@@ -1,0 +1,1145 @@
+Probabilistic Theorem Proving
+
+Vibhav Gogate and Pedro Domingos
+University of Washington
+Computer Science & Engineering
+Seattle, WA 98195, USA
+{vgogate,pedrod}@cs.washington.edu
+
+Abstract
+Many representation schemes combining firstorder logic and probability have been proposed
+in recent years. Progress in unifying logical and
+probabilistic inference has been slower. Existing methods are mainly variants of lifted variable elimination and belief propagation, neither
+of which take logical structure into account. We
+propose the first method that has the full power
+of both graphical model inference and first-order
+theorem proving (in finite domains with Herbrand
+interpretations). We first define probabilistic theorem proving, their generalization, as the problem of computing the probability of a logical formula given the probabilities or weights of a set of
+formulas. We then show how this can be reduced
+to the problem of lifted weighted model counting, and develop an efficient algorithm for the latter. We prove the correctness of this algorithm,
+investigate its properties, and show how it generalizes previous approaches. Experiments show
+that it greatly outperforms lifted variable elimination when logical structure is present. Finally, we
+propose an algorithm for approximate probabilistic theorem proving, and show that it can greatly
+outperform lifted belief propagation.
+
+1
+
+INTRODUCTION
+
+Unifying first-order logic and probability enables uncertain
+reasoning over domains with complex relational structure,
+and is a long-standing goal of AI. Proposals go back to
+at least Nilsson [27], with substantial progress within the
+UAI community starting in the 1990s (e.g., [1, 19, 40]), and
+added impetus from the new field of statistical relational
+learning starting in the 2000s [16]. Many well-developed
+representations now exist (e.g., [9, 14, 23]), but the state
+of inference is less advanced. For the most part, inference
+is still carried out by converting models to propositional
+form (e.g., Bayesian networks) and then applying standard
+propositional algorithms. This typically incurs an exponen-
+
+tial blowup in the time and space cost of inference, and forgoes one of the chief attractions of first-order logic: the
+ability to perform lifted inference, i.e., reason over large
+domains in time independent of the number of objects they
+contain, using techniques like resolution theorem proving
+[32].
+In recent years, progress in lifted probabilistic inference has
+picked up. An algorithm for lifted variable elimination was
+proposed by Poole [29] and extended by de Salvo Braz [10]
+and others. Lifted belief propagation was introduced by
+Singla and Domingos [38] and extended by others (e.g.,
+[21, 36]). These algorithms often yield impressive efficiency gains compared to propositionalization, but still fall
+well short of the capabilities of first-order theorem proving,
+because they ignore logical structure, treating potentials as
+black boxes. This paper proposes the first full-blown probabilistic theorem prover, capable of exploiting both lifting
+and logical structure, and having standard theorem proving
+and standard graphical model inference as special cases.
+Our solution is obtained by reducing probabilistic theorem
+proving (PTP) to lifted weighted model counting. We first
+do the corresponding reduction for the propositional case,
+extending previous work by Darwiche [6] and Sang et al.
+[34] (see also [4]). We then lift this approach to the firstorder level, and refine it in several ways. We show that
+our algorithm can be exponentially more efficient than firstorder variable elimination, and is never less efficient (up to
+constants). For domains where exact inference is not feasible, we propose a sampling-based approximate version of
+our algorithm. Finally, we report experiments in which PTP
+greatly outperforms first-order variable elimination and belief propagation, and discuss future research directions.
+
+2
+
+LOGIC AND THEOREM PROVING
+
+We begin with a brief review of propositional logic, firstorder logic and theorem proving [15]. The simplest formulas in propositional logic are atoms: individual symbols representing propositions that may be true of false in a
+given world. More complex formulas are recursively built
+up from atoms and the logical connectives ¬ (negation),
+∧ (conjunction), ∨ (disjunction), ⇒ (implication) and ⇔
+
+Algorithm 1 TP(KB K, query Q)
+KQ ← K ∪ {¬Q}
+return ¬SAT(CNF(KQ ))
+
+(equivalence). For example, ¬A ∨ (B ∧ C) is true iff A is
+false or B and C are true. A knowledge base (KB) is a set of
+logical formulas. The fundamental problem in logic is determining entailment, and algorithms that do this are called
+theorem provers. A knowledge base K entails a query formula Q iff Q is true in all worlds where all the formulas
+in K are true, a world being an assignment of truth values to all atoms. A world is a model of a KB iff the KB
+is true in it. Theorem provers typically first convert K and
+Q to conjunctive normal form (CNF). A CNF formula is
+a conjunction of clauses, each of which is a disjunction of
+literals, each of which is an atom or its negation. For example, the CNF of ¬A ∨ (B ∧ C) is (¬A ∨ B) ∧ (¬A ∨ C). A
+unit clause consists of a single literal. Entailment can then
+be computed by adding ¬Q to K and determining whether
+the resulting KB KQ is satisfiable, i.e., whether there exists
+a world where all clauses in KQ are true. If not, KQ is unsatisfiable, and K entails Q. Algorithm 1 shows this basic
+theorem proving schema. CNF(K) converts K to CNF, and
+SAT(C) returns True if C is satisfiable and False otherwise.
+The earliest theorem prover is the Davis-Putnam algorithm
+(henceforth called DP) [8]. It makes use of the resolution
+rule: if a KB contains the clauses A1 ∨ . . . ∨ An and B1 ∨
+. . . ∨ Bm , where the a’s and b’s represent literals, and some
+literal Ai is the negation of some literal Bj , then the clause
+A1 ∨ . . . ∨ Ai−1 ∨ Ai+1 ∨ . . . ∨ An ∨ B1 ∨ . . . ∨ Bj−1 ∨
+Bj+1 ∨ . . . ∨ Bm can be added to the KB. For each atom
+A in the KB, DP resolves every pair of clauses C1 , C2 in
+KB such that C1 contains A and C2 contains ¬A, adds the
+result to the KB, and deletes C1 and C2 . If at some point
+the empty clause is derived, the KB is unsatisfiable, and the
+query formula (previously negated and added to the KB) is
+therefore proven. As Dechter [11] points out, DP is in fact
+just the variable elimination algorithm for the special case
+of 0-1 potentials.
+Modern propositional theorem provers use the DPLL algorithm [7], a variant of DP that replaces the elimination step
+with a splitting step: instead of eliminating all clauses containing the chosen atom A, resolve all clauses in the KB
+with A, simplify and recurse, and do the same with ¬A. If
+both recursions fail, the KB is unsatisfiable. DPLL has linear space complexity, compared to exponential for DavisPutnam. DPLL is the basis of the algorithms in this paper.
+First-order logic inherits all the features of propositional
+logic, and in addition allows atoms to have internal structure. An atom is now a predicate symbol, representing a
+relation in the domain of interest, followed by a parenthesized list of variables and/or constants, representing objects. For example, Friends(Anna, x) is an atom. A
+ground atom has only constants as arguments. First-order
+logic has two additional connectives, ∀ (universal quan-
+
+tification) and ∃ (existential quantification). For example,
+∀x Friends(Anna, x) means that Anna is friends with everyone, and ∃x Friends(Anna, x) means that Anna has at
+least one friend. In this paper, we assume that domains are
+finite (and therefore function-free) and that there is a oneto-one mapping between constants and objects in the domain (Herbrand interpretations).
+As long as the domain is finite, first-order theorem proving
+can be carried out by propositionalization: creating atoms
+from all possible combinations of predicates and constants,
+and applying a propositional theorem prover. However, this
+is potentially very inefficient. A more sophisticated alternative is first-order resolution [32], which proceeds by resolving pairs of clauses and adding the result to the KB until
+the empty clause is derived. Two first-order clauses can be
+resolved if they contain complementary literals that unify,
+i.e., there is a substitution of variables by constants or other
+variables that makes the two literals identical up to the negation sign. Conversion to CNF is carried out as before, with
+the additional step of removing all existential quantifiers by
+a process called skolemization.
+First-order logic allows knowledge to be expressed vastly
+more concisely than propositional logic. For example, the
+rules of chess can be stated in a few pages in first-order
+logic, but require hundreds of thousands in propositional
+logic. Probabilistic logical languages extend this power to
+uncertain domains. The goal of this paper is to similarly
+extend the power of first-order theorem proving.
+
+3
+
+PROBLEM DEFINITION
+
+Following Nilsson [27], we define probabilistic theorem
+proving as the problem of determining the probability of an
+arbitrary query formula Q given a set of logical formulas Fi
+and their probabilities P (Fi ). For the problem to be well
+defined, the probabilities must be consistent, and Nilsson
+[27] provides a method for verifying consistency. Probabilities estimated by maximum likelihood from an observed
+world are guaranteed to be consistent [13]. In general, a set
+of formula probabilities does not specify a complete joint
+distribution over the atoms appearing in them, but one can
+be obtained by making the maximum entropy assumption:
+the distribution contains no information beyond that specified by the formula probabilities [27]. Finding the maximum entropy distribution given a set of formula probabilities is equivalent to learning a maximum-likelihood loglinear model whose features are the formulas; many algorithms for this purpose are available (iterative scaling, gradient descent, etc.) [13].
+We call a set of formulas and their probabilities together
+with the maximum entropy assumption a probabilistic
+knowledge base (PKB). Equivalently, a PKB can be directly
+defined as a log-linear model with the formulas as features
+and the corresponding weights or potential values. Potentials are the most convenient form, since they allow determinism (0-1 probabilities) without recourse to infinity. If x
+
+LWSAT
+
+Lifted
+
+TP 1
+
+PTP = LWMC
+
+LMC
+
+MPE = WSAT
+ted
+igh
+e
+W Counting
+
+PI = WMC
+
+TP 0 = SAT
+MC
+Figure 1: Inference problems addressed in this paper. TPo and
+TP1 is propositional and first-order theorem proving respectively,
+PI is probabilistic inference (computing marginals), MPE is computing the most probable explanation, SAT is satisfiability, MC is
+model counting, W is weighted and L is lifted. A = B means A
+can be reduced to B.
+
+is a world and Φi (x) is the potential corresponding to formula Fi , by convention (and without loss of generality) we
+let Φi (x) = 1 if Fi is true, and Φi (x) = φi ≥ 0 if the formula is false. Hard formulas have φi = 0 and soft formulas have φi > 0. In order to compactly subsume standard
+probabilistic models, we interpret a universally quantified
+formula as a set of features, one for each grounding of the
+formula, as in Markov logic [14]. A PKB {(Fi , φi )} thus
+represents the joint distribution
+1 Y ni (x)
+P (X = x) =
+φ
+,
+(1)
+Z i i
+where ni (x) is the number of false groundings of Fi in x,
+and Z is a normalization constant (the partition function).
+We can now define PTP succinctly as follows:
+Probabilistic theorem proving (PTP)
+Input: Probabilistic KB K and query formula Q
+Output: P (Q|K)
+If all formulas are hard, a PKB reduces to a standard logical KB. Determining whether a KB K logically entails a
+query Q is equivalent to determining whether P (Q|K) = 1
+[14]. Graphical models are easily converted into equivalent PKBs [4]. Conditioning on evidence is done by adding
+the corresponding hard ground atoms to the PKB, and the
+conditional marginal of an atom is computed by issuing the
+atom as the query. Thus PTP has both logical theorem proving and inference in graphical models as special cases. In
+this paper we solve PTP by reducing it to lifted weighted
+model counting. Model counting is the problem of determining the number of worlds that satisfy a KB. Weighted
+model counting can be defined as follows [4]. Assign a
+weight to each literal, and let the weight of a world be the
+product of the weights of the literals that are true in it. Then
+weighted model counting is the problem of determining the
+sum of the weights of the worlds that satisfy a KB:
+
+Algorithm 2 WCNF(PKB K)
+for all (Fi , φi ) ∈ K s.t. φi > 0 do
+K ← K ∪ {(Fi ⇔ Ai , 0)} \ {(Fi , φi )}
+C ← CNF(K)
+for all ¬Ai literals do W¬Ai ← φi
+for all other literals L do WL ← 1
+return (C, W )
+
+Algorithm 3 PTP(PKB K, query Q)
+KQ ← K ∪ {(Q, 0)}
+return WMC(WCNF(KQ ))/WMC(WCNF(K))
+
+addressed by this paper. Generality increases in the direction of the arrows. We first propose an algorithm for
+propositional weighted model counting and then lift it to
+first-order. The resulting algorithm is applicable to all the
+problems in the diagram. (Weighted SAT/MPE inference
+requires replacing sums with maxes and an additional traceback step, but we do not pursue this here; cf. Park [28], and
+de Salvo Braz [10] on the lifted case.)
+
+4
+
+PROPOSITIONAL CASE
+
+This section generalizes the Bayesian network inference
+techniques in Darwiche [5] and Sang et al. [34] to arbitrary propositional PKBs, evidence, and query formulas.
+Although this is of value in its own right, its main purpose
+is to lay the groundwork for the first-order case.
+The probability of a formula is the sum of the probabilities
+of the worlds that satisfy it. Thus to compute the probability
+of a formula Q given a PKB K it suffices to compute the
+partition function of K with and without Q added as a hard
+formula:
+P
+Q
+Z(K ∪ {(Q, 0)})
+x 1Q (x)
+i Φi (x)
+P (Q|K) =
+=
+Z(K)
+Z(K)
+(2)
+where 1Q (x) is the indicator function (1 if Q is true in x
+and 0 otherwise).
+In turn, the computation of partition functions can be reduced to weighted model counting using the procedure in
+Algorithm 2. This replaces each soft formula Fi in K by
+a corresponding hard formula Fi ⇔ Ai , where Ai is a new
+atom, and assigns to every ¬Ai literal a weight of φi (the
+value of the potential Φi when Fi is false).
+Theorem 1 Z(K) = WMC(WCNF(K)).
+
+Weighted model counting (WMC)
+Input: CNF C and set of literal weights W
+Output: Sum of weights of worlds that satisfy C
+
+Proof. If a world violates any of the hard clauses in K or
+any of the Fi ⇔ Ai equivalences, it does not satisfy C and is
+therefore not counted. The weight of each remaining world
+x is the product of the weights of the literals that are true in
+x. By the Fi ⇔ Ai equivalences
+and the weights assigned
+Q
+by WCNF(K), this is i Φi (x). (Recall that Φi (x) = 1 if
+Fi is true in x and Φi (x) = φi otherwise.) Thus x’s weight
+is the unnormalized probability of x under K. Summing
+these yields the partition function Z(K).
+2
+
+Figure 1 depicts graphically the set of inference problems
+
+Equation 2 and Theorem 1 lead to Algorithm 3 for PTP.
+
+Algorithm 4 WMC(CNF C, weights W )
+
+Algorithm 5 LWMC(CNF C, substs. S, weights W )
+
+// Base case
+if all clauses
+Q in C are satisfied then
+return A∈A(C) (WA + W¬A )
+if C has an empty unsatisfied clause then return 0
+// Decomposition step
+if C can be partitioned into CNFs C1 , . . . , Ck sharing no
+atoms then
+Qk
+return i=1 WMC(Ci , W )
+// Splitting step
+Choose an atom A
+return WA WMC(C|A; W ) + W¬A WMC(C|¬A; W )
+
+// Lifted base case
+if all clauses
+Q in C are satisfied then
+return A∈A(C) (WA + W¬A )nA (S)
+if C has an empty unsatisfied clause then return 0
+// Lifted decomposition step
+if there exists a lifted decomposition {C1,1 , . . . , C1,m1 ,
+. . . , Ck,1
+Q,k. . . , Ck,mk } of C under S then
+return i=1 [LWMC(Ci,1 , S, W )]mi
+// Lifted splitting step
+Choose an atom A
+(1)
+(l)
+Let {ΣA,S , . . . , ΣA,S } be a lifted split of A for C under S
+
+Pl
+
+(Compare with Algorithm 1.) WMC(C, W ) can be any
+weighted model counting algorithm [4]. Most model counters are variations of Relsat, itself an extension of DPLL
+[3]. Relsat splits on atoms until the CNF is decomposed
+into sub-CNFs sharing no atoms, and recurses on each subCNF. This decomposition is crucial to the efficiency of the
+algorithm. In this paper we use a weighted version of Relsat, shown in Algorithm 4. A(C) is the set of atoms that
+appear in C. C|A denotes the CNF obtained by resolving
+each clause in C with A, which results in removing ¬A
+from all clauses it appears in, and setting to Satisfied all
+clauses in which A is true. Notice that, unlike in DPLL, satisfied clauses cannot simply be deleted, because we need to
+keep track of which atoms they are over for model counting
+purposes. However, they can be ignored in the decomposition step, since they introduce no dependencies. The atom
+to split on in the splitting step can be chosen using various
+heuristics [35].
+Theorem 2 Algorithm WMC(C,W ) correctly computes the
+weighted model count of CNF C under literal weights W .
+Proof sketch. If all clauses in C are satisfied, all assignments to the atoms
+Q in C satisfy it, and the corresponding
+total weight is A∈A(C) (WA + W¬A ). If C has an empty
+unsatisfied clause, it is unsatisfiable given the truth assignment so far, and the corresponding weighted count is 0. If
+two CNFs share no atoms, the WMC of their conjunction is
+the product of the WMCs of the individual CNFs. Splitting
+on an atom produces two disjoint sets of worlds, and the total WMC is therefore the sum of the WMCs of the two sets,
+weighted by the corresponding literal’s weight.
+2
+
+5
+
+FIRST-ORDER CASE
+
+We now lift PTP to the first-order level. We consider first
+the case of PKBs without existential quantifiers. Algorithms 2 and 3 remain essentially unchanged, except that
+formulas, literals and CNF conversion are now first-order.
+In particular, for Theorem 1 to remain true, each new atom
+Ai in Algorithm 2 must now consist of a new predicate
+symbol followed by a parenthesized list of the variables and
+constants in the corresponding formula Fi . The proof of the
+first-order version of the theorem then follows by propositionalization. Lifting Algorithm 4 is the focus of the rest of
+this section.
+
+fi
+LWMC(C|σj ; Sj , W )
+return i=1 ni WAti W¬A
+where ni , ti , fi , σj and Sj are as in Proposition 3
+
+We begin with some necessary definitions. A substitution
+constraint is an expression of the form x = y or x 6= y, where
+x is a variable and y is either a variable or a constant. (Much
+richer substitution constraint languages are possible, but we
+adopt the simplest one that allows PTP to subsume both
+standard function-free theorem proving and first-order variable elimination.) Two literals are unifiable under a set of
+substitution constraints S if there exists at least one ground
+literal consistent with S that is an instance of both, up to the
+negation sign. A (C, S) pair, where C is a first-order CNF
+whose variables have been standardized apart and S is a set
+of substitution constraints, represents the ground CNF obtained by replacing each clause in C with the conjunction
+of its groundings that are consistent with the constraints in
+S. For example, using upper case for constants and lower
+case for variables, if C = R(B, C) ∧ (¬R(x, y) ∨ S(y, z))
+and S = {x = y, z 6= B}, (C, S) represents the ground CNF
+R(B, C)∧(¬R(B, B)∨S(B, C))∧(¬R(C, C)∨S(C, C)). Clauses
+with equality substitution constraints can be abbreviated in
+the obvious way (e.g., T(x, y, z) with x = y and z = C can
+be abbreviated as T(x, x, C)).
+We lift the base case, decomposition step, and splitting step
+of Algorithm 4 in turn. The result is shown in Algorithm 5.
+In addition to the first-order CNF C and weights on firstorder literals W , LWMC takes as an argument an initially
+empty set of substitution constraints S which, similar to
+logical theorem proving, is extended along each branch of
+the inference as the algorithm progresses.
+5.1
+
+LIFTING THE BASE CASE
+
+The base case changes only by raising each first-order atom
+A’s sum of weights to nA (S), the number of groundings of
+A compatible with the constraints in S. This is necessary
+and sufficient since each atom A has nA (S) groundings,
+and all ground atoms are independent because the CNF is
+satisfied irrespective of their truth values. Note that nA (S)
+is the number of groundings of A consistent with S that can
+be formed using all the constants in the original CNF.
+
+5.2
+
+LIFTING THE DECOMPOSITION STEP
+
+Clearly, if C can be decomposed into two or more CNFs
+such that no two CNFs share any unifiable literals, a lifted
+decomposition of C is possible (i.e., a decomposition of C
+into first-order CNFs on which LWMC can be called recursively). But the symmetry of the first-order representation can be further exploited. For example, if the CNF
+C can be decomposed into k CNFs C1 , . . . , Ck sharing no
+unifiable literals and such that for all i, j, Ci is identical to
+Cj up to a renaming of the variables and constants,1 then
+LWMC(C) = [LWMC(C1 )]k . We formalize these conditions below.
+Definition 1 The set of first-order CNFs {C1,1 , . . . ,
+C1,m1 , . . . , Ck,1 , . . . , Ck,mk } is called a lifted decomposition of CNF C under substitution constraints S if, given
+S, it satisfies the following three properties: (i) C =
+C1,1 ∧ . . . ∧ Ck,mk ; (ii) no two Ci,j ’s share any unifiable
+literals; (iii) for all i, j, j 0 , such that j 6= j 0 , Ci,j is identical
+to Ci,j 0
+Proposition 1 If {C1,1 , . . . , C1,m1 , . . . , Ck,1 , . . . , Ck,mk }
+is a lifted decomposition of C under S, then
+k
+Y
+LWMC(C, S, W ) =
+[LWMC(Ci,1 , S, W )]mi . (3)
+i=1
+
+Rules for identifying lifted decompositions can be derived
+in a straightforward manner from the inversion argument in
+de Salvo Braz [10] and the power rule in Jha et al. [20].
+An example of such a rule is given in the definition and
+proposition below. Note that this rule is more general than
+de Salvo Braz’s inversion elimination [10].
+Definition 2 A set of variables X = {x1 , . . . , xm } is called
+a decomposer of a CNF C if it has the following three properties: (i) X is the union of all variables appearing as the
+same argument of a predicate R in C; (ii) every xi in X
+appears in all atoms of a clause in C; (iii) if xi and xj appear as arguments of a predicate R0 , they must appear as
+the same argument of R0 . (R0 may or may not be the same
+as R.)
+For example, {x1 , x2 } is a decomposer of the CNF (R(x1 )∨
+S(x1 , x3 )) ∧ (R(x2 ) ∨ T(x2 , x4 )). Given a decomposer
+{x1 , . . . , xm } and a CNF C, it is easy to see that for every
+pair of substitutions of the form SX = {x1 = X, . . . , xm = X}
+and SY = {x1 = Y, . . . , xm = Y}, with X 6= Y, the CNFs CX
+and CY obtained by applying SX and SY to C do not share
+any unifiable literals. A decomposer thus yields a lifted decomposition. Given a CNF, a decomposer can be found in
+linear time.
+When there are no substitution constraints on the variables
+in the decomposer, as in the example above, all CNFs
+formed by substituting the variables in the decomposer
+with a constant are identical. Thus, k = 1 in Equation
+3 and m1 equals the number of constants (objects) in the
+1
+Henceforth, when we say that two clauses are identical, we
+mean that they are identical up to a renaming of constants and
+variables.
+
+PKB. However, when there are substitution constraints, the
+CNFs may not be identical. For example, given the CNF
+(R(x1 ) ∨ S(x1 , x3 )) ∧ (R(x2 ) ∨ T(x2 , x4 )) and substitution
+constraints {x1 6= A, x2 6= B}, the CNF formed by substituting {x1 = A, x2 = B} is not identical to the CNF formed by
+substituting {x1 = C, x2 = C}.
+Intuitively, if all the clauses in the CNF have the same set
+of groundings relative to the decomposer, then any two
+CNFs formed by substituting the variables in the decomposer with any two (valid) distinct constants will be identical. Thus, we need to split the CNF into disjoint CNFs
+that have identical groundings relative to the decomposer.
+We can achieve this by considering all possible combinations of the substitution constraints. For instance, we
+can decompose our example CNF into the following four
+CNFs, each of which has an identical set of groundings
+relative to x1 and x2 (for readability, we do not standardize variables apart and show the constraints separately for
+each CNF): (1) (R(x1 ) ∨ S(x1 , x3 )) ∧ (R(x2 ) ∨ T(x2 , x4 )),
+{x1 6= A, x1 6= B, x2 6= A, x2 6= B}; (2) (R(x1 ) ∨ S(x1 , x3 )) ∧
+(R(x2 ) ∨ T(x2 , x4 )), {x1 6= A, x1 = B, x2 6= A, x2 = B};
+(3) (R(x1 ) ∨ S(x1 , x3 )) ∧ (R(x2 ) ∨ T(x2 , x4 )), {x1 = A,
+x2 = A, x1 6= B, x2 6= B}; and (4) (R(x1 ) ∨ S(x1 , x3 )) ∧
+(R(x2 ) ∨ T(x2 , x4 )), {x1 = A, x1 = B, x2 = A, x2 = B}. Notice that the fourth CNF has no valid groundings and can be
+removed.
+In general, a CNF can be partitioned into subsets of identical but disjoint CNFs using constraint satisfaction techniques, as in Kisynski and Poole [22]. In summary:
+Proposition 2 Let X = {x1 , . . . , xt } be a decomposer
+of C. Let {{X1,1 , . . . , X1,m1 }, . . . , {Xk,1 , . . . , Xk,mk }} be a
+partition of the constants in the domain and let C 0 =
+{CX1,1 , . . . , CX1,m1 , . . . , CXk,1 , . . . , CXk,mk } be a partition of C
+such that (i) for all i, j, j 0 such that j 6= j 0 , CXi,j is identical to CXi,j0 , and (ii) CXi,mi is a CNF formed by substituting
+each variable in X by the constant Xi,mi . Then C 0 is a lifted
+decomposition of C under S.
+5.3
+
+LIFTING THE SPLITTING STEP
+
+Splitting on a non-ground atom means splitting on all
+groundings of it consistent with the current substitution
+constraints S. Naively, if the atom has c groundings consistent with S this will lead to a sum of 2c recursive calls
+to LWMC, one for each possible truth assignment to the c
+ground atoms. However, in general these calls will have
+repeated structure and can be replaced by a much smaller
+number. The lifted splitting step exploits this.
+We introduce some notation and definitions. Let σA,S denote a truth assignment to the groundings of atom A consistent with substitution constraints S, and let ΣA,S denote
+the set of all possible such assignments. Let C|σA,S denote the CNF formed by removing ¬A from all clauses
+it appears in, and setting to Satisfied all ground clauses
+that are satisfied because of σA,S . This can be done in a
+lifted manner by updating the substitution constraints asso-
+
+ciated with each clause. For instance, consider the clause
+R(x) ∨ S(x, y) and substitution constraint {x 6= A}, and suppose the domain is {A, B, C} (i.e., these are all the constants
+appearing in the PKB). Given the assignment R(A) = False,
+R(B) = True, R(C) = False and ignoring satisfied clauses,
+the clause becomes S(x, y) and the constraint set becomes
+{x 6= A, x 6= B}. R(x) is removed from the clause because
+all of its groundings are instantiated. The constraint x 6= B
+is added because the assignment R(B) = True satisfies all
+groundings in which x = B.
+(1)
+
+(l)
+
+Definition 3 The partition {ΣA,S , . . . , ΣA,S } of ΣA,S is
+called a lifted split of atom A for CNF C under substitu(i)
+tion constraints S if every part ΣA,S satisfies the following
+(i)
+
+two properties: (i) all truth assignments in ΣA,S have the
+(i)
+
+same number of true atoms; (ii) for all pairs σj , σk ∈ ΣA,S ,
+C|σj is identical to C|σk .
+(1)
+
+(l)
+
+Proposition 3 If {ΣA,S , . . . , ΣA,S } is a lifted split of A for
+C under S, then
+l
+X
+fi
+ni WAti W¬A
+LWMC(C|σj ; Sj , W )
+LWMC(C, S, W ) =
+i=1
+(i)
+
+(i)
+
+where ni = |ΣA,S |, σj ∈ ΣA,S , ti and fi are the number of true and false atoms in σj , respectively, and Sj is
+S augmented with the substitution constraints required to
+form C|σj .
+Again, we can derive rules for identifying a lifted split by
+using the counting arguments in de Salvo Braz [10] and the
+generalized binomial rule in Jha et al. [20]. We omit the
+details for lack of space. In the worst case, lifted splitting defaults to splitting on a ground atom. In most inference problems, the PKB will contain many hard ground
+unit clauses (the evidence). Splitting on the corresponding ground atoms then reduces to a single recursive call to
+LWMC for each atom. In general, the atom to split on in Algorithm 5 should be chosen with the goal of yielding lifted
+decompositions in the recursive calls (for example, using
+lifted versions of the propositional heuristics [35]).
+Notice that the lifting schemes used for decomposition and
+splitting in Algorithm 5 by no means exhaust the space of
+possible probabilistic lifting rules. For example, Jha et al.
+[20] and Milch et al. [24] contain examples of other lifting
+rules. Searching for new probabilistic lifted inference rules,
+and positive and negative theoretical results about what can
+be lifted, looks like a fertile area for future research.
+The theorem below follows from Theorem 2 and the arguments above.
+Theorem 3 Algorithm LWMC(C, ∅, W ) correctly computes the weighted model count of CNF C under literal
+weights W .
+5.4
+
+EXTENSIONS
+
+Although most probabilistic logical languages do not include existential quantification, handling it in PTP is desirable for the sake of logical completeness. This is compli-
+
+cated by the fact that skolemization is not sound for model
+counting (skolemization will not change satisfiability but
+can change the model count), and so cannot be applied.
+The result of conversion to CNF is now a conjunction of
+clauses with universally and/or existentially quantified variables (e.g., [∀x∃y (R(x, y) ∨ S(y))] ∧ [∃u∀v∀w T(u, v, w)]).
+Algorithm 5 now needs to be able to handle clauses of this
+form. If no universal quantifier appears nested inside an
+existential one, this is straightforward, since in this case
+an existentially quantified clause is just a compact representation of a longer one. For example, if the domain is
+{A, B, C}, the unit clause ∀x∃y R(x, y) represents the clause
+∀x (R(x, A) ∨ R(x, B) ∨ R(x, C)). The decomposition and
+splitting steps in Algorithm 5 are both easily extended to
+handle such clauses without loss of lifting (and the base
+case does not change). However, if universals appear inside existentials, a first-order clause now corresponds to a
+disjunction of conjunctions of propositional clauses. For
+example, if the domain is {A, B}, ∃x∀y (R(x, y) ∨ S(x, y))
+represents (R(A, A)∨S(A, A))∧(R(A, B)∨S(A, B))∨(R(B, A)∨
+S(B, A)) ∧ (R(B, B) ∨ S(B, B)). Whether these cases can be
+handled without loss of lifting remains an open question.
+Several optimizations of the basic LWMC procedure in Algorithm 5 can be readily ported from the algorithms PTP
+generalizes. These optimizations can tremendously improve the performance of LWMC.
+Unit Propagation When LWMC splits on atom A, the
+clauses in the current CNF are resolved with the unit clauses
+A and ¬A. This results in deleting false atoms, which may
+produce new unit clauses. The idea in unit propagation is
+to in turn resolve all clauses in the new CNF with all the
+new unit clauses, and continue to do this until no further
+unit resolutions are possible. This often produces a much
+smaller CNF, and is a key component of DPLL that can also
+be used in LWMC. Other techniques used in propositional
+inference that can be ported to LWMC include pure literals, clause learning, clause indexing, and random restarts
+[3, 35, 4].
+Caching/Memoization In a typical inference, LWMC will
+be called many times on the same subproblems. The solutions of these can be cached when they are computed,
+and reused when they are encountered again. (Notice that a
+cache hit only requires identity up to renaming of variables
+and constants.) This can greatly reduce the time complexity
+of LWMC, but at the cost of increased space complexity. If
+the results of all calls to LWMC are cached (full caching),
+in the worst case LWMC will use exponential space. In
+practice, we can limit the cache size to the available memory and heuristically prune elements from it when it is full.
+Thus, by changing the cache size, LWMC can explore various time/space tradeoffs. Caching in LWMC corresponds
+to both caching in model counting [35] and recursive conditioning [5] and to memoization of common subproofs in
+theorem proving [39].
+Knowledge-Based Model Construction KBMC first uses
+logical inference to select the subset of the PKB that is rel-
+
+evant to the query, and then propositionalizes the result and
+performs standard probabilistic inference on it [40]. A similar effect can be obtained in PTP by noticing that in Equation 2 factors that are common to Z(K ∪ {(Q, 0)}) and
+Z(K) cancel out and do not need to be computed. Thus we
+can modify Algorithm 3 as follows: (i) simplify the PKB
+by unit propagation starting from evidence atoms, etc.; (ii)
+drop from the PKB all formulas that have no path of unifiable literals to the query; (iii) pass to LWMC only the remaining formulas, with an initial S containing the substitutions required for the unifications along the connecting
+path(s).
+5.5
+
+THEORETICAL PROPERTIES
+
+We now theoretically compare the efficiency of PTP and
+first-order variable elimination (FOVE) [29, 10].
+Theorem 4 PTP can be exponentially more efficient than
+FOVE.
+Proof sketch. We provide a constructive proof. Consider the
+hard CNF (R1 (x1 ) ∨ R2 (x1 , x2 ) ∨ R3 (x2 , x3 )) ∧ (¬R1 (x1 ) ∨
+R2 (x2 , x1 ) ∨ R4 (x2 , x3 )) ∧ (R1 (x1 )). Neither counting elimination [10] nor inversion elimination [29] is applicable
+here, and therefore the complexity of FOVE will be the
+same as that of (propositional) variable elimination, i.e., exponential in the treewidth. The treewidth of the CNF is
+polynomial in the domain size (number of constants), and
+therefore variable elimination and by extension FOVE will
+require exponential time. On the other hand, PTP will solve
+this problem in polynomial time. Since R1 (x1 ) is a unit
+clause, PTP will remove the first clause because it is satisfied (clause deletion). It will then remove R1 from the
+second clause (unit propagation), yielding the hard CNF
+R2 (x2 , x1 ) ∨ R4 (x2 , x3 ). PTP will solve this reduced CNF
+by first running lifted decomposition (x2 is a decomposer)
+followed by two lifted splits over R2 (A, x1 ) and R3 (A, x3 ).
+Thus, the overall time complexity of PTP is polynomial in
+the domain size.
+2
+Theorem 5 LWMC with full caching has the same worstcase time and space complexity as FOVE.
+The proof of Theorem 5 is a little involved. The main insight for this result comes from previous work on recursive
+conditioning [5] and AND/OR search [12]. Specifically,
+these papers show that the worst-case time and space complexity of propositional WMC with caching (and without
+unit propagation and clause deletion) is the same as that
+of variable elimination (VE) (exponential in the treewidth).
+Specifically the authors show that both WMC and VE are
+graph traversal schemes that operate by traversing the same
+graph in a top-down and bottom-up manner respectively.
+Lifting can be seen as a way of compressing this graph via
+Propositions 1 and 3; specifically by aggregating nodes in
+the graph that behave similarly. Since FOVE is a lifted
+analog of VE, it traverses the compressed lifted graph in
+a bottom-up manner while LWMC with caching traverses
+it in a top-down manner; assuming that they use the same
+
+rules for lifting. Since the lifting rules used by LWMC are
+at least as general as FOVE, its worst-case time and space
+complexity is the same as FOVE.
+De Salvo Braz’s FOVE [10] and lifted BP [38] completely
+shatter the PKB in advance. This may be wasteful because
+many of those splits may not be necessary. Like Poole [29]
+and Ng et al. [26], LWMC splits only as needed.
+5.6
+
+DISCUSSION
+
+PTP yields new algorithms for several of the inference
+problems in Figure 1. For example, ignoring weights and
+replacing products by conjunctions and sums by disjunctions in Algorithm 5 yields a lifted version of DPLL for
+first-order theorem proving (cf. [2]).
+Of the standard methods for inference in graphical models, propositional PTP is most similar to recursive conditioning [5] and AND/OR search [12] with context-sensitive
+decomposition and caching, but applies to arbitrary PKBs,
+not just Bayesian networks. Also, PTP effectively performs
+formula-based inference [17] when it splits on one of the
+auxiliary atoms introduced by Algorithm 2.
+PTP realizes some of the benefits of lazy inference for relational models [31] by keeping in lifted form what lazy
+inference would leave as default.
+
+6
+
+APPROXIMATE INFERENCE
+
+LWMC lends itself readily to Monte Carlo approximation,
+by replacing the sum in the splitting step with a random
+choice of one of its terms, calling the algorithm many times,
+and averaging the results. This yields the first lifted sampling algorithm.
+We first apply this importance sampling approach [33] to
+WMC, yielding the MC-WMC algorithm. The two algorithms differ only in the last line. Let Q(A|C, W )
+denote the importance or proposal distribution over A
+given the current CNF C and literal weights W . Then
+WA
+we return Q(A|C,W
+) MC-WMC(C|A; W ) with probability
+W¬A
+Q(A|C, W ), or Q(¬A|C,W
+) MC-WMC(C|¬A; W ) otherwise. By importance sampling theory [33] and by the law
+of total expectation, it is easy to show that:
+
+Theorem 6 If Q(A|C, W ) satisfies WMC(C|A; W ) > 0
+⇒ Q(A|C, W ) > 0 for all atoms A and its true and false
+assignments, then the expected value of the quantity output by MC-WMC(C, W ) equals WMC(C, W ). In other
+words, MC-WMC(C, W ) yields an unbiased estimate of
+WMC(C, W ).
+An estimate of WMC(C, W ) is obtained by running
+MC-WMC(C, W ) multiple times and averaging the results.
+By linearity of expectation, the running average is also unbiased. It is well known that the accuracy of the estimate
+is inversely proportional to its variance [33]. The variance
+can be reduced by either running MC-WMC more times or
+by choosing Q that is as close as possible to the posterior
+
+#Objs.
+10
+20
+50
+Clause PTP FOVE PTP FOVE PTP FOVE
+Size ↓
+3 14.5 18.93 34.5 93.45 82.1 X
+5 23.9 X 43.5 X 132.4 X
+7
+8.2
+X 18.7 X 37.1 X
+9
+2.3
+X
+5.2
+X 15.9 X
+
+distribution P (or both). Thus, for MC-WMC to be effective in practice, at each point, given the current CNF C, we
+should select Q(A|C, W ) that is as close as possible to the
+marginal probability distribution of A w.r.t. C and W .
+The following simple procedure can be used to construct
+the proposal distribution Q. Let A be an atom that needs
+to be sampled and (abusing notation) let o = (A1 , . . . , An )
+be an ordering of its ground atoms (we select the ordering randomly). Given a truth assignment to the previous
+i − 1 atoms, let ni,t and ni,f denote the number of ground
+clauses that are satisfied by assigning Ai to true and false
+respectively. Then, we use Q(Ai |A1 , . . . , Ai−1 , C, W ) =
+ni,t WA /(ni,t WA + ni,f W¬A ). Thus we perform only a
+one-step look ahead for constructing Q. In future, we envision using more sophisticated heuristics.
+MC-WMC suffers from the rejection problem [18]: it may
+return a zero. We can solve this problem by either backtracking when a sample is rejected or by generating samples
+from the backtrack-free distribution [18].
+Next, we present a lifted version of MC-WMC, which is
+obtained by replacing the (last line of the) lifted splitting
+step in LWMC by the following lifted sampling step:
+return
+
+fi
+t
+ni WAi W¬A
+(i)
+Q(ΣA,S )
+
+MC-LWMC(C|σj ; Sj , W )
+
+where ni , ti , fi , σj and Sj are as in Proposition 3
+
+In the lifted sampling step, we construct a distribution Q
+(i)
+over the lifted split and sample an element ΣA,S from it.
+Then we weigh the sampled element w.r.t. Q and call the al(i)
+gorithm recursively on the CNF conditioned on σj ∈ ΣA,S .
+Notice that A is a first-order atom and the distribution
+(i)
+Q(ΣA,S ) is defined in a lifted manner. However, seman(i)
+
+tically, each ΣA,S represents all of groundings of A and
+(i)
+
+therefore given a ground assignment σj ∈ ΣA,S , the prob(i)
+
+ability of sampling σj is QG (σj ) = Q(ΣA,S )/ni . Thus,
+ignoring the decomposition step, MC-LWMC is equivalent
+to MC-WMC that uses QG to sample all the groundings
+of A. In the decomposition step, given a set of identical
+and disjoint CNFs, we simply sample just one of the CNFs
+and raise our estimate to the appropriate count. The correctness of this step follows from the fact that the expected
+value of the product of k identical and independent random
+variables R1 , . . . , Rk equals E[R1 ]k , and (σR1 )k is an unbiased estimate of E[R1 ]k where σR1 is a random sample of
+R1 . Therefore, the following theorem immediately follows
+from Theorem 6.
+(i)
+
+Theorem 7 If Q(ΣA,S ) satisfies WMC(C|σj ; Sj , W ) >
+(i)
+Q(ΣA,S )
+
+(i)
+ΣA,S
+
+0⇒
+> 0 for all elements
+of the lifted split
+of A for C under S, then MC-LWMC(C, S, W ) yields an
+unbiased estimate of WMC(C, W ).
+MC-LWMC has smaller variance than MC-WMC and is
+therefore likely to have higher accuracy. The smaller variance is due to the smaller time complexity of MC-LWMC,
+
+Table 1: Impact of increasing the number of objects and clause
+size on the time complexity of FOVE and PTP. Time is in seconds.
+‘X’ indicates that the algorithm ran out of memory.
+which in turn is due to the decomposition step. Recall that
+we group identical and independent CNFs, sample just one
+CNF from the group, and raise the estimate by the number
+of members in the group. Thus, for each lifted decomposition of size mi > 1, we have a factor of mi speedup. Therefore, given a specific time bound, the estimate returned by
+MC-LWMC will be based on a larger sample size (or more
+runs) than the one returned by MC-WMC.
+
+7
+7.1
+
+EXPERIMENTS
+EXACT INFERENCE
+
+In this subsection, we compare the performance of PTP and
+FOVE on randomly generated and link prediction PKBs.
+We implemented PTP in C++ and ran all our experiments
+on a Linux machine with a 2.33 GHz Intel Xeon processor
+and 2GB of RAM. We used a constraint solver based on
+forward checking to implement the substitution constraints.
+We used the following heuristics for splitting. At any point,
+we prefer an atom which yields the smallest number of recursive calls to LWMC (i.e., an atom that yields maximum
+lifting). We break ties by selecting an atom that appears in
+the largest number of ground clauses; this number can be
+computed using the constraint solver. If it is the same for
+two or more atoms, we break ties randomly.
+Random PKBs with Varying Clause Size In the first set
+of experiments, we show that PTP’s advantage relative to
+FOVE increases with clause length. In order to compare
+the performance in a controlled setting, we generated random PKBs parameterized by five integer constants: n, m, s,
+e and c, where n is the number of predicates, m is the number of clauses, s is the number of literals in each clause, e is
+the number of evidence atoms, and c is the number of constants in the domain. The PKB is generated as follows. All
+predicates are unary. We generate m clauses by randomly
+selecting s predicates and negating each with probability
+0.5. We then choose e ground atoms as evidence, each of
+which is set to either True or False with equal probability.
+We set n = m = 40, varied s from 3 to 9 in increments of
+2 and c from 10 to 50, and set e = c/10. Table 1 shows the
+impact of increasing the number of objects c and the clause
+size s on the time complexity of FOVE and PTP. The results
+are averaged over 10 PKBs. We can see that PTP always
+dominates FOVE. When the PKB has small clauses, PTP is
+only slightly better than FOVE. However, when the clauses
+are large, PTP is substantially better than FOVE, which runs
+
+Negative log likelihood
+
+Time (seconds)
+
+100000
+10000
+1000
+100
+10
+1
+0.1
+0.01
+
+PTP
+FOVE
+
+10000
+1000
+100
+10
+Lifted-BP
+MC-SAT
+MC-WMC
+MC-LWMC
+
+1
+0.1
+0.01
+
+10 20 30 40 50 60 70 80
+
+0
+
+10
+
+Percentage of evidence objects
+(a)
+Negative log likelihood
+
+Time (seconds)
+
+100000
+
+PTP
+FOVE
+
+10000
+1000
+100
+10
+1
+0.1
+0.01
+100
+
+200
+
+300
+
+400
+
+Link Prediction We experimented with a simple PKB consisting of two clauses: GoodProf(x) ∧ GoodStudent(y) ∧
+Advises(x, y) ⇒ FutureProf(y) and Coauthor(x, y) ⇒
+Advises(x, y). The PKB has two types of objects: professors (x) and students (y). Given data on a subset of papers
+and “goodness” of professors and students, the task is to be
+predict who advises whom and who is likely to be a professor in the future.
+We evaluated the performance of FOVE and PTP along two
+dimensions: (i) the number of objects and (ii) the amount
+of evidence. We varied the number of objects from 10 to
+1000 and the number of evidence atoms from 10% to 80%.
+Figure 2(a) shows the impact of increasing the number of
+evidence atoms on the performance of the two algorithms
+on a link prediction PKB with 100 objects. FOVE runs
+out of memory (typically after around 20 minutes of run
+time) after the percentage of evidence atoms rises above
+40%. PTP solves all the problems and is also much faster
+than FOVE (notice the log-scale on the y-axis). Figure 2(b)
+shows the impact of increasing the number of objects on a
+link prediction PKB with 20% of the atoms set as observed.
+We can see that FOVE is unable to solve any problems after the number of objects is increased beyond 100 because
+it runs out of memory. PTP, on the other hand, solves all
+
+50
+
+60
+
+50
+
+60
+
+100
+10
+Lifted-BP
+MC-SAT
+MC-WMC
+MC-LWMC
+
+1
+0.1
+0.01
+10
+
+20
+
+30
+
+40
+
+Time (minutes)
+(b)
+
+(b)
+
+out of memory on all the instances, typically after around
+20 minutes of run time. When large clauses are present, unit
+propagation is very effective and causes a large amount of
+pruning. Because of this, PTP is much faster than FOVE.
+
+40
+
+1000
+
+Number of objects
+
+time complexity of FOVE and PTP in the link prediction domain.
+The number of objects in the domain is 100. (b) Impact of increasing the number of objects on the time complexity of FOVE
+and PTP in the link prediction domain, with 20% of the atoms set
+as evidence.
+
+30
+
+10000
+
+0
+
+500
+
+Figure 2: (a) Impact of increasing the amount of evidence on the
+
+20
+
+Time (minutes)
+(a)
+
+Figure 3: Negative log-likelihood of the data as a function of time
+for lifted BP, MC-SAT, MC-WMC and MC-LWMC on (a) the entity resolution (Cora) and (b) the collective classification domains.
+
+problems in less than 100s.
+7.2
+
+APPROXIMATE INFERENCE
+
+In this subsection, we compare the performance of MCLWMC, MC-WMC, lifted belief propagation [38], and
+MC-SAT [30] on two domains. We used the entity resolution (Cora) and collective classification datasets and
+Markov logic networks used in Singla and Domingos [37]
+and Poon and Domingos [30] respectively. The Cora
+dataset contains 1295 citations to 132 different research papers. The inference task here is to detect duplicate citations, authors, titles and venues. The collective classification dataset consists of about 3000 query atoms.
+Since computing the exact posterior marginals is infeasible
+in these domains, we used the following evaluation method.
+We partitioned the data into two equal-sized sets: evidence
+set and test set. We then computed the probability of each
+ground atom in the test set given all atoms in the evidence
+set using the four inference algorithms. We measure the
+error using negative log-likelihood of the data according to
+the inference algorithms (the negative log-likelihood is a
+sampling approximation of the K-L divergence to the datagenerating distribution, shifted by its entropy).
+The results, averaged over 10 runs, are shown in Figures
+3(a) and 3(b). The figures show how the log-likelihood of
+the data varies with time for the four inference algorithms
+used. We see that MC-LWMC has the lowest negative loglikelihood of all algorithms by a large margin. It significantly dominates MC-WMC in about 2 minutes of run-time
+and is substantially superior to both lifted BP and MC-SAT
+
+(notice the log scale). This shows the advantages of approximate PTP over lifted BP and ground inference.
+
+8
+
+CONCLUSION
+
+Probabilistic theorem proving (PTP) combines theorem
+proving and probabilistic inference. This paper proposed
+an algorithm for PTP based on reducing it to lifted weighted
+model counting, and showed both theoretically and empirically that it has significant advantages compared to previous
+lifted probabilistic inference algorithms. An implementation of PTP will be available in the Alchemy system [25].
+Directions for future research include: extension of PTP
+to infinite, non-Herbrand first-order logic; new lifted inference rules; theoretical analysis of liftability; porting to PTP
+more speedup techniques from logical and probabilistic inference; lifted splitting heuristics; better handling of existentials; variational PTP algorithms; better importance distributions; approximate lifting; answering multiple queries
+simultaneously; applications; etc.
+Acknowledgements This research was partly funded by
+ARO grant W911NF-08-1-0242, AFRL contract FA8750-09-C0181, DARPA contracts FA8750-05-2-0283, FA8750-07-D-0185,
+HR0011-06-C-0025, HR0011-07-C-0060 and NBCH-D030010,
+NSF grants IIS-0534881 and IIS-0803481, and ONR grant
+N00014-08-1-0670. The views and conclusions contained in this
+document are those of the authors and should not be interpreted as
+necessarily representing the official policies, either expressed or
+implied, of ARO, DARPA, NSF, ONR, or the U.S. Government.
+
+References
+[1] F. Bacchus. Representing and Reasoning with Probabilistic
+Knowledge. MIT Press, Cambridge, MA, 1990.
+[2] P. Baumgartner and C. Tinelli. The model evolution calculus
+as a first-order DPLL method. Artif. Intell., 172(4-5):591–
+632, 2008.
+[3] R. J. Bayardo, Jr. and J. D. Pehoushek. Counting models using connected components. In AAAI, pages 157–162, 2000.
+[4] M. Chavira and A. Darwiche. On probabilistic inference by
+weighted model counting. Artif. Intell., 172(6-7):772–799,
+2008.
+[5] A. Darwiche. Recursive conditioning. Artif. Intell., 126:5–
+41, 2001.
+[6] Adnan Darwiche. A logical approach to factoring belief networks. In KR, pages 409–420, 2002.
+[7] M. Davis, G. Logemann, and D. Loveland. A machine program for theorem proving. CACM, 5:394–397, 1962.
+[8] M. Davis and H. Putnam. A computing procedure for quantification theory. JACM, 7(3), 1960.
+[9] L. De Raedt, A. Kimmig, and H. Toivonen. Problog: A
+probabilistic prolog and its application in link discovery. In
+IJCAI, pages 2462–2467, 2007.
+[10] R. de Salvo Braz. Lifted First-Order Probabilistic Inference.
+PhD thesis, Univ. of Illinois, Urbana-Champaign, IL, 2007.
+[11] R. Dechter. Bucket elimination: A unifying framework for
+reasoning. Artif. Intell., 113:41–85, 1999.
+[12] R. Dechter and R. Mateescu. AND/OR search spaces for
+graphical models. Artif. Intell., 171(2-3):73–106, 2007.
+
+[13] S. Della Pietra, V. Della Pietra, and J. Lafferty. Inducing features of random fields. IEEE Transactions on Pattern Analysis and Machine Intelligence, 19:380–392, 1997.
+[14] P. Domingos and D. Lowd. Markov Logic: An Interface
+Layer for Artificial Intelligence. Morgan & Claypool, 2009.
+[15] M. R. Genesereth and N. J. Nilsson. Logical Foundations of
+Artificial Intelligence. Morgan Kaufmann, 1987.
+[16] L. Getoor and B. Taskar, editors. Introduction to Statistical
+Relational Learning. MIT Press, 2007.
+[17] V. Gogate and P. Domingos. Formula-based probabilistic
+inference. In UAI, pages 210–219, 2010.
+[18] Vibhav Gogate and Rina Dechter. SampleSearch: Importance Sampling in presence of Determinism. Artif. Intell.,
+175(2):694-729, 2011.
+[19] J. Halpern. An analysis of first-order logics of probability.
+Artif. Intell., 46:311–350, 1990.
+[20] A. Jha, V. Gogate, A. Meliou, and D. Suciu. Lifted inference
+from the other side: The tractable features. In NIPS, pages
+973–981, 2010.
+[21] K. Kersting, B. Ahmadi, and S. Natarajan. Counting Belief
+Propagation. In UAI, pages 277–284, 2009.
+[22] J. Kisynski and D. Poole. Constraint processing in lifted
+probabilistic inference. In UAI, pages 293–302, 2009.
+[23] B. Milch, B. Marthi, S. J. Russell, D. Sontag, D. L. Ong,
+and A. Kolobov. BLOG: Probabilistic models with unknown
+objects. In IJCAI, pages 1352–1359, 2005.
+[24] B. Milch, L. S. Zettlemoyer, K. Kersting, M. Haimes, and
+L. P. Kaelbling. Lifted probabilistic inference with counting
+formulas. In AAAI, pages 1062–1068, 2008.
+[25] S. Kok, M. Sumner, M. Richardson, P. Singla, H. Poon,
+and P. Domingos. The Alchemy system for statistical relational AI. Tech. Rept., Dept. CSE, Univ. Washington, 2006.
+http://alchemy.cs.washington.edu.
+[26] K. S. Ng, J. W. Lloyd, and W. T. Uther. Probabilistic modelling, inference and learning using logical theories. AMAI
+Journal, 54(1-3):159–205, 2008.
+[27] N. Nilsson. Probabilistic logic. Artif. Intell., 28:71–87, 1986.
+[28] James D. Park. Using weighted MAX-SAT engines to solve
+MPE. In AAAI, pages 682–687, 2002.
+[29] D. Poole. First-order probabilistic inference. In IJCAI, pages
+985–991, 2003.
+[30] H. Poon and P. Domingos. Sound and efficient inference
+with probabilistic and deterministic dependencies. In AAAI,
+pages 458–463, 2006.
+[31] H. Poon, P. Domingos, and M. Sumner. A general method
+for reducing the complexity of relational inference and its
+application to MCMC. In AAAI, pages 1075–1080, 2008.
+[32] J. A. Robinson. A machine-oriented logic based on the resolution principle. JACM, 12:23–41, 1965.
+[33] Reuven Y. Rubinstein. Simulation and the Monte Carlo
+Method. John Wiley & Sons Inc., 1981.
+[34] T. Sang, P. Beame, and H. Kautz. Solving Bayesian networks
+by weighted model counting. In AAAI, pages 475–482, 2005.
+[35] T. Sang, P. Beame, and H. A. Kautz. Heuristics for fast exact
+model counting. In SAT, pages 226–240, 2005.
+[36] P. Sen, A. Deshpande, and L. Getoor. Bisimulation-based
+approximate lifted inference. In UAI, pages 496–505, 2009.
+[37] P. Singla and P. Domingos. Discriminative training of
+Markov logic networks. In AAAI, pages 868–873, 2005.
+[38] P. Singla and P. Domingos. Lifted first-order belief propagation. In AAAI, pages 1094–1099, 2008.
+[39] H. Tamaki and T. Sato. OLD resolution with tabulation. In
+ICLP, pages 84–98, 1986.
+[40] M. Wellman, J. S. Breese, and R. P. Goldman. From knowledge bases to decision models. Knowl. Eng. Rev., 7, 1992.
+
+

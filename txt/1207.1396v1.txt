@@ -1,0 +1,1371 @@
+Toward Practical N 2 Monte Carlo: the Marginal Particle Filter
+
+Mike Klaas
+Computer Science Dept.
+University of British Columbia
+klaas@cs.ubc.ca
+
+1
+
+Nando de Freitas
+Computer Science Dept.
+University of British Columbia
+nando@cs.ubc.ca
+
+Arnaud Doucet
+Computer Science and Stat. Depts.
+University of British Columbia
+arnaud@cs.ubc.ca
+
+Abstract
+
+the observations up to that time; this is known as the filtering distribution p(xt |y1:t ).
+
+Sequential Monte Carlo techniques are useful for
+state estimation in non-linear, non-Gaussian dynamic models. These methods allow us to approximate the joint posterior distribution using
+sequential importance sampling. In this framework, the dimension of the target distribution
+grows with each time step, thus it is necessary to introduce some resampling steps to ensure that the estimates provided by the algorithm
+have a reasonable variance. In many applications, we are only interested in the marginal filtering distribution which is defined on a space of
+fixed dimension. We present a Sequential Monte
+Carlo algorithm called the Marginal Particle Filter which operates directly on the marginal distribution, hence avoiding having to perform importance sampling on a space of growing dimension.
+Using this idea, we also derive an improved version of the auxiliary particle filter. We show theoretic and empirical results which demonstrate a
+reduction in variance over conventional particle
+filtering, and present techniques for reducing the
+cost of the marginal particle filter with N particles from O(N 2 ) to O(N log N ).
+
+In some cases this model can be solved using exact inference, for instance using the Kalman or HMM filters.
+Unfortunately, real-world models are rarely simple enough
+to be solved exactly, often containing non-linearity, nonGaussianity, or hybrid combinations of discrete and continuous variables which lead to high-dimensional intractable
+integrals. Since these integrals cannot be solved analytically, approximation techniques are required.
+
+Introduction
+
+Bayesian state estimation is ubiquitous in the AI community, being one of the most popular techniques for performing inference in dynamic models. Examples of its use include tracking, diagnosis, and control. An unobserved signal (latent states xt ∈ X ) is assumed to exist, and evolves
+according to a (typically Markovian) dynamic model. Additionally, Bayesian filtering assumes the existence of observations (yt ) which are conditionally independent given
+the process. An observation model specifies the generation
+of observations given a specified latent state. Of interest is
+estimating a distribution of the latent state at time t given
+
+One of the most successful and popular approximation
+techniques is Sequential Monte Carlo (SMC), which is referred to as Particle Filtering (PF) in the Bayesian filtering
+domain [2, 13, 3]. In its most basic form, particle filters
+work by starting with a sample from the posterior at time
+t − 1, predicting the state at time t, then updating the importance weights based on the observation yt . These samples form an approximation of the joint density p(x1:t |y1:t )
+at time t. Often, however, it is the filtering distribution
+p(xt |y1:t ) that is desired. This is approximated by dropping samples of the states x1 . . . xt−1 at time t (often implicitly). The tradeoff for doing the importance sampling
+sequentially when the marginal is of interest is that the particle filter is performing importance sampling in a higherdimensional state space X t than is necessary, which results
+in higher variance of the importance weights and requires
+the use of resampling steps.
+In this paper, we develop two particle filtering algorithms which performs importance sampling directly in the
+marginal space X of p(xt |y1:t ). We show using synthetic and real-world experiments that these algorithms
+improve significantly over Sequential Importance Sampling/Resampling (SIR) and Auxiliary Particle Filtering
+(ASIR) in terms of importance weight variance. The main
+disadvantage of doing importance sampling in the marginal
+space is its O(N 2 ) cost, where N is the number of particles used. We demonstrate how this cost can be reduced
+to O(N log N ) or even O(N ) using methods from N -body
+learning [4, 9].
+
+2
+
+Bayesian filtering with SMC
+
+The unobserved signal {xt }, xt ∈ X , is modelled as a
+Markov process of initial distribution p (x1 ) and transition
+prior p ( xt | xt−1 ). The observations {yt }, yt ∈ Y, are
+assumed to be conditionally independent given the process
+{xt } and of marginal distribution p ( yt | xt ). Hence, the
+model is described by
+p(xt |xt−1 ) t ≥ 1, and
+p(yt |xt ) t ≥ 1.
+We denote by x1:t  {x1 , ..., xt } and y1:t  {y1 , ..., yt },
+respectively, the signal and the observations up to time t,
+and define p(x1 |x0 )  p(x1 ) for notational convenience.
+Our aim is to estimate sequentially in time the filtering distribution p ( xt | y1:t ) and the expectations
+
+I (ft ) = Ep( xt |y1:t ) [ft (xt )]  ft (xt ) p ( xt | y1:t ) dxt
+(1)
+for some function of interest ft : X → Rnft integrable with respect to p ( xt | y1:t ). Examples of appropriate functions include the conditional mean, in which case
+ft (xt ) = xt , or the conditional covariance of xt where
+ft (xt ) = xt xTt − Ep( xt |y1:t ) [xt ] ETp( xt |y1:t ) [xt ].
+2.1
+
+Sequential importance sampling
+
+If we had a set of samples (or particles)
+
+N
+
+(i)
+xt
+
+i=1
+
+from
+
+p(xt |y1:t ), we could approximate the distribution with the
+Monte Carlo estimator
+p(dxt |y1:t ) =
+
+N
+1 
+δ (i) (dxt )
+N i=1 xt
+
+where δx(i) (dxt ) denotes the delta Dirac function. This
+t
+can be used to approximate the expectations of interest in
+equation (1) with
+N
+1   (i) 
+
+ft xt .
+I(ft ) =
+N i=1
+
+This estimate converges almost surely to the true expectation as N goes to infinity. Unfortunately, one cannot easily
+sample from the marginal distribution p(xt |y1:t ) directly.
+Instead, we draw particles from p(x1:t |y1:t ) and samples
+x1:t−1 are ignored. To draw samples from p(x1:t |y1:t ), we
+sample from a proposal distribution q and weight the particles according to the following importance ratio:
+wt (x1:t ) =
+
+p(x1:t |y1:t )
+q (x1:t |y1:t )
+
+The proposal distribution is constructed sequentially
+q(x1:t |y1:t ) = q(x1:t−1 |y1:t−1 )q(xt |yt , xt−1 )
+
+and, hence, the importance weights can be updated recursively
+p(x1:t |y1:t )
+wt−1 (x1:t−1 ).
+p(x1:t−1 |y1:t−1 ) q (xt |yt , xt−1 )
+(2)
+N
+
+(i)
+Given a set of N particles x1:t−1
+, we obtain a set of
+i=1
+
+N
+(i)
+(i)
+particles x1:t
+by sampling from q(xt |yt , xt−1 ) and
+i=1
+applying the weights of equation (2).
+
+wt (x1:t ) =
+
+The familiar particle filtering equations for this model are
+obtained by remarking that
+p(x1:t |y1:t ) ∝ p (x1:t , y1:t ) =
+
+t
+
+
+p(yk |xk )p(xk |xk−1 ),
+
+k=1
+
+given which, equation (2) becomes
+(i)
+
+wt ∝
+
+(i)
+
+(i)
+
+(i)
+
+p(yt |xt )p(xt |xt−1 ) (i)
+
+ wt−1 .
+(i)
+(i)
+q xt yt , xt−1
+
+This iterative scheme produces a weighted measure
+
+N
+(i)
+(i)
+(i)
+(i)
+(j)
+x1:t , wt
+, where wt = wt / j wt , and is
+i=1
+known as Sequential Importance Sampling (SIS). A resampling (selection) step may be included at this point that
+chooses the fittest particles (this is the SIR algorithm [8]).
+Figure 2 contains pseudo-code for the algorithm. Note this
+is the procedure in common use by practitioners. It can
+be deceptive: although only the state xt is being updated
+every round, the algorithm (as we have presently derived)
+is nonetheless importance sampling in the joint space X t .
+X × X × X ··· = Xt
+(i)
+
+x1:t
+
+Figure 1: Sequential importance sampling.
+
+3
+
+Marginal Particle Filter
+
+Sequential importance sampling estimates p(x1:t |y1:t ) by
+taking an estimate of p(x1:t−1 |y1:t−1 ) and augmenting it
+with a new sample xt at time t. Each particle at time t is
+a draw over the joint space p(x1:t |y1:t ), sampled sequentially, thus can be thought of as a path through the state
+space at times 1 . . . t (Figure 1). At each time step, the dimension of the sampled paths is increased by the dimension
+of the state space at time t, quickly resulting in a very high
+dimensional space. The sequential nature of the algorithm
+means that the variance is high, leading to most paths having vanishingly small probability. This problem is known
+as degeneracy of the weights, and usually leads to weights
+whose variance tends to increase without bound.
+
+proposal takes a similar form, namely
+Sequential importance sampling step
+
+q (xt |y1:t ) =
+
+• For i = 1, ..., N , sample from the proposal
+
+
+
+(i)
+
+(i)
+
+xt ∼ q xt yt , xt−1
+
+
+
+N
+
+
+t
+
+t
+
+t−1
+
+(4)
+
+j=1
+
+The importance weights are now on the marginal space
+
+• For i = 1, ..., N , evaluate the importance weights
+
+ 
+
+
+(i)
+(i)  (i)
+p yt xt p xt xt−1
+(i)
+
+
+t−1
+w
+t(i) =
+w
+(i) 
+(i)
+q x y , x
+
+
+
+(j)
+(j)
+wt−1 q xt yt , xt−1 .
+
+wt =
+
+p(xt |y1:t )
+.
+q (xt |y1:t )
+
+Pseudo-code for the algorithm is given in Figure 3.
+
+• Normalise the importance weights
+(i)
+
+wt =
+
+w
+(i)
+N t (j)
+t
+j w
+
+Marginal Particle Filter (MPF)
+• For i = 1, ..., N , sample from the proposal using
+stratified sampling
+
+Selection step
+• Resample
+
+
+
+
+(i)
+
+Nthe discrete weighted measure
+(i)
+
+xt , wt
+(i)
+xt , N1
+
+N i=1
+i=1
+
+(i)
+
+xt
+
+to obtain an unweighted measure
+
+N
+
+
+∼
+
+
+
+(i)
+wt
+
+
+
+=
+
+(i)
+
+p yt xt
+
+
+
+N
+
+p(xt |xt−1 ) p(xt−1 |y1:t−1 ) dxt−1 (3)
+
+hence, the filtering update becomes
+p(xt |y1:t ) ∝ p(yt |xt ) p(xt |y1:t−1 )
+
+= p(yt |xt ) p(xt |xt−1 ) p(xt−1 |y1:t−1 ) dxt−1 .
+The integral in equation (3) is generally not solvable
+analytically, but since we
+ have a particle approxima
+(i)
+(i)
+tion of p(xt−1 |y1:t−1 ) namely, xt−1 , wt−1 , we
+can approximate
+(3) as the weighted kernel estimate
+
+(j)
+(j)
+N
+x
+w
+p
+x
+t t−1 .
+j=1 t−1
+While we are free to choose any proposal distribution that
+has appropriate support, it is convenient to assume that the
+
+(j)
+
+(i)
+
+wt−1 q xt
+
+
+
+x(j)
+1:t−1
+
+(j)
+
+(i)
+
+wt−1 p xt
+
+
+yt , xt−1
+
+• Normalize the importance weights
+
+One strategy employed is to use a resampling step after updating the particle weights to multiply particles (paths) with
+high weight and prune particles with negligible weight (the
+SIR algorithm).
+
+
+
+N
+j=1
+
+(j)
+
+j=1
+
+p(xt |y1:t−1 ) =
+
+
+
+• For i = 1, ..., N , evaluate the importance weights
+
+Figure 2: Particle filtering algorithm at time t.
+
+The predictive density is obtained by marginalizing
+
+(j)
+
+j=1
+
+of N new particles.
+
+The Marginal Particle Filter (MPF) uses a somewhat more
+principled approach. We perform particle filtering directly
+on the marginal distribution p(xt |y1:t ) instead of on the
+joint space.
+
+
+
+(j)
+
+wt−1 q xt yt , xt−1
+
+(i)
+
+wt =
+
+w
+(i)
+ t (j)
+t
+jw
+
+Figure 3: The MPF algorithm at time t.
+3.1
+
+Auxiliary Variable MPF
+
+The auxiliary particle filter (ASIR), introduced by Pitt and
+Shepard [11, 1], is designed to improve the performance of
+sequential Monte Carlo in models with peaked likelihoods
+(which is another source of importance weight variance).
+In this section, we derive an algorithm that combines both
+approaches.
+When the likelihood is narrow, it is desirable to choose a
+proposal distribution that samples particles which will be
+in high-probability regions of the observation model. The
+auxiliary particle filter works by re-weighting the particles
+at time t − 1 to boost them in these regions.
+We are interested in sampling from the following target distribution
+p ( xt | y1:t ) ∝ p ( yt | xt )
+
+N
+
+
+
+
+(j)
+(j)
+wt−1 p xt | xt−1
+
+(5)
+
+j=1
+
+=
+
+N
+
+j=1
+
+ 
+
+
+(j)
+(j)
+(j)
+wt−1 p yt | xt−1 p xt | xt−1 , yt .
+
+The auxiliary PF uses the following joint distribution:
+
+ 
+
+(k)
+(k)
+(k)
+p(k, xt |y1:t ) ∝ wt−1 p yt xt−1 p xt xt−1 , yt .
+
+Auxiliary Marginal Particle Filter (AMPF)
+(i)
+
+• For i = 1, . . . , N , choose simulation µt
+culate mixture weights
+
+k is known as an auxiliary variable and is an index into the
+mixture of equation (5). Thus,
+
+
+(k)
+(k)
+(6)
+p ( k| y1:t ) ∝ wt−1 p yt xt−1 .
+
+
+
+(k)
+(k)
+= wt−1 p(yt |xt ) p xt xt−1 dxt
+
+
+
+(i)
+
+(i)
+
+(i)
+
+(k)
+
+q ( k| y1:t ) = λt−1 ,
+
+
+(k)
+q ( xt | y1:t , k) = q xt | xt−1 , yt .
+
+p ( k, xt | y1:t )
+(7)
+q ( k, xt | y1:t )
+
+ 
+
+(k)
+(k)
+(k)
+wt−1 p yt | xt−1 p xt | xt−1 , yt
+
+
+∝
+.
+(k)
+(k)
+λt−1 q xt | xt−1 , yt
+
+w (k, xt ) =
+
+In the marginal particle filter, we use the same importance distribution but instead of performing importance
+sampling between p ( k, xt | y1:t ) and q ( k, xt | y1:t ), we directly perform importance sampling between p ( xt | y1:t )
+and q ( xt | y1:t ) to compute the weights
+
+(i)
+λ
+t−1
+N (j)
+
+λt−1
+
+• For i = 1, ..., N , sample from the proposal
+(i)
+
+xt
+
+∼
+
+N
+
+
+
+
+(j)
+
+(j)
+
+λt−1 q xt yt , xt−1
+
+
+
+j=1
+
+• For i = 1, ..., N , evaluate the importance weights
+w
+t =
+(i)
+
+
+
+(i)
+
+p yt xt
+
+
+
+N
+j=1
+
+N
+j=1
+
+(j)
+
+(j)
+
+
+
+x(j)
+t−1
+
+(j)
+
+(i)
+
+wt−1 p xt
+(i)
+
+λt−1 q xt
+
+
+yt , xt−1
+
+• Normalise the importance weights
+(i)
+
+wt =
+
+w
+(i)
+N t (j)
+t
+j=1 w
+
+Proposition 1. The variance of the AMPF importance
+sampling weights w(xt ) is less than or equal to ASIR’s importance weights w(k, xt ).
+Proof. By the variance decomposition lemma, we have
+var [w (k, xt )] = var [E ( w (k, xt )| xt )]
++ E [var ( w (k, xt )| xt )]
+= var [w (xt )] + E [var ( w (k, xt )| xt )] .
+Hence, as
+E [var ( w (k, xt )| xt )] ≥ 0
+
+(8)
+
+ 
+
+(j)
+(j)
+(j)
+N
+p
+x
+w
+p
+y
+|
+x
+|
+x
+,
+y
+t
+t
+t
+t−1
+t−1
+j=1 t−1
+
+
+.
+(j)
+(j)
+N
+j=1 λt−1 q xt | xt−1 , yt
+
+
+This leads to the auxiliary marginal particle filter (AMPF)
+which is described in Figure 4.
+1
+
+(i)
+
+λt−1 =
+
+We expect that performing importance sampling directly
+between the distributions of interest will lead to a reduction
+in variance. It is not hard to show that it can be no worse.
+
+The importance weight is given by
+
+∝
+
+
+
+Figure 4: The AMPF algorithm at time t. The ←d symbol
+denotes the deterministic selection of a likely value from
+the distribution, such as the mean or a mode of the density.
+
+where
+
+p ( xt | y1:t )
+q ( xt | y1:t )
+
+(i)
+
+j
+
+Using these weights, the auxiliary particle filter defines the
+following joint proposal distribution:
+
+w (xt ) =
+
+
+
+
+
+t−1 = wt−1 p yt µt
+λ
+
+Since the exact evaluation of (6) is usually impossible, we
+approximate this via what is known as a simulation step.
+(k)
+For each index k at time t − 1, we choose µt associ(k)
+ated with the distribution p(xt |xt−1 ) in some deterministic
+(k)
+fashion (µt could be the expected value, for instance).
+We define the simulation weight1 for index k to be
+
+
+(k)
+(k)
+wt−1 p yt µt
+(k)
+.
+
+λt−1 
+(j)
+(j)
+N
+j=1 wt−1 p yt µt
+
+q ( k, xt | y1:t ) = q ( k| y1:t ) q ( xt | y1:t , k)
+
+(i)
+
+µt ←d p xt xt−1
+
+and cal-
+
+To prevent this step from introducing bias, the simulation
+(i)
+weights are chosen independently from xt .
+
+it follows that
+var [w (xt )] ≤ var [w (k, xt )] .
+3.2
+
+Discussion
+
+Since the particles at time t are sampled from a much lower
+dimensional space in the marginal filter algorithms, we expect that the variance in the weights will be significantly
+less than that of (A)SIR for the same number of particles.
+
+−3
+
+2
+
+x 10
+
+Particle weight variance
+SIR
+Auxiliary marginal PF
+Marginal PF
+ASIR
+
+1.5
+
+(a) (A)SIR samples a mixture component and uses this to
+compute importance sampling weights.
+1
+
+0.5
+
+(b) Marginal filtering uses the entire mixture.
+
+Figure 5: Predictive density p(xt |y1:t−1 ) in (A)SIR and
+Marginal PF. By using a single mixture component, the
+(A)SIR estimate ignores important details of the distribution; a particle lying in the left mode should be given less
+weight than one lying in the right mode.
+
+Proposition 1 proves that it is no greater in the auxiliary
+variable setting, and a similar result holds for SIR.
+Figure 5 demonstrates this with an example. Consider a
+multi-modal state estimate at time t − 1, and a Gaussian
+transition prior. In (A)SIR, a particle’s transition likelihood
+is relative to the tail end of a path (5(a)), while the marginal
+PF calculates the true marginal transition density (5(b)).
+The marginal PF improves over (A)SIR whenever a particle has high marginal probability but low joint probability
+along its path. This can occur due to heavy-tailed importance distributions or models with narrow or misspecified
+transition priors. On the other hand, the improvement of
+MPF over SIR will not be very pronounced if the observation model is peaked (i.e., if likelihood is highly concentrated), as this will influence the importance weights more
+than the effect of sampling in the joint space. In these cases,
+AMPF should be used. Figure 6 demonstrates the two types
+of variance reduction.
+Finally, it should be noted that sequential Monte Carlo applies to domains outside of Bayesian filtering, and an analogous marginal SMC algorithm can be straightforwardly
+derived in a general SMC context.
+
+0
+0
+
+10
+
+20
+Timestep
+
+30
+
+40
+
+Figure 6: Importance weights variance reduction. “Spikes”
+in weight variance are caused by unlikely observations.
+ASIR (red) is successful in smoothing these occurrences
+when using SIR (green). The marginal PF (black) reduces
+overall variance by sampling in a smaller-dimensional
+space, but still suffers from spikes. AMPF (blue) gains the
+advantages of both approaches.
+tribution, then the MPF weight update equation becomes:
+
+
+
+
+(i)
+(j)
+(i) (j)
+N
+p yt x t
+wt−1 p xt xt−1
+j=1
+(i)
+
+
+wt ∝
+(j)
+(i) (j)
+N
+x
+w
+p
+x
+t
+t−1
+j=1 t−1
+
+
+(i)
+= p yt x t .
+When using SIR, particles are resampled after being
+weighted, but this is precisely equivalent to sampling
+from
+
+
+(j)
+N (j)
+the marginal proposal distribution j wt−1 p xt xt−1 .
+The SIR weight update equation is
+ 
+
+
+(i)
+(i) (i)
+
+
+p yt xt p xt xt−1
+(i)
+(i)
+(i)
+
+
+wt ∝
+wt−1 = p yt xt ,
+(i) (i)
+p xt xt−1
+(i)
+
+since wt−1 is set to N −1 after resampling. In both cases,
+the conventional likelihood-weighted filter is recovered.
+
+Note that the evaluation of the proposal (equation (4)) must
+be performed for each sample, thus both MPF and AMPF
+incur an N 2 cost. As we later show, this can be improved
+substantially.
+
+Similarly, when performing auxiliary filtering, it may
+be possible to sample exactly from the optimal pro(k)
+posal q (xt |yt , k) = p(xt |yt , xt ) and exactly evaluate
+(k)
+p(yt |xt−1 ) (equation (6)). In this case the importance
+weight variance is zero, thus the marginal particle filter cannot bring any improvement.
+
+3.3
+
+4
+
+Cases of equivalence
+
+There is one case where SIR and marginal PF are equivalent. When the transition prior is used as the proposal dis-
+
+Efficient Implementation
+
+The marginal particle filter as presented has a significant
+disadvantage: it has O(N 2 ) complexity. In this section,
+
+we show how to apply powerful techniques from N -body
+learning [4] to reduce this cost to O(N log N ), and in some
+cases O(N ). N -body problems involve a set of sources
+X  {xj } with associated weights {ωj }, a set of targets
+Y  {yi },2 and an influence function K(xj , yi ).
+The goal is to find the influence qi at each target yi , ie.
+∀i,
+
+qi =
+
+N
+
+
+ωj K(xj , yi )
+
+j=1
+
+to within a specified error . This is the weighted Kernel Density Estimation (KDE) problem, and costs O(N 2 )
+when implemented directly. The mapping to marginal filtering is direct. For instance, equation (4) can be formulated as a weighted KDE problem as follows:
+   
+
+  
+(j)
+(i)
+yi  xt , and
+xj  xt−1 ,
+
+5
+
+Experiments
+
+We present several examples of using the Marginal Particle Filter for Bayesian filtering. We compare the algorithms in several respects: the error of the state estimate
+to the ground truth (when known); the variance of the importance weights; and unique particle count. High variance is indicative of degeneracy of the importance sampling weights, and affects the precision and variance of the
+estimator. Unique particle count is a measure of the diversity of the particles. The latter two are both important: it is
+trivial to construct an algorithm which performs well under
+either of these measures individually, but the construction
+will behave pathologically under the other measure.
+5.1
+
+Consider the following reference model [2]:
+
+K(xj , yi )  q (xt = yi |xt−1 = xj , yt ) .
+We give a brief overview of the methods involved. For an
+empirical comparison of the methods, see [9].
+4.1
+
+Dual-tree methods
+
+Dual-tree recursion requires a kernel parameterized by a
+distance function: K(x, y)  K(δ(x, y)). This encompasses most continuous densities and some discrete distributions (in the latter case, it usually depends on the parameters of the distribution). This method first builds a spacial
+tree3 on both the source and target points. We can bound
+the kernel response of a node of source points to a node of
+target points based on the node-node distances (Figure 7).
+The bounds can be tightened by recursing on both trees.
+Gray and Moore [5] give a thorough exposition.
+
+Multi-modal non-linear time series
+
+xt =
+
+25xt−1
+xt−1
++
++ cos(1.2t) + N (0, σx )
+2
+1 + x2t−1
+
+yt =
+
+x2t
++ N (0, σy ) .
+20
+
+The posterior distribution is bi-modal and non-linear; this
+is a standard example of a difficult filtering workload.
+Method
+SIR
+MPF
+
+RMS Error
+2.902
+2.344
+
+Figure 7: Dual-tree bounding.
+
+Weight var.
+0.000163
+0.000025
+
+Table 1: 1-D time series: RMS error and weight variance.
+Table 1 and Figures 8, 9, and 10 summarize the results.
+The Marginal Particle Filter improves over SIR slightly in
+terms of RMSE, and produces a substantial reduction in
+importance weight variance.
+
+δmax
+δmin
+
+variance
+1.03
+0.06
+
+State estimate
+20
+
+SIR
+Marg PF
+True state
+
+15
+10
+
+4.2
+
+Gaussian kernel methods
+
+If the kernel is Gaussian, then the fast Gauss Transform [6]
+and Improved-FGT [14] can be used to perform weighted
+KDE in O(N ). These methods work by partitioning the
+space in which the data lie into clusters, and approximating
+the Gaussian sum from one cluster to another with a Hermite polynomial (FGT) or Taylor series expansion (IFGT).
+While the IFGT is generally faster, it is unknown how to
+tune the parameters to guarantee the error bound while
+maintaining acceptable performance.
+2
+
+Note: xj , yi , and ωj defined here are not to be confused with
+the xt , yt , and wt used earlier in the paper.
+3
+A popular choice is a kd-tree, though metric trees are preferred in high dimensional spaces.
+
+5
+0
+−5
+−10
+−15
+−20
+0
+
+10
+
+20
+30
+Timestep
+
+40
+
+Figure 8: 1-D time series; state estimate.
+
+50
+
+Particle weight variance
+0.012
+
+U.K. Sterling/U.S. Dollar exchange rate from 1/10/81 to
+28/6/85. There are 946 timesteps, but we limit analysis to
+the first 200 for readability, and use the model parameters
+fit to the data using MCMC in [7]. We use as proposal the
+transition prior with heavier tails to test the marginal filter’s
+ability to compensate for poor proposals.
+
+SIR
+Marg PF
+
+0.01
+0.008
+
+State estimate
+
+0.006
+
+2.5
+
+0.004
+
+2
+
+0.002
+0
+0
+
+SIR
+Auxiliary marginal PF
+Marginal PF
+ASIR
+Observations
+
+1.5
+10
+
+20
+30
+Timestep
+
+40
+
+50
+
+Figure 9: 1-D time series; variance of the importance
+weights. The spikes are the result of unlikely data—MPF
+does particularly better than SIR in these cases.
+
+0.5
+0
+−0.5
+0
+
+Unique particles (max = 500)
+600
+
+1
+
+50
+
+SIR
+Marg PF
+
+500
+
+100
+Timestep
+
+150
+
+200
+
+Figure 11: Stochastic volatility model; state estimate.
+
+400
+−3
+
+300
+
+2
+
+x 10
+
+200
+1.5
+
+Particle weight variance
+SIR
+Auxiliary marginal PF
+Marginal PF
+ASIR
+
+100
+0
+0
+
+10
+
+20
+30
+Timestep
+
+40
+
+50
+
+Figure 10: 1-D time series; unique particle count. Although
+the Marginal PF generally better diversity, an unlikely observation can still cause problems (such as at t = 8).
+5.2
+
+Stochastic Volatility
+
+Monte Carlo methods are often applied to the analysis of
+the variance of financial returns as the models involved cannot be solved analytically. One commonly used model is
+stochastic volatility [7], which is summarized as:
+yt = t β exp {xt /2}
+
+1
+
+0.5
+
+0
+0
+
+50
+
+100
+Timestep
+
+150
+
+200
+
+Figure 12: Stochastic volatility model; importance weight
+variance. Marginal filtering consistently achieves lower
+variance. See Figure 6 for a closer view of the first twenty
+timesteps, which more clearly illustrates the interaction
+among SIR, AMPF, and ASIR.
+
+xt = φxt−1 + ηt
+where ηt ∼ N (0, ση ), t ∼ N (0, 1), and x1 ∼
+N 0, ση2 /(1 − φ2 ) . We analyze the weekday close of the
+
+The results are summarized in Figures 11, 12, and 13. All
+results are means over five runs.
+
+Unique particles
+400
+
+troduced marginal importance sampling which overcomes
+this deficiency, and have derived two new particle filtering
+algorithms using marginal importance sampling that improve over SIR and ASIR, respectively. We have presented
+theoretical and empirical results which show that MPF and
+AMPF achieve a significant reduction in importance weight
+variance over the standard algorithms, and have shown how
+the computational burden can be drastically reduced.
+
+SIR
+Auxiliary marginal PF
+Marginal PF
+ASIR
+
+350
+
+300
+
+250
+
+200
+
+150
+0
+
+50
+
+100
+Timestep
+
+150
+
+200
+
+Figure 13: Stochastic volatility, unique particle count.
+
+Note that while we have reduced MPF to the same asymptotic complexity as SIR, the constants (while not prohibitive) are certainly higher than in SIR. The use of MPF
+is preferable when the transition prior p(xt |xt−1 ) is vague,
+which is common in industrial applications [10]. Regardless of the choice of prior, the MPF is also essential in order
+to compute the filter derivatives for parameter estimation
+[12].
+Acknowledgements
+We thank Gareth Peters for his invaluable suggestions.
+
+5.3
+
+Fast implementation
+
+References
+
+We compared the MPF implemented naı̈vely to an implementation using the fast Gauss Transform (FGT), as it is
+conceivable that the error introduced by the FGT would
+offset the variance-reduction benefits that MPF provides.
+The results in Table 2 indicate that we can increase the precision sufficiently to render this issue moot. (Additionally,
+we performed all the experiments in the previous section
+using the approximation techniques.)
+
+1e-3
+
+N
+500
+
+1e-3
+
+1500
+
+1e-7
+
+5000
+
+naı̈ve
+FGT
+naı̈ve
+FGT
+naı̈ve
+FGT
+
+time(s)
+0.300
+0.181
+2.568
+0.310
+28.14
+1.482
+
+speedup
+1.66
+8.28
+19.0
+
+RMSE
+1.2684
+1.2685
+1.2469
+1.2542
+1.2466
+1.2466
+
+Table 2: Fast methods applied to the marginal particle filter. All reported results are the mean values over ten runs.
+The FGT enables a substantial improvement in speed at the
+cost of a slight increase in error. For the last test, we substantially decreased the error tolerance of the FGT approximation (which increases the runtime), and were still able
+to achieve a considerable speedup and RMSE within the
+variance of the test to the naı̈ve. This suggests that the error introduced by the FGT approximation can be made less
+than the inherent error caused by Monte Carlo variance.
+
+6
+
+Conclusions
+
+Particle filtering involves importance sampling in the
+high-dimensional joint distribution even when the lowerdimensional marginal distribution is desired. We have in-
+
+[1] C Andrieu, M Davy, and A Doucet. Improved auxiliary particle filtering: Application to time-varying spectral analysis.
+In IEEE SCP 2001, Signapore, August 2001.
+[2] A Doucet, N de Freitas, and N J Gordon, editors. Sequential
+Monte Carlo Methods in Practice. Springer-Verlag, 2001.
+[3] P Fearnhead. Sequential Monte Carlo Methods in Filter
+Theory. PhD thesis, Department of Statistics, Oxford University, England, 1998.
+[4] A Gray and A Moore. ‘N-Body’ problems in statistical
+learning. In NIPS, pages 521–527, 2000.
+[5] A Gray and A Moore. Nonparametric density estimation:
+Toward computational tractability. In SIAM International
+Conference on Data Mining, 2003.
+[6] L Greengard and X Sun. A new version of the Fast
+gauss transform. Documenta Mathematica, ICM(3):575–
+584, 1998.
+[7] S Kim, N Shephard, and S Chib. Stochastic volatility: Likelihood inference and comparison with ARCH models. Review of Economic Studies, 65(3):361–93, 1998.
+[8] G Kitagawa. Monte Carlo filter and smoother for nonGaussian nonlinear state space models. Journal of Computational and Graphical Statistics, 5:1–25, 1996.
+[9] D Lang, M Klaas, and N de Freitas. Empirical testing of fast
+kernel density estimation algorithms. Technical Report TR2005-03, Dept of Computer Science, UBC, February 2005.
+[10] R Morales-Menendez, N de Freitas, and D Poole. Real-time
+monitoring of complex industrial processes with particle filters. In Advances in Neural Information Processing Systems,
+2003.
+[11] M K Pitt and N Shephard. Filtering via simulation: Auxiliary particle filters. JASA, 94(446):590–599, 1999.
+[12] G Poyadjis, A Doucet, and S S Singh. Particle methods for
+optimal filter derivative: Application to parameter estimation. In ICASSP, 2005.
+[13] C P Robert and G Casella. Monte Carlo Statistical Methods.
+Springer-Verlag, New York, 1999.
+[14] C Yang, R Duraiswami, N A Gumerov, and L S Davis. Improved fast Gauss transform and efficient kernel density estimation. In ICCV, Nice, 2003.
+
+

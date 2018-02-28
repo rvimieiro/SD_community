@@ -1,0 +1,1031 @@
+326
+
+SARIA ET AL.
+
+Reasoning at the Right Time Granularity
+
+Suchi Saria
+
+Uri Nodelman
+Daphne Koller
+Department of Computer Science
+Stanford University
+Stanford, CA 94305
+{ssaria,nodelman,koller}@cs.stanford.edu
+
+Abstract
+Most real-world dynamic systems are composed
+of different components that often evolve at very
+different rates. In traditional temporal graphical models, such as dynamic Bayesian networks,
+time is modeled at a fixed granularity, generally selected based on the rate at which the
+fastest component evolves. Inference must then
+be performed at this fastest granularity, potentially at significant computational cost. Continuous Time Bayesian Networks (CTBNs) avoid
+time-slicing in the representation by modeling
+the system as evolving continuously over time.
+The expectation-propagation (EP) inference algorithm of Nodelman et al. (2005) can then vary
+the inference granularity over time, but the granularity is uniform across all parts of the system,
+and must be selected in advance. In this paper, we provide a new EP algorithm that utilizes
+a general cluster graph architecture where clusters contain distributions that can overlap in both
+space (set of variables) and time. This architecture allows different parts of the system to be
+modeled at very different time granularities, according to their current rate of evolution. We also
+provide an information-theoretic criterion for dynamically re-partitioning the clusters during inference to tune the level of approximation to the
+current rate of evolution. This avoids the need
+to hand-select the appropriate granularity, and allows the granularity to adapt as information is
+transmitted across the network. We present experiments demonstrating that this approach can
+result in significant computational savings.
+
+1 Introduction
+Reasoning about systems that evolve over time is an important task that arises in many applications. The standard representational frameworks for temporal reasoning — hidden Markov models (Rabiner & Juang, 1986) and dynamic
+
+Bayesian networks (Dean & Kanazawa, 1989) — model
+the system by slicing time into a sequence of equal-length
+intervals. However, many systems are comprised of components that change on vastly different time scales. When
+modeling a person’s activity in an office environment, some
+factors, such as their current job specification, evolve quite
+slowly, others, such as their current project composition, at
+a medium rate, and yet others, such as their current immediate task, evolve very quickly (often depending on what
+email they happened to get in the past few minutes). Similar high disparities in time granularity occur when modeling complex geopolitical situations, a person’s television
+viewing pattern, and many more.
+The framework of continuous time Bayesian networks
+(CTBNs) (Nodelman et al., 2002) provides a representation for structured dynamic systems that avoids the use of
+a fixed time granularity. CTBNs build on the framework
+of homogeneous Markov processes (Norris, 1997), which
+provide a model of continuous-time evolution. CTBNs
+model each process variable as a continuous-time Markov
+process, whose dynamics depends on other process variables in the model. Thus, not only can variables evolve
+at different rates, but the evolution rate of a single process
+variable can vary over time, in response to events occurring
+elsewhere in the system.
+Exact inference in CTBNs involves generating an
+exponentially-large matrix representing the transition
+model over the entire system state. Nodelman et al. (2005)
+present an approximate inference algorithm for CTBNs
+which is an instance of the expectation propagation (EP)
+algorithm (Minka, 2001). In this algorithm, the system is
+segmented into time intervals that can vary in their length;
+within each segment, messages are passed in an EP cluster
+graph, which contains clusters that represent distributions
+over subsets of variables during that segment. While the
+time segments can be of different length, all the clusters of
+variables are broken up over the same segment boundaries.
+Thus, if one cluster evolves more rapidly than others, requiring a finer-grained approximation, inference in the entire system will have to be approximated at that granularity.
+Moreover, the granularity needs to be selected by the user,
+
+SARIA ET AL.
+in advance, a design choice which is far from obvious.
+In this paper, we present a new EP-based algorithm
+that has two important novel features. First, the algorithm uses a flexible cluster graph architecture where clusters, and messages between them, can have varying time
+scopes. This feature allows us to fully exploit the natural time-granularity at which different sub-processes evolve
+by modeling different parts of the system at different time
+granularities. Second, we introduce a new dynamic-EP algorithm, where the algorithm dynamically chooses the appropriate level of granularity to use in each cluster at each
+point in time. This level can depend both on the current evidence for that subset and on messages received from other
+parts of the system. Dynamic-EP utilizes an informationtheoretic criterion to automatically decide whether a cluster should be encoded at a finer time granularity, and also
+how it should be split. We illustrate the performance of
+our Dynamic-EP algorithm on networks where different
+variables evolve at different rates; our results suggest that
+Dynamic-EP provides a much better time-accuracy tradeoff than using a uniform granularity.
+
+2 Continuous Time Bayesian Networks
+We begin by briefly reviewing the key definitions of
+Markov processes and continuous time Bayesian networks,
+as presented by Nodelman et al. (2002).
+A finite state, continuous time, homogeneous Markov
+process X with state space Val(X) = {x1 , . . . , xn } is essentially a distribution over a continuum of transient variables X t for t ∈ [0, ∞). It is described by an initial distri0
+bution PX
+and an n × n transition intensity matrix whose
+off-diagonal entries qxi xj encode the intensity of transitioning from
+P state xi to state xj and whose diagonal entries
+qxi = j6=i qxi xj . This matrix describes the transient behavior of X t . If X0 = x then it stays in state x for an
+amount of time exponentially distributed with parameter
+qx . Upon transitioning, X shifts to state x′ with proba0
+bility qxx′ /qx . If PX
+is the distribution over X at time 0,
+then the distribution over the state of the process X at some
+t
+0
+future time t can be computed at PX
+= PX
+exp(QX · t),
+where exp is matrix exponentiation.
+A continuous time Bayesian network (CTBN) N defines
+a distribution over trajectories σ for a set of process variables X. A complete trajectory σ can be represented as a
+sequence of states xi of X, each with an associated duration. A CTBN encodes this distribution in a factored form,
+as follows: Each process variable X is associated with a
+conditional Markov process — an inhomogeneous Markov
+process whose intensity matrix varies as a function of the
+current values of a set of discrete conditioning variables
+U. It is parameterized using a conditional intensity matrix
+(CIM) — QX|U — a set of homogeneous intensity matrices QX|u , one for each instantiation of values u to U. A
+continuous time Bayesian network N over X consists of
+0
+two components: an initial distribution PX
+, specified as a
+
+327
+
+Bayesian network B 0 over X, and a continuous transition
+model, specified using a directed (possibly cyclic) graph G
+whose nodes are X ∈ X; UX denotes the parents of X in
+G. Each variable X ∈ X is associated with a conditional
+intensity matrix, QX|UX . The CIMs can be combined to
+form a single homogeneous Markov process over the joint
+state space by a process of amalgamation.
+The resulting density over complete trajectories can be
+formulated within the framework of exponential families
+(see Lauritzen (1996)). We define a sufficient statistics vector τ (σ) comprised of sufficient statistics for each variable
+{T [x|u], M [x, x′ |u]}: T [x|u] — the amount of time that
+X = x while UX = u; and M [x, x′ |u] — the number
+of times that X transitions from x to x′ while UX = u.
+Similarly, the natural parameters for the QX component of
+the model are simply the diagonal terms and the logarithm
+of the off-diagonal terms η(QX|u ) = {−qx|u , ln(qxx′ |u )}.
+Then, the probability of the trajectory over the variables in
+the model can be written as the inner product of the sufficient statistics and the natural parameter vectors:
+PN (σ) ∝
+
+Y
+
+0
+LX (T [X|U], M [X|U])
+PX
+
+X∈X
+
+LX (T [X|U], M [X|U]) =
+
+Y
+
+exp(hτX|u (σ), η(QX|u )i) =
+
+u
+
+
+
+XX
+XX
+exp 
+−qx|u T [x|u] +
+M [x, x′ |u] ln(qxx′ |u )
+u
+
+x
+
+u x′ 6=x
+
+The term LX (T [X|U], M [X|U]) is X’s likelihood contribution to the overall probability of the trajectory.
+
+3 Expectation Propagation for CTBNs
+We want to compute answers to probabilistic queries given
+some partial observations about the current trajectory. Although many forms of evidence are possible, we focus, for
+simplicity of presentation, on interval evidence of the form
+“Process variable X takes the value x for the duration of an
+interval [t1 , t2 ]”. From here on, we represent the composite of such evidence for all variables in the system in the
+interval [t1 , t2 ] as σ t1 :t2 .
+In this section, we briefly review the algorithm of Nodelman et al. (2005) (NKS from now on), which forms the
+basis for our approach. The NKS algorithm is based on the
+expectation propagation framework, which performs message passing in a cluster graph. In general, a cluster graph is
+defined in terms of a set of clusters Cj , whose scope is some
+subset of the variables V j ⊆ X. Messages are passed between clusters along edges Cj —Ck , each of which is associated with a sepset Sj,k whose scope is the set of variables
+V jk = V j ∩ V k . The NKS algorithm uses a cluster graph
+whose clusters correspond to subsets of process variables
+over a particular time interval [t1 , t2 ]; the cluster Cj encodes a distribution over the trajectories of the variables
+V j during [t1 , t2 ], i.e., a distribution over the continuum of
+
+328
+
+SARIA ET AL.
+
+transient variables X t , where X ∈ V j and t ∈ [t1 , t2 ]. A
+sepset Sj,k is used to transmit a distribution over the trajectories of the variables V jk in the intersection of the two
+clusters. To pass a message from Cj to Ck , the distribution
+in Cj is marginalized over the variables in the sepset, and
+the resulting marginal is passed to Ck .
+
+Example 3.1 Consider a chain CTBN A → B → C →
+0
+0
+D, and an initial distribution PABCD
+= PA0 PB0 PC0 PD
+.
+The natural cluster graph for this CTBN has the structure
+AB—BC—CD. The AB cluster, for example, could be
+initialized to contain the CIMs QA , QB|A and PA0 PB0 . To
+pass a message from AB to BC over the sepset B, we
+would compute the distribution over AB trajectories in the
+cluster, marginalize to produce a distribution over B, and
+pass the message to the BC cluster. Importantly, although
+the joint AB distribution is a homogeneous Markov process over AB, the marginal distribution over B is not typically a homogeneous Markov process.
+In general, the exact marginal distribution over a subset
+of the variables in the network can be arbitrarily complex,
+requiring a number of parameters which grows exponentially with the size of the network. NKS address this problem by using expectation propagation (EP) (Minka, 2001).
+EP is a general scheme for approximate message passing
+in a cluster graph, where one approximates a complex message δj→k by projecting it into some fixed parametric form
+in the exponential family, keeping the complexity of the
+messages bounded. The projection is selected to minimize
+the KL-divergence between δj→k and its approximation
+δ̂j→k . In the NKS algorithm, the exponential family used
+for the message representation is the class of homogeneous
+Markov processes, characterized by an initial distribution
+and an intensity matrix.
+So far, we have described a cluster graph where all
+clusters are over a fixed time interval [t1 , t2 ]. To address
+the general case, NKS string together a sequence of cluster graphs, over consecutive intervals [t1 , t2 ], [t2 , t3 ], . . ..
+Messages are passed from one interval [ti , ti+1 ] to another
+[ti+1 , ti+2 ] by computing a point distribution at the boundary point ti+1 . In this solution, the intervals [ti , ti+1 ] can
+have different lengths, but all of the clusters within a single cluster graph for an interval have precisely that interval as their time scope. This assumption can be costly in
+cases where some clusters evolve much more rapidly than
+others. In this case, the messages associated with a rapidly
+evolving cluster cannot be approximated well using a single
+homogeneous Markov process. To obtain a high-accuracy
+result, we must refine the representation of this cluster to
+utilize a much finer time granularity. However, this would
+force us to refine all clusters in the graph in a similar way,
+including clusters that evolve much more slowly. This refinement can greatly, and unnecessarily, increase the number of messages required. Moreover, the NKS algorithm
+requires the discretization of the clusters to be determined
+in advance, a design decision which is far from trivial, and
+
+provide no automated way to select or refine the clusters.
+
+4 Variable Time-Scope EP
+In this paper, we propose an alternative cluster graph architecture, which allows us to much more flexibly tune our
+approximation to the rate of evolution of each cluster separately. In our framework, each cluster Cj encodes a distribution over a set of process variables V j over a clusterspecific interval Ij = [tj1 , tj2 ]. A cluster can encode the distribution over its interval using one or more piece-wise homogenous Markov processes. The sepset between Cj and
+Ck is a distribution over (a subset of) the intersection between the transient variables in the two clusters: the variables in V jk over the interval Ij ∩ Ik . The sepset always
+stores its distribution as a single homogenous continuoustime Markov process. Note that for two consecutive clusters Cj , Ck over the same set of variables Y , where tj2 = tk1 ,
+the sepset is simply the point distribution over Y at time
+tj2 .
+In this generalized cluster graph, even within the same
+time period, some clusters can span much longer intervals,
+whereas others can be much shorter. This flexibility allows
+the outgoing information regarding one set of process variables to be approximated fairly coarsely, using a message
+sent via a single sepset, whereas the information about others can be approximated in a much finer-grained representation by sending a message over multiple sepsets over the
+interval.
+Example 4.1 Consider the CTBN of Example 3.1, over a
+time interval [0, 6]. We might choose a cluster graph that
+has: C1 with scope A, B over the interval [0, 6]; C2 and
+C3 with scope B, C and intervals [0, 2] and [2, 6]; and
+C4 , C5 , C6 with scope C, D and intervals [0, 1], [1, 3], and
+[3, 6]. Between each of these uniform clusters, we have a
+sepset S2,3 over the single time point 2, and two sepsets
+S4,5 and S5,6 over the time points 1 and 3 respectively. In
+addition, we have six sepsets that connect different variable
+scopes: S1,2 and S1,3 with scopes B and intervals [1, 2]
+and [2, 6] respectively; S2,4 , S2,5 , S3,5 and S3,6 with scopes
+C and intervals [0, 1], [1, 2], [2, 3] and [3, 6] respectively.
+Thus, the information that the B, C clusters receive about
+the A, B clusters is summarized within a single homogeneous Markov process; the information about the C, D
+clusters is actually a piece-wise homogeneous Markov process with three separate segments, potentially providing a
+more precise approximation.
+Based on this general scheme, we now describe the details of the algorithm and the message passing steps that it
+takes. For the duration of this discussion, consider a particular CTBN N with an initial distribution specified as
+a Bayesian network B 0 and a set of CIMs QX|UX . We
+are interested in a particular time interval [0, T ], and may
+have some partial evidence σ 0:T about the trajectory, as described above.
+
+SARIA ET AL.
+Cluster Graph Construction. Our message passing algorithm applies to a very general form of a cluster graph. As
+described above, each cluster Cj has a scope of variables
+V j and an associated time interval [tj1 , tj2 ]. In addition,
+clusters are related by sepsets, which also have a variable
+scope and a time scope. Importantly, the same pair of clusl
+ters can be related by more than one sepset. We use Sj,k
+to enumerate the sepsets relating the clusters Cj and Ck ; we
+l
+l
+use V ljk to denote the variable scope of Sj,k
+and Ijk
+its
+interval time scope. A legal cluster graph must satisfy the
+following three properties. Family preservation: For each
+CIM QX|UX and each time point t there must exist some
+Cj such that V j ⊇ ({X} ∪ UX ) and [tj1 , tj2 ] ∋ t; this allows the CIM to be placed in Cj at time t. Similarly, for
+each conditional probability distribution P (X 0 | U0 ) in
+the time 0 Bayesian network B 0 , there must exist Cj such
+that V j ⊇ ({X} ∪ U) and tj1 = 0. Sepset containment:
+l
+For each sepset Sj,k
+relating a pair of clusters Cj , Ck , we
+l
+l
+have that V jk ⊆ V j ∩ V k and Ijk
+⊆ Ij ∩ Ik . Moreover,
+l
+∪l Ijk = Ij ∩ Ik . Running intersection: For each transient
+variable X t , the set of clusters and sepsets containing X t
+forms a tree.
+In most cases, the clusters will have a uniform structure
+over variable scopes across time, as in Example 4.1; we
+have a (non-disjoint) partition of the process variables into
+subsets, and a sequence of consecutive clusters for each
+such subset. However, this formulation also allows a different breakdown of process variables into clusters at different
+points in time, which is useful in cases where the strength
+of the interaction between variables can vary over time.
+We now initialize the cluster graph. To understand this
+step, we first need to examine closely the forms of the measures that we obtain in a cluster Cj by aggregating the factors assigned to the cluster, the incoming messages, and the
+evidence. Recall that our evidence gives us observations of
+the form X = x over an interval [t1 , t2 ]. During that interval, we must reduce the system dynamics to consider only
+states consistent with X = x (see NKS for details). Thus,
+if our cluster does not have uniform observation throughout the length of its interval, different time segments will
+have different dynamics. Different dynamics can also arise
+l
+from messages. Recall that each sepset Sj,k
+sends the clusl
+ter Cj a message over an interval Ijk = [t1 , t2 ], which is a
+sub-interval of Ij . Thus, the distribution over Cj is broken
+up into a sequence of closed sub-clusters, representing consecutive sub-intervals of Ij , each of which has a single coherent model for the system dynamics over its interval. Between each pair of consecutive sub-intervals (tji , tj(i+1) )
+and (tj(i+1) , tj(i+2) ), we have a demarcation point tj(i+1) .
+Thus, the demarcation points are: the beginning or end
+points of any interval of evidence; the beginning or end
+l
+points of any interval of an adjoining sepset Sj,k
+; and the
+beginning and end of the entire interval Ij .
+We can now define a cluster’s distribution in terms
+
+329
+
+of these demarcation points and the closed intervals between them. To motivate the parameterization for each
+closed interval, we recall from NKS the recursive definition for computing probability distributions over variable
+states in a homogenous Markov process. For example, we
+compute a point distribution for X at t given partial evidence σ 0:T as: P (X t |σ 0:T ) = Z1 P (X t |σ 0:t1 ) exp(Q(t −
+t1 ))∆x,x exp(Q(t2 − t))P (σ t2 :T |X t ). Here, Z is the normalizing constant representing the probability of the evidence, ∆x,x is a zero matrix with a 1 in the row and column that both correspond to x; t1 and t2 are time points
+within [0, T ]. Thus, for each closed interval [t1 , t2 ] within
+a cluster Cj , to allow for efficient recursive computations,
+we maintain a data-structure that caches these components:
+1. P (V tj |σ 0:t1 ) accessed as πj [αt1 ]
+2. CIM QV j accessed as πj [Qt1 ]
+3. P (σ t2 :T |V tj ) accessed as πj [β t2 ] .
+Each sepset contains the same data-structure as above represented using the same notation. We denote the message
+l
+in Sj,k
+as µlj,k . A demarcation point contains messages exchanged between consecutive closed sub-intervals within a
+cluster, similarly represented as µtj for the point at time t
+in Cj . Note, both demarcation points and sepsets between
+clusters of the same variable scope do not contain CIMs
+(i.e., they only contain distributions over their point intervals).
+To initialize the cluster graph data-structures, we begin
+by setting all point distributions, α and β vectors, to 1. We
+also initialize all CIMs to zero over their scope. Now, each
+factor from B 0 is multiplied to α0 in a cluster thats starts
+at time 0 and contains the factor’s variable scope. Moreover, the CIMs are assigned to a cluster such that, for each
+t and each X, QX|UX is present in the cluster graph exactly
+once. In the case of uniformly structured cluster graphs, we
+simply pick, for each X, a single cluster sequence whose
+scope contains X and UX , and incorporate QX|UX into
+each cluster in the sequence. After all the CIMs have been
+assigned, each interval may contain zero or more CIMs assigned to it. We store any evidence about the variables
+in the scope of a cluster interval, by reducing the CIMs
+and the corresponding point distributions. The resulting reduced matrices, which we call dynamics matrices, have the
+same form as intensity matrices, but do not necessarily satisfy the constraint that the diagonal entries are the negative
+sum of the off-diagonal entries. The dynamics matrices for
+each interval are amalgamated to produce a single dynamics matrix for that interval that describes the evolution of
+the variables in that interval. The amalgation and reduction
+operations are carefully detailed in NKS. To briefly recap,
+amalgamation corresponds to addition of the intensity matrices (after they have been expanded to apply to the same
+variable scope). Reduction corresponds to zeroing out the
+elements in the intensity matrix that are inconsistent with
+the evidence.
+Example 4.2 Continuing Example 4.1, assume that we ob-
+
+330
+
+SARIA ET AL.
+
+serve B = b during [4, 5]. The distribution at C1 will have
+the following demarcation points: the beginning (1) and
+end (6) of the interval; the beginning (4) and end (5) of the
+interval of evidence over B; and the point 2 which is both
+the end of the sepset S1,2 and the beginning of the sepset
+S1,3 . To obtain the dynamics matrix for the interval (4, 5),
+for example, we amalgamate the CIMs QB|A and QA assigned to it, and reduce them to match the evidence B = b.
+Also, π1 [α4 ] and π1 [β 5 ] are reduced to match the evidence.
+Message Passing. Given an initialized cluster graph, we
+now iteratively pass messages between clusters, until convergence. Convergence occurs when messages between
+neighboring clusters cease to affect the potentials. At a
+high level, during message passing each cluster Cj collects
+incoming messages from all of the sepsets. Each such message is a distribution over the scope of the sepset. The messages are combined together with the factors stored at the
+cluster, and conditioned on the evidence. The result is an
+implicit description of a complex, unnormalized measure
+over the trajectories of the variables V j throughout the interval Ij . We now perform inference within the cluster
+to compute outgoing messages over each of the cluster’s
+sepsets. This message is the cluster distribution, marginalized over the sepset scope, and projected into the parametric form of the outgoing message.
+Message Computation. Our task now is to compute an
+l
+outgoing message over a sepset Sj,k
+, with variable scope
+l
+l
+V jk and interval Ijk . When the variable scopes of Cj and
+Ck are not the same, we call a message exchanged between
+them a vertical message. To compute the outgoing message, we need to perform inference over the measure at Cj ,
+and then perform a KL-divergence minimizing projection
+into the space of homogenous Markov processes over V ljk
+l
+and Ijk
+= [t1 , t2 ]. Consider first the simple case where the
+entire cluster has uniform dynamics Qj , and so the cluster
+boundaries exactly match the sepset boundaries, and the
+only demarcation points are at the beginning and end of the
+interval, where we have factors φtV1 j and φtV2 j , respectively.
+The message computation and marginalization operation is
+now identical to that described by NKS.
+Recapping briefly, for any pair of instantiations x, x′ to
+V j , define ∆x,x′ to be a matrix of the same size as Qj with
+zeros everywhere except for a 1 in the row corresponding
+to x and the column corresponding to x′ . As described by
+NKS, we can compute the projection of the distribution into
+the space of homogeneous Markov processes by computing
+the expected sufficient statistics:
+E[T [v]] =
+Z
+1 t2 t1
+φ exp(Qj (t − t1 ))∆x,x exp(Qj (t2 − t))φt2 dt
+Z t1
+E[M [x, x′ ]] =
+Z
+qxx′ t2 t1
+φ exp(Qj (t − t1 ))∆x,x′ exp(Qj (t2 − t))φt2 dt
+Z t1
+
+The normalization constant Z in both equations is the partition function, which makes the expected amount of time
+over all states sum to t2 − t1 . We can calculate all of these
+statistics simultaneously for all x, x′ , using a fifth order
+Runge-Kutta numerical integration method with an adaptive step size.
+In the general case, a cluster may have multiple subintervals. Note that the boundaries of a sepset always
+correspond to demarcation points in its neighboring clusters. If the sepset interval [t1 , t2 ] is a single sub-interval
+in Ij , then the sufficient statistics computation follows exactly as described above. If [t1 , t2 ] spans multiple intervals, then for each interval [tji , tj(i+1) ] ∈ [t1 , t2 ], we re[t :t ]
+peat the above computation using the factors in πj 1 2
+which are the set of factors in Cj corresponding to the interval [t1 , t2 ]. Having computed all the sub-interval sufficient statistics, we now sum up these sufficient statistics
+over the different sub-intervals to obtain the overall set of
+sufficient statistics for the sepset interval. We marginalize the sufficient statistics over the smaller subset V ljk , and
+compute the KL-divergence minimizing projection for the
+sepset intensity matrix by matching moments as follows:
+′
+P
+]]
+qyy′ = E[M[y,y
+y′ 6=y qyy ′ . Summing up the
+E[T [y]] , qy =
+sufficient statistics over the sub-intervals has natural meaningful semantics. If the sufficient statistics over the different sub-intervals are the same, then a computation of the
+intensity matrix for each of the sub-intervals would result
+in the same intensity matrix. Hence, using a piece-wise homogenous Markov process parameterization would contain
+the same information as a single homogenous Markov process over the entire interval. Alternatively, if the sufficient
+statistcs vary widely between the different sub-intervals,
+then projection into a single homogenous Markov process
+would lead to a poor approximation.
+Finally, to compute the point distributions, µli,j [αt1 ] and
+l
+µi,j [β t2 ] at t1 and t2 for the message, we simply marginalize the distributions at those time points in the cluster.
+Message Incorporation. We will now discuss how to
+incorporate a message from the sepset. Again, consider the
+simple case where the incoming message boundary overlaps a single sub-interval within a cluster. We use factor
+multiplication and division to incorporate each component
+of the message into Ck .
+When the incoming message spans multiple subintervals within the receiving cluster, we first represent the message in the form of the receiving cluster
+as a set of messages over its sub-intervals. For example, say [tk0 , tk1 ], · · · , [tki , tk(i+1) ], · · · , [tk(n−1) , tkn ] ⊆
+[t1 , t2 ] are the corresponding sub-intervals in Ck . For
+l
+each sub-interval [tki , tk(i+1) ], we compute δj→k
+[αtki ],
+l
+l
+[Qtki ] from the newly-received
+δj→k
+[β tk(i+1) ] and δj→k
+message δj→k . We also compute µlj,k [αtki ], µlj,k [β tk(i+1) ]
+and µlj,k [Qtki ] from the old-message µlj,k in the sepset. We
+obtain all of the above point distributions using standard
+
+SARIA ET AL.
+forward and backward propagation within the interval. The
+sub-interval Q matrices are obtained by replicating the bigger interval matrix over each sub-interval. Now, the message for each sub-interval is incorporated independently.
+To maintain consistency between adjacent clusters that
+are over the same variable scope and have an overlapping
+time point, we send what we call a horizontal message
+between them. Finally, as new information is received
+through messages that are incorporated in sub-intervals
+within a cluster, this information must be propagated along
+the remaining cluster intervals to maintain consistency between sub-intervals. This is similar to maintaining consistency across cluster boundaries since, essentially, we can
+view the sub-intervals as defining a chain-structured cluster graph, embedded in the larger cluster Cj (as in the nested
+junction tree of Kjaerulff (1997)). We can now pass messages over this embedded cluster graph using an exact message passing algorithm.
+Summary. We formally outline below the three forms
+of message passing steps we just discussed:
+l
+Procedure Send-Vertical-Message(j, k, Sjk
+)
+l
+1. [t1 t2 ] ← Ijk
+[t t ]
+2. δj→k ← margCj1\V2 l (πj )
+jk
+
+3. foreach sub-interval [tki , tk(i+1) ] ⊆ [t1 , t2 ] in Ck
+δ
+[αtki ]
+πk [αtki ] ← πk [αtki ] · µj→k
+l [αtki ]
+j,k
+
+4.
+
+πk [Qtki ] ←
+l
+µj,k ← δj→k
+
+πk [Qtki ] +
+
+t
+
+δj→k [β k(i+1) ]
+t
+µlj,k [β k(i+1 ]
+λ(δj→k [Q] − µlj,k [Q])
+
+πk [β tk(i+1) ] ← πk [β tk(i+1) ] ·
+
+Note that we scale the update of Q by λ. This is so because
+sometimes the update may lead to a Q matrix that has negative off-diagonal values which is not admissable by our
+definition of a valid intensity matrix. This problem is not
+peculiar to Dynamic-EP. A similar problem is encountered
+in Gaussian-EP (Minka, 2001). Hence, we find the largest
+λ such that the updated Q matrix is valid. This change does
+not affect the fixed-point of the algorithm. At convergence
+(i.e., when δj→k [Q] matches µlj,k [Q]) this algorithm has
+the same fixed-point as the original algorithm.
+1
+Procedure Send-Horizontal-Message(i, j, Sij
+)
+1
+1. t ← Iij
+1. [ti1 ti2 ] ← Ii
+2. [tj1 tj2 ] ← Ij
+3. δi→j [αt ] ← πi [αt ], δi→j [β t ] ← πi [β t ]
+4. If (ti2 = tj1 = t)
+δ
+[αt ]
+πj [αt ] ← πj [αt ] · µi→j
+1 [αt ]
+i,j
+
+Else If (ti1 = tj2 = t)
+δ
+[β t ]
+πj [β t ] ← πj [β t ] · µi→j
+1 [β t ]
+
+5. µ1i,j ← δi→j
+
+i,j
+
+Procedure Update-Dist(j)
+1. Foreach consecutive sub-interval
+(tj(i−1) , tji ) and (tji , tj(i+1) ) in Ci
+
+331
+δ[α] ← αtj(i−1) exp(Qtj(i−1) (tji − tj(i−1) ))
+πj [αtji ] ← πj [αtji ] · tδ[α]
+ji
+t
+
+µi
+
+[α]
+
+µiji [α] ← δ[α]
+2. Foreach consecutive sub-interval
+(tji , tj(i+1) ) and (tj(i−1) , tji ) in Ci
+δ[β] ← exp(Qtji (tj(i+1) − tji )β tj(i+1)
+πj [β tji ] ← πj [β tji ] · tδ[β]
+ji
+t
+
+µi
+
+[β]
+
+µiji [β] ← δ[β]
+For updating the distribution within a cluster, we have the
+flexibility not to fully calibrate the nested cluster graph
+whenever we receive a message; for example, we can update a subset of the sub-interval factors as needed for the
+vertical message computations, saving computational cost.
+Alternatively, we can incorporate multiple incoming messages before recalibrating.
+
+5 Dynamic Repartitioning of Messages
+The message over the variables V jk of sepset Sj,k is constrained to belong to the set of homogeneous Markov Processes, so that a single intensity matrix is used to describe
+the evolution of the variables over the interval Ijk . Additional partitioning of Ijk allows us to have a richer piecewise homogeneous representation over the same interval.
+To dynamically change the granularity of messages, we
+consider (online during inference) the possibility of splitl
+l
+ting Sj,k into sepsets Sj,k
+over sub-intervals Ijk
+, thereby
+creating new demarcation points. Two questions naturally
+arise: how should we choose where these new demarcation
+points should go and how should we decide whether or not
+to make any particular split? The answer to these questions
+is not obvious. We might base the decision of cluster splits
+on the order of magnitude of the diagonal elements in the
+cluster intensity matrices, as large values in the intensity
+matrix mean a faster rate of evolution. This may be a good
+heuristic, but it takes into account neither the starting distribution (which has a significant impact on the relevance
+on any intensity) nor evidence received as messages from
+neighbors.
+We provide an alternative approach, which adds one
+split point at a time, and makes use of the KL-divergence
+minimization (i.e., projection) that we must perform anyway. The basis for our analysis is the following result,
+which follows from standard results for the exponential
+family:
+Proposition 5.1 Let PC be the distribution over variables
+V of cluster C for the interval IC defined by parameters
+ηC . Let PS be a distribution over variables V ′ ⊆ V of
+sepset S for the interval IS ⊆ IC defined by parameters
+ηS . If EC [τ (V )] is the expected sufficient statistics over
+variables V as computed from PC , then
+D(PC ||PS ) = hEC [τ (V )], ηC i−hEC [τ (V ′ )], ηS i−ln
+
+ZC
+,
+ZS
+
+332
+
+SARIA ET AL.
+
+where EC [τ (V ′ )] is computed by marginalization.
+Consider splitting sepset S at time t. This would give us
+two homogeneous approximations PSL and PSR computed
+as described in the previous section. Using Propositions 5.1
+we can compute the “cost” (in terms of KL divergence)
+of using a two-piece approximation rather than the correct
+2
+cluster distribution, CKL
+= D(PC ||PSL ) + D(PC ||PSR ).
+We can similarly define the cost for the single-piece ap1
+proximation: CKL
+= D(PC ||PS ). We would like to select
+2
+the repartition point t̂ = arg mint CKL
+(t).
+It turns out that we can perform this computation efficiently by building on properties of the fifth-order RungeKutta, which is used as the key subroutine in the inference
+process. The Runge-Kutta method uses an adaptive parameter to decide the step size based on the size of the errors
+accumulated while performing the integration. Hence, on
+intervals where the errors are large, it takes smaller steps
+and vice versa. At all the interval partitions formed by
+the Runge-Kutta points, we can compute the Q̂L and Q̂R
+by computing the intensity matrices incrementally from
+the sufficient statistics over the left and right sub-intervals.
+This is an O(n2 ) computation where n is the dimension of
+the intensity matrix and each step of Runge-Kutta is O(n3 ).
+Given the intensity matrices, and removing terms that remain constant over different partitions, the CKL computation simplifies to only the terms involving inner products
+over marginalized expected sufficient statistics and the partition functions (when there is continuous evidence). Each
+of the inner-products are over vectors of length d2 , where
+d is the dimension of the intensity matrix over the sepset
+variables and d < n. The Runge-Kutta computations are
+performed at O(q̂T ), where q̂ is the maximum intensity
+value in Q. Hence, this optimization is O(q̂d2 T ).
+In order to decide whether to actually split at t̂, we compare the KL cost of using the one-piece approximation to
+the two-piece. That is, we define a threshold, k ∗ and make
+1
+2
+the split if CKL
+− CKL
+> k ∗ . Again, this computation
+can be incorporated efficiently given that we have already
+stored the incremental sufficient statistics. After the 2-piece
+message has been computed, to incorporate the message in
+the receiving cluster, a demarcation point is first created
+at t̂. Then, each sepset message is incorporated independently.
+
+6 Results
+We use an extended version of the drug effect network of
+NKS shown in Fig. 1 to illustrate the dynamic behavior of
+this algorithm. The network models the effects of the uptake of a drug and the resulting concentration of the drug in
+the bloodstream.
+Illustrative Examples. In our first scenario, we model a
+person that is experiencing joint pain, takes the drug to alleviate the pain, is not eating, has an empty stomach, is not
+hungry, and is not drowsy. The weather condition is nor-
+
+Prescription
+
+Eating
+
+Hungry
+
+Full
+Stomach
+
+Weather
+Condition
+
+Uptake
+
+Barometer
+
+Long-term
+Side effect
+
+Concentration
+
+Joint
+Pain
+
+Drowsy
+
+Figure 1: The drug-effect network
+mal and the barometric pressure is steady. In Fig. 2(a), we
+show part of the cluster graph with the sepsets created as a
+result of message passing. The clusters have been unrolled
+over a period of 10 hours. C0 which contains variables such
+as Hungry, Eating and Full-Stomach changes very rapidly
+in the first hour because the empty stomach leads to hunger
+which causes the person to eat. This behavior results in
+Dynamic-EP creating several splits to refine the granularity at which the message is sent to C1 within the first few
+hours. C4 , on the contrary, evolves very slowly when the
+weather is steady, a state with relatively high persistence.
+As a result, this causes no bad effects on the barometric
+pressure and it continues to remain steady. As expected,
+C4 and C2 do not further refine the message they exchange
+over the variable Barometer Pressure. To examine the effect of incoming evidence, in our second scenario, we now
+observe very bad weather. This adversely makes the barometric pressure unsteady. C4 now dynamically splits its
+message to 8 separate pieces as shown in Fig. 2(b).
+Dynamic-EP also shows interesting behavior with regard to deciding when to partition a sepset. In this split
+graph, C0 first creates a partition at time 2.1108 to the message it sends to C1 over µ0,1 . C1 emulates the behavior
+by creating a partition to the message it sends to C2 at
+time 2.1108. C1 in future iterations of message passing
+chooses not to further refine its message over µ1,2 over time
+0 − 2.1108 until it receives a message from C0 split at time
+0.489 after which it splits its message over µ1,2 from time
+0 − 2.1108 at 0.472. Thus, the splitting behavior happens
+selectively depending on how the incoming message affects
+the message computation at a cluster given its own evolution matrix. The EP algorithm of NKS is unable to respond
+similarly to an incoming message – once a granularity of
+computation at a given time has been selected for the entire
+system, it cannot adaptively refine its messages as needed.
+Quantitative Results. To investigate the computational
+properties of our dynamic-EP algorithm, we compared its
+performance to the EP algorithm of NKS, using various
+uniform time granularities. Unfortunately, the extended
+version of the drug effect network is too large to allow ex-
+
+SARIA ET AL.
+Cluster 0: Eating, Hungry, Full Stomach
+Sepset01: Full Stomach
+
+Cluster 1: Concentration, Full Stomach, Uptake
+Sepset12: Concentration
+
+Cluster 2: Concentration, Barometer Pressure, Joint Pain
+Sepset24: Barometer Pressure
+
+Cluster 4:Weather, Barometer Pressure
+0
+
+2
+
+4
+
+(a)
+Cluster 2: Concentration, Barometer Pressure, Joint Pain
+Sepset24: Barometer Pressure
+
+Cluster 4:Weather, Barometer Pressure
+0
+
+2
+
+4
+
+(b)
+Figure 2: (a) Portion of drug-effect network cluster graph pulled
+out to show dynamically selected partition points under the joint
+pain scenario.. (b) Portion of cluster graph showing partition
+points for the bad weather scenario.
+
+act inference for comparison. We therefore generated chain
+CTBNs X1 → . . . → Xn of different lengths n, ranging from 5 to 50 variables, in increments of 5. Each variable Xi has three values. A child Xi+1 generally tries to
+follow the value of its parent Xi , with some noise; Xi+1
+transitions an order of magnitude faster than X1 when it
+disagrees with Xi , and an order of magniture slower than
+X1 when it agrees with Xi . We use trajectories of 10 time
+units in length, and compared four different approximation
+schemes: Uniform-K — splitting clusters uniformly, as in
+the NKS algorithm, with time granularity K = 1, 5, 10;
+and our dynamic-EP algorithm with a KL threshold of 0.01.
+Note that, at uniform granularity 10, there are no splits. In
+all cases, our cluster graph contained uniform clusters, consisting of pairs {Xi , Xi+1 }.
+We considered a scenario where we have evidence only
+at the initial time. Thus the initial state is unstable and results in rapid change. To capture this phenomenon, we need
+a finer-grained approximation for a short duration, then a
+coarser approximation as the distribution approaches equilibrium. Fig. 3(a) presents results for a distribution over the
+5-variable chain, which is small enough to admit a comparison to exact inference. The graph plots the KL-divergence
+between the exact distribution and that given by four approximate methods for 100 points in [0, 10]. Dynamic-EP
+
+333
+
+generated only a single split point, in the sepset between
+the cluster {X1 , X2 } and {X2 , X3 }, at time point 0.762.
+With the addition of this one sepset, Dynamic-EP does as
+well or better than Uniform-1, except in a very small interval, where it does almost as well. In terms of running time,
+Uniform-1 took 0.67s, Uniform-5 took 0.14s, Uniform-10
+took 0.05s, and Dynamic-EP took 0.08s, only slightly more
+than Uniform-10. The threshold k ∗ in Dynamic-EP controls the accuracy versus complexity of computation tradeoff. Lowering this threshold would create more splits and
+improve the accuracy in the small interval where it does not
+do as well at increased computational cost.
+To obtain results for larger networks where exact inference is intractable, we used an empirical approximation to
+the KL-divergence. For each network, we generated 100
+random trajectories from the network, and ran approximate
+inference for each one. Then, for each Xi and each of 100
+time points t ∈ (0, 10], we computed the log-likelihood for
+the true value xti of Xit in the trajectory, using the marginal
+distribution of Xit in a cluster that contains it. We averaged
+the log-likelihood over variables and trajectories. The results, graphed in Fig. 3(b), show that the performance of
+Dynamic-EP is only slightly worse than those of Uniform1. Again, this outcome can be changed by using a lower
+KL-threshold. Moreover, in contrast to the coarser uniform
+partitioning algorithms, it degrades much more slowly as
+the number of variables increases. Fig. 3(c) shows the average running time taken by each of the approximate methods, showing that this high accuracy is obtained at a computational cost which is comparable to that of Uniform-10.
+Since Dynamic-EP can focus computational resources
+on portions of the cluster graph that are evolving faster,
+we wanted to explore the speed-up we achieve in networks
+where there is widening gap between the rate of the fastest
+evolving cluster and the slowest. So, using a 30 variable
+chain whose top node evolved at a fast rate (max intensity
+= 100), we made a series of networks by slowing the evolution rate of the remaining variables — leading to ratios
+from 1 (i.e., all clusters evolve at the same rate) to 104 (i.e.,
+the cluster containing the top node evolves 104 times faster
+than the others). Fig. 3(d) shows the resulting speed-up expressed as the ratio of Uniform-0.1 runtime over DynamicEP plotted against the series of networks with increasingly
+divergent rates of evolution between the fastest and slowest
+clusters. This graph represents the average speed-up over
+10 runs. As we expect, the figure shows an increasing advantage for Dynamic-EP over Uniform-0.1 when the clusters evolve at increasingly different rates. There is a peak at
+cluster rate ratio is 200 but the errorbar shows a high range
+of values at that point possibly due to interactions with the
+particular KL threshhold of the runs (0.01).
+
+7 Discussion and Future Work
+We have presented a highly flexible cluster graph architecture for passing messages across both time and space in
+
+SARIA ET AL.
+
+References
+Dean, T., & Kanazawa, K. (1989). A model for reasoning
+about persistence and causation. Computational Intelligence, 5, 142–150.
+
+0.03
+
+KL Divergence
+
+0.025
+0.02
+0.015
+0.01
+∆t=1
+∆t=5
+∆ t = 10
+Dynamic Split
+
+0.005
+0
+0
+
+2
+
+4
+
+0
+−0.1
+−0.2
+−0.3
+−0.4
+−0.5
+−0.6
+−0.7
+
+∆t=1
+∆t=5
+∆ t = 10
+Dynamic Split
+10
+
+20
+30
+Number of Variables
+
+Norris, J. (1997). Markov chains. Cambridge Univ. Press.
+Rabiner, L. R., & Juang, B. H. (1986). An introduction to
+hidden Markov models. IEEE ASSP Magazine, 4–16.
+Sudderth, E., Ihler, A., Freeman, W., & Willsky, A. (2003).
+Nonparametric belief propagation. CVPR.
+
+40
+
+50
+
+40
+
+50
+
+(b)
+16
+14
+12
+
+∆t=1
+∆t=5
+∆ t = 10
+Dynamic Split
+
+10
+8
+6
+4
+2
+0
+
+10
+
+20
+30
+Number of Variables
+
+(c)
+40
+Uniform / Dynamic Runtime Ratio
+
+Nodelman, U., Shelton, C., & Koller, D. (2002). Continuous time Bayesian networks. UAI (pp. 378–387).
+
+10
+
+0.1
+
+Lauritzen, S. (1996). Graphical models. Clarendon Press.
+
+Nodelman, U., Koller, D., & Shelton, C. (2005). Expectation propagation for continuous time Bayesian networks.
+UAI.
+
+8
+
+(a)
+
+Kjaerulff, U. (1997). Nested junction trees. UAI.
+
+Minka, T. (2001). Expectation propagation for approximate bayesian inference. UAI (pp. 362–369).
+
+6
+Time
+
+Normalized Approx LLH Per Variable
+
+CTBNs. We also presented Dynamic-EP, a new algorithm
+for approximate inference in CTBNs. This algorithm adaptively assigns computational resources to parts of the inference where greater accuracy is required, and can provide a much better tradeoff between computational cost
+and accuracy than previous algorithms. Most importantly,
+Dynamic-EP deals well with situations where some components of the system evolve much more rapidly than others, allowing each part of the system to adaptively choose
+the time granularity most appropriate to it at that time.
+There are many useful extensions of this work. Clearly,
+we plan to test whether the computational gains on simple,
+synthetic networks also manifest in real-world problems.
+More broadly, our framework allows a highly flexible inference architecture, where process variables can dynamically
+change their cluster assignments over time. Thus, if two
+variables undergo a strong interaction, we can temporarily put them in the same cluster. It would be interesting to
+design an algorithm that dynamically determined an appropriate cluster structure as the process evolves. Finally, there
+are many probabilistic models other than CTBNs where EP
+is used to provide a parametric approximation to complex
+messages in a cluster graph. In some cases, there may be a
+need for a richer, more flexible representation of the messages (one of the key motivations for the development of
+non-parametric belief propagation (Sudderth et al., 2003).)
+The algorithm that we proposed provides a semi-parametric
+message representation. It would be interesting to explore
+the viability of a similar approach in other types of probabilistic graphical models.
+
+Time (seconds)
+
+334
+
+35
+30
+25
+20
+15
+10
+5
+0 0
+10
+
+1
+
+2
+
+3
+
+4
+
+10
+10
+10
+10
+Fastest / Slowest Cluster Rate−of−Evolution Ratio
+
+(d)
+Figure 3: (a) KL from exact distribution for 5-chain. (b) Approx
+LLH per variable in chains of increasing length. (c) Processor
+time to run approximate inference for chains of increasing length.
+(d) Speed-up of Dynamic-EP over Uniform-0.1 for increasing difference between rate of fastest and slowest clusters
+
+

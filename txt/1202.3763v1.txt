@@ -1,0 +1,1143 @@
+An Efficient Algorithm for Computing Interventional Distributions
+in Latent Variable Causal Models
+
+Ilya Shpitser
+Department of Epidemiology
+Harvard School of Public Health
+ishpitse@hsph.harvard.edu
+
+Thomas S. Richardson
+Department of Statistics
+University of Washington
+tsr@stat.washington.edu
+
+Abstract
+Probabilistic inference in graphical models is
+the task of computing marginal and conditional densities of interest from a factorized
+representation of a joint probability distribution. Inference algorithms such as variable elimination and belief propagation take
+advantage of constraints embedded in this
+factorization to compute such densities efficiently. In this paper, we propose an algorithm which computes interventional distributions in latent variable causal models
+represented by acyclic directed mixed graphs
+(ADMGs). To compute these distributions
+efficiently, we take advantage of a recursive factorization which generalizes the usual
+Markov factorization for DAGs and the more
+recent factorization for ADMGs. Our algorithm can be viewed as a generalization of
+variable elimination to the mixed graph case.
+We show our algorithm is exponential in the
+mixed graph generalization of treewidth.
+
+1
+
+Introduction
+
+Establishing cause-effect relationships is fundamental
+to progress of empirical science. Directed Acyclic
+Graphs (DAGs) are a popular approach to modeling causation, since they provide an intuitive representation of causal and probabilistic notions. Causal
+models based on DAGs include structured tree graphs
+(FFRSTG) [11], non-parametric structural equation
+models (NPSEM) [6], the minimal causal model
+(MCM) [12], the so called “agnostic causal models,”
+aka causal Bayesian networks [17], [6], and the “decision theoretic model” [1]. These formalisms represent
+causal and probabilistic assumptions by means of a
+directed acyclic graph, with the interpretation of the
+graph broadly similar, but differing in some details.
+
+James M. Robins
+Department of Epidemiology
+Harvard School of Public Health
+robins@hsph.harvard.edu
+
+One major restriction of these models is that they assume causal sufficiency: causes of at least two variables
+already in the model must also be in the model. The
+causal sufficiency assumption is often unreasonable in
+practical causal inference problems, where partial observability is very common. Approaches to relaxing
+causal sufficiency include the incorporation of latent
+variables, or dependent error terms as in the so-called
+‘semi-Markovian’ NPSEMs [6].
+Of particular interest in causal inference is the problem
+of determining causal effects, which are formalized as
+joint distributions on outcome variables after an idealized experiment called an intervention is performed.
+A variety of questions in empirical science can be formulated in terms of causal effects. Interventions can
+sometimes be implemented by randomization, but this
+frequently cannot be done due to expense or ethical
+considerations. As a consequence, an important problem is determining in what situations a given causal
+effect is identifiable from an observational distribution
+induced by a causal model.
+An algorithm for the causal effect identification problem was given in [19],[18],[14], with the completeness
+of the algorithm established in [15],[14],[3]. This algorithm manipulates the observational distribution and
+the graph until it either proves the manipulation results in the causal effect of interest or it fails. This
+process always terminates after a number of recursive
+calls polynomial in the number of nodes in the graph.
+However, there is no known efficient scheme for the
+manipulations of the observational distribution performed by this algorithm. We propose such a scheme
+here.
+This scheme takes advantages of a recursive factorization satisfied by observational distributions of DAG
+models with latent variables that mirrors the recursive
+algorithm for identifying causal effects. This recursive
+factorization implies certain constraints which generalize conditional independence and which we call posttruncation independences. If causally interpretable,
+
+these constraints are known as dormant independence
+constraints [16]. The recursive factorization may also
+be seen as a refinement of the simpler Markov factorization for ADMGs [8]. Our algorithm can be viewed
+as a generalization of variable elimination [20] to mixed
+graphs.
+The paper is organized as follows. In Section 2 we
+define graph theoretic terminology, describe the identification problem for causal effects, and review the ID
+algorithm which solves it. Section 3 gives a recursive
+factorization (r-factorization) of distributions with respect to mixed graphs. Section 4 gives a generalized
+Möbius parameterization of binary r-factorizing models. In Section 5 we describe our efficient algorithm
+for computing interventional distributions. Section 6
+contains the discussion and our conclusions.
+
+2
+
+Notation and Basic Concepts
+
+We first introduce the graph-theoretic terminology we
+need to discuss graphical causal models. In this paper,
+we will restrict our attention to directed and mixed
+graphs. A directed graph consists of a set of nodes and
+directed arrows connecting pairs of nodes. A mixed
+graph consists of a set of nodes and directed and/or
+bidirected arrows (↔) connecting pairs of nodes. A
+path is a sequence of distinct nodes where any two
+adjacent nodes in the sequence are connected by an
+edge. A directed path from a node X to a node Y
+is a path consisting of directed edges where all edges
+on the path point away from X and towards Y . If a
+directed edge points from X to Y then X is called a
+parent of Y , and Y a child of X. If X and Y are connected by a bidirected arc, they are called spouses. If
+there is a directed path from X to Y then X is an ancestor of Y , and Y a descendant of X; by convention,
+X is both an ancestor and a descendant of X. The
+sets of parents, children, spouses, ancestors, descendants and non-descendants of a node X are denoted,
+P a(X), Ch(X), Sp(X), An(X), De(X) and N d(X),
+respectively. A directed acyclic graph (DAG) is a directed graph where for any directed path from X to
+Y , Y is not a parent of X. An acyclic directed mixed
+graph (ADMG) is a mixed graph which is a DAG if
+restricted to directed edges.
+A conditional acyclic directed mixed graph (CADMG)
+G(V, W, E) is a mixed graph with a vertex set V ∪ W ,
+where V ∩W = ∅, subject to the restriction that for all
+w ∈ W , P aG (w) = ∅ = SpG (w). In words, a CADMG
+is an ADMG with an extra set of nodes W that have
+no incoming arrows. Intuitively, a CADMG represents
+a conditional distribution P (V | W ). For a graph G,
+and a subset of nodes S in G, we denote by G[S] the
+CADMG G ∗ (S, P a(S)G \ S, ES ), where ES are those
+
+edges in G that connect nodes in S, or directed edges
+in G from a node in P a(S)G \ S to a node in S.
+A district S in a CADMG G with vertex set V ∪ W
+is any maximal set of nodes in V that are mutually
+connected by bidirected paths which are themselves
+entirely in S. For a node X, its district in G is denoted by D(X)G . The set of all districts in G forms a
+partition of nodes in G and is denoted by D(G). A set
+of nodes S ⊆ V in a CADMG G is called bi-directed
+connected (↔-connected for short) if it forms a district
+in G[S]. For a graph G over V , and vertex set A, the
+induced sub-graph GA contains only nodes in A, and
+those edges in G which connect nodes in A. A set A is
+ancestral in G if for all X ∈ A, An(X)G ⊆ A. The set
+of all ancestral sets in G is denoted by A(G).
+A consecutive triple of nodes Wi , Wj , Wk on a path is
+called a collider if the edge between Wi and Wj and
+the edge between Wk and Wj both have arrowheads
+pointing to Wj . Any other consecutive triple is called
+a non-collider. A path between two nodes X and Y
+is said to be blocked by a set Z if either for some noncollider on the path, the middle node is in Z, or for
+some collider on the path, no descendant of the middle
+node is in Z. For disjoint sets X, Y, Z of nodes in
+an ADMG we say X is m-separated from Y given Z
+if every path from a node in X to a node in Y is
+blocked by Z. If the ADMG is also a DAG, then we
+say X is d-separated from Y given Z. If X is not mseparated (or d-separated) from Y given Z, we say X
+is m-connected (or d-connected) to Y given Z. See the
+graph in Fig. 1 (a) for an illustration of these concepts.
+In this graph X1 → X2 → X3 ← X4 is a path from
+X1 to X4 ; X1 → X2 → X3 is a directed path from X1
+to X3 ; X1 is a parent of X2 , and an ancestor of X3 ;
+X2 → X3 ← X4 is a collider; X1 is m-separated from
+X4 given X5 ; X1 is m-connected to X4 given X5 and
+X3 .
+x1
+
+x5
+x2
+
+y
+
+x
+x4
+
+x3
+(a)
+
+(b)
+
+Figure 1: (a) An acyclic directed mixed graph. (b)
+A graph representing some semi-Markovian models
+where P (y | do(x)) is not identifiable from P (v).
+2.1
+
+Causal Models and Causal Effects
+
+A Bayesian network model [5] over variables V1 , . . . , Vn
+is a joint probability distribution P (v1 , . . Q
+. , vn ) and
+a DAG G, such that P (v1 , . . . , vn ) =
+i P (vi |
+P a(Vi )G = pai ), where value assignments pai are con-
+
+sistent with {v1 , . . . , vn }. This decomposition of P
+into a product is known as a Markov factorization.
+This factorization is equivalent to the local Markov
+property which states that each Vi is independent of
+{V1 , . . . , Vn } \ (De(Vi )G ∪ P a(Vi )G ) given P a(Vi )G , and
+in turn equivalent to the global Markov property defined by d-separation [5], which states, for any disjoint
+sets X, Y, Z, that if X is d-separated from Y given Z
+in a graph G, then X is independent of Y given Z in
+P (v1 , . . . , vn ). The global Markov property for ADMGs is given by m-separation [9].
+
+x1
+
+x2
+
+x3
+
+x4
+
+(a)
+
+(b)
+
+y1
+
+y2
+
+y3
+
+y4
+
+...
+
+y1
+
+y2
+
+y3
+
+y4
+
+...
+
+Figure 2: (a) A DAG. (b) A latent projection of the
+DAG in (a) onto {Y1 , Y2 , Y3 , Y4 , . . . }.
+
+Note that we use Vi to refer both to a graph vertex and
+its associated random variable. In situations where it
+is important to distinguish vertices and their variables,
+we will use Vi to refer to the vertex, and XVi to refer
+to the variable.
+
+there exists a trek (that is a collider-free path) from
+Xi to Xj , where all intermediate nodes on the trek are
+not in O, and where the first edge has an arrowhead
+pointing to Xi , and the last edge has an arrowhead
+pointing to Xj .
+
+We use P (y | do(x)) to denote the distribution resulting from an idealized intervention which fixes the value
+of X, and called the causal effect of do(x) on Y . The
+causal model associated with a DAG asserts that
+
+Latent projections are a convenient way to represent
+latent variable models because they simplify the representation of multiple paths of latents while preserving
+many useful constraints over observable variables; see
+Figure 2 for an example.
+
+p(V \ X = v ∗ | do(x)) =
+
+Y
+
+p(vj | P a(vj ) = paj );
+
+j:Vj 6∈X
+
+where v ∗ , x, paj and the vj are consistent (in that the
+same values are assigned to the same variables). This
+is known as the truncation formula [17],[6], or the gformula [11].
+Note that this definition, and hence our resulting theory, is compatible with any of the causal frameworks
+currently in the literature (NPSEM, MCM, FFRCISTG, causal BNs, causal IDs).
+2.2
+
+Latent Projections, Marginal Causal
+Models, and Causal Effect Identification
+
+Causal models with unobserved variables can be represented by a directed acyclic graph with a subset of
+nodes labeled as latent. However, another alternative
+is to represent such models by ADMGs, containing
+only observed variables, where directed arrows represent “direct causation,” and bidirected arrows represent “unspecified causally ancestral latent variables.”
+Every DAG with a set of nodes marked latent can
+be associated with a ‘latent projection’, which is an
+ADMG that preserves path separation relations among
+the observable variables [7].
+For a DAG G over a variable set V , a latent projection
+of G onto O ⊆ V is an ADMG G(O), over nodes O,
+where Xi , Xj ∈ O have an edge Xi → Xj if there
+exists a directed path Xi → L1 → · · · → Lk → Xj
+where L1 , . . . Lk 6∈ O, and have an edge Xi ↔ Xj if
+
+Consider an ADMG G induced by some latent variable
+causal model, and disjoint sets X, Y of nodes in this
+G. Is it possible to characterize situations when the
+causal effect of do(x) on Y is identifiable in any model
+inducing G? It turns out that the answer is yes, and
+there is an explicit, closed-form algorithm for deriving the functional for such a causal effect whenever it
+is identifiable. This algorithm was first developed in
+[19], for causal Bayesian networks and semi-Markovian
+models. A version of this algorithm, called ID, which
+appears in [15] is shown in Fig. 3.
+The ID algorithm is recursive, using simplification
+methods, based on districts and ancestral sets. First,
+the algorithm eliminates any irrelevant variables by intervening on them with arbitrary values (line 3). Second, the algorithm splits the problem into subproblems based on districts (line 4). Third, the algorithm
+marginalizes out some variables such that the margin
+that is left is an ancestral set in the graph resulting
+from interventions (line 2). And finally, the algorithm
+“truncates out” some variables in situations where the
+DAG truncation formula applies to a particular intervention (lines 6 and 7). When the algorithm fails (line
+5), it returns a witness for this failure, called a ‘hedge’:
+Definition 1 (c-forest) Let R be a subset of nodes
+in an ADMG G. Then a set F is called an R-rooted
+C-forest if R ⊆ F , F is a ↔-connected set, and every
+node in F has a directed path to a node in R with every
+element on the path also in F .
+Definition 2 (hedge) Let X, Y be disjoint node sets
+in an ADMG G. Then two R-rooted C-forests F, F ′
+
+function ID(y, x, P (V ), G(V ))
+INPUT: x, y value assignments, P (V ) a probability
+distribution over V , G(V ) an ADMG over nodes V .
+OUTPUT: Expression for Px (y) in terms of P (V ) or
+a hedge (F, F ′ ) witness for non-identification.
+P
+1 if x = ∅, return v\y P (V ).
+2 if V \ An(Y )G 6=
+P∅, return
+ID(y, xAn(Y )G , v\An(Y )G P (V ), G(An(Y ))).
+3 let W = (V \ X) \ An(Y )G[V \X] .
+if W 6= ∅, return ID(y, x ∪ w, P (V ), G(V )).
+4 if D(G[V
+P\ X]) =Q{S1 , . . . , Sk },
+return v\(y∪x) i ID(si , v \ si , P (V ), G(V )).
+if D(G[V \ X]) = {S},
+5 if D(G) = {V }, stop with (V, V ∩ S).
+P Q
+6 if S ∈ D(G), return s\y {i|Vi ∈S} P (Vi |Vi ).
+
+′
+′
+7 if
+ID(y, x ∩ S ′ ,
+Q(∃S ) S ⊂ S ∈ D(G) return
+′
+′
+′
+{i|Vi ∈S ′ } P (Vi | Vi ∩ S , vi \ S ), GS ).
+
+Figure 3: A complete identification algorithm. Vi is
+the set of nodes preceding Vi in some topological ordering π in G.
+form a hedge for (X, Y ) in G if F ⊂ F ′ , R ⊂
+An(Y )G[V \X] , and X ⊂ F ′ \ F .
+Hedges characterize non-identification of causal effects
+due to the following theorem [15].
+Theorem 1 P (y | do(x)) is identifiable in any semiMarkovian model inducing an ADMG G if and only if
+there is no hedge for any (X ′ , Y ′ ) in G, where X ′ ⊆
+X, Y ′ ⊆ Y , and X ′ is non-empty.
+
+where x̃2 and x̃1 are arbitrary values. This functional
+involves the term P (x5 | x4 , x′3 , x̃2 , x′1 ), which in binary models corresponds to 32 numbers. As mixed
+graphs increase in size, the size of conditional probability tables necessary to evaluate causal effect functionals quickly becomes intractable. In DAG models, inference algorithms based on the factorization systematically exploit conditional independence constraints
+implied by this factorization to make inference computationally tractable. To extend this approach to mixed
+graphs, we introduce a recursive factorization.
+
+3
+
+Recursive Factorization of ADMGs
+
+The recursive factorization is defined in terms of special sets of nodes called ‘intrinsic’ sets, which are
+closely related to certain identifiable causal effects,
+though the notion of an intrinsic set is purely graphical.
+Definition 3 Let G be an ADMG. Then a set of nodes
+S in G is intrinsic if it is ↔-connected and there does
+not exist a hedge for (P a(S) \ S, S) in G.
+An alternative but equivalent definition of intrinsic
+sets exists, which does not involve concepts from identification.
+Definition 4 Let S be a ↔-connected set in an
+ADMG G. Define the following operations on subgraphs of G:
+G
+G
+
+7→ GAnG (S) ,
+7→ GDG (S) ,
+
+:
+
+G
+
+7→ αS (δS (G)),
+
+:
+
+G
+
+7→ γS (. . . γS (G) . . . ) .
+|
+{z
+}
+
+αS :
+δS :
+γS
+(k)
+γS
+
+k-times
+
+The simplest graph where causal effect identification
+is not possible is shown in Fig. 1(b). In this graph, the
+hedge witnessing non-identifiability of P (y | do(x)) is
+the two sets {Y }, and {X, Y }. Mapping to the definition, R = {Y }, F = {Y }, F ′ = {X, Y }.
+2.3
+
+Evaluating Causal Effect Functionals
+
+Consider the graph shown in Fig. 7(a), where we wish
+to use ID to evaluate the causal effect of do(x3 ) on
+X5 , or P (x5 | do(x3 )). Applying ID to this task yields
+the following identity:
+
+(k)
+
+Then S is intrinsic in G if (∃k > 0), GS = γS (G).
+We will denote the set of all intrinsic sets in G by I(G).
+Every ↔-connected set S in G is contained in a unique
+smallest member of I(G), called the intrinsic closure
+of S.
+Our factorization is recursive, and thus is defined on
+CADMGs, in which the set W may be thought of as
+representing ‘pre-existing interventions’.
+
+Definition 5 (r-factorization) Let G(V, W, E) be a
+CADMG and FG ≡ {fC (XC | XP a(C)\C ), C ∈ I(G)}
+P (x5 | do(x3 )) =
+be
+a collection of densities. A distribution p(XV |
+³
+´
+P
+P
+′
+′
+X
+) recursively factorizes (r-factorizes) according to
+|
+x̃
+)
+×
+,
+x̃
+)P
+(x
+P
+(x
+|
+x
+,
+x
+=
+′
+′
+W
+1
+1
+4
+3
+2
+2
+x2
+x4
+³P
+´ G(V, W, E) and FG if for every subset A ⊆ V such
+′
+′
+′
+′
+′
+′
+that anG (A) ∩ V = A the following hold:
+x′1 ,x′3 P (x5 | x4 , x3 , x̃2 , x1 )P (x3 | x̃2 , x1 )P (x1 )
+
+(i) p(XA | XW ) =
+
+Q
+
+D∈D(GA∪W ) fD (XD
+
+| XP a(D)\D )
+
+(ii) if |D(GA∪W )| > 1 then for every district D ∈
+D(GA∪W ), fD (XD | XP a(D)\D ) r-factorizes according to (GA∪W )[D] and the set of densities
+{fC ∈ FG , C ∈ I((GA∪W )[D])}.
+Note that this factorization can be viewed as a refinement of the factorization in [8] which only represented
+conditional independence constraints (corresponding
+to m-separations), whereas the criterion here also represents conditional independences after division by a
+conditional density. If such a division can be causally
+interpreted as an intervention, such independences are
+called dormant in [16].
+
+4.2
+
+We now show how to partition an arbitrary subset of
+V in a CADMG G(V, W, E) into elements of RH(G).
+Definition 8 Let ≺I(G) be a partial order on heads
+of intrinsic sets of G such that H1 ≺I(G) H2 if H1 =
+rh(C1 ), H2 = rh(C2 ), C1 , C2 ∈ I(G), C1 ⊆ C2
+For a set of heads H, let max≺I(G) (H) be the subset
+of H containing heads maximal in H under ≺I(G) .
+Definition 9 For any B ⊆ V of nodes in a CADMG
+G(V, W, E), define the following functions:
+ΥG (B) ≡ max≺I(G) (RH(G) ∩ P(B))
+
+We now show that the observed marginals of causal
+DAG models r-factorize.
+Theorem 2 Let P (O) be the observed marginal of a
+causal DAG, with latent projection given by an ADMG
+G. Then there exists FG such that P (O) r-factorizes
+according to G and FG .
+Proof: Let FG = {P (c | do(P a(C) \ C = pa)) | C ∈
+I(G), pa assignments to P a(C) \ C}. The theorem follows by soundness of the ID algorithm.
+¤
+
+ρG (B) ≡ B \
+
+We now give a parameterization of r-factorizing binary
+models. The approach generalizes in a straightforward
+way to finite discrete state spaces.
+4.1
+
+Heads of intrinsic sets
+
+To parameterize our models, we will associate a set of
+parameters with each intrinsic set, just as binary DAG
+models associate parameters of the form P (Xi = 0 |
+P a(Xi ) = pai ) with each node Xi . We first define sets
+of nodes, called ‘heads’ and ‘tails’ related to a given
+set C ∈ I(G) that will serve the role of Xi and P a(Xi ),
+respectively, in the DAG case.
+Definition 6 For an intrinsic set C ∈ I(G) of a
+CADMG G, define the recursive head (rh) as: rh(C) ≡
+{x | x ∈ C; chGC (x) = ∅}. Let RH(G) ≡ {rh(C) | C ∈
+I(G)}.
+Definition 7 The tail associated with a recursive
+head H of an intrinsic set C in a CADMG G is given
+by: tail(H) ≡ (C \ H) ∪ paG (C)
+
+(k)
+
+H, ρG (B) ≡ ρG (· · · ρG (B) · · · )
+{z
+}
+|
+k-times
+(0)
+
+where P(B) is the power set of B, and ρG (B) ≡ B.
+We partition B into recursive heads of G as follows:
+JBKG ≡
+
+[
+
+³
+´
+(k)
+ΥG ρG (B)
+
+k≥0
+
+4.3
+
+Parameterization of Binary
+R-factorizing Models
+
+[
+
+H∈ΥG (B)
+
+This theorem implies that our results apply to any
+causal DAG model for which P (v | do(x)) is given by
+the g-formula.
+
+4
+
+Recursive head partition of arbitrary sets
+
+Binary Parameterization
+
+Multivariate binary distributions which r-factorize
+with respect to a CADMG G may be parameterized
+by the following parameters:
+Definition 10 The binary parameters associated with
+CADMG G are a set of functions QG :
+n
+o
+qH (xtail(H) ) | H ∈ RH(G), qH : {0, 1}|tail(H)| → [0, 1]
+Intuitively the functions qH (xtail(H) ) should be
+thought of as giving the value fC (XH = 0 | Xtail(H) =
+xtail(H) ), where H = rhG (C). We emphasize that the
+density fC is not necessarily a standard conditional
+density in P . Instead in any causal model where the
+g-formula holds, fC (XH = 0 | Xtail(H) = xtail(H) ) can
+be interpreted as a conditional interventional distribution P (XH = 0 | XC\H = xC\H , do(XP a(C)\C =
+xP a(C)\C )), where H = rh(C).
+Definition 11 Let ν : V ∪ W 7→ {0, 1} be an assignment of values to the variables indexed by V ∪ W .
+Define ν(T ) to be the values assigned to variables indexed by a subset T ⊆ V ∪ W . Let ν −1 (0) = {v | v ∈
+V, ν(v) = 0}.
+
+function EID(y, x, Q(V ), G(V ))
+INPUT: x, y value assignments, Q(V ) a set of parameters representing a distribution P (v) which r-factorizes
+with respect to G, G an ADMG.
+OUTPUT: A set of q parameters representing Px (y),
+or FAIL.
+1 Let V ∗ = An(Y )G[V \X] \ X, Q∗ = Q(V ∗ | x),
+G ∗ = G[V ∗ ].
+2 If I(G[V ∗ ]) 6⊆ I(G(V )), return FAIL.
+3 Pick an elimination order V1 , . . . , Vk for V ∗ \ Y .
+4 For each i = 1, . . . , k, do:
+(Q∗ , G ∗ ) ← sum-one(Vi , Q∗ , G ∗ ).
+5 return Q∗
+
+2, our algorithm applies to any graphical causal model
+where the g-formula holds. The algorithm is shown in
+Figs. 4 and 5.
+The algorithm returns a q representation of an identifiable query P (y | do(x)) in two stages. In the first
+stage, the algorithm computes a q representation of
+the distribution P (An(y)G([V \X]) \ X | do(x)) from a
+q representation of P (v1 , . . . , vn ), denoted by Q(V ).
+As we will show in the next section, a representation of this marginal interventional can be computed
+in one step, by restricting the set Q(V ) to those parameters qH (tail(H)) with H ⊆ RH(G) ∩ V ∗ , where
+V ∗ = An(Y )G[V \X] \X, and with tail assignments consistent with x. In the algorithm, this restriction is
+denoted by Q(V ∗ | x).
+
+Figure 4: An efficient algorithm for computing
+marginal interventional distributions.
+
+The second stage marginalizes out variables not in Y
+from P (An(y)G([V \X]) \ X | do(x)) using a particular
+elimination order. Marginalizing a single variable X is
+done by converting from a q representation to a standard probability representation, marginalizing X from
+the table, and converting back to a q representation.
+
+A distribution P (XV | XW ) is said to be parameterized by the set QG , for CADMG G if:
+X
+−1
+(−1)|B\ν (0)|
+p(XV = ν(V ) | XW = ν(W )) =
+
+In the remainder of the section, we are going to show
+that the algorithm is sound (i.e.. performs probabilistic calculations correctly), and then analyze its time
+and space complexity.
+
+B : ν −1 (0)∩V ⊆B⊆V
+
+×
+
+Y
+
+qH (Xtail(H) = ν(tail(H))),
+
+5.1
+
+Soundness
+
+H∈JBKG
+
+where the empty product is defined to be 1.
+Note that this parameterization maps qH parameters
+to probabilities in a CADMG via an inverse Möbius
+transform. Note also that this parameterization generalizes both the standard Markov parameterization
+of DAGs in terms of parameters of the form p(Xi =
+0 | P a(xi ) = pai ), and the Möbius parameterization
+of bidirected graph models given in [2]. We will denote the generalized Möbius transform which maps
+a set Q(V ) = {qH (tail(H)) ∈ QG | H ⊆ V }, to
+a distribution P (XV = ν(V ) | XW = ν(W )) as
+GMT(G(V ), Q(V ), ν). In a companion paper [10] we
+show that a multivariate binary distribution P is parameterized by Q(V ) if and only if P r-factorizes according to G. We will call the set of q parameters representing a (possibly conditional) distribution P the q
+representation of P .
+
+5
+
+An Efficient Algorithm for
+Computing Interventional
+Marginals
+
+In this section, we describe our inference algorithm for
+computing causal effect marginals. Due to Theorem
+
+To show soundness of EID, we will first show that
+the set of unintervened nodes in the post-intervention
+world considered by ID before the final marginalization step in lines 1, 4, or 6 consists precisely of nodes
+in An(Y )G[V \X] \ X. Next, we show that the distribution corresponding to that post-intervention world can
+be computed by restricting the set of parameters onto
+the set of nodes in that world. Finally, we show the
+soundness of the last marginalization step by showing
+sum-one is sound.
+Lemma 1 For a given query (y, x, P (v), G(V )), line
+4 of ID is invoked at most once.
+Proof: If line 4 is invoked, all subproblems contain
+outcome sets which form a ↔-connected set. Since no
+recursive call of ID considers subsets of such outcome
+sets, line 4 is never invoked on any subproblem.
+¤
+For any recursive call ID, let V ∗ be the set of nodes
+in the ADMG G ∗ passed to that recursive call’s scope.
+Lemma 2 If ID is invoked with (y, x, P (v), G(V )),
+and terminates successfully, then in the terminating line ID evaluates an expression corresponding to
+P
+∗
+∗
+v ∗ \y P (v | do(x)), where An(Y )G[V \X] \X ⊆ V \X
+∗
+∗
+and An(Y )G[V \X] \ X ∈ A(G [V \ X]).
+
+function sum-one(X, Q(V ), G(V ))
+INPUT: X a single variable, Q(V ) a set of parameters representing a distribution P (v) which r-factorizes
+with respect to G(V ), G(V ) an ADMG.
+OUTPUT:
+A set of q parameters representing
+P
+P
+(v),
+and
+a latent projection G(V \ {X}).
+x
+1 Compute G ∗ = G(V \ {X}) from G(V ).
+2 Compute Ix = I(G ∗ ).
+3 Let Qsum = {}. For each I ∈ Ix where X ∈
+P a(I)G(V ) , do
+3a Let H = rh(I), T = (I ∪ P a(I)G ∗ ) \ rh(I).
+3b For all assignments ν to I ∪ {X} where
+ν(H) = 0, ν(T ) = t, order ν in ascending
+order of cardinality of 1 assignments in ν,
+evaluate
+in order: qh (T = ν(T )) =
+P Q
+
+Finally, we are ready to prove that the first stage of
+EID is sound.
+Lemma 5 If P (y | do(x)) is identifiable in G(V ),
+and P (v) r-factorizes according to G(V ), then
+P (An(y)G[V \X] \ X | do(x)) is identifiable in G(V ),
+and is parameterized by Q(An(Y )G[V \X] \ X | x) in
+G[An(Y )G[V \X] \ X].
+Proof: The distribution operations in ID corresponding to lines 2 and 7 are ancestral marginalizations and
+interventions on all nodes outside a districts. Since
+the q parameters are fully determined by the distributions P (XC | Xtail(C) ), the previous three lemmas
+imply our result.
+¤
+
+To prove the soundness of stage two, we have two
+cases. If I ∈ I(G(V \ {X})) and X 6∈ P a(I)G(V ) , then
+I ∈ I(G(V )). Further, by Lemma 3, the q parameters
+GMT(G(V )[D],Q(D),ν)
+P Qx D∈D(G(V )[I∪{X}])
+. associated with I remain unchanged in G(V \ {X}).
+GMT(G(V
+)[D],Q(D),ν)
+x
+D∈D(G(V )[(I∪{X})\rh(I)])
+Otherwise, we need the following lemma.
+3c Qsum ← Qsum ∪ {qh (T = ν(T ))}.
+
+4 Q∗ ← {qrh(I) ((I ∪ P a(I)) \ rh(I)) ∈ Q(V ) | I ∈
+Ix , X 6∈ P a(I)G(V ) } ∪ Qsum .
+5 return (Q∗ , G ∗ ).
+Figure 5: An algorithm for computing q parameters of
+an r-factorizing model obtained from marginalizing a
+single variable X from the input model.
+
+Proof: Successful termination occurs in lines 1, 4,
+and 6. An(Y )G[V \X] \ X ⊆ V ∗ \ X is established by
+function call induction. Certainly An(Y )G[V \X] ∩ ⊆
+V \ X, where V is the set of all nodes in the outermost call. The only lines which remove nodes are
+2 and 7. We have two cases. If line 4 is never
+called, then in line 2, by inductive hypothesis, G ∗
+is a supergraph of G[An(Y )G[V \X] \ X]. This means
+An(Y )G[V \X] \ X ⊆ An(Y )G ∗ . In line 7, only a subset of nodes in X, say X ∗ , is removed. By inductive hypothesis, An(Y )G[V \X] \ X ⊆ V \ X ∗ . If line
+4 is called, it is only once due to Lemma 1. We have
+An(Y )G[V \X] \ X ⊆ V ∗ \ X, by induction. Finally,
+G ∗ [V ∗ \ X] is a subgraph of G[V \ X], so any set ancestral in G[V \ X] is also ancestral in G ∗ [V ∗ \ X]. But
+we know An(Y )G[V \X] is ancestral in G[V \ X].
+¤
+Lemma 3 In a CADMG G, for any A ⊆ (V ∪ W )
+such that AnG (A) = A, I(GA ) = I(G) ∩ P(A ∩ V ),
+where P(·) denotes the powerset.
+Lemma 4 In a CADMG G, for any district D,
+I(GD ) = I(G) ∩ P(D).
+
+Lemma 6 If I ∈ I(G(V \ {X})) and X ∈ P a(I)G(V ) ,
+then ∀D ∈ D(G[I ∪ {X}]), D ∈ I(G(V )).
+Proof: By construction, each such D is ↔-connected.
+We want to show the distribution P (i∪{x} | do(P a(I ∪
+{X})G(V ) \ (I ∪ {X}) = pai )) is identifiable in G(V ).
+Once we do so, our conclusion will follow, since for each
+D, P (d | do(P a(D)G \ D = pad )) is identifiable from
+P (I ∪ {X} | do(P a(I ∪ {X})G(V ) \ (I ∪ {X}) = pai )).
+Assume for contradiction P (i ∪ {x} | do(P a(I ∪
+{X})G(V ) \ (I ∪ {X}) = pai )) is not identifiable in
+G(V ). Then there exists a hedge for (P a(I ∪ {X}) \
+(I ∪ {X}), I ∪ {X}) in G(V ). Let R be the subset of
+I ∪ {X} with no children in G[I ∪ {X}]. By definition,
+there exists a hedge for (P a(I ∪ {X}) \ (I ∪ {X}), R).
+If any vertex Z in I has X as a child in G[I ∪ {X}],
+then it will have a child in G[I], hence gets nothing
+added to R in G(V \ {X}). Note also that the sets
+P a(I ∪ {X})G(V ) \ (I ∪ {X}), and P a(I)G(V \{X}) \ I
+are the same. Finally, since X contains a child C in I,
+any C-forest F in G(V ) either remain in G(V \ {X}),
+if F does not intersect X, or an isomorphic C-forest
+F ′ exists in G(V \ {X}), where X is replaced by C.
+This implies a contradiction, since we just showed the
+existence of a hedge for (P a(I)G(V \{X}) \ I, I), but we
+assumed I ∈ I(G(V \ {X})).
+¤
+This lemma coupled with the soundness of the GMT
+mapping in the previous section establishes soundness
+of sum-one.
+5.2
+
+Mixed Graph Binary Width
+
+We now introduce a certain measure of graph “width,”
+which is derived from the dimension of the model. We
+
+will show that the computational complexity of EID is
+exponential in this measure. This width can be viewed
+as a tally of those parameters which we compute by
+invoking GMT, for a particular elimination order.
+Definition 12 For an ADMG G(V ) and a node X ∈
+V , let Hx = {rh(I) | I ∈ I(G(V \ {X})), X ∈
+P a(I)G(V ) }. The binary width of G(V ) with respect to
+P
+X, or bw(G(V ), X) is equal to log2 H∈Hx 2|tail(H)| .
+Definition 13 For an elimination order π indexing
+nodes Z1 , . . . , Zk in a set Z ⊂ V in G(V ), the binary width of G(V ) using π with respect to Z is
+bwπ (G(V ), Z) = maxi bw(G(V \ Z, Zi , . . . , Zk ), Zi ).
+The binary width of G(V ) with respect to a set Z ⊆ V ,
+written as bw(G(V ), Z) is the smallest binary width
+across all elimination orderings of nodes in Z.
+Note that considering an interventional query P (y |
+do(x)) will often reduce the width, since evaluating
+such a query entails considering the mutilated graph
+G[An(Y )G[V \X] \ X] which often has fewer edges, and
+always has fewer parameters than G(V ).
+5.3
+
+Complexity Analysis
+
+We now give the complexity analysis of EID. We will
+consider a fixed query (y, x, Q(V ), G(V )), for which we
+let V ∗ = An(Y )G[V \X] \ X. The original graph G(V )
+will be assumed to have n nodes and m edges, while
+the graph G[V ∗ ] will be assumed to have n∗ nodes.
+Lemma 7 Evaluating line 1 of EID has time complexity O(n + m + |Q(V ∗ | x)|).
+Lemma 8 Evaluating line 2 of EID has time complexity O(|I(G)| · n2 · (n + m)).
+Proof: Finding ancestors of a set can be done using
+an O(n) traversal, which is done possibly O(n) times.
+Finding a smaller district containing the outcome is
+equivalent to the problem of updating connected sets
+in undirected graphs when edges are deleted one by
+one. An algorithm for this problem exists with time
+complexity O(q + n · m), where q is the number of
+edge deletions [13]. This implies finding the intrinsic
+closure of any ↔-connected S can be done in time
+O(n · (n + m)). It can be shown (we omit the proof
+for space reasons) that all elements in I(G) can be
+obtained from the set of closures of singleton nodes
+in G by successively taking unions and closures. This
+implies the overall complexity stated.
+¤
+Let b = bwπ (G[V ∗ ], V ∗ \ Y ), for some order π which
+we assume EID is using.
+Lemma 9 For each latent projection Gi obtained by
+eliminating the first i nodes in V ∗ \ Y in order π from
+
+G[V ∗ ], computing the set I(Gi ) has time complexity
+O(|I(Gi )| · n2i · (ni + mi )), where ni is the number of
+nodes in Gi and mi is the number of edges in Gi .
+Lemma 10 Line 3 of sum-one has time complexity
+O(4b ).
+Proof: Given that we know the heads and tails of
+all parameters in G(V \ X), we can tell in O(1) time
+whether a given parameter must be computed via line
+3. The number of assignments ν is bounded by 2b , by
+definition. For each such assignment, we call GMT
+on each district in the partition of I ∪ {X}, which is
+equivalent to calling GMT on the entire set. But this
+is exponential in the number of nodes assigned 1, and
+so is bounded by 2b .
+¤
+Lemma 11 Line 4 of sum-one has time complexity
+O(n∗ · 2b ).
+Proof: For each element in Q(V ), we must perform
+a constant amount of work to determine whether the
+parameter stays unchanged or was computed via line
+3. But |Q(V )| has size at most O(n∗ · 2b ).
+¤
+Noting that ni + mi is bounded by n + m, and |I(Gi )|
+is bounded by n∗ · 2b , we put our results together to
+give the overall complexity of EID.
+Theorem 3 EID has time complexity O(n + m +
+|Q(V ∗ | x)| + (n∗ − |Y |) · (4b + 2b · n∗ · n2 · (n + m))).
+We emphasize that our analysis of graph operations of
+EID is somewhat coarse, and the complexity of these
+operations may potentially be improved. We believe
+a more careful analysis would render the paper more
+complex for little return, since the main computational
+roadblock in practice is the exponential dependence
+on width. An even coarser grained expression for the
+complexity of EID is O(poly(n) · 4b ), where poly(n) is
+some low order polynomial over n.
+5.4
+
+A Dynamic Programming Scheme for
+GMT
+
+A Möbius transform [4] on a distribution over n variables has time complexity O(4n ). A dynamic programming algorithm exists which is capable of implementing the transform with time complexity O(n · 2n ).
+This algorithm is known as the Fast Möbius Transform
+[4]. We develop a similar scheme for our generalized
+Möbius transform. It is shown in Fig. 6.
+Theorem 4 If every input to FGMT in the course of
+evaluating P (XV | XW ) is memoized (cached on evaluation), and assignments µ are processed in ascending
+order of cardinality of 1 assignments in µ, then the
+
+time and space complexity of using FGMT to evaluate P (XV | XW ) is O(|V ∪ W | · 2|V ∪W | ).
+Corollary 1 If memoized FGMT is used instead of
+GMT in line 3b of sum-one, then the time complexity of EID is O(n + m + |Q(V ∗ | x)| + (n∗ − |Y |) · (b ·
+2b + 2b · n∗ · n2 · (n + m))).
+
+function FGMT(G, Q, µ)
+INPUT: G a CADMG, Q a set of qH (XH = 0 | xT ),
+for every head H in G, µ an assignment to XV ∪W .
+OUTPUT: The probability p(XV = µV | XW = µW ).
+Let ≺ be a topological ordering on V ∪ W .
+0. If G is the empty graph, return 1.
+
+A coarser expression for the overall complexity of EID
+is then O(poly(n) · b · 2b ), where poly(n) is a low order
+polynomial over n.
+
+1. If G has more than one district then call
+FGMT(G[D], Q(D | µP a(D)\D ), µD∪P a(D) ) on
+each district D ∈ D(G); return the product of
+the results.
+
+5.5
+
+2. If D(G) = {D} then find H = rh(D);
+
+An Example
+
+We illustrate the operation of the algorithm with an
+example. Consider the mixed graph in Fig. 7(a),
+parameterized by: qx1 , qx2 (x1 ), qx1 ,x3 (x2 ), qx3 (x2 ),
+qx2 ,x4 (x1 , x3 ), qx4 (x3 ), qx5 ,x3 ,x1 (x2 , x4 ), qx5 ,x3 (x2 , x4 ),
+qx5 (x4 ), for a total of 23 parameters. A more naive
+representation of the distribution P (x1 , x2 , x3 , x4 , x5 )
+(including the parameterization in [8]) would contain 31 parameters.
+We wish to evaluate the
+query P (x5 | do(x3 )). According to EID, V ∗ =
+An(X5 )G[X1 ,X2 ,X4 ,X5 ] \ {X3 }, which means the relevant parameter restriction computed in the first
+stage is Q(X5 , X4 | x3 ), which is equal to {qx5 (x4 ),
+qx4 (x3 )}. In the second stage, EID marginalizes out
+all nodes not in the outcome X5 from this representation, which just entails marginalizing out X4 . This is
+done using sum-one, which uses GMT to compute
+P (x5 | do(x
+P4 )) and P (x4 | do(x3 )), computes P (x5 |
+do(x3 )) = x4 P (x5 | do(x4 ))P (x4 | do(x3 )), and converts back to a q representation of P (x5 | do(x3 )),
+which corresponds to the graph shown in Fig. 7(c).
+Note that using q parameters allows us to compute
+precisely the effect expression in Section 2.3 without
+resorting to 32 conditional probabilities.
+Note that the same running time will hold for evaluating the query P (xk | do(xk−2 )) for any extension of
+the graph in Fig. 7(a) to k nodes. This is in contrast
+to the original formulation of the ID algorithm, which
+will involve probability tables of size exponential in k.
+
+6
+
+Discussion
+
+We have given an algorithm (EID) which can compute
+interventional marginal distributions in latent variable
+causal models. Our algorithm achieves some measure
+of computational efficiency by exploiting conditional
+and post-truncation independence constraints embedded in r-factorization. In the special case of no interventions, our algorithm can be viewed as an efficient inference scheme for graphical models of conditional independence containing latent variables. Given
+a maximum likelihood estimator for q parameters of
+
+(a) If µH = 0 then
+∗
+(i) q(D\H)∪W
+← FGMT(G(D\H)∪W ,
+Q(D \ H | µP a(D)\D ), µ(D\H)∪W ).
+∗
+(ii) return q(D\H)∪W
+× qH (µtail(H) ).
+(b) Else find the first Y under ≺ such that Y ∈ H
+and µY = 1;
+∗
+(i) q(D\{Y
+})∪W ← FGMT(G(D\{Y })∪W ,
+Q(D \ {Y } | µP a(D)\D ), µ(D\{Y })∪W ).
+0
+← FGMT(GD∪W , Q, (µ(D\{Y })∪W ,
+(ii) qD∪W
+y = 0)).
+∗
+0
+(iii) return q(D\{Y
+})∪W − qD∪W .
+Figure 6: Fast Generalized Möbius Transform. Each
+input is memoized (cached).
+
+r-factorizing models, our algorithm can be viewed as
+giving an MLE for causal effects in such models.
+Going beyond binary models, EID can be viewed as
+generalizing the g-formula for identifiable causal effects
+to mixed graph models,
+by noting that in such models,
+P
+P (y | do(x)) = v∗ \y P ∗ (V ∗ ), where V ∗ are observable ancestors of Y in the graph after do(x) was performed, and P ∗ is a distribution obtained from P (V )
+by “truncating out” all (r)-factors containing X.
+We hasten to add that r-factorizing models are inherently conservative, in the sense that they make no
+assumptions about the latent variables. A statistical
+model which makes additional modeling assumptions
+on the latents is capable of more efficient parameterizations and algorithms. Consider a DAG model shown
+in Fig. 2(a), where nodes {X1 , X2 , . . . } are latent, and
+all nodes are binary. This model is parameterized by
+P (x1 = 0), P (y1 = 0 | x1 ), and P (yi = 0 | xi−1 , xi ),
+P (xi = 0), for i > 1. Since all nodes are binary, the total number of parameters grows linearly with the total
+number of nodes in this model.
+A latent projection of the DAG in Fig. 2(a) onto
+
+x1
+
+x2
+
+[4] R. Kennes. Computational aspects of the Möbius
+transform of a graph. IEEE Transactions on Systems,
+Man, and Cybernetics, 22:201–223, 1991.
+
+x3
+
+x4
+
+x5
+
+(b)
+
+x3
+
+x4
+
+x5
+
+[5] J. Pearl. Probabilistic Reasoning in Intelligent Systems. Morgan and Kaufmann, San Mateo, 1988.
+
+(c)
+
+x3
+
+x5
+
+[6] J. Pearl. Causality: Models, Reasoning, and Inference.
+Cambridge University Press, 2000.
+
+(a)
+
+Figure 7: (a) A graph where we wish to evaluate
+P (x5 | do(x3 )). (b) A graph G[An(X5 )G[X1 ,X2 ,X4 ,X5 ] \
+{X3 }]. (c) A graph representing the output distribution P (x5 | do(x3 )).
+{Y1 , Y2 , . . . } is shown in Fig. 2(b). It is not difficult
+to show that the number of q parameters in graphs
+of the type shown in Fig. 2(b) grows as O(k 2 ) for a
+graph with k nodes. The DAG model with latents in
+Fig. 2(a) posits additional assumptions about the latent variables beyond those implied by the conditional
+independence structure of its graph, namely that the
+number of states of the latent variables Xi does not
+depend on the total number of such variables. On the
+other hand, if we are not willing to commit to any
+assumptions about latent variables, and only wish to
+assume conditional and post-truncation independences
+implied by a particular mixed graph, we believe using
+r-factorization is in some sense “optimal.”
+Our algorithm can be used to obtain identifiable conditional interventional distributions of the form P (y |
+z, do(x)). A known result [14] implies identification
+problems for such distributions are always equivalent
+to identification problems for an unconditional effect
+of the form P (y ′ | do(x′ )), where P (y | z, do(x)) =
+P (y ′ | do(x′ ))/P (z ′ | do(x′ )), for some Z ′ ⊆ Y ′ . This
+result means, we can use our algorithm to obtain q
+parameters for P (y ′ | do(x′ )), and obtain our answer
+by one final conditioning operation.
+Acknowledgments
+This research was supported by the U.S. National Science
+Foundation (CRI 0855230) and U.S. National Institutes of
+Health (R01 AI032475).
+
+References
+[1] A.P. Dawid. Influence diagrams for causal modelling and inference. International Statistical Review,
+70:161–189, 2002.
+[2] M. Drton and T.S. Richardson. Binary models for
+marginal independence. J. Roy. Statist. Soc. Ser. B,
+70(2):287–309, 2008.
+[3] Y. Huang and M. Valtorta. Pearl’s calculus of interventions is complete. In Twenty Second Conference
+On Uncertainty in Artificial Intelligence, 2006.
+
+[7] Judea Pearl and T. S. Verma. A theory of inferred
+causation. In Principles of Knowledge Representation
+and Reasoning: Proceedings of the Second International Conference, pages 441–452, 1991.
+[8] T. S. Richardson. A factorization criterion for acyclic
+directed mixed graphs. In 25th Conference on Uncertainty in Artificial Intelligence, 2009.
+[9] T.S. Richardson. Markov properties for acyclic directed mixed graphs. Scand. J. Statist., 30:145–157,
+2003.
+[10] T.S. Richardson, J.M. Robins, I Shpitser, and R.J.
+Evans. Recursive factorizations for acyclic directed
+mixed graphs. Unpublished manuscript, 2011.
+[11] J.M. Robins. A new approach to causal inference in
+mortality studies with sustained exposure periods –
+application to control of the healthy worker survivor
+effect. Mathematical Modeling, 7:1393–1512, 1986.
+[12] J.M. Robins and T.S. Richardson. Alternative graphical causal models and the identification of direct effects. Causality and Psychopathology: Finding the determinants of disorders and their cures, 2011.
+[13] Y. Shiloach and S. Even. An on-line edge-deletion
+problem. Journal of the ACM, 28, 1981.
+[14] I. Shpitser and J. Pearl. Identification of conditional
+interventional distributions. In Twenty Second Conference on Uncertainty in Artificial Intelligence (UAI06), volume 22, pages 437–444. AUAI Press, 2006.
+[15] I. Shpitser and J. Pearl. Identification of joint interventional distributions in recursive semi-markovian
+causal models. In Twenty First National Conference
+on Artificial Intelligence(AAAI-06), 2006.
+[16] I. Shpitser and J. Pearl. Dormant independence. In
+Twenty Third National Conference on Artificial Intelligence (AAAI-08), pages 1081–1087. AAAI Press,
+2008.
+[17] P. Spirtes, C. Glymour, and R. Scheines. Causation,
+Prediction, and Search. Springer Verlag, NY, 1993.
+[18] J. Tian. Identifying conditional causal effects. In
+Twentieth Conference on Uncertainty in Artificial Intelligence (UAI-04), 2004.
+[19] J. Tian and J. Pearl. A general identification condition
+for causal effects. In Eighteenth National Conference
+on Artificial Intelligence (AAAI-02), pages 567–573,
+2002.
+[20] N.L. Zhang and D. Poole. A simple approach to
+Bayesian network computations. In Tenth Canadian
+Conference on AI, pages 171–178, 1994.
+
+

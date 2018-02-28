@@ -1,0 +1,943 @@
+the dimension of the state space is exponential in the number of components, which poses representational and computational difficulties. Recently, Nodelman et al. (2002)
+introduced the representation language of continuous-time
+Bayesian networks (CTBNs), which provides a factorized,
+component-based representation of CTMPs: each component is characterized by a conditional CTMP dynamics,
+which describes its local evolution as a function of the current state of its parents in the network. This representation
+is natural for describing systems with a sparse structure of
+local influences between components.
+For most applications of such CTMP models, we need
+to perform inference to evaluate the posterior probability
+of various queries given evidence. Exact inference requires
+exponentiation of the rate matrix Q. As the rate matrix is
+exponential in the number of components, exact computations are infeasible for more than a few components. Thus,
+applications of factored CTMPs require the use of approximate inference.
+In two recent works Nodelman et al. (2005) and Saria
+et al. (2007) describe approximate inference procedures
+based on Expectation Propagation, a variational approximation method (Minka, 2001; Heskes and Zoeter, 2002).
+These approximation procedures perform local propagation of messages between components (or sub-trajectories
+of components) until convergence. Such procedures can be
+quite efficient, however they can also introduce a systematic error in the approximation (Fan and Shelton, 2008).
+More recently, Fan and Shelton (2008) introduced a
+procedure that employs importance sampling and particle
+filtering to sample trajectories from the network. Such a
+stochastic sampling procedure has anytime properties as
+collecting more samples leads to more accurate approximation. However, since this is an importance sampler, it
+has limited capabilities to propagate evidence “back” to influence the sampling of earlier time steps. As a result, when
+the evidence is mostly at the end of the relevant time inter-
+
+val, and is of low probability, the procedure requires many
+samples. A related importance sampler was proposed by
+Ng et al. (2005) for monitoring a continuous time process.
+In this paper we introduce a new stochastic sampling
+procedure for factored CTMPs. The goal is to sample
+random system trajectories from the posterior distribution.
+Once we have multiple independent samples from this distribution we can approximate the answer to queries about
+the posterior using the empirical distribution of the samples. The challenge is to sample from the posterior. While
+generative sampling of a CTMP is straightforward, sampling given evidence is far from trivial, as evidence modifies the posterior probability of earlier time points.
+Markov Chain Monte Carlo (MCMC) procedures circumvent this problem by sampling a stochastic sequence
+of system states (trajectories in our models) that will eventually be governed by the desired posterior distribution.
+Here we develop a Gibbs sampling procedure for factored
+CTMPs. This procedure is initialized by setting an arbitrary trajectory which is consistent with the evidence. It
+then alternates between randomly picking a component Xi
+and sampling a trajectory from the distribution of Xi conditioned on the trajectories of the other components and
+the evidence. This procedure is reminiscent of block Gibbs
+sampling (Gilks et al., 1996) as we sample an entire trajectory rather than a single random variable in each iteration.
+However, in our approach we need to sample a continuous
+trajectory.
+The crux of our approach is in the way we sample a trajectory for a single component from a process that is conditioned on trajectories of the other components. While
+such a process is Markovian, it is not homogeneous as its
+dynamics depends on trajectories of its Markov Blanket as
+well as on past and present evidence. We show that we can
+perform exact sampling by utilizing this Markovian property, and that the cost of this procedure is determined by the
+complexity of the current trajectories and the sampled one,
+and not by a pre-defined resolution parameter. This implies
+that the computational time adapts to the complexity of the
+sampled object.
+
+2
+
+Continuous-Time Bayesian Networks
+
+In this section we briefly review the CTBN model (Nodelman et al., 2002). Consider an M -component Markov process
+(t)
+(t)
+(t)
+X (t) = (X1 , X2 , . . . XM )
+with state space S = S1 × S2 × · · · × SM .
+A notational convention: vectors are denoted by boldface symbols, e.g., X, a, and matrices are denoted by
+blackboard style characters, e.g., Q. The states in S are
+denoted by vectors of indexes, a = (a1 , . . . , aM ). The indexes 1 ≤ i, j ≤ M are used to enumerate the components.
+(t)
+We use the notation X (t) and Xi to denote a random variable at time t. We will use X [s,t] , X (s,t] , X [s,t) , to denote
+
+the state of X in the closed and semi-open intervals from s
+to t.
+The dynamics of a time-homogeneous continuous-time
+Markov process are fully determined by the Markov transition function,
+pa,b (t) = Pr(X (t+s) = b|X (s) = a),
+where time-homogeneity implies that the right-hand side
+does not depend on s. Provided that the transition function satisfies certain analytical properties (continuity, and
+regularity; see Chung (1960)) the dynamics are fully captured by a constant matrix Q—the rate, or intensity matrix—whose entries qa,b are defined by
+qa,b = lim
+h↓0
+
+pa,b (h) − δa,b
+,
+h
+
+where δa,b is a multivariate Kronecker delta.
+A Markov process can also be viewed as a generative
+process: The process starts in some state a. After spending a finite amount of time at a, it transitions, at a random
+time, to a random state b 6= a. The transition times to the
+various states are exponentially distributed, with rate parameters qa,b . The diagonal elements of Q are set such that
+each row sums up to zero.
+The time-dependent probability distribution, p(t),
+whose entries are defined by
+pa (t) = Pr(X (t) = a),
+
+a ∈ S,
+
+satisfies the so-called forward, or master, equation,
+dp
+= QT p.
+dt
+
+(1)
+
+Thus, using the Q matrix, we can write the Markov transition function as
+pa,b (t) = [exp(tQ)]a,b ,
+that is, as the a, b entry in the matrix resulting from exponentiating Q (using matrix exponentiation).
+It is important to note that the master Eq. (1) encompasses all the statistical properties of the Markov process.
+There is a one-to-one correspondence between the description of a Markov process by means of a master equation, and by means of a “pathwise” characterization (up to
+stochastic equivalence of the latter; see Gikhman and Skorokhod (1975)).
+Continuous-time Bayesian Networks provide a compact representation of multi-component Markov processes
+by incorporating two assumptions: (1) every transition involves a single component; (2) each component undergoes
+transitions at a rate which depends only on the state of a
+subsystem of components.
+Formally, the structure of a CTBN is defined by assigning to each component i a set of indices Par(i) ⊆
+
+{1, . . . , M } \ {i}. With each component i, we associate
+i| Par(i)
+a conditional rate matrix Qi| Par(i) with entries qai ,bi |ui
+where ai and bi are states of Xi and ui is a state of Par(i).
+This matrix defines the rate of Xi as a function of the state
+of its parents. Thus, when the parents of Xi change state,
+the rates governing its transition can change.
+The formal semantics of CTBNs is in terms of a joint
+rate matrix for the whole process. This rate matrix is defined by combining the conditional rate matrices
+
+
+M
+X
+Y
+i|
+Par(i)
+q
+qa,b =
+δaj ,bj  .
+(2)
+ai ,bi | Pi (a)
+i=1
+
+j6=i
+
+where Pi (a) is a projection operator that project a complete assignment a to an assignment to the Par(i) components. Eq. (2) is, using the terminology of Nodelman et al.
+(2002), the “amalgamation” of the M conditional rate matrices. Note the compact representation, which is valid for
+both diagonal and off-diagonal entries. It is also noteworthy that amalgamation is a summation, rather than a product; indeed, independent exponential rates are additive. If,
+for example, every component has d possible values and k
+parents, the rate matrix requires only M dk+1 (d − 1) parameters, rather than dM (dM − 1).
+The dependency relations between components can be
+represented graphically as a directed graph, G, in which
+each node corresponds to a component, and each directed
+edge defines a parent-child relation. A CTBN consists of
+such a graph, supplemented with a set of M conditional
+rate matrices Qi| Par(i) . The graph structure has two main
+roles: (i) it provides a data structure to which parameters
+are associated; (ii) it provides a qualitative description of
+dependencies among the various components of the system. The graph structure also reveals conditional independencies between sets of components (Nodelman et al.,
+2002).
+Notational conventions: Full trajectories and observed
+pointwise values of components are denoted by lower case
+(t)
+letters indexed by the relevant time intervals, e.g., xi ,
+[s,t]
+(t)
+[s,t]
+xi . We will use Pr(xi ) and Pr(xi ) as shorthands
+(t)
+(t)
+[s,t]
+[s,t]
+for Pr(Xi = xi ) and Pr(Xi = xi ).
+It should be emphasized that even though CTBNs provide a succinct representation of multi-component processes, any inference query still requires the exponentiation of the full dM × dM dimensional rate matrix Q. For
+example, given the state of the system at times 0 and T , the
+Markov bridge formula is
+Pr(X (t) = a|x(0) , x(T ) ) =
+[exp(tQ)]x(0) ,a [exp((T − t)Q)]a,x(T )
+.
+[exp(T Q)]x(0) ,x(T )
+It is the premise of this work that such expressions cannot
+be computed directly, thus requiring approximation algorithms.
+
+3
+3.1
+
+Sampling in a Two Component Process
+Introduction
+
+We will start by addressing the task of sampling from
+a two components process. The generalization to multicomponent processes will follow in the next section.
+Consider a two-component CTBN, X = (X, Y ),
+whose dynamics is defined by conditional rates QX|Y and
+QY |X (that is, X is a parent of Y and Y is a parent of X).
+Suppose that we are given partial evidence about the state
+of the system. This evidence might contain point observations, as well as continuous observations in some intervals,
+of the states of one or two components. Our goal is to sample a trajectory of (X, Y ) from the joint posterior distribution.
+The approach we take here is to use a Gibbs sampler
+(Gilks et al., 1996) over trajectories. In such a sampler, we
+initialize X and Y with trajectories that are consistent with
+the evidence. Then, we randomly either sample a trajectory
+of X given the entire trajectory of Y and the evidence on
+X, or sample a trajectory of Y given the entire trajectory of
+X and the evidence on Y . This procedure defines a random
+walk in the space of (X, Y ) trajectories. The basic theory
+of Gibbs sampling suggests that this random walk will converge to the distribution of X, Y given the evidence.
+To implement such a sampler, we need to be able to
+sample the trajectory of one component given the entire
+trajectory of the other component and the evidence. Suppose, we have a fully observed trajectory on Y . In this case,
+observations on X at the extremities of some time interval
+statistically separate this interval from the rest of trajectory.
+Thus, we can restrict our analysis to the following situation:
+the process is restricted to a time interval [0, T ] and we are
+given observations X (0) = x(0) and X (T ) = x(T ) , along
+with the entire trajectory of Y in [0, T ]. The latter consists
+of a sequence of states (y0 , . . . , yK ) and transition times
+(τ0 = 0, τ1 , . . . , τK , τK+1 = T ). An example of such scenario is shown in Figure 1(a). The entire problem is now
+reduced to the following question: how can we sample a
+trajectory of X in the interval (0, T ) from its posterior distribution?
+To approach this problem we exploit the fact that the
+sub-process X given that Y [0,T ] = y [0,T ] is Markovian (although non-homogeneous in time):
+Proposition 3.1: The following Markov property holds for
+all t > s,
+Pr(X (t) | x[0,s] , x(T ) , y [0,T ] ) = Pr(X (t) | x(s) , x(T ) , y [s,T ] ).
+3.2
+
+Time Granularized Process
+
+Analysis of such process requires reasoning about a continuum of random variables. A natural way of doing so is to
+perform the analysis in discrete time with a finite time granularity h, and examine the behavior of the system when we
+take h ↓ 0.
+
+To do so, we introduce some definitions. Suppose Pr
+is the probability function associated with a continuoustime Markov process with rate matrix Q. We define the
+h-coarsening of Pr to be Prh , a distribution over the random variables X (0) , X (h) , X (2h) , . . . which is defined by
+the dynamics
+Prh (X (t+h) = b | X (t) = a) = δa,b + h · qa,b ,
+which is the Taylor expansion of [exp(tQ)]a,b , truncated
+at the linear term. When h < mina (−1/qa,a ), Prh is a
+well-defined distribution.
+We would like to show that the measure Prh (A) of an
+event A converges to Pr(A) when h ↓ 0. To do so, however, we need to define the h-coarsening of an event. Given
+a time point t, define btch and dteh to be the rounding down
+and up of t to the nearest multiple of h. For point events
+we define [[X (t) = a]]h to be the event X (btch ) = a, and
++
+[[X (t ) = a]]h to the event X (dteh ) = a. For an interval event, we define [[X (s,t] = a(s,t] ]]h to be the event
+X (dseh ) = adseh , X (dseh +h) = adseh +h , . . . , X (btch ) =
+abtch . Similarly, we can define the coarsening of events
+over only one component and composite events.
+Note that the probability of any given trajectory tends
+to zero as h → 0. The difficulty in working directly in the
+continuous-time formulation is that we condition on events
+that have zero probability. The introduction of a granularized process allows us to manipulate well-defined conditional probabilities, which remain finite as h → 0.
+Theorem 3.2: Let A and B be point, interval, or a finite
+combination of such events. Then
+lim Prh ([[A]]h | [[B]]h ) = Pr(A | B)
+h↓0
+
+From now on, we will drop the [[A]]h notation, and assume
+it implicitly in the scope of Prh ().
+A simple minded approach to solve our problem is to
+work with a given finite h and use discrete sampling to
+sample trajectories in the coarsened model (thus, working
+with a dynamical Bayesian network). If h is sufficiently
+small this might be a reasonable approximation to the desired distribution. However, this approach suffers from
+sub-optimality due to this fixed time granularity — a too
+coarse granularity leads to inaccuracies, while a too fine
+granularity leads to computational overhead. Moreover,
+when different components evolve at different rates, this
+trade-off is governed by the fastest component.
+3.3
+
+Sampling a Continuous-Time Trajectory
+
+To avoid the trade-offs of fixed time granularity we exploit
+the fact that while a single trajectory is defined over infinite
+time points, it involves only a finite number of transitions
+in a finite interval. Therefore, instead of sampling states
+at different time points, we only sample a finite sequence
+
+of transitions. The Markovian property of the conditional
+process X enables doing so using a sequential procedure.
+Our procedure starts by sampling the first transition
+time. It then samples the new state the transition leads to.
+As this new sample point statistically separates the remaining interval from the past, we are back with the initial problem yet with a shorter interval. We repeat these steps until
+the entire trajectory is sampled; it terminates once the next
+transition time is past the end of the interval.
+Our task is to sample the first transition time and the
+next state, conditioned on X (0) = x(0) , X (T ) = x(T ) as
+well as the entire trajectory of Y in [0, T ]. To sample this
+transition time, we first define the conditional cumulative
+distribution function F (t) that X stays in the initial state
+for a time less than t:
+
+
+(3)
+F (t) = 1 − Pr X (0,t] = x(0) |x(0) , x(T ) , y [0,T ]
+If we can evaluate this function, then we can sample the
+first transition time τ by inverse transform sampling — we
+draw ξ from a uniform distribution in the interval [0, 1], and
+set τ = F −1 (ξ); see Figure 1a,b.
+The Markov property of the conditional process allows
+us to decompose the probability that X remains in its initial
+state until time t. Denoting the probability of Y ’s trajectory
+and of X remaining in its initial state until time t by
+ppast (t) = Pr(X (0,t] = x(0) , y (0,t] |x(0) , y (0) ),
+and the probability of future observations given the state of
+(Xt , Yt ) by
+pfuture
+(t) = Pr(x(T ) , y (t,T ] |X (t) = x, y (t) ).
+x
+We can then write the probability that X is in state x(0)
+until t as
+
+ ppast (t) · pfuture (t)
+x(0)
+.
+Pr X (0,t] = x(0) |x(0) , x(T ) , y [0,T ] =
+future
+px(0) (0)
+(4)
+Lamentably, while the reasoning we just described is
+seemingly correct, all the terms in Eq. (4) are equal to
+0, since they account for the probability of Y ’s trajectory.
+However, as we shall see, if we evaluate this equation carefully we will be able to define it with terms that decompose
+the problem in a similar manner.
+To efficiently compute these terms we exploit the fact
+that although the process is not homogeneous, the dynamics of the joint process within an interval [τk , τk+1 ) , in
+which Y has a fixed value yk , is characterized by a single unnormalized rate matrix whose entries depend on yk .
+This allows us to adopt a forward-backward propagation
+scheme. We now develop the details of these propagations.
+3.4
+
+Computing ppast (t)
+
+We begin with expressing ppast (t) as a product of local
+terms. Recall that ppast (t) is the probability that X is constant until time t. We denote by ppast
+h (t) the h-coarsened
+version of ppast (t).
+
+(a) Sampling first transition
+
+(b) Sampling second transition
+
+(c) Initial propagators
+
+(d) Propagators in second step
+
+Figure 1: Illustration of sampling of a single component with three states. (a) Top panel: sampling scenario, with a
+complete trajectory for Y , that has four transitions at τ1 , . . . , τ4 , and point evidence on X at times 0 and T . Bottom panel:
+the cumulative distribution F (t), that X changes states before time t given this evidence. We sample the next transition
+time by drawing ξ from a uniform distribution and setting τ = F −1 (ξ). Note that as x(0) 6= x(T ) , F (T ) = 1. The bar
+graph represents the conditional distribution of the next state, given a transition at time τ . (b) Same sampling procedure
+for the second transition. Here F (T ) < 1 since it is not necessary for X to change its state. (c and d) The two components
+used in computing 1 − F (t): p̃past (t) the probability that X stays with a constant value until time t and Y has the observed
+trajectory until this time; and p̃future
+(x) the probability that X transition’s from state x at t to its observed state at time T
+t
+and Y follows its trajectory from t to T .
+To characterize the dynamics within intervals
+(τk , τk+1 ) we define constant propagator functions
+ppast
+h (t)
+
+=
+
+"k−1
+Y
+
+#
+l
+φyh,x
+(0) (∆l )
+
+·
+
+Y |X
+qyl ,yl+1 |x(0)
+
+k
+· h φyh,x
+(0) (t−τk )
+
+l=0
+
+φyh,x (∆t) =
+
+Prh (X (t,t+∆t] = x, Y (t,t+∆t] = y|X (t) = x, Y (t) = y) where ∆l = τl+1 − τl .
+To compute the constant propagator functions, we realize that in each step within the interval (s, t] the state does
+not change. Thus,
+These functions determine the probability that X = x and
+Y = y throughout an interval of length ∆t if they start with
+these values.
+At time τk+1 the Y component changes it value from
+yk to yk+1 . The transition probability at this point is h ·
+Y |X
+qyk ,yk+1 |x(0) . Thus, from the Markov property of the joint
+process it follows that for t ∈ (τk , τk+1 )
+
+Y |X
+
+X|Y
+
+φyh,x (∆t) = [1 + h · (qx,x|y + qy,y|x )]
+
+b∆tch
+h
+
+We define
+X|Y
+
+Y |X
+
+(∆t)(qx,x|y +qy,y|x )
+
+φyx (∆t) = lim φyh,x (∆t) = e
+h↓0
+
+We conclude that if
+"k−1
+#
+Y y
+Y |X
+past
+l
+p̃ (t) =
+φx(0) (∆l ) · qyl ,yl+1 |x(0) φyxk(0) (t − τk ),
+l=0
+
+then for t ∈ (τk , τk+1 )
+lim
+h↓0
+
+3.5
+
+ppast
+h (t)
+= p̃past (t)
+hk
+
+"
+
+Computing pfuture
+(t)
+x
+
+future
+
+p̃
+
+We now turn to computing pfuture
+(t). Unlike the previous
+x
+case, here we need to compute this term for every possible
+value of x. We do so by backward dynamic programing
+(reminiscent of backward messages in HMMs).
+We denote by pfuture
+(t) a vector with entries pfuture
+h
+h,x (t).
+future
+Note that, ph (T ) = ex(T ) where ex is the unit vector
+with 1 in position x. Next, we define a propagator matrix
+Syh (∆t) with entries
+syh,a,b (∆t) =
+Prh (X (t+∆t) = b, Y (t,t+∆t] = y|X (t) = a, Y (t) = y)
+This matrix provides the dynamics of X in an interval
+where Y is constant. We can use it to compute the probability of transitions between states of X in the intervals
+(τk , τk+1 ], for every τk < s < t < τk+1
+pfuture
+(s)
+h
+
+=
+
+Syhk (t
+
+This terms is similar to transition matrix of a Markov process. Note, however that R is not a stochastic rate matrix,
+as the rows do not sum up to 0. In fact, the sum of the
+rows in negative, which implies that the entries in Syh (∆t)
+tend to get smaller with ∆t. This matches the intuition that
+this term should capture the probability of the evidence that
+Y = y for the whole interval.
+To summarize, if we define for t ∈ (τk , τk+1 )
+
+−
+
+lim
+h↓0
+
+3.6
+
+y
+
+K
+Y
+
+hTyl ,yl+1 Syh (∆l ) ex(T )
+
+l=k+1
+
+It remains to determine the form of the propagator matrix. At time granularity h, we can write the probability of
+transitions between states of X while Y = y as a product
+of transition matrices. Thus,
+Syh (∆t) = (I + h · RX|y )
+
+b∆tch
+h
+
+where RX|y is the matrix with entries
+ X|Y
+
+a 6= b
+ qa,b|y
+X|y
+ra,b =
+
+ q X|Y + q Y |X a = b
+a,a|y
+y,y|a
+We now can define
+Sy (∆t) = lim Syh (∆t) = e(∆t)R
+h↓0
+
+X|y
+
+T
+
+S (∆l ) ex(T ) ,
+
+pfuture
+(t)
+h
+= p̃future (t)
+hK−k
+
+Putting it All Together
+
+Based on the above arguments.
+
+ ppast (t)pfuture
+(t)
+h
+h,x(0)
+Prh X (0,t] = x(0) |x(0) , x(T ) , y [0,T ] =
+future
+ph,x(0) (0)
+Now, if t ∈ (τk , τk+1 ), then
+
+
+Pr X (0,t] = x(0) |x(0) , x(T ) , y [0,T ]
+=
+
+#
+
+(τk+1 −t)
+
+#
+yl ,yl+1 y
+
+then
+
+s)pfuture
+(t)
+h
+
+pfuture
+(t) =
+h
+Shk−1 (τk+1 − t)
+
+(t) = S
+
+K
+Y
+l=k+1
+
+At transition points τk we need to take into account the
+probability of a change. To account for such transitions, we
+0
+Y |X
+define a diagonal matrix Ty,y whose (a, a) entry is qy,y0 |a .
+Using this notation and the Markov property of the joint
+process the conditional probability of future observations
+for τk ≤ t ≤ τk+1 is
+"
+
+yk−1
+
+lim
+h↓0
+
+future
+ppast
+h (t)ph,x(0) (t)
+
+pfuture
+(0)
+h,x(0)
+−(K−k) future
+[h−k ppast
+ph,x(0) (t)]
+h (t)][h
+
+=
+
+lim
+
+=
+
+p̃past (t)p̃future
+(t)
+x(0)
+p̃future
+(0)
+x(0)
+
+h↓0
+
+h−K pfuture
+(0)
+h,x(0)
+
+Thus, in both numerator and denominator we must account
+for the observation of K transitions of Y , which have probability of o(hK ). Since these term cancels out, we remain
+with the conditional probability over the event of interest.
+3.7
+
+Forward Sampling
+
+To sample an entire trajectory we first compute p̃future (t)
+only at transition times from the final transition to the start.
+We sample the first transition time by drawing a random value ξ from a uniform distribution in [0, 1]. Now
+we find τ such that F (τ ) = ξ in two steps: First, we
+sequentially search for the interval [τk , τk+1 ] such that
+F (τk ) ≤ F (τ ) ≤ F (τk+1 ) by propagating p̃past (t) forward through transition points. Second, we search the exact time point within [τk , τk+1 ] using binary search with L
+steps to obtain accuracy of 2−L ∆k . This step requires computation of Syk (2−L ∆k ) and its exponents Syk (2−l ∆k ),
+l = 1, . . . , L − 1.
+Once we sample the transition time t, we need to compute the probability of the new state of X. Using similar
+
+arguments as the ones we discussed above, we find that
+
+
++
++
+Pr X (t ) = x|X [0,t) = x(0) , X (t ) 6= x(0) , y [0,T ] =
+X|Y
+
+qx(0) ,x · p̃future
+(t)
+x
+P
+
+x0 6=x(0)
+
+X|Y
+
+qx(0) ,x0 · p̃future
+x0 (t)
+
+.
+
+Thus, we can sample the next state by using the precomputed value of p̃future
+(t) at t.
+x
+Once we sample a transition (time and state), we can
+sample the next transition in the interval [τ, T ]. The procedure proceeds while exploiting propagators which have
+already been computed. It stops when F (T ) < ξ, i.e., the
+next sampled transition time is greater than T . Figure 1
+illustrates the conditional distributions of the first two transitions.
+
+4
+
+Sampling in a Multi-Component Process
+
+The generalization from a two-component process to a general one is relatively straightforward. At each step, we need
+to sample a single component Xi conditioned on trajectories in Y = (X1 , . . . , Xi−1 , Xi+1 , . . . , XM ). To save
+computations we exploit the fact that given complete trajectories over the Markov blanket of Xi , which is the component set of Xi ’s parents, children and its children’s parents, the dynamics in Xi is independent of the dynamics of
+all other components (Nodelman et al., 2002).
+Indeed, the structured representation of a CTBN allows
+computations using only terms involving the Markov blanket. To see that, we first notice that within an interval whose
+state is Y t = y the propagator matrix involves terms which
+Xi |Y
+Xi |Par(i)
+and
+depend only on the parents of Xi qa,b|y
+= qa,b|u
+i
+terms which depend on the other members of the Markov
+blanket,
+X
+X |Par(j)
+Y |X
+qxjj,xj |uj + cy
+qy,y|xii =
+j∈Child(i)
+
+where cy does not depend on the state of Xi . Therefore,
+we define the reduced rate matrix RXi |v :
+ X |Par(i)
+i
+
+a 6= b
+ qa,b|ui
+Xi |MB(i)
+ra,b|v
+=
+
+Xj |Par(j)
+ q Xi |Par(i) + P
+a=b
+j∈Child(i) qxj ,xj |uj
+a,a|ui
+where, v is the projection of y to the Markov blanket. Consequently the local propagator matrix becomes
+Sv (t) = exp(t · RXi |v )
+
+(5)
+
+Importantly, this matrix differs from Sy (t) by a scalar factor of exp(t · cy ). The same factor arise when replacing the
+term in the exponent of the constant propagator. Therefore,
+these terms cancel out upon normalization.
+This development also shows that when sampling Xi
+we only care about transition points of one of the trajectories in MB(i). Thus, the intervals computed in the
+
+Figure 2: Relative error versus burn-in and number of samples.
+initial backward propagation are defined by these transitions. Therefore, the complexity of the backward procedure
+scales with the rate of Xi and its Markov blanket.
+
+5
+
+Experimental Evaluation
+
+We evaluate convergence properties of our procedure on a
+chain network presented in Fan and Shelton (2008), as well
+as on related networks of various sizes and parametrizations. The basic network contains 5 components, X0 , →
+X1 → . . . X4 , with 5 states each. The transition rates
+of X0 suggest a tendency to cycle in 2 possible loops:
+s0 → s1 → s2 → s0 and s0 → s3 → s4 → s0 ; whereas
+for i > 0, Xi attempts to follow the state of Xi−1 — the
+Xi |Xi−1
+transition qa,b|c
+has higher intensity when c = b. The
+intensities of X0 in the original network are symmetric relative to the two loops. We slightly perturbed parameters to
+break symmetry since the symmetry between the two loops
+tends to yield untypically fast convergence.
+To obtain a reliable convergence assessment, we should
+generate samples from multiple independent chains which
+are initialized from an over-dispersed distribution. Aiming to construct such samples, our initialization procedure
+draws for each component a rate matrix by choosing an assignment to its parents from a uniform distribution and taking the corresponding conditional rate matrix. Using these
+matrices it samples a trajectory that is consistent with evidence independently for every component using the backward propagation-forward sampling strategy we described
+above.
+A crucial issue in MCMC sampling is the time it takes
+the chain to mix — that is, sample from a distribution that
+is close to the target distribution rather than the initial distribution. It is not easy to show empirically that a chain has
+mixed. We examine this issue from a pragmatic perspective
+by asking what is the quality of the estimates based on sam-
+
+Figure 3: Error versus burn-in for different evidence sets.
+For each set we specify the average log-likelihood of the
+samples after convergence.
+
+ples taken at different number of “burn-in” iterations after
+the initialization, where a single iteration involves sampling
+each of the components once. We examine the estimates of
+expected sufficient statistics that are required for learning
+CTBN’s — residence time of components in states and the
+number of transitions given the state of the component’s
+parent (Nodelman et al., 2003). We measure estimation
+P |θ̂ −θ |
+quality by the average relative error j jθj j where θj
+is exact value of the j’th sufficient statistics calculated using numerical integration and θ̂j is the approximation.
+To make the task harder, we chose an extreme case
+by setting evidence X (0) = ~s0 (the vector of s0 ), and
+X (3) = (s0 , s1 , s3 , s0 , s1 ). We then sampled the process
+using multiple random starting points, computed estimated
+expected statistics, and compared them the exact expected
+statistics. Figure 2 shows the behavior of the average relative error taken over all θ > 0.05 versus the sample size for
+different number of burn-in iterations. Note that when
+√using longer burn-in, the error decreases at a rate of O( n),
+where n is the number of samples, which is what we would
+expect from theory, if the samples where totally independent. This implies that at this long burn-in the error due to
+the sampling process is smaller than the error contributed
+by the number of samples.
+To study further the effect of evidence’s likelihood,
+we measured error versus burn-in using 10,000 samples in
+our original evidence set, and four additional ones. The
+first additional evidence, denoted by e2 is generated by
+setting X (0) = ~s0 , forward sampling a random trajectory
+and taking the complete trajectory of X4 as evidence.
+Additional sets are:
+e3 = {X (0) = ~s0 , X (3) = ~s0 };
+(0)
+e4 = {X = ~s0 } and an extremely unlikely case
+(0,3)
+e5 = {X (0) = ~s0 , X0
+= s0 , X (3) = (s0 , s1 , s3 , s0 , s1 )}.
+Figure 3 illustrates that burn-in period may vary by an
+
+Figure 4: Effect of conditional transition probability sharpness on mixing time.
+
+order of magnitude, however it is not correlated with the
+log-likelihood. Note that in this specific experiment slower
+convergence occurs when continuous evidence is absent.
+The reason for this may be the existence of multiple possible paths that cycle through state zero. That is, the posterior
+distribution is , in a sense, multi-modal.
+To further explore the effect of the posterior’s landscape, we tested networks with similar total rate of transitions, but with varying level of coupling between components. Stronger coupling of components leads to a sharper
+joint distribution. To achieve variations in the coupling
+we consider variants
+of the chain CTBN where we set
+(q
+)α
+π̂a,b|y = P a,b|y
+α and q̂a,b|y = qa,a|y · π̂a,b|y where
+c6=a (qa,c|y )
+α is a non-negative sharpness parameter As α → 0 the network becomes smoother, which reduces coupling between
+components. However, the stationary distribution is not
+tending to a uniform one because we do not alter the diagonal elements. Figure 4 shows convergence behavior for
+different values of α where estimated statistics are averaged
+over 1,000 samplers. As we might expect, convergence is
+faster as the network becomes smoother.
+Next we evaluated the scalability of the algorithm
+by generating networks containing additional components
+with an architecture similar to the basic chain network.
+As exact inference is infeasible in such networks we measured relative error versus estimations taken from long
+runs. Specifically, for each N , we generated 1000 samples by running 100 independent chains and taking samples after 10,000 rounds as well as additional 9 samples
+from each chain every 1,000 rounds. Using these samples
+we estimated the target sufficient statistics. To avoid averaging different numbers of components, we compared the
+relative error in the estimate of 5 components for networks
+of different sizes. Figure 5 shows the results of this experiment. As we can see, convergence rates decay moderately
+
+Figure 5: Convergence of relative error in statistics of first
+five components in networks of various sizes. Errors are
+computed with respect to statistics that are generated with
+N = 10, 000 rounds.
+
+Figure 7: The effect of different time scales on the sampling. In this network Xi ’s rate is twice as fast than Xi+1 ’s
+rate. (top) The number transitions sampled for each of the
+first four components as a function of iteration number.
+(bottom) The number of intervals of Markov neighbors of
+each component as a function of iteration number.
+Figure 6: Relative error versus run-time in seconds for various network sizes.
+
+with the size of the network.
+While for experimental purposes we generate many
+samples independently. A practical strategy is to run a
+small number of chains in parallel and then collect take a
+large number of samples from each. We tested this strategy
+by generating 10 independent chain for various networks
+and estimating statistics from all samples except the first
+20%. Using these, we measured how the behavior of error
+versus CPU run-time scales with network size. Average results of 9 independent tests are shown in Figure 6. Roughly,
+the run-time required for a certain level of accuracy scales
+linearly with network size.
+Our sampling procedure is such that the cost of sampling a component depends on the time scales of its Markov
+neighbors and its own rate matrix. To demonstrate that, we
+
+created a chain network where each component has rates
+that are of half the magnitude of its parent. This means that
+the first component tends to switch state twice as fast as the
+second, the second is twice as fast as the third, and so on.
+When we examine the number of transitions in the sampled
+trajectories Figure 7, we see that indeed they are consistent
+with these rates, and quickly converge to the expected number, since in this example the evidence is relatively weak.
+When we examine the number of intervals in the Markov
+blanket of each components, again we see that neighbors
+of fast components have more intervals. In this graph X1
+is an anomaly since it does not have a parent.
+
+6
+
+Discussion
+
+In this paper we presented a new approach for approximate inference in Continuous-Time Bayesian Networks.
+By building on the strategy of Gibbs sampling. The core
+
+of our method is a new procedure for exact sampling of a
+trajectory of a single component, given evidence on its end
+points and the full trajectories of its Markov blanket components. This sampling procedure adapts in a natural way
+to the time scale of the component, and is exact, up to a
+predefined resolution, without sacrificing efficiency.
+This is the first MCMC sampling procedure for this
+type of models. As such it provides an approach that
+can sample from the exact posterior, even for unlikely evidence. As the current portfolio of inference procedures
+for continuous-time processes is very small, our procedure
+provides another important tool for addressing these models. In particular, since the approach is asymptotically unbiased in the number of iterations it can be used to judge
+the systematic bias introduced by other, potentially faster,
+approximate inference methodologies, such as the one of
+Saria et al. (2007).
+It is clear that sampling complete trajectories is not useful in situations where we expect a very large number of
+transitions in the relevant time periods. However, in many
+applications of interest, and in particular our long term goal
+of modeling sequence evolution (El-Hay et al., 2006), this
+is not the case. When one or few components transitions
+much faster than neighboring components, then we are essentially interested in its average behavior (Friedman and
+Kupferman, 2006). In such situations, it would be useful to
+develop a Rao-Blackwellized sampler that integrates over
+the fast components.
+As with many MCMC procedures, one of the main concerns is the mixing time of the sampler. An important direction for future research is the examination of methods
+for accelerating the mixing - such as Metropolis-coupled
+MCMC or simulated tempering (Gilks et al., 1996) - as well
+as a better theoretic understanding of the convergence properties.
+Acknowledgments
+We thank Ido Cohn and the anonymous reviewers for helpful remarks on previous versions of the manuscript. This
+research was supported in part by grants from the Israel
+Science Foundation and the US-Israel Binational Science
+Foundation. Tal El-Hay is supported by the Eshkol fellowship from the Israeli Ministry of Science.
+
+References
+Chung, K. (1960). Markov chains with stationary transition probabilities. Springer Verlag, Berlin.
+El-Hay, T., Friedman, N., Koller, D., and Kupferman, R.
+(2006). Continuous time markov networks. In Proceedings of the Twenty-second Conference on Uncertainty in
+AI (UAI).
+Fan, Y. and Shelton, C. (2008). Sampling for approximate inference in continuous time Bayesian networks.
+
+In Tenth International Symposium on Artificial Intelligence and Mathematics.
+Friedman, N. and Kupferman, R. (2006). Dimension reduction in singularly perturbed continuous-time
+Bayesian networks. In Proceedings of the Twentysecond Conference on Uncertainty in AI (UAI).
+Gardiner, C. (2004). Handbook of stochastic methods.
+Springer-Verlag, New-York, third edition.
+Gikhman, I. and Skorokhod, A. (1975). The theory of
+Stochastic processes II. Springer Verlag, Berlin.
+Gilks, W. R., S., R., and J., S. D. (1996). Markov Chain
+Monte Carlo in Practice. Chapman & Hall.
+Heskes, T. and Zoeter, O. (2002). Expectation propagation for approximate inference in dynamic Bayesian
+networks. In Uncertainty in Artificial Intelligence:
+Proceedings of the Eighteenth Conference (UAI-2002),
+pages 216–233.
+Minka, T. P. (2001). Expectation propagation for approximate Bayesian inference. In Proc. Seventeenth
+Conference on Uncertainty in Artificial Intelligence
+(UAI ’01), pages 362–369.
+Ng, B., Pfeffer, A., and Dearden, R. (2005). Continuous time particle filtering. In Proceedings of the 19th
+International Joint Conference on AI.
+Nodelman, U., Shelton, C., and Koller, D. (2002).
+Continuous time Bayesian networks. In Proc. Eighteenth Conference on Uncertainty in Artificial Intelligence (UAI ’02), pages 378–387.
+Nodelman, U., Shelton, C., and Koller, D. (2003).
+Learning continuous time Bayesian networks.
+In
+Proc. Nineteenth Conference on Uncertainty in Artificial Intelligence (UAI ’03), pages 451–458.
+Nodelman, U., Shelton, C., and Koller, D. (2005). Expectation propagation for continuous time Bayesian networks. In Proc. Twenty-first Conference on Uncertainty
+in Artificial Intelligence (UAI ’05), pages 431–440.
+Saria, S., Nodelman, U., and Koller, D. (2007). Reasoning at the right time granularity. In Proceedings of the
+Twenty-third Conference on Uncertainty in AI (UAI).
+
+

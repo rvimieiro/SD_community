@@ -1,0 +1,988 @@
+Observation Subset Selection as Local Compilation
+of Performance Profiles
+
+Yan Radovilsky
+Computer Science Dept.
+Ben-Gurion University
+84105 Beer-Sheva, Israel
+yanr@cs.bgu.ac.il
+
+Abstract
+Deciding what to sense is a crucial task,
+made harder by dependencies and by a nonadditive utility function. We develop approximation algorithms for selecting an optimal
+set of measurements, under a dependency
+structure modeled by a tree-shaped Bayesian
+network (BN).
+Our approach is a generalization of composing anytime algorithm represented by conditional performance profiles. This is done
+by relaxing the input monotonicity assumption, and extending the local compilation
+technique to more general classes of performance profiles (PPs). We apply the extended
+scheme to selecting a subset of measurements
+for choosing a maximum expectation variable
+in a binary valued BN, and for minimizing
+the worst variance in a Gaussian BN.
+
+1
+
+Introduction
+
+A typical diagnostic system consists of two types of
+variables: tests (observable) and hypotheses (unobservable), with statistical dependencies among variables. Each test, if performed, consumes resources
+(time or money), and provides a measurement of one
+or more test variables. After obtaining the values of
+the selected tests, the distribution of the model is updated. An objective function specifies a reward given
+to the system for the posterior distribution. The system should make its selection so as to optimize the
+objective function, a hard problem in the general case.
+Observation subset selection (OSS) is a restricted version of this problem, where all measurements must be
+selected in advance, prior to any observations. In this
+paper we develop approximation algorithms for some
+settings of the OSS problem for tree-shaped dependency structures.
+
+Solomon Eyal Shimony
+Computer Science Dept.
+Ben-Gurion University
+84105 Beer-Sheva, Israel
+shimony@cs.bgu.ac.il
+To tackle this problem we present OSS as a variant
+of the following well-known meta-reasoning problem.
+In systems composed of several computational components (CCs), the meta-level controller should reason
+about allocation of available computational resources
+for different CCs in order to optimize the overall performance of the entire system. This task is usually
+referred to in the research literature as the meta-level
+resource allocation (MRA) problem (see for example
+[11]). The standard approach used to optimize the
+MRA task was proposed by S. Zilberstein [10, 11, 12],
+the technique of local compilation (LC). This technique
+is applied to individual CCs, represented in a form
+of conditional performance profiles, and generates the
+optimal time allocation scheme for the entire system
+(see Section 2). However, local compilation requires
+the input monotonicity assumption and is, therefore,
+restricted to deterministic performance profiles with
+scalar output quality.
+In this paper we relax the input monotonicity assumption and extend the LC technique to more general
+classes of PPs. We then apply the extended approximation scheme (Section 4) to find an approximate solution to the OSS problem, under two settings, both for
+dependencies modeled as a tree-shaped BN: a) finding
+a maximum expectation variable in a binary valued
+BN (Section 4.1), and b) minimizing the worst variance in a Gaussian BN (Section 4.2).
+
+2
+
+Background
+
+Flexible computation refers to procedures that allow
+a graceful trade-off to be made between the quality
+of results and allocation of costly resources, such as
+time, memory, or information [3]. Since time is usually the main computational resource, there are several
+alternative terms used for reference to flexible computation in the research literature: continual computation [4, 5], anytime computation [8], and anytime algorithms [1, 10, 12].
+
+To predict the quality of the result which depends on
+the amount of allocated time, a statistical model called
+a performance profile (PP) is employed. The most simple version of such a PP called an expected performance
+profile (EPP), a mapping from consumed time to an
+expected result quality, Q : T → Q. Given anytime algorithm A described by EPP QA and time-dependent
+utility function U : T × Q → R, optimal time allocation t∗ can be derived as follows:
+t∗ = arg max U (t, QA (t))
+t
+
+(1)
+
+When an algorithm operates with some inexact inputs,
+the quality of its result may also strongly depend on
+the quality of the inputs. To address this point, a
+more flexible model, known as a conditional performance profile (CPP), is used. For example, an anytime algorithm with 2 inputs and one output can be
+represented by a CPP Q : T × Q2 → Q.
+
+Figure 1: Composition graph
+In a complex system, several CCs (or anytime algorithms) can be composed to achieve a required result.
+In this case, their PPs should be compiled in order to
+obtain an appropriate performance prediction for the
+entire system. Such a system is usually described in
+a graphical form by a directed acyclic graph (DAG),
+where each node corresponds to a single CC and is
+associated with an appropriate PP, while edges represent dependencies between input/output qualities of
+different CCs (Figure 1). This model is referred to as
+a composition graph (CG).
+A time allocation scheme (TAS) t̂ ∈ Tn specifies allocation of time for each of n elementary CCs of a composite system. Output quality of the whole system can
+be expressed as a function of a TAS in a form of composite expression (CE) φ : Tn × Qk → Q, where k is
+a number of external inputs. For example, the system
+in figure 1 has the following CE:
+φ(t̂, qin ) = Q1 ([t̂]1 , Q2 ([t̂]2 , Q3 ([t̂]3 , qin )), Q3 ([t̂]3 , qin ))
+The MRA problem for a composite system is to optimize a time-dependent utility function by selecting an
+appropriate TAS. Formally, given a composite system
+represented by CE φ, external input quality qin , and
+utility function U , the goal is to find TAS t̂∗ ∈ Tn
+which maximizes the utility:
+t̂∗ = arg max U (kt̂k, φ(t̂, qin )),
+t̂∈Tn
+
+(2)
+
+where operator k · k denotes a summation
+P over all elements of its argument vector: kt̂k = i [t̂]i .
+
+An intuitive approach to tackle the MRA problem has
+been proposed in [10]. This approach, called compilation of performance profiles, involves construction of
+an appropriate PP for the entire system:
+Qc (t, qin ) =
+
+max
+
+t̂∈Tn :kt̂k=t
+
+φ(t̂, qin ),
+
+(3)
+
+Each entry in Qc is additionally associated with a corresponding TAS π(t, qin ) = t̂ s.t. φ(t̂, qin ) = Qc (t, qin )
+and kt̂k = t.
+Once such a model is constructed, the optimal solution
+for the MRA problem can be derived from this model
+as t̂∗ = π(t∗ , qin ), where t∗ is the optimal total time
+allocation computed using equation 1.
+Algorithm 1: method RLC for in-tree shaped composite systems
+Input : s - a node in a composition graph.
+Output: Composed PP for the subtree rooted in s.
+if (Pred (s) = ∅) then
+return Qs ;
+foreach si ∈ Pred (s) do
+Let Qcsi ← RLC (si );
+Let L ← {Qcsi : si ∈ Pred (s)};
+return Compose (Qs , L);
+In general, the task of (global) compilation is computationally hard even for approximate solution [10].
+However, for some restricted topologies (e.g. trees) S.
+Zilberstein [10] proposed an efficient algorithm based
+on the local compilation (LC) technique, summarized
+as RLC in Algorithm 1. In this technique a composite PP of each subtree is generated based on the CPP
+of its root and composed PPs of all its predecessors.
+Method Compose performs the basic composition operation, which results in the following composite PP:
+Qcs (t, q1 , . . . , qk ) =
+(4)
+c
+c
+maxP
+Qs (t0 , Qs1 (t1 , q1 ), . . . , Qsk (tk , qk ))
+t0 ,...,tk ∈T:
+
+ti =t
+
+where s1 , . . . , sk are the predecessors of node s.
+For systems, where all CCs are represented by deterministic CPPs, RLC is proved to produce the correct
+result (equals to one obtained by global compilation)
+when the following assumptions hold:
+• A tree-structured CG - each node has only one
+output which serves as an input for one successor
+node except for the root node, whose output is
+the resulting system output.
+
+• Input monotonicity (IM) - the utility function and
+all involved CPPs are non-decreasing functions of
+input quality, i.e. ∀q ≥ p : Q(t, q) ≥ Q(t, p).
+Such restrictive assumptions are required to enable
+independent compilation of each subtree followed by
+greedy selection of one local TAS for each total allocation without harming optimality of the resulting solution. However, in practice, the IM assumption may
+be too restrictive. For example, a diagnostic system
+with a dependency model represented by Gaussian BN
+and a utility function depending on posterior marginal
+precision of several hypothesis nodes, violates this assumption. In this work we propose an extension to the
+CPP model, which allows relaxing the IM assumption.
+Recent work exists in another line directly related to
+the OSS task. In [7] the authors proved that the OSS
+problem is NP PP -hard even for tree-structured BNs.
+They proposed a polynomial time algorithm, based on
+dynamic programming, which constructs an optimal
+solution to a version of OSS restricted to chain topology, exact observation, and additive reward. In [9] a
+similar technique was used beyond the exact observation assumption, and determined a theoretical bound
+for the worst-case loss in expected reward. Our work
+can be seen as an extention of the latter research. Another approximation method based on greedy selection
+of test nodes is applicable when the reward function
+exhibits property of sub-modularity [6].
+
+3
+
+can contain more than one output quality for the same
+pair of total time allocation and input quality (each
+with a different local TAS).
+We further extend our model by allowing backward
+conditioning, which means that output quality of a
+CC may depend on output quality of its successor. The general form of a CP in this case is
+(t̂, (psuc , ppred ), (qsuc , qpred )), where the p-component
+has two parts: psuc is a required output quality of
+the successor, and ppred is a vector of required output qualities of all the predecessors; the q-component
+has two parts as well: an output quality towards its
+successor (qsuc ), and a vector of qualities towards all
+its predecessors (qpred ). Such a form of CPs is useful
+in applications for BNs, where posterior probability
+distribution of a node (and its local reward) depends
+on the messages coming from all its neighbors (details
+appear in section 4).
+In order to adapt the RLC algorithm to the extended
+settings, we need to modify the Compose method.
+This method is now applied to a list of profiles in the
+RPP representation, and its output should be in the
+RPP form as well. Moreover, the greedy selection reflected in the max operator in equation 3 strongly relies on the IM assumption. Since this assumption fails
+in the RPP case, we propose another approach. The
+composition process comprises two parts: the first part
+(Construct ) considers all combinations of input CPs,
+and collects appropriate resulting CPs.
+Q = {(t̂0 + t̂1 + . . . + t̂k , p0 , q0 ) : (t̂i , pi , qi ) ∈ Qsi ,
+
+Generalized Local Compilation
+
+(t̂0 , (p0 , q1 , . . . , qk ), (q0 , p1 , . . . , pk )) ∈ Qs }. (6)
+This section generalizes the notion of a performance
+profile to a reachable performance profile, and adapts
+the LC technique to handle the extended model.
+Definition 3.1 (Conditional performance). Conditional performance (CP) of a CC (either elementary
+or composite) is a tuple (t̂, p, q), where t̂ is a local
+TAS (t-component), p is a required input quality (pcomponent), and q is an expected output quality, obtained by the CC when applied to inputs of quality p
+with TAS t̂ (q-component).
+Either p or q may be represented by scalars or by vectors, while t̂ is assumed to be a complete assignment
+of time allocations to all CCs of the system.
+Definition 3.2 (Reachable performance profile).
+Reachable performance profile (RPP) of a CC is a set
+of CPs achievable by this CC.
+The RPP model can be derived from a CPP as follows:
+RA = {(πA (t, p), p, QA (t, p))},
+
+(5)
+
+where QA is a CPP, and RA is an appropriate RPP.
+The converse is not always possible, because a RPP
+
+The second part, called Purge is applied to the set
+Q. Purge exploits domination and equivalence among
+reachable CPs in order to filter out irrelevant CPs.1
+The idea of pruning irrelevant CPs is very similar to
+one used in the Incremental Pruning algorithm [2] for
+filtering irrelevant α-vectors. The resulting RPP Qc
+keeps one representative for each CP in Q:
+∀a ∈ Q ∃b ∈ Qc s.t. (b ≻ a) ∨ (b ≈ a).
+where ≻ and ≈ are domination and equivalence operators respectively. These operators can be defined
+based on partial orders within each performance component. Assuming only a natural partial order in the
+t-component we obtain:
+P
+
+Q
+
+P
+
+Q
+
+(t̂, p, q) ≈ (t̂′ , p′ , q ′ ) ⇔ (kt̂k = kt̂′ k) ∧ (p ≈ p′ ) ∧ (q ≈ q ′ )
+and
+(t̂, p, q) ≻ (t̂′ , p′ , q ′ ) ⇔ (kt̂k < kt̂′ k) ∧ (p ≈ p′ ) ∧ (q ≈ q ′ )
+1
+The filtering can be applied after Construct terminates, but it is usually more efficient to perform filtering
+on-the-fly.
+
+Q
+
+P
+
+where ≈ and ≈ are equivalence operators defined over
+the p and q components, respectively.
+
+4
+
+notation to refer to other relevant subsets of nodes:
+I
+XO
+s = X \ Xs ;
+
+YsI = {Yi : Xi ∈ (XM ∩ XIs )};
+
+Observation Selection in BNs.
+
+YsO = Y \ YsI ;
+EsI = E ∩ YsI ;
+
+In this section we describe how our framework can be
+applied to OSS in BNs. We use the following notation:
+• X = {Xi : 1 ≤ i ≤ n} - set of all state variables;
+
+• XM ⊆ X - set of measurable state variables;
+• Y = {Yi : Xi ∈ XM } - set of test variables;
+• N - BN over X ∪ Y;
+
+Yi ∈E τi
+
+Xi ∈A
+
+- additive time consumption;
+
+• B - time budget (maximum time for observation).
+Definition 4.1 (OSS optimization problem).
+The OSS optimization problem is: given a tuple
+(N, R, T, B), select a subset of observation variables
+E ⊆ Y which maximizes the expected reward:
+R̂(XH |E) =
+
+X
+
+Pr(E = e)R(XH |E = e)
+
+OSS in discrete BNs
+
+R(A|E = e) = max Ri (Xi |E = e),
+
+• R : Pr(XH ) → R - reward function;
+• T (E) =
+
+4.1
+
+We now apply our approach to OSS in tree-shaped
+BNs with discrete variables. Since solving this problem
+for the general setting (even for the tree-structured
+topology) is proved to be NP PP -hard [7], we restrict
+our focus to BNs with boolean variables (Dom(Xi ) =
+Dom(Yi ) = {0, 1}), and consider the following reward
+function, defined for an arbitrary set of nodes A:
+
+• XH ⊆ X - set of hypothesis state variables;
+
+P
+
+EsO = E ∩ YsO .
+
+(7)
+
+e∈Dom(E)
+
+subject to the budget limit T (E) ≤ B.
+
+where each Ri : Pr(Xi ) → R is a local reward function:
+(
+Pr(Xi = 1|E = e) : if(Xi ∈ XH ),
+Ri (Xi |E = e) =
+0
+: otherwise.
+(8)
+We refer to this version of OSS as Boolean OSS
+(BOSS).
+The BN can be specified by the following parameters:
+(
+Pr(Xi = 1)
+: if Xi is a root,
+αi =
+Pr(Xi = 1|XP rev(i) = 1) : otherwise;
+(
+Pr(Xi = 1)
+: if Xi is a root,
+βi =
+Pr(Xi = 1|XP rev(i) = 0) : otherwise;
+(
+Pr(Yi = 0|Xi = 1) : if(Xi ∈ XM ),
+θi =
+1
+: otherwise;
+(
+Pr(Yi = 1|Xi = 0) : if(Xi ∈ XM ),
+ζi =
+0
+: otherwise;
+We make the following simplifying assumptions about
+the involved observation process:
+1. Probability of a false positive observation result
+for all nodes is bounded by a small constant ζmax
+(that is ∀i : ζi ≤ ζmax );
+
+Figure 2: Out-tree BN topology.
+We assume BNs with an out-tree shaped dependency
+graph rooted in node X1 (as shown in figure 2). Let XIs
+denote a subset of X, which consists of all nodes Xi in
+the subtree rooted in Xs (all descendants of Xs including Xs itself), and let E ⊆ Y be any given subset of
+observation (“evidence”) nodes. We use the following
+
+2. Only hypothesis nodes have directly attached observations (XM ⊆ XH ).
+Henceforth this set of assumptions is called the restricted false positive property. In the extreme case
+(ζmax = 0) we get a false-positive-free observation process. Despite the relatively restricted setting, we have
+the following complexity result:
+
+Theorem 1 (Hardness of BOSS). Finding an exact
+solution to the BOSS problem is NP-hard even when
+all state variables are independent (αi = βi ) and all
+observations are exact (θi = ζi = 0).
+
+RPPs of observation nodes contain CPs with no condition (denoted by ∅ in the p-component):
+
+Proof is by reduction from Knapsack, which is a wellknown NP -complete problem. Below, we show how
+the BOSS problem can be reduced to a special case
+of MRA and then solved (approximately) by the RLC
+algorithm.
+
+where τ̂s is an assignment of τs time units to s and 0
+to all the other CCs.
+
+In order to apply the RLC algorithm we must specify
+the problem in terms of a composite system. Deriving
+the corresponding CG is straightforward: the graph
+has in-tree form and can be obtained from the dependency graph by simply reversing directions of all arcs.
+
+QX
+s = {(0̂, u, ψs (u)) : u ∈ Ps × Ms }
+
+QYs = {(mτ̂s , ∅, m) : m ∈ Ms },
+
+(9)
+
+All leaf X-nodes are associated with RPPs of the following form:
+(10)
+
+where 0̂ denotes a zero time allocation (to all CCs),
+and ψs : Ps × Ms → Qs is a vector function defined
+as follows:
+
+Careful inspection of the false-positive-free property
+yields that observing one positive value at any observation node (Yi = 1) provides a sufficient evidence for
+determining the reward value (R(XH |Yi = 1, E = e) =
+Ri (Xi |Yi = 1) = 1), regardless of other observations.
+We employ this fact to obtain a recursive decomposition of the expected reward.
+
+= 0) = (1 − ζs )m ,
+(
+pf
+: if (Xs ∈ XH ),
+r = Rs (Xs |ê) = L(f,g,p)
+0
+: otherwise
+
+We specify output quality (q-component) of exploring
+subset E ⊆ Y w.r.t. subtree XIs as the triple (f, g, r):
+
+In our notation L(·, ·, ·) stands for the operator of linear interpolation defined as follows:
+
+ψs (p, m) = (f, g, r),
+f
+g
+
+= Pr(êIs |Xs
+= Pr(êIs |Xs
+
+f = Pr(êIs |Xs = 1),
+
+L(a, b, c) = ca + (1 − c)b.
+
+g = Pr(êIs |Xs = 0),
+r = R(XIs |ê),
+êIs ,
+
+êO
+s
+
+where ê,
+and
+denote assignments of all zeros to
+E, EsI , and EsO respectively. While f and g components depend only on observations inside the subtree
+(êIs ), to determine the value of the r-component we
+need additional information from outside the subtree,
+provided by the p-component: p = Pr(Xs = 1|êO
+s ).
+For each quality component we define one corresponding domain set (of relevant values):
+
+Ps = Pr(Xs = 1|EsO = êO
+s ):E ⊆ Y
+
+Fs = Pr(EsI = êIs |Xs = 1) : E ⊆ Y
+
+Gs = Pr(EsI = êIs |Xs = 0) : E ⊆ Y
+
+Rs = R(XIs |E = ê) : E ⊆ Y .
+We also define combined domain sets Qs = Fs × Gs ×
+Rs . Finally, all alternative assignments to a number of
+observations (measurements) in node Xs is represented
+by set Ms . In the basic OSS setting we have at most
+one observation per node:
+(
+{0, 1} : if (Xs ∈ XM ),
+Ms =
+{0}
+: otherwise.
+However, the model can be easily extended to multiple
+observations (by specifying appropriate Ms sets).
+
+= 1) =
+
+(11)
+θsm ,
+
+(12)
+
+RPP of any non-leaf node Xs with k children
+(Xs1 , . . . , Xsk ) is specified as follows:
+QX
+s = {(0̂, u, ψs (u)) : u ∈ Ps × Ms × Qs1 × · · · × Qsk }
+(13)
+where
+ψs : Ps × Ms × Qs1 × · · · × Qsk → Qs × Ps1 × · · · × Psk
+is a vector function defined as follows:
+ψs (p, m, (f1 , g1 , r1 ), . . . , (fk , gk , rk )) =
+= ((f, g, r), p1 , . . . , pk ),
+r = max{r0 , r1 , . . . , rk },
+(
+
+r0 = Rs (Xs |ê) =
+
+pf
+L(f,g,p)
+
+0
+
+f = Pr(êIs |Xs = 1) = θsm
+
+: if (Xs ∈ XH ),
+: otherwise
+Y
+fi′ ,
+
+1≤i≤k
+
+g=
+
+Pr(êIs |Xs
+
+= 0) = (1 − ζs )m
+
+Y
+
+gi′ ,
+
+1≤i≤k
+
+1|êO
+si )
+
+=
+Q
+L(αsi , βsi , pθsm j6=i fj′ )
+Q
+Q
+=
+,
+L(θsm j6=i fj′ , (1 − ζs )m j6=i gj′ , p)
+
+pi = Pr(Xsi =
+
+fi′ = Pr(êIsi |Xs = 1) = L(fi , gi , αsi ),
+gi′ = Pr(êIsi |Xs = 0) = L(fi , gi , βsi ).
+
+(14)
+
+While all QYs RPPs can be specified explicitly (as a list
+of CPs), the QX
+s RPPs generally cannot, due to a possibly exponential size of domains Ps , Fs , Gs and Rs
+in their input condition. Instead, we represent them
+in an implicit form by providing (parameters of) the
+involved ψs functions.
+During the compilation process (according to the RLC
+algorithm) method Compose is applied to lists of
+RPPs. At each application one composed RPP Qcs
+(which represents the whole subtree XIs ) is generated.
+Due to backward conditioning on elements of Ps which
+can contain exponential number of elements), such a
+RPP cannot be derived exactly (and explicitly). There
+is also no obvious way to specify it implicitly by providing some predefined functions (as we do in case of
+individual RPPs). To address this problem, we propose to approximate all Ps sets by one uniform grid
+Dp defined as follows:
+
+
+
+1
+ǫp : k ∈ 0, . . . , dp − 1
+(15)
+Dp =
+k+
+2
+l m
+where 0 < ǫp < 1 is a small constant, and dp = ǫ1p
+is a number of intervals of size ǫp in the range [0, 1].
+Thus, set Dp has a fixed number of elements (dp ) which
+makes efficient enumeration possible.
+We define discretization function λp , which maps any
+value p ∈ Ps to an appropriate point in set Dp :
+
+ 
+1
+p
+ǫp
+(16)
++
+λp (p) =
+ǫp
+2
+This discretization induces approximate equivalence
+
+After compiling RPPs of the entire tree, the resulting RPP Qc1 can be used to select a near-optimal TAS
+w.r.t. this utility function. Let E ∗ denote the optimal
+observation subset, and let E be a subset corresponding to the TAS selected based on the resulting RPP.
+Theorem 2 (Approximation quality of RLC for
+BOSS). The RLC algorithm applied to a transformed
+instance of BOSS with out-tree topology and a restricted false positive observation process approximates
+the optimal solution within additive factor of ∆u ,
+which is bounded as follows:
+∆u = R̂(X|E ∗ ) − R̂(X|E) ≤ hǫp + 2nǫs + ǫr + nζmax
+(19)
+where h is a height of the tree, and ǫs = max{ǫf , ǫg }.
+Selection of the appropriate values for the grid steps
+depends on the required precision of the solution. To
+ensure approximation with ∆u ≤ ǫ + nζmax (in worst
+ǫ
+ǫ
+, ǫf = ǫg = 6n
+, and ǫr = 3ǫ .
+case) we can select ǫp = 3h
+Due to monotonicity in total time, any composed RPP
+can be represented by the 4-dimensional table (Dp ×
+Df × Dg × Dr ), where each entry is associated with
+at most one appropriate partial TAS. The number of
+entries (CPs) in such a table is bounded as follows:
+   2  
+6n
+3
+3h
+c
+.
+(20)
+|Qs | ≤ dp df dg dr =
+ǫ
+ǫ
+ǫ
+Worst-case
+complexity
+ 3  for the complete run of RLC is
+ 4
+n
+O ǫ4 time, O nǫ4 space for a chain topology, and
+ 2c+1 
+ 2c 2 
+h c
+O nǫ2c+2hc time, O nǫ2c+2
+space for a tree with a
+maximum branching factor of c.
+
+P
+
+relation ≈ among elements of Ps defined as follows:
+P
+
+p ≈ p′ ⇔ λp (p) = λp (p′ )
+
+(17)
+
+We apply a similar discretization technique to other
+domain sets (Fs , Gs , and Rs ) with discretization steps
+ǫf , ǫg and ǫr respectively. The appropriate grids (Df ,
+Dg , Dr ), discretization functions (λf , λg , λr ) and
+F
+
+G
+
+R
+
+equivalence operators (≈, ≈, ≈) are defined accordQ
+
+ingly. The composed equivalence operator ≈ is defined
+as follows:
+Q
+
+F
+
+G
+
+R
+
+(f, g, r) ≈ (f ′ , g ′ , r′ ) ⇔ (f ≈ f ′ ) ∧ (g ≈ g ′ ) ∧ (r ≈ r′ )
+To complete the specification, we define the following
+comprehensive utility function:
+U (t̂, p, (f, g, r)) =
+(
+L(r, 1, L(f, g, α1 ))
+=
+−∞
+
+(18)
+P
+
+: if (p ≈ α1 ∧ kt̂k ≤ B),
+: otherwise,
+
+4.2
+
+OSS in Gaussian Bayesian networks
+
+Gaussian Bayesian network (GBN) is a special case of
+BN, where the conditional probability distributions of
+the variables are Normal (Gaussian) distributions:
+
+
+X
+ai,j (Xj − µj ), σi2 
+Xi |P a(Xi ) ∼ N µi +
+Xj ∈P a(Xi )
+
+We parametrize our GBN model as follows:
+αi = a2i,P rev(i) ,
+1
+βi = P rec(Xi |XP rev(i) ) = 2 ,
+σi
+(
+P rec(Yi |Xi ) : if (Xi ∈ XM ),
+θi =
+0
+: otherwise.
+In our notation P rec(·) denotes the precision operator,
+which is reciprocal to variance:
+P rec(Xi |E) =
+
+1
+.
+V ar(Xi |E)
+
+(21)
+
+For Gaussian OSS (GOSS) we consider the following
+reward function:
+R(A|E = e) = min Ri (Xi |E),
+
+where Ri : Pr(Xi ) → R are local reward functions:
+(
+
+loga,b (P rec(Xi |E)) : if(Xi ∈ XH ),
+1
+: otherwise.
+(22)
+Here a and b are two parameters that determine a
+range of distinguishable (for reward) values of precision, and loga,b (·) denotes a normalized (and truncated
+at its extreme points) log operator, defined as follows:
+
+
+0
+loga,b (p) = 1
+
+ log p−log a
+log b−log a
+
+: if (p ≤ a),
+: if (p ≥ b),
+: otherwise.
+
+(23)
+
+Theorem 3 (Hardness of GOSS). Finding an exact
+solution for a general instance of the GOSS problem is
+NP -hard even for a tree-shaped GBN.
+Proof is by reduction from Knapsack. A polynomial
+scheme for approximate solution of GOSS, similar to
+one presented for BOSS, follows.
+To apply the RLC algorithm we specify the problem in
+terms of a composite system. The CG is as for BOSS.
+All domain sets (except for Ms , that remain the same)
+should be redefined as follows:
+Ps = {P rec(Xs |EsO ) : E ⊆ Y},
+{P rec(Xs |EsI )
+
+(24)
+
+Fs =
+: E ⊆ Y},
+Rs = {Rs (Xs |E) : E ⊆ Y},
+
+(25)
+(26)
+
+Qs = Fs × Rs .
+
+(27)
+
+We need to reformulate, in the definition of RPPs, the
+specification of the ψs functions. For the leaf nodes ψs
+is defined as follows:
+ψs (p, m) = (f, r),
+f=
+
+P rec(Xs |EsI )
+
+ψs (p, m, (f1 , r1 ), . . . , (fk , rk )) = ((f, r), p1 , . . . , pk );
+X
+f = P rec(Xs |EsI ) = mθs +
+fi′ ,
+1≤i≤k
+
+Xi ∈A
+
+Ri (Xi |E) =
+
+For the non-leaf nodes we have:
+
+(28)
+
+= mθs ,
+(
+loga,b (p + f ) : if (Xs ∈ XH ),
+r = Rs (Xs |E) =
+1
+: otherwise,
+
+r = min{r0 , r1 , . . . , rk },
+(
+loga,b (p + f ) : if (Xs ∈ XH ),
+r0 = Rs (Xs |E) =
+1
+: otherwise,
+X
+pi = P rec(Xsi |EsOi ) = J(βsi , αsi (mθs + p +
+fj′ )),
+j6=i
+
+fi′ = P rec(Xs |EsIi ) =
+
+J(fi , βsi )
+,
+αsi
+
+(29)
+(30)
+
+In our notation J(·, ·) stands for the operator of precision propagation defined as follows:
+(
+0
+: if (a = b = 0),
+(31)
+J(a, b) =
+ab
+: otherwise.
+a+b
+As in case of BOSS, to prevent exponential growth of
+the composed RPPs we apply discretization to all domains by appropriate grids. Grid Dr and corresponding discretization function λr are defined exactly as in
+BOSS. To define Dp we use its projection D′p to the
+[0, 1] interval (D′p is defined exactly as Dp in the BOSS
+case):
+Dp = {p : loga,b (p) ∈ D′p },
+(32)
+We express the discretization function λp through its
+projected version λ′p (which is defined as λp in BOSS):
+λp (p) = λ′p (loga,b (p)).
+
+(33)
+
+Grid Df and the corresponding discretization function
+λf are similarly defined.
+P
+
+F
+
+R
+
+Equivalence operators ≈, ≈, and ≈ are defined as in
+Q
+
+BOSS. The composed equivalence operator ≈ is:
+Q
+
+F
+
+R
+
+(f, r) ≈ (f ′ , r′ ) ⇔ (f ≈ f ′ ) ∧ (r ≈ r′ )
+The comprehensive utility function is as follows:
+(
+P
+r
+: if ((p ≈ β1 ) ∧ (kt̂k ≤ B)),
+U (t̂, p, (f, r)) =
+−∞ : otherwise
+(34)
+After compiling the composite system (using the RLC
+algorithm), a near-optimal TAS can be selected from
+the resulting RPP Qc1 w.r.t. this utility function. Let
+E ∗ denote an optimal observation subset, and E a subset corresponding to the TAS selected from Qc1 .
+
+Theorem 4 (Approximation quality of RLC for
+GOSS). The RLC algorithm applied to a transformed
+instance of GOSS problem with out-tree topology approximates the optimal solution E ∗ within additive factor of ∆u , bounded as follows:
+
+[2] A. Cassandra, M. L. Littman, and N. L. Zhang.
+Incremental Pruning: A simple, fast, exact
+method for partially observable Markov decision
+processes. In Proceedings of (UAI–97), pages 54–
+61, 1997.
+
+∆u = R̂(XH |E ∗ ) − R̂(XH |E) ≤ hǫp + hǫf + ǫr (35)
+
+[3] E. Horvitz. Reasoning about beliefs and actions under computational resource constraints.
+In UAI, pages 301–324, 1987.
+
+To ensure approximation with ∆u ≤ ǫ (in worst case)
+we can select ǫp = ǫf = hǫ , and ǫr = ǫ.
+Any composed RPP Qcs can be represented by a 3dimensional (Dp × Df × Dr ) table with a number of
+entries bounded as follows:
+ 2  
+1
+h
+c
+.
+(36)
+|Qs | ≤ dp df dr =
+ǫ
+ǫ
+The appropriate worst-case complexity for
+ the
+ comnh2
+plete run of the RLC algorithm is O ǫ2
+time,
+ c+1 
+ 2
+nh
+h
+O ǫ3 space for a chain topology, and O ǫc+2 c
+ c+2 
+time, O hǫc+2c space for a tree with maximum
+branching factor of c.
+
+5
+
+Summary
+
+In this paper we extended the concept of CPP, and presented an efficient technique for compiling a composite system beyond the input monotonicity assumption.
+The extended scheme has been applied to optimizing
+a set of measurements in two different settings (for
+choosing a maximum expectation variable in a binary
+valued BN, and for minimizing the worst variance in
+a Gaussian BN). Polynomial time methods have been
+presented for both problems, and quality of approximation has been theoretically determined.
+Applying our framework to real-world domains as an
+empirical evaluation is underway. Further extending the framework to deal with more general system
+topologies, tractable strategies for active monitoring
+are possible directions for future research.
+Acknowledgements
+Partially supported by the IMG4 consortium (under the Ministry of Industry, Trade and Labor of Israel MAGNET program), by the Lynn and William
+Frankel Center for Computer Sciences, and by the Paul
+Ivanier Center for Robotics.
+
+References
+[1] M. Boddy and T. Dean. Solving time-dependent
+planning problems. In IJCAI, pages 979–984,
+1989.
+
+[4] E. Horvitz. Models of continual computation. In
+AAAI/IAAI, pages 286–293, 1997.
+[5] E. Horvitz. Continual computation policies for allocating offline and real-time resources. In IJCAI,
+pages 1280–1287, 1999.
+[6] A. Krause and C. Guestrin. Near-optimal nonmyopic value of information in graphical models.
+In UAI, pages 324–331, 2005.
+[7] A. Krause and C. Guestrin. Optimal nonmyopic
+value of information in graphical models - efficient
+algorithms and theoretical limits. In IJCAI, pages
+1339–1345, 2005.
+[8] A. I. Mouaddib and S. Zilberstein. Knowledgebased anytime computation. In IJCAI, pages
+775–783, 1995.
+[9] Y. Radovilsky, G. Shattah, and E. S. Shimony. Efficient deterministic approximation algorithm for
+nonmyopic value of information in graphical models. In SMC Conference, Taipei, Taiwan, 2006.
+[10] S. Zilberstein. Operational rationality through
+compilation of anytime algorithms. Technical report, Computer Science Division, University of
+California at Berkeley, 1993. PhD Dissertation.
+[11] S. Zilberstein. Optimizing decision quality with
+contract algorithms. In IJCAI, pages 1576–1582,
+1995.
+[12] S. Zilberstein. Using anytime algorithms in intelligent systems. AI Magazine, 17(3):73–83, 1996.
+
+

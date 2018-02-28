@@ -1,0 +1,1112 @@
+it may have many local maxima).
+The space D might be the set of free parameters that one could feed into a time-consuming algorithm or
+the locations where a sensor could be deployed, and the function f might be a measure of the performance
+of the algorithm (e.g. how long it takes to run). We refer the reader to (Močkus, 1982; Schonlau et al.,
+1998; Gramacy et al., 2004; Brochu et al., 2007; Lizotte, 2008; Martinez–Cantin et al., 2009; Garnett et al.,
+2010) for many practical examples of this global optimization setting. In this paper, our assumption is that
+once the function has been probed at point x ∈ D, then the value f (x) can be observed with very high
+precision. This is the case when the deployed sensors are very accurate or if the algorithm is deterministic.
+An example of this is the configuration of CPLEX parameters in mixed-integer programming (Hutter et al.,
+2010). More ambitiously, we might be interested in the simultaneous automatic configuration of an entire
+
+Authorship in alphabetical order.
+
+Figure 1. An example of the Lipschitz hypothesis being used to discard pieces of the search space when finding the
+maximum of a function f . Although f is only known at the red sample points, if the derivative upper bounds (dashed
+lines) are below the best attained value thus far, f (x+ ), the corresponding areas of the search space (shaded regions)
+may be discarded.
+
+system (algorithms, architectures and hardware) whose performance is deterministic in terms of several free
+parameters and design choices.
+Global optimization is a difficult problem without any assumptions on the objective function f . The main
+complicating factor is the uncertainty over the extent of the variations of f , e.g. one could consider the
+characteristic function, which is equal to 1 at xM and 0 elsewhere, and none of the methods we mention here
+can optimize this function without exhaustively searching through every point in D.
+The way a large number of global optimization methods address this problem is by imposing some prior
+assumption on how fast the objective function f can vary. The most explicit manifestation of this remedy is
+the imposition of a Lipschitz assumption on f , which requires the change in the value of f (x), as the point x
+moves around, to be smaller than a constant multiple of the distance traveled by x (Hansen et al., 1992). As
+pointed out in (Bubeck et al., 2011, Figure 3), it is only important to have this kind of tight control over the
+function near its optimum: elsewhere in the space, we can have what they have dubbed a “weak Lipschitz”
+condition.
+One way to relax these hard Lipschitz constraints is by putting a Gaussian Process (GP) prior on the function.
+Instead of restricting the function from oscillating too fast, a GP prior requires those fast oscillations to have
+low probability, cf. (Ghosal & Roy, 2006, Theorem 5).
+The main point of these bounds (be they hard or soft) is to assist with the exploration-exploitation trade-off
+that global optimization algorithms have to grapple with. In the absence of any assumptions of convexity on
+the objective function, a global optimization algorithm is forced to explore enough until it reaches a point in
+the process when with some degree of certainty it can localize its search space and perform local optimization
+(exploitation). Derivative bounds such as the ones discussed here together with the boundedness of the search
+space, guaranteed by the compactness assumption on D, provide us with such certainty by producing a useful
+upper bound that allows us to shrink the search space. This is illustrated in Figure 1. Suppose we know that
+our function is Lipschitz with constant L, then given sample points as shown in the figure, we can use the
+Lipschitz property to discard pieces of the search space. This is done by finding points in the search space
+where the function could not possibly be higher than the maximum value already encountered. Such points
+are found by placing cones at the sampled points with slope equal to L and checking where those cones lie
+below the maximum observed value.
+This crude approach is wasteful because very often the slope of the function is much smaller than L. As we
+will see below (cf. Figure 2), GPs do a better job of providing lower and upper bounds that can be used to
+limit the search space, by essentially choosing Lipschitz constants that vary over the search space and the
+algorithm run time.
+
+Figure 2. An example of our branch and bound maximization algorithm with UCB surrogate µ + Bσ, where µ and σ
+are the mean and standard deviation of the GP respectively. The region consisting of the points x for which the upper
+confidence bound µ(x) + Bσ(x) is lower that the maximum value of the lower confidence bound µ(x) − Bσ(x) does
+not need to be sampled anymore. Note that the UCB surrogate function bounds f from above.
+
+We also assume that the objective function f is costly to evaluate (e.g. time-wise or financially). We would
+like to avoid probing f as much as possible and to get close to the optimum as quickly as possible. A
+solution to this problem is to approximate f with a surrogate function that provides a good upper bound for
+f and which is easier to calculate and optimize. Surrogate functions can also aid with global optimization
+by restricting the domain of interest.
+GPs enable us to construct surrogate functions, which are relatively easy to evaluate and optimize. We refer
+the reader to (Brochu et al., 2009) for a general review of the literature on the various surrogate functions
+utilized in GP bandits in the context of Bayesian optimization.
+The surrogate function that we will make extensive use of here is called the Upper Confidence Bound (UCB).
+It is defined to be µ + Bσ, where µ and σ are the posterior predictive mean and standard deviation of the
+GP and B is a constant to be chosen by the algorithm. This surrogate function has been studied extensively
+in the literature and this paper relies heavily on the ideas put forth in the paper by Srinivas et al (Srinivas
+et al., 2010), in which the algorithm consists of repeated optimization of the UCB surrogate function after
+each sample.
+One key difference between our setting and that of (Srinivas et al., 2010) is that, whereas we assume that
+the value of the function can be observed exactly, in (Srinivas et al., 2010) it is necessary for the noise to be
+non-trivial (and Gaussian) because the main quantity that is used in the estimates, namely information gain,
+cf. (Srinivas et al., 2010, Equation 3), becomes undefined when the variance of the observation noise (σ 2 in
+their notation) is set to 0, cf. the expression for I(yA ; fA ) that was given in the paragraph following Equation
+(3). So, their setting is complementary
+
+ to ours. Moreover, we show that the regret, r(xt ) = maxD f − f (xt ),
+decreases according to O e
+
+−
+
+τt
+(ln t)d/4
+
+, implying that the cumulative regret is bounded from above.
+
+The paper whose results are most similar to ours is (Munos, 2011), but there are some key differences in
+the methodology, analysis and obtained rates. For instance, we are interested in cumulative regret, whereas
+the results of (Munos, 2011) are proven for finite stop-time regret. In our case, the ideal application is the
+2
+optimization of a function
+ that is C
+ -smooth and has an unknown non-singular Hessian at the maximum. We
+obtain a regret rate O e
+
+−
+
+τt
+(ln t)d/4
+
+, whereas the DOO algorithm in (Munos, 2011) has regret rate O(e−t ) if
+√
+
+the Hessian is known and the SOO algorithm has regret rate O(e− t ) if the Hessian is unknown. In addition,
+the algorithms in (Munos, 2011) can handle functions that behave like −ckx − xM kα near the maximum
+(cf. Example 2 therein). This problem was also studied by (Vazquez & Bect, 2010) and (Bull, 2011), but
+using the Expected Improvement surrogate instead of UCB. Our methodology and results are different, but
+complementary to theirs.
+
+2. Gaussian process bandits
+2.1. Gaussian processes
+As in (Srinivas et al., 2010), the objective function is distributed according to a Gaussian process prior:
+f (x) ∼ GP(m(·), κ(·, ·)).
+
+(1)
+
+For convenience, and without loss of generality, we assume that the prior mean vanishes, i.e., m(·) = 0.
+There are many possible choices for the covariance kernel. One obvious choice is the anisotropic kernel κ
+with a vector of known hyperparameters (Rasmussen & Williams, 2006):
+
+κ(xi , xj ) = κ
+e −(xi − xj )> D(xi − xj ) ,
+(2)
+where κ
+e is an isotropic kernel and D is a diagonal matrix with positive hyperparameters along the diagonal
+and zeros elsewhere. Our results apply to squared exponential kernels and Matérn kernels with parameter
+ν ≥ 2. In this paper, we assume that the hyperparameters are fixed and known in advance.
+We can sample the GP at t points by choosing points x1:t := {x1 , . . . , xt } and sampling the values of the
+function at these points to produce the vector f1:t = [f (x1 ) · · · f (xt )]> . The function values are distributed
+according to a multivariate Gaussian distribution N (0, K), with covariance entries κ(xi , xj ). Assume that we
+already have several observations from previous steps, and that we want to decide what action xt+1 should
+be considered next. Let us denote the value of the function at this arbitrary new point as ft+1 . Then, by
+the properties of GPs, f1:t and ft+1 are jointly Gaussian:
+
+
+ 
+
+f1:t
+K
+k>
+∼ N 0,
+,
+ft+1
+k κ(xt+1 , xt+1 )
+where k = [κ(xt+1 , x1 ) · · · κ(xt+1 , xt )]> . Using the Schur complement, one arrives at an expression for the
+posterior predictive distribution:
+P (ft+1 |x1:t+1 , f1:t ) = N (µt (xt+1 ), σt2 (xt+1 )),
+where
+
+µt (xt+1 ) = k> K−1 f1:t ,
+σt2 (xt+1 ) = κ(xt+1 , xt+1 ) − k> K−1 k
+
+(3)
+
+and f1:t = [f (x1 ) · · · f (xt )]> .
+2.2. Surrogates for optimization
+When it is assumed that the objective function f is sampled from a GP, one can use a combination of the
+posterior predictive mean and variance given by Equations (3) to construct surrogate functions, which tell
+us where to sample next. Here we use the UCB combination, which is given by
+µt (x) + Bt σt (x),
+where {Bt }∞
+t=1 is a sequence of numbers specified by the algorithm. This surrogate trades-off exploration
+and exploitation since it is optimized by choosing points where the mean is high (exploitation) and where the
+variance is large (exploration). Since the surrogate has an analytical expression that is easy to evaluate, it is
+much easier to optimize than the original objective function. Other popular surrogate functions constructed
+using the sufficient statistics of the GP include the Probability of Improvement, Expected Improvement and
+Thompson sampling. We refer the reader to (Brochu et al., 2009; May et al., 2010; Hoffman et al., 2011) for
+details on these.
+2.3. Our algorithm
+The main idea of our algorithm (Algorithm 1) is to tighten the bound on f given by the UCB surrogate
+function by sampling the search space more and more densely and shrinking this space as more and more
+
+Algorithm 1 Branch and Bound
+Input: A compact subset D ⊆ Rd , a discrete lattice L ⊆ D and a function f : D → R.
+R←D
+δ←1
+repeat
+Sample Twice as Densely:
+δ
+•δ←
+2
+• Sample f at enough points in L so that every point in R is contained in a simplex of size δ.
+Shrink the Relevant Region:
+• Set
+
+
+p
+p
+e := x ∈ R µT (x) + βT σT (x) > sup µT (x) − βT σT (x) .
+R
+R
+
+
+
+2
+T is the number points sampled so far and βT = 2 ln |L|T
+= 4 ln T + 2 ln |L|
+α
+α with α ∈ (0, 1).
+• Solve the following constrained optimization problem:
+(x∗1 , x∗2 ) =
+
+argsup
+
+kx1 − x2 k
+
+e R
+e
+(x1 ,x2 )∈R×
+
+
+•R←B
+
+
+x∗1 + x∗2
+, kx∗1 − x∗2 k , where B(p, r) is the ball of radius r centred around p.
+2
+
+until R ∩ L = ∅
+
+of the UCB surrogate function is “submerged” under the maximum of the Lower Confidence Bound (LCB).
+Figure 2 illustrates this intuition.
+More specifically, the algorithm consists of two iterative stages. During the first stage, the function is sampled
+along a lattice of points (the red crosses in Figure 3). In the second stage, the search space is shrunk to
+discard regions where the maximum is very unlikely to reside. Such regions are obtained by finding points
+where the UCB is lower than the LCB (the complement of the colored region in the same panel as before).
+e In order to simplify the task of shrinking the search
+The remaining set of relevant points is denoted by R.
+space, we simply find an enclosing ball, which is denoted by R in Algorithm 1. Back to the first stage, we
+consider a lattice that is twice as dense as in the first stage of the previous iteration, but we only sample at
+points that lie within our new smaller search space.
+e with the ball R introduces
+In the second stage, the auxiliary step of approximating the relevant set R
+e This can be easily remedied in
+inefficiencies in the algorithm, since we only need to sample inside R.
+practice to obtain an efficient algorithm. Our analysis will show that even without these improvements it is
+already possible to obtain very strong exponential convergence rates. Of course, practical improvement will
+result in better constants and ought to be considered seriously.
+
+3. Analysis
+3.1. Approximation results
+We begin our analysis by showing that, given sufficient explored locations, the residual variance is small.
+More specifically, for any point x contained in the convex hull of a set of d points that are no further than δ
+apart from x, we show that the residual is bounded by O(khkH δ 2 ), where khkH is the Hilbert Space norm
+of the associated function and that furthermore the residual variance is bounded by O(δ 2 ). We begin by
+relating residual variance, projection operators, and interpolation in Hilbert Spaces. Lemmas 1, 2 and 3 are
+standard. We include their proofs in the supplementary material for the purpose of being self-contained.
+Proposition 4 is our key approximation result. It plays a central role in the proof of our exponential regret
+bounds. Its proof, as well as the proof for the main theorem, is included in the supplementary material.
+
+Figure 3. Branch and Bound algorithm for a 2D function. The colored region is the search space and the color-map,
+with red high and blue low, illustrates the value of the UCB. Four steps of the algorithm are shown; progressing from
+left to right and top to bottom. The green dots designate the points where the function was sampled in the previous
+steps, while the red crosses denote the freshly sampled points.
+
+Lemma 1 (Hilbert Space Properties) Given a set of points x1:T := {x1 , . . . , xT } ∈ D and a Reproducing Kernel Hilbert Space (RKHS) H with kernel κ the following bounds hold:
+1. Any h ∈ H is Lipschitz continuous with constant khkH L, where k·kH is the Hilbert space norm and L
+satisfies the following:
+L2 ≤ sup ∂x ∂x0 κ(x, x0 )|x=x0
+
+(4)
+
+x∈D
+
+and for κ(x, x0 ) = κ
+e(x − x0 ) we have
+
+L2 ≤ ∂x2 κ
+e(x)|x=0 .
+
+2. Any h ∈ H has its second derivative bounded by khkH Q where
+Q2 ≤ sup ∂x2 ∂x20 κ(x, x0 )|x=x0
+
+(5)
+
+x∈D
+
+and for κ(x, x0 ) = κ
+e(x − x0 ) we have
+
+Q2 ≤ ∂x4 κ
+e(x)|x=0 .
+
+3. The projection operator P1:T on the subspace span {κ(xt , ·)} ⊆ H is given by
+t=1:T
+
+P1:T h := k> (·)K−1 hk(·), hi
+
+(6)
+
+>
+
+where k(·) = k1:T (·) := [κ(x1 , ·) · · · κ(xT , ·)]
+
+and K := [κ(xi , xj )]i,j=1:T ; moreover, we have that
+
+
+ 
+h(x1 )
+hκ(x1 , ·), hi
+
+  .. 
+..
+hk(·), hi := 
+ =  . .
+.
+
+
+hκ(xT , ·), hi
+
+h(xT )
+
+Here P1:T P1:T = P1:T and kP1:T k ≤ 1 and k1 − P1:T k ≤ 1.
+4. Given sets x1:T ⊆ x1:T 0 it follows that kP1:T hkH ≤ kP1:T 0 hkH ≤ khkH .
+5. Given tuples (xi , hi ) with hi = h(xi ), the minimum norm interpolation h̄ with h̄(xi ) = h(xi ) is given by
+h̄ = P1:T h. Consequently its residual g := (1 − P1:T )h satisfies g(xi ) = 0 for all xi ∈ x1:T .
+Lemma 2 (GP Variance) Under the assumptions of Lemma 1 it follows that
+|h(x) − P1:T h(x)| ≤ khkH σT (x),
+
+(7)
+
+−1
+k1:T (x) and this bound is tight. Moreover, σT2 (x) is the residual variance
+where σT2 (x) = κ(x, x)−k>
+1:T (x)K
+of a Gaussian process with the same kernel.
+
+Lemma 3 (Approximation Guarantees) We denote by x1:T ⊆ D a set of locations and assume that
+g(xi ) = 0 for all xi ∈ x1:T .
+1. Assume that g is Lipschitz continuous with bound L. Then g(x) ≤ Ld(x, x1:T ), where d(x, x1:T ) is the
+minimum distance kx − xi k between x and any xi ∈ x1:T .
+2. Assume that g has its second derivative bounded by Q0 . Moreover, assume that x is contained inside the
+convex hull of x1:T such that the smallest such convex hull has a maximum pairwise distance between
+vertices of d. Then we have g(x) ≤ 14 Q0 d2 .
+Proposition 4 (Variance Bound) Let κ : Rd × Rd → R be a kernel that is four times differentiable along
+the diagonal {(x, x) | x ∈ Rd }, with Q defined as in Lemma 1.2, and f ∼ GP (0, κ(·, ·)) a sample from the
+corresponding Gaussian Process. If f is sampled at points x1:T = {x1 , . . . , xT } that form a δ-cover of a
+subset D ⊆ Rd , then the resulting posterior predictive standard deviation σT satisfies
+sup σT ≤
+D
+
+Qδ 2
+.
+4
+
+3.2. Finiteness of regret
+Having shown that the variance vanishes according to the square of the resolution of the lattice of sampled
+points, we now move on to show that this estimate implies an exponential asymptotic vanishing of the regret
+encountered by our Branch and Bound algorithm. This is laid out in our main theorem stated below and
+proven in the supplementary material.
+The theorem considers a function f , which is a sample from a GP with a kernel that is four times differentiable
+along its diagonal. The global maximum of f can appear in the interior of the search space, with the function
+being twice differentiable at the maximum and with non-vanishing curvature. Alternatively, the maximum
+can appear on the boundary with the function having non-vanishing gradient at the maximum. Given
+a lattice that is fine enough, the theorem asserts that the regret asymptotically decreases in exponential
+fashion.
+The main idea of the proof of this theorem is to use the bound on σ given by Proposition 4 to reduce the size
+of the search space. The key assumption about the function that the proof utilizes is the quadratic upper
+bound on the objective function f near its global maximum, which together with Proposition 4 allows us to
+shrink the relevant region R in Algorithm 1 rapidly. The figures in the proof give a picture of this idea. The
+
+√
+only complicating factor is the factor βt in the expression for the UCB that needs to be estimated. This
+is dealt with by modeling the growth in the number of points sampled in each iteration with a difference
+equation and finding an approximate solution of that equation.
+Recall that D ⊆ Rd is assumed to be a non-empty compact subset and f a sample from the Gaussian
+Process GP (0, κ(·, ·)) on D. Moreover, in what follows we will use the notation xM := argmax f (x). Also,
+x∈D
+
+by convention, for any set S, we will denote its interior by S ◦ , its boundary by ∂S and if S is a subset of
+Rd , then conv(S) will denote its convex hull. The following holds true:
+Theorem 5 Suppose we are given:
+1. α > 0, a compact subset D ⊆ Rd , and κ a stationary kernel on Rd that is four times differentiable;
+2. f ∼ GP(0, κ) a continuous sample on D that has a unique global maximum xM , which satisfies one of
+the following two conditions:
+(†) xM ∈ D◦ and f (xM )−c1 kx−xM k2 < f (x) ≤ f (xM )−c2 kx−xM k2 for all x satisfying x ∈ B(xM , ρ0 )
+for some ρ0 > 0;
+(‡) xM ∈ ∂D and both f and ∂D are smooth at xM , with ∇f (xM ) 6= 0;
+3. any lattice L ⊆ D satisfying the following two conditions
+•
+•
+
+2L ∩ conv(L) ⊆ L
+ρ0
+− log2 diam(D)
+
+e+1 L ∩ L 6= ∅
+2d
+if f satisfies (†)
+
+(8)
+(9)
+
+Then, there exist positive numbers A and τ and an integer T such that the points specified by the Branch
+and Bound algorithm, {xt }, will satisfy the following asymptotic bound: For all t > T , with probability 1 − α
+we have
+τt
+−
+r(xt ) < Ae (ln t)d/4 .
+We would like to make a few clarifying remarks about the theorem. First, note that for a random sample
+f ∼ GP(0, κ) one of conditions (†) and (‡) will be satisfied almost surely if κ is a Matérn kernel with ν > 2
+and the squared exponential kernel because the sample f is twice differentiable almost surely by (Adler &
+Taylor, 2007, Theorem 1.4.2) and (Stein, 1999, §2.6)) and the vanishing of at least one of the eigenvalues of
+the Hessian is a co-dimension 1 condition in the space of all functions that are smooth at a given point, so it
+has zero chance of happening at the global maximum. Second, the two conditions (8) and (9) simply require
+that the lattice be “divisible by 2” and that it be fine enough so that the algorithm can sample inside the
+ball B(xM , ρ0 ) when the maximum of the function is located in the interior of the search space D. Finally, it
+is important to point out that the rate decay τ does not depend on the choice of the lattice L, even though
+as stated, the statement of the theorem chooses τ only after L is specified. The theorem was written this
+way simply for the sake of readability.
+Given the exponential rate of convergence we obtain in Theorem 5, we have the following finiteness conclusion
+for the cumulative regret accrued by our Branch and Bound algorithm:
+Corollary 6 Given κ, f ∼ GP(0, κ) and L ⊆ D as in Theorem 5, the cumulative regret is bounded from
+above.
+Remark 7 It is worth pointing out the trivial
+√ observation that using a simple UCB algorithm with monotonically increasing and unbounded factor βt , without any shrinking
+of the search space as we do here,
+√
+necessarily leads to unbounded cumulative
+regret
+since
+eventually
+β
+becomes
+large enough so that at points
+t
+√
+x0 far away from the maximum, βt σt (x0 ) becomes larger than f (xM ) − f (x). In fact, eventually the UCB
+algorithm will sample every point in the lattice L.
+
+4. Discussion
+In this paper we proposed a modification of the UCB algorithm of (Srinivas et al., 2010) which addresses the
+1
+noise free case. The key difference is that while the original algorithm achieves an O(t− 2 ) rate of convergence
+to the regret minimizer, we obtain an exponential rate in the number of function evaluations. In other words,
+the noise free problem is significantly easier, statistically speaking, than the noisy case. The key difference
+is that we need not invest any samples in noise reduction to determine whether our observations deviate far
+from their expectation.
+This allows us to discard pieces of the search space where the maximum is very unlikely to be, when compared
+to (Srinivas et al., 2010). We show that this additional step leads to a considerable improvement of the regret
+accrued by the algorithm. In particular, the cumulative regret obtained by our Branch and Bound algorithm
+is bounded from above, whereas the cumulative regret bound obtained in the noisy bandit algorithm is
+unbounded. The possibility of dispensing with chunks of the search space can also be seen in the works
+involving hierarchical partitioning, e.g. (Munos, 2011), where regions of the space are deemed as less worthy
+of probing as time goes on.
+Our results mirror the observation in active learning that noise free and large margin learning of half spaces
+can be achieved much more rapidly than identifying a linear separator in the noisy case (Bshouty & Wattad,
+2006; Dasgupta et al., 2009). This is also reflected in classical uniform convergence results for supervised
+learning (Audibert & Tsybakov, 2007; Vapnik, 1998) where the achievable rate depends on the decay of
+probability mass near the margin.
+This suggests that the ability to extend our results to the noisy case is somewhat limited. An indication of
+what might be possible can be found in (Balcan et al., 2009), where regions of the version space are eliminated
+once they can be excluded with sufficiently high probability. One could model a corresponding Branch and
+Bound algorithm, which dispenses with points that lie outside the current (or perhaps the previous) relevant
+set when calculating the covariance matrix K in the posterior equations (3). Analysis of how much of an
+effect such a computational cost-cutting measure would have on the regret encountered by the algorithm is
+a subject of future research.
+We believe that an exciting extension can be found in guarantees for contextual bandits. Note, however,
+that the unpredictability of the context introduces new difficulties in terms of speed of convergence that
+need to be overcome. For instance, parameters for infrequent contexts will be estimated slowly unless there
+are strong correlations among contexts.
+
+References
+Adler, Robert J. and Taylor, Jonathan E. Random Fields and Geometry. Springer, 2007.
+Audibert, Jean-Yves and Tsybakov, Alexandre B. Fast learning rates for plug-in classifiers. Annals of
+Statistics, 35(2):608–633, 2007.
+Balcan, Maria-Florina, Beygelzimer, Alina, and Langford, John. Agnostic active learning. J. Comput. Syst.
+Sci, 75(1):78–89, 2009.
+Brochu, Eric, Freitas, Nando De, and Ghosh, Abhijeet. Active preference learning with discrete choice data.
+In Advances in Neural Information Processing Systems, pp. 409–416, 2007.
+Brochu, Eric, Cora, Vlad M, and de Freitas, Nando. A tutorial on Bayesian optimization of expensive cost
+functions, with application to active user modeling and hierarchical reinforcement learning. Technical
+Report TR-2009-023, arXiv:1012.2599v1, UBC CS department, 2009.
+Bshouty, Nader H. and Wattad, Ehab. On exact learning halfspaces with random consistent hypothesis
+oracle. In International Conference on Algorithmic Learning Theory, pp. 48–62, 2006.
+Bubeck, Sébastien, Munos, Rémi, Stoltz, Gilles, and Szepesvari, Csaba. X-armed bandits. Journal of
+Machine Learning Research, 12:1655–1695, 2011.
+
+Bull, Adam D. Convergence rates of efficient global optimization algorithms. Journal of Machine Learning
+Research, 12:2879–2904, 2011.
+Dasgupta, Sanjoy, Kalai, Adam Tauman, and Monteleoni, Claire. Analysis of perceptron-based active learning. Journal of Machine Learning Research, 10:281–299, 2009.
+Garnett, R., Osborne, MA, and Roberts, SJ. Bayesian optimization for sensor set selection. In ACM/IEEE
+International Conference on Information Processing in Sensor Networks, pp. 209–219. ACM, 2010.
+Ghosal, Subhashis and Roy, Anindya. Posterior consistency of Gaussian process prior for nonparametric
+binary regression. Ann. Stat., 34:2413–2429, 2006.
+Gramacy, Robert B., Lee, Herbert K. H., and MacReady, William. Parameter space exploration with
+Gaussian process trees. In International Conference on Machine Learning, pp. 353–360, 2004.
+Hansen, P., Jaumard, B., and Lu, S. Global optimization of univariate Lipschitz functions: I. survey and
+properties. Mathematical Programming, 55:251–272, 1992.
+Hoffman, Matthew, Brochu, Eric, and de Freitas, Nando. Portfolio allocation for Bayesian optimization. In
+Uncertainty in Artificial Intelligence, pp. 327–336, 2011.
+Hutter, Frank, Hoos, Holger H., and Leyton-Brown, Kevin. Automated configuration of mixed integer
+programming solvers. In Proceedings of CPAIOR-10, pp. 186–202, 2010.
+Lizotte, Daniel. Practical Bayesian Optimization. PhD thesis, University of Alberta, Edmonton, Alberta,
+Canada, 2008.
+Martinez–Cantin, Ruben, de Freitas, Nando, Brochu, Eric, Castellanos, Jose, and Doucet, Arnaud. A
+Bayesian exploration-exploitation approach for optimal online sensing and planning with a visually guided
+mobile robot. Autonomous Robots, 27(2):93–103, 2009.
+May, Benedict, Korda, Nathan, Lee, Anthony, and Leslie, David. Optimistic Bayesian sampling in contextualbandit problems. 2010.
+Močkus, Jonas. The Bayesian approach to global optimization. In System Modeling and Optimization,
+volume 38, pp. 473–481. Springer Berlin / Heidelberg, 1982.
+Munos, Rémi. Optimistic optimization of a deterministic function without the knowledge of its smoothness.
+In Advances in Neural Information Processing Systems, 2011.
+Rasmussen, Carl Edward and Williams, Christopher K. I. Gaussian Processes for Machine Learning. The
+MIT Press, 2006.
+Schonlau, Matthias, Welch, William J., and Jones, Donald R. Global versus local search in constrained
+optimization of computer models. Lecture Notes-Monograph Series, 34:11–25, 1998.
+Srinivas, Niranjan, Krause, Andreas, Kakade, Sham M, and Seeger, Matthias. Gaussian process optimization in the bandit setting: No regret and experimental design. In International Conference on Machine
+Learning, 2010.
+Stein, Michael L. Interpolation of Spatial Data: Some Theory for Kriging. Springer, 1999.
+Steinwart, Ingo and Christmann, Andreas. Support Vector Machines. Springer, 2008.
+Vapnik, V. Statistical Learning Theory. John Wiley and Sons, New York, 1998.
+Vazquez, Emmanuel and Bect, Julien. Convergence properties of the expected improvement algorithm with
+fixed mean and covariance functions. Journal of Statistical Planning and Inference, 140:3088–3095, 2010.
+
+5. Proofs
+5.1. Approximation Results
+Proof [Lemma 1] We prove the claims in sequence.
+1. This follows from Corollary 4.36 in (Steinwart & Christmann, 2008), with |α| = 1.
+2. Same as above, just with |α| = 2.
+3. For any operator V with full column rank the projection on the image of V is given by V (V > V )−1 V > .
+The operator V in the above case is given by the stacked vector of evaluation functionals
+k(x1 , ·), . . . , k(xn , ·). This provides us with PX . The remaining claims are standard linear algebra.
+4. Projection operators satisfy kP1:T k ≤ 1. This proves the second claim. The first claim can be seen from
+the fact that projecting on a subspace can only have a smaller norm than the superspace projection.
+5. We first show that the projection is an interpolation. This follows from
+h̄(xi ) = P1:T h(xi ) = hP1:T h, κ(xi , ·)i = hh, P1:T κ(xi , ·)i = hh, κ(xi , ·)i = h(xi ).
+Correspondingly g(xi ) = h(xi ) − h̄(xi ) = 0 for all xi ∈ x1:T . By construction P1:T h uses h only in
+evaluations h(xi ), hence for any two functions h, h0 with h(xi ) = h0 (xi ) we have P1:T h = P1:T h0 . Since
+kP1:T k ≤ 1 it follows that kP1:T hk ≤ khkH . Hence there is no interpolation with norm smaller than
+kP1:T hk.
+
+Proof [Lemma 2] To see the bound we again use the Cauchy-Schwartz inequality
+|h(x) − P1:T h(x)| = |(1 − P1:T )h(x)|
+= |h(1 − P1:T )h, κ(x, ·)iH |
+
+(by the defining property of h , iH ,
+
+= |hh, (1 − P1:T )κ(x, ·)iH |
+
+(since 1 − P1:T is an orthogonal projection and so self-adjoint)
+
+cf. (Steinwart & Christmann, 2008), Def. 4.18)
+≤ khkH k(1 − P1:T )κ(x, ·)k
+
+(by Cauchy-Schwarz)
+
+This inequality is clearly tight for h = (1 − P1:T )κ(x, ·) by the nature of dual norms. Next note that
+2
+
+k(1 − P1:T )κ(x, ·)k = h(1 − P1:T )κ(x, ·), (1 − P1:T )κ(x, ·)i = hκ(x, ·), (1 − P1:T )κ(x, ·)i
+= κ(x, x) − hκ(x, ·), P1:T κ(x, ·)i = σT2 (x).
+The second equality follows from the fact that 1 − P1:T is idempotent. The last equality follows from the
+definition of P1:T . The fact that σT2 (x) is the residual variance of a Gaussian Process regression estimate is
+well known in the literature and follows, e.g. from the matrix inversion lemma.
+
+Proof [Lemma 3] The first claim is an immediate consequence of the Lipschitz property of g. To see the
+second claim we need to establish a number of issues: without loss of generality assume that the maximum
+within the convex hull containing x is attained at x (and that the maximum rather than the minimum
+denotes the maximum deviation from 0).
+√
+The maximum distance of x to one of its vertices is bounded by δ/ 2. This is established by considering the
+minimum enclosing ball and realizing that the maximum distance is achieved for the regular polyhedron.
+To see the maximum deviation from 0 we exploit the fact that ∂x g(x) = 0 by the assumption of x being the
+maximum (we need not consider cases where x is on a facet of the polyhedral set since in this case we could
+
+easily reduce the dimensionality). In this case the largest deviation between g(x) and g(xi ) is obtained by
+2 0
+0
+2
+making g a quadratic function g(x0 ) = Q2 kx0 − xk . At distance √δ2 the function value is bounded by δ 4Q .
+Since the latter bounds the maximum deviation it does bound it for g in particular. This proves the claim.
+
+Proof [Proposition 4] Let H be the RKHS corresponding to κ and h ∈ H an arbitrary element, with
+g := (1 − P1:T )h the residual defined in Lemma 1.5. By Lemma 1.3, we know that k1 − P1:T k ≤ 1 and so
+we have
+kgkH ≤ k1 − P1:T k khkH ≤ khkH
+(10)
+Moreover, by Lemma 1.2, we know that the second derivative of g is bounded by kgkH Q, and since by
+Lemma 1.5 we know that g vanishes at each xi , we can use Lemma 3.2 and the inequality given by inequality
+(10) to conclude that
+|h(x) − P1:T h(x)| := |g(x)|
+kgkH Qδ 2
+by Lemma 3.2
+4
+khkH Qδ 2
+by inequality (10)
+≤
+4
+
+≤
+
+and so for all x ∈ D we have
+|h(x) − P1:T h(x)| ≤
+
+Qδ 2
+khkH
+4
+
+(11)
+
+On the other hand, by Lemma 2, we know that for all x ∈ D we have the following tight bound:
+|h(x) − P1:T h(x)| ≤ σT (x) khkH .
+
+(12)
+
+Now, given the fact that both inequalities (11) and (12) are bounding the same quantity and that the latter
+is a tight estimate, we necessarily have that
+σT (x) khkH ≤
+
+Qδ 2
+khkH .
+4
+
+Canceling khkH gives the desired result.
+
+5.2. Finiteness of Regret
+We begin with two lemmas from (Srinivas et al., 2010):
+Lemma 8 (Lemma 5.1 of (Srinivas et al., 2010)) Given any finite set L, any sequence of points
+{x1 , x2 , . . .} ⊆ L and f : L → R a sample from GP(0, κ(·, ·)), for all α ∈ (0, 1), we have
+o
+n
+p
+P ∀x ∈ L, t ≥ 1 : |f (x) − µt−1 (x)| ≤ βt σt−1 (x) ≥ 1 − α,
+where βt = 2 ln
+
+
+
+|L|πt
+α
+
+
+
+and {πt } is any positive sequence satisfying
+
+X 1
+= 1. Here |L| denotes the number
+πt
+t
+
+of elements in L.
+Lemma 9 (Lemma 5.2 in (Srinivas et al., 2010)) Let L a non-empty finite set and
+√ f : L → R an
+arbitrary function. Also assume that there exist functions µ, σ : L → R and a constant β, such that
+p
+|f (x) − µ(x)| ≤ βσ ∀ x ∈ L.
+(13)
+
+Then, we have
+r(x) ≤ 2
+
+p
+p
+βσ(x) ≤ 2 β max σ.
+L
+
+Definition 10 (Covering Number) Denote by B a Banach space with norm k·k. Furthermore denote by
+B ⊆ B a set in this space. Then the covering number n (B, B) is defined as the minimum number of  balls
+with respect to the Banach space norm that are required to cover B entirely.
+Proof [Theorem 5] The proof consists of the following steps:
+• Global: We first show that after a finite number of steps the algorithm zooms in on the neighbourhood
+B(xM , ρ0 ). This is done by first showing that  can be chosen small enough to squeeze the set f −1 ((fM −
+, fM ]) into any arbitrarily small neighbourhood of xM and that as the function is sampled more and
+more densely, the UBC-LCB envelope around f becomes arbitrarily tight, hence eventually fitting the
+relevant set inside a small neighbourhood of xM . Please refer to Figure 4 for a graphical depiction of
+this process.
+GI : Since D is compact and f is continuous and has a unique maximum, for every ρ > 0, we can find
+an  = (ρ) > 0 such that
+f −1 ((fM − , fM ]) ⊆ B(xM , ρ),
+where fM = max f .
+To see this, suppose on the contrary that there exists a radius ρ > 0 such that for all  > 0 we have
+f −1 ((fM − , fM ]) * B(xM , ρ)
+which means that there exists a point x ∈ D such that
+ f (xM ) − f (x) <  but kx − xM k > ρ. Now,
+for each i ∈ N, pick a point xi ∈ f −1 (fM − 1i , fM ] \ B(xM , ρ): this gives us a sequence of points
+{xi } in D, which by the compactness of D has a convergent subsequence {xik }, whose limit we will
+denote by x∗ . From the continuity of f and the fact that f (xM ) − f (xi ) < 1i , we can conclude that
+f (xM ) − f (x∗ ) = 0, which contradicts our assumption that f has a unique global maximum since
+we necessarily have x∗ ∈
+/ B(xM , ρ).
+(ρ
+)
+0
+, with ρ0 as in Condition (†) of the statement of Theorem 5.
+GII : Define ∗ :=
+4
+GIII : For each T , define the “relevant set” RT ⊆ D as follows:
+
+
+p
+p
+RT = x ∈ D µT (x) + βT σT (x) > sup µT (x) − βT σT (x) .
+R
+
+GIV : Choose βT = b ln(T ), with b chosen large enough to satisfy the conditions of Lemma 8. Then, it is
+possible to sample f densely enough so that
+p
+βT max σT (x) < ∗ ,
+(14)
+x∈D
+
+2
+so that RT ⊆ B(xM , ρ0 ). This is because as D is sampled more and more densely
+ we have σ = O(δ ),
+1
+where
+δ is the distance between the points of the grid, and β = O ln δd = O (− ln δ) and so
+√
+βσ → 0 as δ → 0, and so there exists a δ0 small enough so that a lattice of resolution δ0 would
+give us the bound given in inequality (14). The end point of this process is depicted in Figure
+4, where the relevant set RT lies inside the non-shaded region: the reason for this inclusion and
+“thickness” 4∗ is described below, in Step L1 of the proof: cf. Equation (15).
+
+• Local: Once the algorithm has localized attention to a neighbourhood of xM , then we can show that the
+regret decreases exponentially; to do so, we will proceed by sampling the relevant set twice as densely
+and shrinking the relevant set, and repeating these two steps. The claim is that in each iteration, the
+maximum regret goes down exponentially and the number of the new points that are sampled in each
+refining iteration is asymptotically constant. To prove this, we will write down the equations governing
+the behaviour of the number of sampled points and σ. We will adopt the following notation to carry
+out this task:
+
+Figure 4. The elimination of other smaller peaks.
+
+– δ` - the resolution of the lattice of sampled points at the end of the (` + 1)th refining iteration inside
+R`+1 (defined below).
+– ` = sup σN` (x) at the end of the `th iteration. Note that ` ∝ δ`2 . Also, note that 0 ≤ ∗ by the
+x∈R`
+
+–
+–
+–
+–
+
+choice of δ0 .
+N` - number of points that have been sampled by the end of the `th iteration.
+∆N` = N`+1 − N` .
+R` - the relevant set at the beginning of the `th iteration. Note that R1 ⊆ B(xM , ρ0 ).
+diam(R` )
+. Note that ρ1 < ρ0 .
+ρ` =
+2
+
+L1 :
+
+
+N1 ≤ N0 + nδ0 R0 , (Rd , k · k2 )
+
+
+
+where nδ0 R0 , (Rd , k · k2 ) is the δ0 -covering number
+
+as defined in Definition 10
+
+
+where N (ρ0 , δ0 ) := nδ0 B(0, ρ0 ), (Rd , k · k2 )
+
+
+≤ N0 + N (ρ0 , δ0 )
+s p
+40 βN0
+≤ N0 + N 
+, δ0 
+c2
+s
+
+√
+4
+b
+ln
+N
+0
+0
+≤ N0 + N 
+, δ0 
+c2
+ √ p
+
+= N0 + N c 0 4 ln N0 , δ0
+
+s √
+4 b
+where c :=
+c2
+
+√
+p
+40 βN0
+The expression
+comes about as follows: using the notations B = βN0 and σ = σN0
+c2
+we know by Lemma 8 that f and µ are intertwined with each other in the sense that both of the
+r
+
+following chains of inequality hold:
+µ−Bσ
+
+≤
+
+f
+
+≤
+
+µ+Bσ
+
+f −Bσ
+
+≤
+
+µ
+
+≤
+
+f +Bσ,
+
+which, combined together, give us the following chain of inequalities
+f −2Bσ
+
+≤
+
+µ−Bσ
+
+≤
+
+f
+
+≤
+
+µ+Bσ
+
+≤
+
+f +2Bσ.
+
+(15)
+
+Since, we also know that σ(x) ≤ 0 for all x ∈ R0 , we can conclude that
+f −2B0
+
+≤
+
+µ−Bσ
+
+≤
+
+µ+Bσ
+
+≤
+
+f +2B0 .
+
+Moreover, if condition (†) holds, we know that in R0 , the function f satisfies −c1 r 2 < f (x) −
+f (xM ) < −c2 r 2 , where r = r(x) := kx − xM k, so we get that
+f (xM)−c1r 2−2B0
+
+≤
+
+µ−Bσ
+
+≤
+
+µ+Bσ
+
+≤
+
+f (xM)−c2 r 2+2B0 .
+
+Now, recall that R0 is defined to consist of points x where µ(x)+Bσ(x) ≥ sup µ(x)−Bσ(x), but given
+D
+
+the fact that we have the above outer envelope for µ ± Bσ, we can conclude that
+n
+o
+R0 ⊆ x f (xM)−c2 r(x)2+2B0 ≥ max f (xM)−c1r(x)2−2B0
+n
+o
+= x f (xM)−c2 r(x)2+2B0 ≥ f (xM)−2B0
+n
+o
+= x −c2 r(x)2+2B0 ≥ −2B0
+n
+o
+= x c2 r(x)2 ≤ 4B0
+(
+)
+r
+4B0
+= x r(x) ≤
+c2
+Now, if, on the other hand, f satisfies condition (‡), then by the smoothness assumptions in (‡),
+we know that ∇f (xM ) is perpendicular to ∂D at xM and so there exist positive numbers c1 and c2
+such that in a neighbourhood of xM we have
+−c1 r
+
+≤
+
+f − f (xM )
+
+≤
+
+−c2 r 2 .
+
+Note that in the argument above in the case of (†), the precise form of the lower bound on f was
+irrelevant, since all we are interested in is its
+So, the same argument goes through again.
+p maximum.
+√
+This is depicted in Figure 5, where B := βN0 = b ln N0 .
+L`+1 : Now, let us suppose that we are the end of the `th iteration. We have
+N`+1 ≤ N` + N (ρ` , δ` )
+ √ p
+
+= N` + N c ` 4 ln N` , δ`
+ r p
+
+0 4
+δ0
+≤ N` + N c
+ln
+N
+,
+`
+4`
+2`
+
+ √ p
+= N` + N c 0 4 ln N` , δ0
+
+by Proposition 4
+since N (2ρ, 2δ) = N (ρ, δ) for any ρ and δ
+
+d
+
+≤ N` + C(ln N` ) 4
+
+So, the number of samples needed by the branch and bound algorithm is governed by the difference
+inequation
+d
+∆N` ≤ C(ln N` ) 4 .
+(16)
+
+Figure 5. The shrinking of the relevant set R` . Here, B =
+
+p
+
+βN0
+
+To study the solutions of this difference equation, we consider the corresponding differential equation:
+d
+dN
+= C(ln N ) 4 .
+(17)
+d`
+Since this equation is separable, we can write
+dN
+d
+
+(ln N ) 4
+
+= Cd`.
+
+Now, letting ` = L be a given number of iterations in the algorithm and N (L) the corresponding
+number of sampled points, we can integrate both sides of the above equation to get
+Z
+
+N (L)
+
+d
+
+N (0)
+
+L
+
+Z
+
+dN
+(ln N ) 4
+
+=
+
+Cd` = CL.
+0
+
+Given the fact that the integral on the left can’t be solved analytically, we will use the lower bound
+N (L) − N (0)
+(ln N (L))
+
+d
+4
+
+Z
+
+N (L)
+
+≤
+
+dN
+d
+
+N (0)
+
+(ln N ) 4
+
+to get
+N (L) − N (0)
+d
+
+C(ln N (L)) 4
+
+≤L
+
+(18)
+
+Given a time t, we will denote by `t the largest non-negative integer such that N`t < t or 0 if no
+such number exists. We illustrate this somewhat obtuse definition with the following example:
+•O •O · · ·
+1 2
+
+•O
+N0
+
+···
+
+•O
+N1
+
+···
+
+•O · · · •O · · · •O
+N`t
+
+t
+
+N`t +1
+
+···
+
+Now, by Lemma 9, for all t >> N0 we have
+√
+√
+p
+√
+80 b ln t
+20 b ln t
+≤
+rt ≤ 2 βt max σt ≤ 2 b ln t`t ≤
+R`t
+4`t
+4`t +1
+  N`t +1 −N0d/4
+√
+1 C (ln N`t +1 )
+≤ 80 b ln t
+by Equation 18
+4
+  DN`t +1d/4
+√
+1 (ln N`t +1 )
+≤ 80 b ln t
+for some D > 0 since N`t +1 > N0
+4
+  Dtd/4
+√
+1 (ln t)
+d
+for t satisfying ln t > (see ? below) since t ≤ N`t +1
+≤ 80 b ln t
+4
+4
+√ − Etd/4 + ln 2ln t
+≤ 80 be (ln t)
+√ − Et + Et
+≤ 80 be (ln t)d/4 2(ln t)d/4
+for large enough t
+τt
+√
+−
+= Ae (ln t)d/4
+for A = 80 b and τ = E/2.
+x
+? The reason for the specific criterion ln t > d4 is that the function (ln x)
+d/4 is increasing when this
+condition is satisfied, and so decreasing x from N`t + 1 to t decreases its value, increasing the
+ x
+x
+d
+overall expression 14 (ln x)d/4 . To see that (ln x)
+d/4 becomes increasing when ln x > 4 , we simply
+need to calculate its derivative:
+
+d
+x
+1
+d
+x
+=
+−
+dx (ln x)d/4
+4 x(ln x)d/4+1
+(ln x)d/4
+=
+
+ln x − d4
+.
+(ln x)d/4
+
+x
+Moreover, since N`t +1 ≥ t, if the derivative of (ln x)
+d/4 is positive at t, it is also positive between
+t and N`t +1 and so the function is indeed increasing in that interval.
+
+

@@ -1,0 +1,1674 @@
+Resourceful Contextual Bandits∗
+Ashwinkumar Badanidiyuru
+
+ASHWINKUMARBV @ GMAIL . COM
+
+Google Research, Mountain View CA, USA.
+
+John Langford
+
+JCL @ MICROSOFT. COM
+
+arXiv:1402.6779v6 [cs.LG] 31 Jul 2015
+
+Microsoft Research, New York, NY, USA.
+
+Aleksandrs Slivkins
+
+SLIVKINS @ MICROSOFT. COM
+
+Microsoft Research, New York, NY, USA.
+
+First version: February 2014.
+This version: July 2015.
+
+Abstract
+We study contextual bandits with ancillary constraints on resources, which are common in realworld applications such as choosing ads or dynamic pricing of items. We design the first algorithm
+for solving these problems that handles constrained resources other than time, and improves over a
+trivial reduction to the non-contextual case. We consider very general settings for both contextual
+bandits (arbitrary policy sets, Dudik et al. (2011)) and bandits with resource constraints (bandits
+with knapsacks, Badanidiyuru et al. (2013a)), and prove a regret guarantee with near-optimal statistical properties.
+
+1. Introduction
+Contextual bandits is a machine learning framework in which an algorithm makes sequential decisions according to the following protocol: in each round, a context arrives, then the algorithm
+chooses an action from the fixed and known set of possible actions, and then the reward for this action is revealed; the reward may depend on the context, and can vary over time. Contextual bandits
+is one of the prominent directions in the literature on online learning with exploration-exploitation
+tradeoff; many problems in this space are studied under the name multi-armed bandits.
+A canonical example of contextual bandit learning is choosing ads for a search engine. Here,
+the goal is to choose the most profitable ad to display to a given user based on a search query and
+the available information about this user, and optimize the ad selection over time based on user
+feedback such as clicks. This description leaves out many important details, one of which is that
+every ad is associated with a budget which constrains the maximum amount of revenue which that
+ad can generate. In fact, this issue is so important that in some formulations it is the primary problem
+(e.g., Devanur and Vazirani, 2004).
+The optimal solution with budget constraints fundamentally differs from the optimal solution
+without constraints. As an example, suppose that one ad has a high expected revenue but a small
+budget such that it can only be clicked on once. Should this ad be used immediately? From all
+∗
+
+This is the full version of a paper in the 26th Conf. on Learning Theory (COLT), 2014. The present version includes
+a correction for Theorem 3, a corollary for contextual dynamic pricing with discretization, and an updated discussion
+of related work.
+The main results have been obtained while A. Badanidiyuru was a research intern at Microsoft Research New York
+City. A. Badanidiyuru was also partially supported by NSF grant AF-0910940 of Robert Kleinberg.
+
+c A. Badanidiyuru, J. Langford & A. Slivkins.
+
+BADANIDIYURU L ANGFORD S LIVKINS
+
+reasonable perspectives, the answer is “no”. From the user’s or advertiser’s perspective, we prefer
+that this ad be displayed for the user with the strongest interest rather than for a user who simply
+has more interest than in other options. From a platform’s viewpoint, it is better to have more ads
+in the system, since they effectively increases the price paid in a second price auction. And from
+everyone’s viewpoint, it is simply odd to burn out the budget of an ad as soon as it is available.
+Instead, a small budget should be parceled out over time.
+To address these issues, we consider a generalization of contextual bandits in which there are
+one or several resources that are consumed by the algorithm. This formulation has many natural applications. Dynamic ad allocation follows the ad example described above: here, resources
+correspond to advertisers’ budgets. In dynamic pricing, a store with a limited supply of items to
+sell can make customized offers to customers. In dynamic procurement, a contractor with a batch
+of jobs and a limited budget can experiment with prices offered to the workers, e.g. workers in a
+crowdsourcing market. The above applications have been studied on its own, but never in models
+that combine contexts and limited resources.
+We obtain the first known algorithm for contextual bandits with resource constraints (other than
+time) that improves over a trivial reduction to the non-contextual version of the problem. As such,
+we merge two lines of work on multi-armed bandits: contextual bandits and bandits with resource
+constraints. While significant progress has been achieved in each of the two lines of work (in
+particular, optimal solutions have been worked out for very general models), the specific approaches
+break down when applied to our model.
+Our model. We define resourceful contextual bandits (in short: RCB), a common generalization
+of two general models for contextual bandits and bandits with resource constraints: respectively,
+contextual bandits with arbitrary policy sets (e.g., Langford and Zhang, 2007; Dudik et al., 2011)
+and bandits with knapsacks (Badanidiyuru et al., 2013a).
+There are several resources that are consumed by the algorithm, with a separate budget constraint on each. (Time is one of these resources, with deterministic consumption of 1 for every
+action.) In each round, the algorithm receives a reward and consumes some amount of each resource, in a manner that depends on the context and the chosen action, and may be randomized.
+We consider a stationary environment: in each round, the context and the mapping from actions to
+rewards and resource consumption is sampled independently from a fixed joint distribution, called
+the outcome distribution. Rewards and consumption of various resources can be correlated in an
+arbitrary way. The algorithm stops as soon as any constraint is violated. Initially the algorithm is
+given no information about the outcome distribution (except the distribution of context arrivals). In
+particular, expected rewards and resource consumptions are not known.
+An algorithm is given a finite set Π of policies: mappings from contexts to actions. We compete
+against algorithms that must commit to some policy in Π before each round. Our benchmark is a
+hypothetical algorithm that knows the outcome distribution and makes optimal decisions given this
+knowledge and the restriction to policies in Π. The benchmark’s expected total reward is denoted
+OPT(Π). Regret of an algorithm is defined as OPT(Π) minus the algorithm’s expected total reward.
+For normalization, per-round rewards and resource consumptions lie in [0, 1]. We assume that
+the distribution of context arrivals is known to the algorithm.
+Discussion of the model. Allowing stochastic resource consumptions and arbitrary correlations
+between per-round rewards and per-round resource consumptions is essential: this is why our model
+
+2
+
+R ESOURCEFUL C ONTEXTUAL BANDITS
+
+subsumes diverse applications such as the ones discussed above,1 and many extensions thereof.
+Further discussion of the application domains can be found in Appendix A.
+Intuitively, the policy set Π consists of all policies that can possibly be learned by a given
+learning method, such as linear estimation or decision trees. Restricting to Π allows meaningful
+performance guarantees even if competing against all possible policies is intractable. The latter is
+common in real-life applications, as the set of possible contexts can be very large.
+Our benchmark can change policies from one round to another without restriction. As we prove,
+this is essentially equivalent in power to the best fixed distribution over policies. However, the best
+fixed policy may perform substantially worse.2
+Our stopping condition corresponds to hard constraints: an advertiser cannot exceed his budget,
+a store cannot sell more items than it has in stock, etc. An alternative stopping condition is to restrict
+the algorithm to actions that cannot possibly violate any constraint if chosen in the current round,
+and stop if there is no such action. This alternative is essentially equivalent to the original version.3
+Moreover, we can w.l.o.g. allow our benchmark to use this alternative.
+Our contributions: main algorithm. We design an algorithm, called MixtureElimination, and
+prove the following guarantee on its regret.
+Theorem 1 For all RCB problems with K actions, d resources, time horizon T , and for all policy
+sets Π. Algorithm MixtureElimination achieves expected total reward
+p
+REW ≥ OPT(Π) − O 1 + B1 OPT(Π)
+dKT log (dKT |Π|),
+(1)
+where B = mini Bi is the smallest of the resource constraints B1 , . . . , Bd .
+
+This regret guarantee is optimal in several regimes. First, we achieve an optimal square-root
+“scaling” of regret: if all constraints are scaled by the same parameter α > 0, then√regret scales
+√
+= T (i.e., there are no constraints), we recover the optimal Õ( KT ) regret.
+as α. Second, if B √
+Third, we achieve Õ( KT ) regret for the important regime when OPT(Π) and B are at
+√ least a constant fraction of T . In fact, Badanidiyuru et al. (2013a) provide a complimentary Ω( KT ) lower
+bound forpthis regime, which holds in a very strong sense: for any given tuple (K, B, OPT(Π), T ).
+The log |Π| term in Theorem 1 is unavoidable (Dudik et al., 2011). The dependence on the
+minimum of the constraints (rather than, say, the maximum or some weighted combination thereof)
+is also unavoidable (Badanidiyuru et al., 2013a). For strongest results, one can rescale per-round
+rewards and per-round consumption of each resource so that they can be as high as 1.4
+Note that the regret bound in Theorem 1 does not depend on the number of contexts, only on
+the number of policies in Π. In particular, it tolerates infinitely many contexts. On the other hand,
+if the set X of contexts is not too large, we can also obtain a regret bound with respect to the best
+policy among all possible policies. Formally, take Π = {all policies} and observe that |Π| ≤ K |X| .
+Further, Theorem 1 extends to policy sets Π that consist of randomized policies: mappings from
+contexts to distributions over actions. This may significantly reduce |Π|, as a given randomized
+1. For example, in dynamic pricing the algorithm receives a reward and loses an item only if the item is sold.
+2. The expected total reward of the best fixed policy can be half as large as that of the best distribution. This holds
+for several different domains including dynamic pricing / procurement, even without contexts (Badanidiyuru et al.,
+2013a). Note that without resource constraints, the two benchmarks are equivalent.
+3. Each budget constraint changes by at most one, which does not affect our regret bounds in any significant way.
+1
+, then multiplying it by 10 would
+4. E.g., if per-round consumption of some resource i is deterministically at most 10
+effectively increase the corresponding budget Bi by a factor of 10, and hence can only improve the regret bound.
+
+3
+
+BADANIDIYURU L ANGFORD S LIVKINS
+
+policy might not be representable as a distribution over a small number of deterministic policies.5
+We assume deterministic policies in the rest of the paper.
+Computational issues. This paper is focused on proving the existence of solutions to this problem, and the mathematical properties of such a solution. The algorithm is specified as a mathematically well-defined mapping from histories to actions; we do not provide a computationally efficient
+implementation. Such “information-theoretical” results are common for the first solutions to new,
+broad problem formulations (e.g. Kleinberg et al., 2008; Kleinberg and Slivkins, 2010; Dudik et al.,
+2011). In√particular, in the prior work for RCB without resource constraints there exists an algorithm
+with Õ( KT ) regret (Auer et al., 2002; Dudik et al., 2011), but for all known computationally
+efficient algorithms regret scales with T as T 2/3 (Langford and Zhang, 2007).
+Our contributions: partial lower bound. We derive a√partial lower bound: we prove that RCB
+is essentially hopeless for the regime OPT(Π) ≤ B ≤ KT /2. The condition OPT(Π) ≤ B is
+satisfied, for example, in dynamic pricing with limited supply.
+Theorem 2 Any algorithm for RCB√incurs regret Ω(OPT(Π)) in the worst case over all problem
+instances such that OPT(Π) ≤ B ≤ KT /2 (using the notation from Theorem 1).
+The above lower bound is specific to the general (“contextual”) case of RCB. In fact, it points
+to a stark difference between RCB and the non-contextual version: in the latter, o(OPT) regret is
+achievable as long as (for example) B ≥ log T (Badanidiyuru et al., 2013a).
+While Theorem 2 is concerned
+√ with the regime of small B, note that in the “opposite” regime
+in Theorem 1 is quite low: it can be
+of very large B,√namely B ≫ KT , the regret achieved
+√
+expressed as Õ( KT + ǫ · OPT(Π)), where B = 1ǫ KT .
+Our contributions: discretization. In some applications of RCB, such as dynamic pricing and
+dynamic procurement, the action space is a continuous interval of prices. Theorem 1 usefully applies
+whenever the policy set Π is chosen so that the number of distinct actions used by policies in Π is
+finite and small compared to T . (Because one can w.l.o.g. remove all other actions.) However, one
+also needs to handle problem instances in which the policies in Π use prohibitively large or infinite
+number of actions.
+We consider a paradigmatic example of RCB with an infinite action space: contextual dynamic
+pricing with a single product and prices in the [0, 1] interval. We derive a corollary of Theorem 1
+that applies to an arbitrary finite policy set Π. To the best of our knowledge, this is the first result
+on contextual dynamic pricing with infinite price set.
+We use discretization: we reduce the original problem to one in which actions (i.e., prices) are
+multiples of some carefully chosen ǫ > 0. Our approach proceeds as follows. For each ǫ > 0 and
+each policy π let πǫ be a policy that takes the price computed by π and rounds it down to the nearest
+multiple of ǫ. We define the “discretized” policy set Πǫ = {πǫ : π ∈ Π}. We use Theorem 1 to
+obtain a regret bound relative to Πǫ . Here the ǫ controls the tradeoff between the number of actions
+in that regret bound and the “discretization error” of Πǫ . Then we optimize the choice of ǫ to obtain
+5. We can reduce RCB with randomized policies to RCB with deterministic policies simply by replacing each context x
+with a vector (a(x, π) : π ∈ Π) such that a(x, π) = π(x), and encoding the randomization in policies through the
+randomization in the context arrivals. While this blows up the context space, it does not affect our regret bound.
+
+4
+
+R ESOURCEFUL C ONTEXTUAL BANDITS
+
+the regret bound relative to Π. The technical difficulty here is to bound the discretization error in
+terms of ǫ; for this purpose we assume Lipschitz demands.6
+Theorem 3 Consider contextual dynamic pricing with a single product and prices in [0, 1]. Use
+standard notation: supply B, policy set Π and time horizon T . Assume Lipschitz demands with
+Lipschitz constant L. Then algorithm MixtureElimination with discretized policy set Πǫ (defined
+as above) and ǫ suitably chosen as a function of (B, T, L, |Π|) achieves expected total reward
+REW ≥ OPT(Π) − O(T 3/5 B 1/5 ) · (L log (T |Π|))1/5
+
+(2)
+
+This regret bound is most interesting for the important regime B ≥ Ω(T ) (studied, for example,
+in Besbes and Zeevi (2009, 2011); Wang et al. (2014)). Then regret is O(T 4/5 ) (L log (T |Π|))1/5 .
+It is unclear whether this regret bound is optimal. When specialized to the non-contextual
+case, it is not optimal. The optimal regret is then O(B 2/3 ), even for an arbitrary budget B and
+even without the Lipscitz assumption (Babaioff et al., 2015). Extending the discretization approach
+beyond dynamic pricing with a single product is problematic even without contexts, see Section 10
+for further discussion.
+Discussion: main challenges in RCB. The central issue in bandit problems is the tradeoff between
+exploration: acquiring new information, and exploitation: making seemingly optimal decisions
+based on this information. In this paper, we resolve the explore-exploit tradeoff in the presence of
+contexts and resource constraints. Each of the three components (explore-exploit tradeoff, contexts,
+and resource constraints) presents its own challenges, and we need to deal with all these challenges
+simultaneously. Below we describe these individual challenges one by one.
+A well-known naive solution for explore-exploit tradeoff, which we call pre-determined exploration, decides in advance to allocate some rounds to exploration, and the remaining rounds to
+exploitation. The decisions in the exploration rounds do not depend on the observations, whereas
+the observations from the exploitation rounds do not impact future decisions. While this approach is
+simple and broadly applicable, it is typically inferior to more advanced solutions based on adaptive
+exploration – adapting the exploration schedule to the observations, so that many or all rounds serve
+both exploration and exploitation.7 Thus, the general challenge in most explore-exploit settings is
+to design an appropriate adaptive exploration algorithm.
+Resource constraints are difficult to handle for the following three reasons. First, an algorithm’s
+ability to exploit is constrained by resource consumption for the purpose of exploration; the latter
+is stochastic and therefore difficult to predict in advance. Second, the expected per-round reward is
+no longer the right objective to optimize, as the action with the highest expected per-round reward
+could consume too much resources. Instead, one needs to take into account the expected reward
+over the entire time horizon. Third, with more than one constrained resource (incl. time) the best
+fixed policy is no longer the right benchmark; instead, the algorithm should search over distributions
+over policies, which is a much larger search space.
+In contextual bandit problems, an algorithm effectively chooses a policy π ∈ Π in each round.
+Naively, this can be reduced to a non-contextual bandit problem in which “actions” correspond to
+6. Lipschitz demands is a common assumption in some of the prior work on (non-contextual) dynamic pricing, even with
+a single product (Besbes and Zeevi, 2009; Wang et al., 2014). However, the optimal algorithm for the single-product
+case (Babaioff et al., 2015) does not need this assumption.
+√
+7. For example, the difference in regret between pre-determined and adaptive exploration is Õ( KT ) vs. O(K log T )
+3/4
+2/3
+for stochastic K-armed bandits, and Õ(T ) vs. Õ(B ) for dynamic pricing with limited supply.
+
+5
+
+BADANIDIYURU L ANGFORD S LIVKINS
+
+policies. In particular, the main results in Badanidiyuru et al. (2013a) directly apply to this reduced
+problem.
+However, the action space in the reduced problem has size |Π|; accordingly, regret scales
+p
+as |Π| in the worst case. The
+pchallenge in contextual bandits is to reduce this dependence. In
+particular, note that we replace |Π| with log |Π|, an exponential improvement.
+
+Organization of the paper. We start with a survey of related work and preliminaries (Sections 2-3).
+We define the main algorithm, prove its correctness, and describe the key steps of regret analysis
+in Sections 4-6. The remaining details of the regret analysis are in Section 7. We prove the lower
+bound in Section 8. We conclude with an extensive discussion of the state-of-art for RCB and the
+directions for further work (Sections 10). Appendix A contains a discussion of the main application
+domains for RCB.
+
+2. Related work
+Multi-armed bandits have been studied since Thompson (1933) in Operations Research, Economics,
+and several branches of Computer Science, see (Gittins et al., 2011; Bubeck and Cesa-Bianchi,
+2012) for background. This paper unifies two active lines of work on bandits: contextual bandits
+and bandits with resource constraints.
+Contextual Bandits (Auer, 2002; Langford and Zhang, 2007) add contextual side information
+which can be used in prediction. This is a necessary complexity for virtually all applications of
+bandits since it is far more common to have relevant contextual side information than no such information. Several versions have been studied in the literature, see (Bubeck and Cesa-Bianchi, 2012;
+Dudik et al., 2011; Slivkins, 2014) for a discussion. For contextual bandits with policy sets, there
+exist two broad families of solutions, based on multiplicative weight algorithms (Auer et al., 2002;
+McMahan and Streeter, 2009; Beygelzimer et al., 2011) or confidence intervals (Dudik et al., 2011;
+Agarwal et al., 2012). We rework the confidence interval approach, incorporating and extending the
+ideas from the work on resource-constrained bandits (Badanidiyuru et al., 2013a).
+Prior work on resource-constrained bandits includes dynamic pricing with limited supply (Babaioff et al.,
+2015; Besbes and Zeevi, 2009, 2012), dynamic procurement on a budget (Badanidiyuru et al., 2012;
+Singla and Krause, 2013; Slivkins and Vaughan, 2013), dynamic ad allocation with advertisers’
+budgets (Slivkins, 2013), and bandits with a single deterministic resource (Guha and Munagala,
+2007; Gupta et al., 2011; Tran-Thanh et al., 2010, 2012). Badanidiyuru et al. (2013a) define and
+optimally solve a common generalization of all these settings: the non-contextual version of RCB.
+An extensive discussion of these and other applications, including applications to repeated auctions
+and network routing, can be found in (Badanidiyuru et al., 2013a).
+To the best of our knowledge, the only prior work that explicitly considered contextual bandits
+with resource constraints is (György et al., 2007). This paper considers a somewhat incomparable
+setting with arbitrary policy sets and a single constrained resource: time, whose consumption is
+stochastic and depends on the context and the chosen action. György et al. (2007) design an algorithm whose regret scales O(f (t) log t) for any time t, where f is any positive diverging function
+and the constant in O() depends on the problem instance and on f .
+Our setting can be seen as a contextual bandit version of stochastic packing (e.g. Devanur and Hayes,
+2009; Devanur et al., 2011). The difference is in the feedback structure: in stochastic packing, full
+information about each round is revealed before that round.
+
+6
+
+R ESOURCEFUL C ONTEXTUAL BANDITS
+
+While we approximate our benchmark OPT(Π) with a linear program optimum, our algorithm
+and analysis are conceptually very different from the vast literature on approximately solving linear
+programs, and in particular from LP-based work on bandit problems such as Guha et al. (2010).
+Concurrent and independent work. Agrawal and Devanur (2014) study a model for contextual
+bandits with resource constraints that is incomparable with ours. The model for contexts is more
+restrictive: contexts do not change over time,8 and expected outcome of each round is linear in
+the context. Whereas the model for rewards and resource constraints is more general: the total
+reward can be an arbitrary concave function of the time-averaged outcome vector v̄, and the resource
+constraint states that v̄ must belong to a given convex set (which can be arbitrary).
+
+3. Problem formulation and preliminaries
+We consider an online setting where in each round an algorithm observes a context x from a possibly
+infinite known set of possible contexts X and chooses an action a from a finite known set A. The
+world then specifies a reward r ∈ [0, 1] and the resource consumption. There are d resources that can
+be consumed, and the resource consumption is specified by numbers ci ∈ [0, 1] for each resource i.
+Thus, the world specifies the vector (r; c1 , . . . , cd ), which we call the outcome vector; this vector
+can depend on the the chosen action a and the round. There is a known hard constraint Bi ∈ R+
+on the consumption of each resource i; we call it a budget for resource i. The algorithm stops at the
+earliest time τ when any budget constraint is violated; its total reward is the sum of the rewards in
+all rounds strictly preceding τ . The goal of the algorithm is to maximize the expected total reward.
+We are only interested in regret at a specific time T (time horizon) which is known to the
+algorithm. Formally, we model time as a specific resource with budget T and a deterministic consumption of 1 for every action. So d ≥ 2 is the number of all resources, including time. W.l.o.g.,
+Bi ≤ T for every resource i.
+We assume that an algorithm can choose to skip a round without doing anything. Formally, we
+posit a null action: an action with 0 reward and 0 consumption of all resources except the time. This
+is for technical convenience, so as to enable Lemma 5.
+Stochastic assumptions. We assume that there exists an unknown distribution D(x, r, ci ), called
+the outcome distribution, from which each round’s observations are created independently and identically, where the vectors are indexed by individual actions. In particular, context x is drawn from
+the marginal distribution DX (·), and the observed reward and resource consumptions for each action
+a are drawn from the conditional distribution D(r a , cia |x). We assume that the marginal distribution over contexts D(x) is known.
+Policy sets and the benchmark. An algorithm is given a finite set Π of policies – mappings from
+contexts to actions. Our benchmark is a hypothetical algorithm that knows the outcome distribution
+D, and makes optimal decisions given this knowledge. The benchmark is restricted to policies in Π:
+before each round, it must commit to some policy π ∈ Π, and then choose action π(x) upon arrival
+of any given context x. The expected total reward of the benchmark is denoted OPT(Π). Regret of
+an algorithm is OPT(Π) minus the algorithm’s expected total reward.
+8. Agrawal and Devanur (2014) also claimed an extension to contexts that change over time, which has subsequently
+been retracted (see Footnote 1 in Agrawal and Devanur (2015)). This extension constitutes the main result in
+Agrawal and Devanur (2015) (which is subsequent work relative to the present paper).
+
+7
+
+BADANIDIYURU L ANGFORD S LIVKINS
+
+Uniform budgets. We say that the budgets are uniform if Bi = B for each resource i. Any problem
+instance can be reduced to one with uniform budgets by dividing all consumption values for every
+resource i by Bi /B, where B = mini Bi . (That is tantamount to changing the units in which we
+measure consumption of resource i.) We assume uniform budgets B from here on.
+Notation. Let r(π) = E(x,r)∼D [r π(x) ] and ci (π) = E(x,ci )∼D [ci π(x) ] be the expected per-round
+reward and the expected per-round consumption of resource i for policy π. Similary, define r(P ) =
+Eπ∼P [r(π)] and ci (P ) = Eπ∼P [ci (π)] as the natural extension to a distribution P over policies.
+The tuple µ = ( (r(π); c1 (π) , . . . , cd (π)) : π ∈ Π ) is called the expected-outcomes tuple.
+For a distribution P over policies, let
+PP (π) is the probability that P places over policy π. By a
+slight abuse of notation, let P (a|x) = π(x)=a P (π) be the probability that P places on action a
+given context x. Thus, each context x induces a distribution P (·|x) over actions.
+3.1. Linear approximation and the benchmark
+We set up a linear relaxation that will be crucial throughout the paper. As a by-product, we (effectively) reduce our benchmark OPT(Π) to the best fixed distribution over policies.
+A given distribution P over policies defines an algorithm ALGP : in each round a policy π is
+sampled independently from P , and the action a = π(x) is chosen. The value of P is the total
+reward of this algorithm, in expectation over the outcome distribution.
+As the value of P is difficult to characterize exactly, we approximate it (generalizing the approach from (Babaioff et al., 2015; Badanidiyuru et al., 2013a) for the non-contextual version). We
+use a linear approximation where all rewards and consumptions are deterministic and the time is
+continuous. Let r(P, µ) and ci (P, µ) be the expected per-round reward and the expected per-round
+consumption of resource i for policy π ∼ P , given expected-outcomes tuple µ. Then the linear
+approximation corresponds to the solution of a simple linear program:
+Maximise t r(P, µ)
+in t ∈ R
+subject to t ci (P, µ) ≤ B for each i
+t ≥ 0.
+
+(3)
+
+The solution to this LP, which we call the LP-value of P , is
+LP(P, µ) = r(P, µ) mini B/ci (P, µ).
+
+(4)
+
+Denote OPTLP = supP LP(P, µ), where the supremum is over all distributions P over Π.
+Lemma 4 OPTLP ≥ OPT(Π).
+Therefore, it suffices to compete against the best fixed distribution over Π, as approximated
+by OPTLP , even though our benchmark OPT(Π) allows unrestricted changes over time. Note that
+proving regret bounds relative to OPTLP rather than to OPT(Π) only makes our results stronger.
+A distribution P over Π that attains the supremum value OPTLP is called LP-optimal. Such P is
+called LP-perfect if furthermore |support(P )| ≤ d and ci (P, µ) ≤ B/T for each resource i. We
+find it useful to consider LP-perfect distributions throughout the paper.
+Lemma 5 An LP-perfect distribution exists for any instance of RCB.
+
+8
+
+R ESOURCEFUL C ONTEXTUAL BANDITS
+
+Lemma 4 and Lemma 5 are proved for the non-contextual version of RCB in Badanidiyuru et al.
+(2013a). The general case can be reduced to the non-contextual version via a standard reduction
+where actions in the new problem correspond to policies in Π in the original problem. For Lemma 5,
+Badanidiyuru et al. (2013a) obtain an LP-perfect distribution by mixing an LP-optimal distribution
+with the “null action”; this is why we allow the null action in the setting.
+
+4. The algorithm: MixtureElimination
+The algorithm’s goal is to converge on a LP-perfect distribution over policies. The general design
+principle is to explore as much as possible while avoiding obviously suboptimal decisions.
+Overview of the algorithm. In each round t, the following happens.
+1.
+Compute estimates. We compute high-confidence estimates for the per-round reward r(π)
+and per-round consumption ci (π), for each policy π ∈ Π and each resource i. The collection I of
+all expected-outcomes tuple that are consistent with these high-confidence estimates is called the
+confidence region.
+2. Avoid obviously suboptimal decisions. We prune away all distributions P over policies in Π
+that are not LP-perfect with high confidence. More precisely, we prune all P that are not LP-perfect
+for any expected-outcomes tuple in the confidence region I; the remaining distributions are called
+potentially LP-perfect. Let F be the convex hull of the set of all potentially LP-perfect distributions.
+3. Explore as much as possible. We choose a distribution P ∈ F which is balanced, in the sense
+that no action is starved; see Equation (5) for the precise definition. Note that balanced distributions
+are typically not LP-perfect.
+4. Select an action. We choose policy π ∈ Π independently from P . Given context x, the action
+a is chosen as a = π(x). The algorithm adds some random noise: with probability q0 , the action a
+is instead chosen uniformly at random, for some parameter q0 .
+The algorithm halts as soon as the time horizon is met, or one of the resources is exhausted.
+The pseudocode can be found in Algorithm 1.
+Some details. After each round t, we estimate the per-round consumption ci (π) and the per-round
+reward r(π), for each policy π ∈ Π and each resource i, using the following unbiased estimators:
+e
+ci (π) =
+
+r 1{a=π(x)}
+ci 1{a=π(x)}
+and re(π) =
+.
+P [a = π(x) | x]
+P [a = π(x) | x]
+
+The corresponding time-averages up to round t are denoted
+ĉt,i (π) =
+
+1
+t−1
+
+t−1
+X
+s=1
+
+e
+cs,i (π) and r̂t (π) =
+
+1
+t−1
+
+t−1
+X
+s=1
+
+res (π).
+
+We show that with high probability these time-averages are close to their respective expectations. To express the confidence
+p term in a more lucid way, we use the following shorthand, called
+confidence radius: radt (ν) = Crad ν/t, where Crad = Θ(log(d T |Π|)) is a parameter which we
+will fix later. We show that w.h.p. the following holds:
+|r(π) − r̂t (π)| ≤ radt (K/απ,t ) ,
+
+|ci (π) − ĉt,i (π)| ≤ radt ( K/απ,t )
+9
+
+(6)
+for all i.
+
+(7)
+
+BADANIDIYURU L ANGFORD S LIVKINS
+
+Algorithm 1 MixtureElimination
+1: Parameters: #actions K, time horizon T , budget B, benchmark set Π, context distribution DX .
+2: Data structure: “confidence region” I ← {all feasible expected-outcomes tuples}.
+3:
+4:
+5:
+6:
+7:
+
+8:
+9:
+10:
+11:
+12:
+
+For each round t = 1 . . . T do
+∆t = {distributions P over Π: P is LP-perfect for some µ ∈ I}.
+Let Ft be the convex hull of ∆t .
+Let απ,t = maxP ∈Ft P (π), ∀π ∈ Π.
+Choose a “balanced” distribution Pt ∈ Ft : any P ∈ Ft such that ∀π ∈ Π
+
+
+ q
+
+2K
+1
+K
+1
+≤
+E
+, where q0 = min 2 , T log(K T |Π|) .
+q
+x∼DX (1 − q0 ) P (π(x)|x) + K0
+απ,t
+
+(5)
+
+Observe context xt ; choose action at to ”play”:
+with probability q0 , draw at u.a.r. in A; else, draw π ∼ Pt and let at = π(xt ).
+Observe outcome vector (r, c1 , . . . , cd ).
+Halt if one of the resources is exhausted.
+Eliminate expected-outcomes tuples from I that violate equations (6-7)
+
+(Here απ,t = maxP ∈Ft P (π), as in Algorithm 1.)
+
+5. Correctness of the algorithm
+We need to prove that in each round t, some P ∈ Ft satisfies (5), and Equations (6-7) hold for all
+policies π ∈ Π with high probability.
+Notation. Recall that Pt is the distribution over Π chosen in round t of the algorithm, and q0 is the
+noise probability. The “noisy version” of Pt is defined as
+Pt′ (a|x) = (1 − q0 ) Pt (a|x) + q0 /K
+
+(∀x ∈ X, a ∈ A).
+
+Then action at in round t is drawn from distribution Pt′ (·|xt ).
+Lemma 6 In each round t, some P ∈ Ft satisfies (5).
+Proof First we prove that Ft is compact; here each distribution over Π is interpreted as a |Π|dimensional vector, and compactness is w.r.t. the Borel topology on R|Π| . This can be proved via
+standard real analysis arguments; we provide a self-contained proof in Appendix B.
+In what follows we extend the minimax argument from Dudik et al. (2011). Our proof works
+for any q0 ∈ [0, 21 ] and any compact and convex set F ⊂ FΠ .
+Denote απ = maxP ∈F P (π), for each π ∈ Π. Let FΠ be the set of all distributions over Π.
+Equation (5) holds for a given P ∈ F if and only if for every distribution Z ∈ FΠ we have that
+
+
+απ
+E
+f (P, Z) , E
+≤ 2K,
+x∼DX π∼Z P ′ (π(x)|x)
+where P ′ is the noisy version of P . It suffices to show that
+min max f (P, Z) ≤ 2K.
+
+P ∈F Z∈FΠ
+
+10
+
+(8)
+
+R ESOURCEFUL C ONTEXTUAL BANDITS
+
+We use a min-max argument: noting that f is a convex function of P and a concave function of Z,
+by the Sion’s minimax theorem (Sion, 1958) we have that
+min max f (P, Z) = max min f (P, Z).
+
+P ∈F Z∈FΠ
+
+Z∈FΠ P ∈F
+
+(9)
+
+For each policy π ∈ Π, let βπ ∈ argmaxβ∈F β(π) be a distribution which maximizes the probability
+of selecting π. Such distribution exists because β 7→ β(π) is a continuous function on a compact
+set F. Recall that απ = βπ (π).
+P
+Given any Z ∈ FΠ , define distribution PZ ∈ FΠ by PZ (π) = φ∈Π Z(φ) βφ (π). Note that
+PZ is a convex combination
+of distributions in F. Since F is convex, it follows that PZ ∈ F. Also,
+P
+note that PZ (a|x) ≥ π∈Π: π(x)=a Z(π) απ . Letting PZ′ be the noisy version of PZ , we have:
+"
+#
+X Z(π) απ
+min f (P, Z) ≤ f (PZ , Z) = E
+P ∈F
+x∼DX
+PZ′ (π(x)|x)
+π
+
+
+#
+"
+P
+X
+X
+X
+Z(π)
+α
+π
+Z(π)
+α
+π∈Π:
+π(x)=a
+π
+= E
+= E 
+x∼DX
+x∼DX
+PZ′ (a|x)
+(1 − q0 )PZ (a|x) + q0 /K
+a∈X
+a∈A π∈Π: π(x)=a
+#
+"
+X 1
+K
+≤ 2K.
+=
+≤ E
+x∼DX
+1 − q0
+1 − q0
+a∈X
+
+
+
+Thus, by Equation (9) we obtain Equation (8).
+
+To analyze Equations (6-7), we will use Bernstein’s inequality for martingales (Freedman,
+1975), via the following formulation from Bubeck and Slivkins (2012):
+Lemma 7 Let G0 ⊆ G1 ⊆ . . . ⊆ Gn be a filtration, and X1 , . . . , Xn be real random variables P
+such that Xt is Gt -measurable, E(Xt |Gt−1 ) = 0 and |Xt | ≤ b for some b > 0. Let
+Vn = nt=1 E(Xt2 |Gt−1 ). Then with probability at least 1 − δ it holds that
+q
+Pn
+X
+≤
+4Vn log(nδ−1 ) + 5b2 log2 (nδ−1 ).
+t=1 t
+
+Lemma 8 With probability at least 1− T1 , Equations (6-7) hold for all rounds t and policies π ∈ Π.
+
+Proof Let us prove Equation (6). (The proof of (7) is similar.) Fix round t and policy π ∈ Π. We
+bound the conditional variance of the estimators ret (π). Specifically, let Gt be the σ-algebra induced
+by all events up to (but not including) round t. Then
+#
+"
+
+
+2 1
+
+
+r
+1
+2K
+{π(x)=a}
+t
+2
+E ret (π) | Gt =
+.
+E
+≤ E
+≤
+′
+′
+2
+′
+x∼DX Pt (π(x)|x)
+Pt (a|x)
+απ,t
+x∼DX , a∼Pt
+
+The last inequality holds by the algorithm’s choice of distribution Pt . Since the confidence region
+I in our algorithm is non-increasing over time, it follows that απ,t is non-increasing in t, too. We
+conclude that Var [e
+rs (π) | Gs ] ≤ 2K/απ,t for each round s ≤ t. Therefore, noting that ret (π) ≤
+1/P ′ (π(xt )|xt ) ≤ K/q0 , we obtain Equation (6) by applying Lemma 7 with Xt = ret (π) − r(π). 
+11
+
+BADANIDIYURU L ANGFORD S LIVKINS
+
+6. Regret analysis: proof of Theorem 1
+We provide the key steps of the proof; the details can be found in Section 7.
+Let It and ∆t be, resp., the confidence region I and the set ∆ of potentially LP-perfect distributions computed in round t. Let Conv(∆t ) be the convex hull of ∆t .
+First we bound the deviations within the confidence region.
+Lemma 9 For any two expected-outcomes tuples µ′ , µ′′ ∈ It and a distribution P ∈ Conv(∆t ):
+|ci (P, µ′ ) − ci (P, µ′′ )| ≤ radt (dK)
+′
+
+Proof
+
+for each resource i
+
+′′
+
+|r(P, µ ) − r(P, µ )| ≤ radt (dK)
+
+(10)
+(11)
+
+Let us prove Equation (11). (Equation (10) is proved similarly.) By definition of It :
+P
+|r(P, µ′ ) − r(P, µ′′ )| ≤ π∈Π P (π) |r(π, µ′ ) − r(π, µ′′ )|
+P
+≤ π∈Π P (π) radt (K/απ,t ) .
+
+It remains to prove that the right-hand side is at most radt (dK). By linearity, it suffices to prove
+this for P ∈ ∆t . So let us assume P ∈ ∆t from here on. Recall that |support(P )| ≤ d since P is
+LP-perfect, and P (π) ≤ απ,t for any policy π ∈ Π. Therefore:
+P
+P
+π∈Π P (π) radt (K/απ,t ) ≤
+π∈Π radt (KP (π))
+
+P
+
+≤ radt dK π∈Π P (π) = radt (dK) .
+Using Lemma 9 and a long computation (fleshed out in Section 7), we prove the following.
+
+Lemma 10 For any two expected-outcomes tuples µ′ , µ′′ ∈ It and a distribution P ∈ Conv(∆t ):
+LP(P, µ′ ) − LP(P, µ′′ ) ≤ ( B1 LP(P, µ′ ) + 2) · T · radt (dK).
+Let REWt and Ct,i be, respectively, the (realized) total reward and average consumption of resource i up to and including round t. Recall that Pt′ is the noisy version of distribution Pt chosen by
+the algorithm in round t. Given Pt , the expected revenue
+in round t is,
+P and resource-i consumption
+P
+respectively, r(Pt′ , µ) and ci (Pt′ , µ). Denote r t = 1t ti=1 r(Pt′ , µ) and ci,t = 1t ti=1 ci (Pt′ , µ).
+
+Analysis of a clean execution. Henceforth, without further notice, we assume a clean execution
+where several high-probability conditions are satisfied. Formally, the algorithm’s execution is clean
+
+if in each round t Equations (6-7) are satisfied, and moreover min | 1t REWt − rt |, |Ct,i − ct,i | ≤
+radt (1).
+In particular, the set ∆t of potentially LP-perfect distributions indeed contains a LP-perfect distribution. By Lemma 8 and Azuma-Hoeffding Inequality, clean execution happens with probability
+at least 1 − T1 . Thus, it suffices to lower-bound the total reward REWT for a clean execution.
+Lemma 11 For any distribution P ′ ∈ Conv(∆t ) and any expected-outcomes tuple µ ∈ It ,
+min LP(P, µ) ≤ LP(P ′ , µ) ≤ max LP(P, µ).
+P ∈∆t
+
+P ∈∆t
+
+12
+
+(12)
+
+R ESOURCEFUL C ONTEXTUAL BANDITS
+
+Proof The proof consists of two parts. The second inequality in Equation (12) follows easily
+because the distribution which maximizes LP(P, µ) by definition belongs to ∆t , and so
+LP(P ′ , µ) ≤
+
+max
+
+P ∈Conv(∆t )
+
+LP(P, µ) = max LP(P, µ).
+P ∈∆t
+
+To prove the first inequality in Equation (12), we first argue that LP(P, µ) is a quasi-concave
+function of P . Denote ηi (P, µ) = B · r(P, µ)/ci (P, µ) for each resource i. Then ηi is a quasiconcave function of P since each level set (the set of distributions P that satisfy ηi (P, µ) ≥ α for
+some α ∈ R) is a convex set. Therefore LP(P, µ) = mini ηi (P, µ) is a quasi-concave function of P
+as a minimum of quasi-concave functions.
+P
+P
+Since P ′ ∈ Conv(∆t ), it is a convex combination P ′ = Q∈∆t αQ Q with Q∈∆t αQ = 1.
+Therefore:
+
+
+X
+αQ Q, µ
+LP(P ′ , µ) = LP 
+Q∈∆t
+
+≥
+
+min
+
+Q∈∆t ,αQ >0
+
+LP(Q, µ)
+
+By definition of quasi-concave functions
+
+
+
+≥ min LP(Q, µ).
+Q∈∆t
+
+The following lemma captures a crucial argument. Denote
+
+
+
+1
+Φt = 2 + B
+max LP(P, µ) · T · radt (dK)
+P ∈FΠ , µ∈It
+
+Lemma 12 For any expected-outcomes tuple µ∗ , µ∗∗ ∈ It and distributions P ′ , P ′′ ∈ Conv(∆t ):
+
+|LP(P ′ , µ∗ ) − LP(P ′′ , µ∗∗ )| ≤ 3Φt .
+(13)
+′
+′′
+′
+′′
+Proof Assume P , P ∈ ∆t . In particular, P , P are LP-perfect for some expected-outcomes
+tuples µ′ , µ′′ ∈ It , resp. Also, some distribution P ∗ ∈ ∆t is LP-perfect for µ∗ (by Lemma 5).
+Therefore:
+LP(P ′ , µ∗ ) ≥ LP(P ′ , µ′ ) − Φt
+
+(by Lemma 10: P = P ′ )
+
+≥ LP(P ∗ , µ′ ) − Φt
+
+≥ LP(P ∗ , µ∗ ) − 2Φt
+
+(by Lemma 10: P = P ∗ )
+
+≥ LP(P ′′ , µ∗ ) − 2Φt .
+We proved Equation (13) for P ′ , P ′′ ∈ ∆t . Thus:
+
+max LP(P, µ∗ ) − min LP(P, µ∗ ) ≤ 2Φt .
+
+P ∈∆t
+
+P ∈∆t
+
+(14)
+
+Next we generalize to P ′ , P ′′ ∈ Conv(∆t ).
+
+LP(P ′ , µ∗ ) ≥ min LP(P, µ∗ )
+P ∈∆t
+
+(by Lemma 11)
+
+≥ max LP(P, µ∗ ) − 2Φt
+P ∈∆t
+
+≥ LP(P ′′ , µ∗ ) − 2Φt
+
+(by Equation (14))
+
+(by Lemma 11).
+
+We proved Equation (13) for µ∗ = µ∗∗ . We obtain the general case by plugging in Lemma 10.
+13
+
+
+
+BADANIDIYURU L ANGFORD S LIVKINS
+
+Next, we upper-bound Φt in terms of
+Ψt = (2 +
+
+1
+B
+
+OPTLP ) · T · radt (dK).
+
+Corollary 13 Φt ≤ 2Ψt , assuming that B ≥ 6 · T · radt (dK).
+Proof Follows from Lemma 12 via a simple computation, see Section 7.
+
+
+
+Corollary 14 LP(Pt , µ) ≥ OPTLP − 12 Ψt , where µ is the actual expected-outcomes tuple.
+Proof Follows from Lemma 12 and Corollary 13, observing that Pt ∈ Conv(∆t ) and OPTLP =
+LP(P ∗ , µ) for some P ∗ ∈ ∆t .
+
+In the remainder of the proof (which is fleshed out in Section 7) we build on the above lemmas
+and corollaries to prove the following sequence of claims:
+t
+(OPTLP − O(Ψt ))
+T
+≤ B/T + O(radt (dK))
+
+REWt ≥
+Ct,i
+
+(15)
+
+REWT ≥ OPTLP − O(ΨT ).
+
+To complete the proof of Theorem 1, we re-write the last equation as REWT ≥ f (OPTLP ) for an
+appropriate function f (), and observe that f (OPTLP ) ≥ f (OPT) because function f () is increasing.
+
+7. Regret analysis: remaining details for the proof of Theorem 1
+7.1. Proof of Lemma 10
+We restate the lemma for convenience.
+Lemma For any two expected-outcomes tuples µ′ , µ′′ ∈ It and a distribution P ∈ Conv(∆t ):
+Proof
+
+LP(P, µ′ ) − LP(P, µ′′ ) ≤ ( B1 LP(P, µ′ ) + 2) · T · radt (dK).
+For brevity, we will denote:
+LP′ = LP(P, µ′ ) and
+
+LP′′ = LP(P, µ′′ )
+
+r ′ = r(P, µ′ ) and
+
+r ′′ = r(P, µ′′ )
+
+c′i = ci (P, µ′ ) and
+
+c′′i = ci (P, µ′′ ).
+
+By symmetry, it suffices to prove the upper bound for LP′ − LP′′ . Henceforth, assume LP′ > LP′′ .
+We consider two cases, depending on whether
+T ≤ B/c′′i
+
+for all resources i.
+
+(16)
+
+Case 1. Assume Equation (16) holds. Then LP′′ = T r ′′ . Therefore by Lemma 9
+LP′ − LP′′ ≤ T r ′ − T r ′′ ≤ T radt (dK).
+Case 2. Assume Equation (16) fails. Then LP′′ = B r ′′ /c′′i for some resource i. We consider
+two subcases, depending on whether
+T ≤ B/c′j
+
+for all resources j.
+14
+
+(17)
+
+R ESOURCEFUL C ONTEXTUAL BANDITS
+
+Subcase 1. Assume Equation (17) holds. Then:
+LP′ = T r ′
+
+(18)
+
+′′
+
+′
+
+′′
+
+′
+
+LP ≤ T · min(r , r ) ≤ LP
+
+(19)
+
+Equation (19) follows from (18) and LP′ > LP′′ .
+For δ ∈ [0, c′′i ), define
+r(δ) = r ′′ + δ
+ci (δ) = c′′i − δ
+
+f (δ) = B r(δ)/ci (δ).
+
+Then f () is monotonically and continuously increasing function, with f (δ) → ∞ as δ → c′′i . For
+convenience, define f (c′′i ) = ∞.
+Let δ0 = min(c′′i , radt (dK)). By Lemma 9, we have f (δ0 ) ≥ Br ′ /c′i . Therefore:
+f (0) = LP′′ < LP′ ≤ Br ′ /c′i ≤ f (δ0 ).
+Thus, by Equation (19), we can fix δ ∈ [0, δ0 ) such that f (δ) = T · min(r ′ , r ′′ ).
+r ′′
+r(δ) − δ
+=B
+c′′i
+ci (δ) + δ
+
+
+r(δ) − δ
+δ
+≥B
+1−
+.
+ci (δ)
+ci (δ)
+r(δ)
+B
+δ+B
+δ
+f (δ) − LP′′ ≤
+ci (δ)
+ci (δ)2
+
+
+r(δ) B δ
+= 1+
+ci (δ) ci (δ)
+
+
+f (δ) f (δ) δ
+= 1+
+B
+r(δ)
+
+
+T r ′ T r ′′ δ
+≤ 1+
+B
+r(δ)
+
+
+′
+LP
+≤ 1+
+Tδ
+B
+
+≤ LP′ /B + 1 · T · radt (dK).
+LP′′ = B
+
+LP′ − f (δ) = T r ′ − T min(r, r ′ )
+
+≤ T · radt (dK)
+
+
+LP − LP = LP′ − f (δ) + f (δ) − LP′′
+
+≤ LP′ /B + 2 · T · radt (dK).
+′
+
+′′
+
+Subcase 2. Assume Equation (17) fails. Then LP′ = B r ′ /c′j for some resource j. Note that
+c′i ≤ c′j and c′′j ≤ c′′i by the choice of i and j.
+15
+
+BADANIDIYURU L ANGFORD S LIVKINS
+
+From these inequalities and Lemma 9 we obtain c′′i ≤ c′j + radt (dK). Therefore,
+B
+
+r ′ − radt (dK)
+r ′′
+≥
+B
+c′′i
+c′j + radt (dK)
+r ′ − radt (dK)
+≥B
+c′j
+
+LP′ − LP′′ = B
+
+(by Lemma 9)
+radt (dK)
+1−
+c′j
+
+!
+
+.
+
+r ′′
+r′
+−
+B
+c′j
+c′′i
+
+!
+r′
+B
++ B ′ 2 radt (dK)
+≤
+c′j
+(cj )
+
+
+′T
+radt (dK)
+≤ T + LP
+B
+
+≤ LP′ /B + 1 · T · radt (dK).
+
+
+
+7.2. Remainder of the proof after Lemma 12
+We start with Corollary 13, which we restate here for convenience.
+Corollary Φt ≤ 2Ψt , assuming that B ≥ 6 · T · radt (dK).
+Proof Let γ = maxP ∈FΠ ,µ∈It LP(P, µ). Note that γ ≤ T . Then from Lemma 12 we obtain:
+γ − OPTLP ≤ 3( Bγ + 2) · T · radt (dK) ≤
+
+γ
+2
+
++ 6 · T · radt (dK).
+
+Using (20) and Lemma 12 we get the desired bound:
+Φt ≤ ( Bγ + 2) · T · radt (dK)
+
+
+2 OPTLP + 12 · T · radt (dK)
++ 2 · T · radt (dK)
+≤
+B
+
+
+2 OPTLP
++ 4 · T · radt (dK) = 2Ψt .
+
+≤
+B
+In the remainder of this appendix, we prove the claims in Equation (15) one by one.
+Corollary 15 REWt ≥ Tt (OPTLP − O(Ψt )) for each round t ≤ τ .
+Proof From Lemma 14 we obtain
+T r(Pt′ , µ) ≥ (1 − q0 ) LP(Pt , µ)
+
+≥ (1 − q0 ) (OPTLP − 12Ψt )
+
+≥ OPTLP − 13Ψt .
+
+Summing up and taking average over rounds, we obtain:
+Pt
+T r t ≥ OPTLP − 13
+s=1 Ψs ≥ OPTLP − O(Ψt ).
+t
+By definition of clean execution, we obtain:
+
+REWt ≥ t(r t − radt (rt )) ≥
+
+t
+T (OPTLP
+
+16
+
+− O(Ψt )).
+
+
+
+(20)
+
+R ESOURCEFUL C ONTEXTUAL BANDITS
+
+Corollary 16 Ct,i ≤ B/T + O(radt (dK)) for each round t ≤ τ .
+
+Proof Let µ be the (actual) expected-outcomes tuple, and recall that Pt is LP-optimal for some
+expected-outcomes tuple µ′ ∈ ∆t . Then, by Lemma 9, it follows that ci (Pt , µ) ≤ ci (Pt , µ′ ) +
+radt (dK). Furthermore since Pt is LP-optimal for µ′ we have ci (Pt , µ′ ) ≤ B
+T . Therefore:
+ci (Pt , µ) ≤
+
+B
+T
+
+≤
+
+B
+T
+
+ci (Pt′ , µ)
+
++ radt (dK)
+
+≤ (1 − q0 ) ci (Pt , µ) + q0
++ O(radt (dK)).
+B
+T
+
+Now summing and taking average we obtain ct,i ≤
+clean execution, it follows that
+Ct,i ≤ ct,i + radt (ct,i ) ≤
+
+B
+T
+
++ O(radt (dK)). Using the definition of
+
+
++ O(radt (dK)).
+
+Lemma 17 REWT ≥ OPTLP − O(ΨT ).
+
+Proof
+
+Either τ = T or some resource i gets exhausted, in which case (using Corollary 16)
+τ=
+
+B
+≥
+Cτ,i
+
+B
+T
+
+B
++ radτ (dK)
+
+⇒τB
+T + τ radτ (dK) ≥ B
+
+⇒τB
+T + T radT (dK) ≥ B
+
+⇒τ ≥T 1−
+
+T
+B
+
+
+radT (dK) .
+
+(21)
+
+Using this lower bound and Corollary 15, we obtain the desired bound on the total revenue REWT .
+REWT = REWτ ≥
+
+τ
+( OPTLP − O(Ψτ ) )
+T
+
+≥ OPTLP (1 −
+
+T
+B
+
+radT (dK)) −
+
+≥ OPTLP − ΨT −
+
+O(τ Ψτ )
+T
+
+O(τ Ψτ )
+.
+T
+
+In the above, the first inequality holds by Corollary 15, the second by Equation (21), and the third
+by definition of ΨT .
+Finally, we note that τ Ψτ is an increasing function of τ , and substitute τ Ψτ ≤ T ΨT .
+
+
+We complete the proof of Theorem 1 as follows. Re-writing Lemma 17 as REWT ≥ f (OPTLP ),
+for an appropriate function f (), note that REWT ≥ f (OPT) because function f () is increasing.
+
+8. Lower bound: proof of Theorem 2
+In fact, we prove a stronger theorem that implies Theorem 2.
+√
+Theorem 18 Fix any tuple (K, T, B) such that K ∈ [2, T ] and B ≤ KT /2. Any algorithm
+for RCB incurs regret Ω(OPT(Π)) in the worst case over all problem instances with K actions, time
+horizon T , smallest budget B, and policy sets Π such that OPT(Π) ≤ B.
+17
+
+BADANIDIYURU L ANGFORD S LIVKINS
+
+We will use the following lemma (which follows from simple probability arguments).
+Lemma 19 Consider two collections of n balls I1 and I2 , each numbered from 1 to n. Let I1
+consists of all red balls, while I2 consist of n − 1 red balls and 1 green ball (with labels chosen
+uniformly at random). In this setting, let an algorithm is given access to random samples from one
+of Ii with replacement. The algorithm is allowed to first look at the ball’s number and then decide
+whether to inspect it’s color. Then any algorithm A which with probability at least 12 can distinguish
+between I1 and I2 must inspect color of at least n/2 balls in expectation.
+In the remainder of this section we prove Theorem 18.
+Let us define a family of problem instances as follows. Let the set of arms be {a1 , a2 , . . . , aK }.
+There are T /B different contexts labelled {x1 , ..., xT /B } and there is a uniform distribution over
+contexts. The policy set Π consists of T (K − 1)/B policies πi,j , where 2 ≤ i ≤ K and 1 ≤ j ≤
+T /B. Define them as follows: πi,j (xl ) = ai for l = j, and πi,j (xl ) = a1 for l 6= j.
+There is just one resource constraint B (apart from time). Pulling arm a1 always costs 0 and
+arm ai , i 6= 1 always costs 1. Now consider the following problem instances:
+•
+
+Let F0 be the instance in which every arm always gives a reward 0. Note that OPT(F0 ) = 0.
+
+• Let Fi,j be the instance in which arm ai on context xj gives reward 1, otherwise every arm on
+every context gives reward 0. Note that in this case the optimal distribution over policies is just to
+follow πi,j and gets reward ≈ B.
+Now consider any algorithm A and let the expected number of times it pulls arm ai be pi
+on input F0 . Let i′ , i′ 6= 1 be the arm for which this is minimum. Then by simple linearity of
+expectation we get that B ≥ (K − 1)pi′ . It is also simple to see that for the algorithm to get a regret
+better than Ω(OPT) it should be able to distinguish between F0 and Fi′ ,. at least with probability
+1
+′
+/(2B). Combining the two equations we get
+2 . From lemma 19 this can be done iff pi ≥ T√
+B ≥ (K − 1)T /(2B). Solving for B we get B ≥ KT /2.
+
+9. Discretization for contextual dynamic pricing (proof of Theorem 3)
+We consider contextual dynamic pricing with B copies of a single product. The action space consists
+of all prices p ∈ [0, 1]. We obtain regret bounds relative to an arbitrary policy set Π.
+Preliminaries. Let S(p|x) be the contextual sales rate: the probability of a sale for price p and
+context x. Note that S(p|x) is non-increasing in p, for any given x.
+The assumption of Lipschitz demands is stated as follows:
+|S(p|x) − S(p′ |x)| ≤ L · |p − p′ | for all contexts x,
+
+(22)
+
+for some constant L called the Lipschitz constant. For simplicity, assume L ≥ 1.
+For a (possibly randomized) policy π, define the contextual sales rate S(π|x) = Ep∼π(x) [ S(p|x) ]
+and the absolute sales rate S(π) = Ex [ S(π|x) ]. The latter is exactly the expected per-round resource consumption for π. Let r(π) be the expected per-round reward for π.
+As discussed in the Introduction, we define the discretization with step ǫ as follows. For each
+price p, let fǫ (p) be p rounded down to the nearest multiple of ǫ, i.e. the largest price p′ ≤ p such
+18
+
+R ESOURCEFUL C ONTEXTUAL BANDITS
+
+that p′ ∈ ǫN. For each policy π we define a discretized policy πǫ = fǫ (π). The discretized policy
+set is then Πǫ = {πǫ : π ∈ Π}. Note that for all policies π and all contexts x we have
+π(x) ≥ πǫ (x) ≥ π(x) − ǫ.
+By monotonicity of the sales rate and the Lipschitz assumption, resp., it follows that
+S(π|x) ≤ S(πǫ |x) ≤ S(π|x) + ǫL.
+Consequently, S(π) ≤ S(πǫ ) ≤ S(π) + ǫL.
+Discretization error. The key technical step is to bound the discretization error of the discretized
+policy set Πǫ compared to the original policy set Π, as quantified by the difference in OPTLP (·).
+Our proof will use an intermediate policy class Φδ = {S(π) ≥ δ}, where δ > 0. First we bound
+the discretization error relative to Φδ .
+Lemma 20 OPTLP (Φδ ) − OPTLP (Πǫ ) ≤ 2 · ǫ(1 + Lδ−2 ) · B, for each ǫ, δ > 0.
+Proof Using a trivial reduction to the non-contextual case (when a policy corresponds to an
+action in the bandits-with-knapsacks problem), one can use a generic discretization result from
+Badanidiyuru et al. (2013a). According to this result (specialized to contextual dynamic pricing), it
+suffices to prove that for each policy π ∈ Φδ the following two properties hold:
+(P1) S(πǫ ) ≥ S(π),
+(P2) r(πǫ )/S(πǫ ) ≥ r(π)/S(π) − ǫ(1 + Lδ−2 ), as long as S(πǫ ) > 0.
+In words: the sales rate of the discretized policy πǫ is at least the same, and the reward-to-consumption
+ratio is not much worse.
+Property (P1) holds trivially because πǫ ≤ π (deterministically and for every context), and the
+contextual sales rate S(p|x) is decreasing in p for any fixed context x.
+r(πǫ ) = E [ fǫ (π(x)) · S(πǫ |x) ]
+x,π
+
+≥ E [ (π(x) − ǫ) · S(πǫ |x) ]
+x,π
+
+≥ E [ π(x) · S(π|x) ] − ǫ E [ S(πǫ |x) ]
+x,π
+
+x,π
+
+= r(π) − ǫ S(πǫ ).
+
+r(πǫ )/S(πǫ ) ≥ r(π)/S(πǫ ) − ǫ.
+Now, by the Lipschitz assumption, S(πǫ ) ≤ S(π) + ǫL, so to complete the proof
+r(π)
+r(π)
+ǫL
+r(π)
+ǫL
+r(πǫ )
+≥
+−ǫ≥
+−
+−ǫ≥
+− 2 − ǫ.
+2
+S(πǫ )
+S(π) + ǫL
+S(π) (S(π))
+S(π)
+δ
+
+
+
+Now we bound the loss in OPTLP between Π and Φδ .
+Lemma 21 OPTLP (Π) − OPTLP (Φδ ) ≤ δT , for each δ > 0.
+Proof If δ ≥ B/T , the statement is trivial because OPTLP (Π) ≤ B. So w.l.o.g. assume δ < B/T .
+By Lemma 5, there exists an LP-perfect distribution P over policies in Π. Recall that P is a
+mixture of (at most) two policies, say π and π ′ , and c(P ) ≤ B/T . W.l.o.g. assume S(π) ≤ S(π ′ ).
+If S(π) ≥ δ then π, π ′ ∈ Φδ , so OPTLP (Π) = OPTLP (Φδ ).
+19
+
+BADANIDIYURU L ANGFORD S LIVKINS
+
+The remaining case is S(π) < δ. Then S(π ′ ) ≥ B/T > δ, so π ′ ∈ Φδ . Therefore:
+OPTLP (Π) = LP(P ) ≤ LP(π) + LP(π ′ ) ≤ LP(π) + OPTLP (Φδ ).
+It remains to prove that LP(π) ≤ δT . Indeed,
+r(π) = E [ π(x) · S(π|x) ] ≤ E [ S(π|x) ] = S(π) ≤ δ.
+x,π
+
+x,π
+
+LP(π) = r(π) min(T, B/S(π)) ≤ r(π) T ≤ δT.
+
+
+
+Putting Lemma 20 and Lemma 20 together and optimizing δ, we obtain:
+Lemma 22 For each ǫ > 0, letting δ = (2ǫBL/T )1/3 , we have
+OPTLP (Π) − OPTLP (Πǫ ) ≤ 2δT + 2ǫB.
+Plugging in the general result. Let REW(Π′ ) be the expected total reward when MixtureElimination
+is run with policy set Π′ which uses only K distinct actions. Recall that we actually prove a somewhat stronger version of Theorem 1: the same regret bound (1), but with respect to OPTLP (Π′ ) rather
+than OPT(Π′ ). In our setting we have d = 2 resource constraints (incl. time) and OPTLP (Π′ ) ≤ B.
+Therefore:
+
+p
+KT log (KT |Π′ |) .
+REW(Π′ ) ≥ OPTLP (Π′ ) − O
+Plugging in Π′ = Πǫ and K = 1ǫ , and using Lemma 22, we obtain
+
+
+q
+
+T
+T
+REW(Πǫ ) ≥ OPTLP (Π) − O ǫB + δT + ǫ log ǫ |Πǫ | ,
+
+(23)
+
+for each ǫ > 0 and δ = (2ǫBL/T )1/3 .
+We obtain Theorem 3 choosing ǫ = (BL)−2/5 T −1/5 (log(T |Πǫ |))3/5 and noting |Πǫ | ≤ |Π|.
+
+10. Conclusions and open questions
+We define a very general setting for contextual bandits with resource constraints (denoted RCB). We
+design an algorithm for this problem, and derive a regretpbound which achieves the optimal root-T
+scaling in terms of the time horizon T , and the optimal log |Π| scaling in terms of the policy set
+Π. Further, we consider discretization issues, and derive a specific corollary for contextual dynamic
+pricing with a single product; we obtain a regret bound that applies to an arbitrary policy set Π.
+Finally, we derive a partial lower bound which establishes a stark difference from the non-contextual
+version. These results set the stage for further study of RCB, as discussed below.
+The main question left open by this work is to combine provable regret bounds and a computationally efficient (CE) implementation. While we focused on the statistical properties, we believe
+our techniques are unlikely to lead to CE implementations. Achieving near-optimal regret bounds
+in a CE way has been a major open question for contextual bandits with policy sets (without resource constraints). This question has been resolved in the positive in a simultaneous and independent work (Agarwal et al., 2014). Very recently, a follow-up paper (Agrawal et al., 2015) has
+20
+
+R ESOURCEFUL C ONTEXTUAL BANDITS
+
+achieved the corresponding advance on RCB, by combing the techniques from Agarwal et al. (2014)
+and Agrawal and Devanur (2014) (which, in turn, builds on Badanidiyuru et al. (2013a)).
+Computational issues aside, several open questions concern our regret bounds.
+First, it is desirable to achieve the same regret bounds without assuming a known time horizon
+T (as it is in most bandit problems in the literature). This may be difficult because time is one of
+the resource constraints in our problem, and our techniques rely on knowing all resource constraints
+in advance. More generally, one can consider a version of RCB in which some of the resource
+constraints are not fully revealed to an algorithm; instead, the algorithm receives updated estimates
+of these constrains over time.
+Second, while our main regret bound in Theorem 1 is optimal in the important regime when
+OPT(Π) and B are at least a constant fraction of T , it is not tight for some other regimes. For a concrete comparison, consider problem instances with a constant number of resources (d), a constant
+number √
+of actions (K), and OPT(Π) ≥ Ω(B). Then, ignoring logarithmic factors, we√obtain regret
+OPT(Π) T /B, whereas the lower bound in Badanidiyuru et al. (2013a) is OPT(Π)/ B. So there
+is a gap when B ≪ T . Likewise, for contextual dynamic pricing with a single product, there is a
+gap between our algorithmic result (Theorem 3) and the B 2/3 lower bound for the non-contextual
+case from Babaioff et al. (2015). In both cases, both upper and lower bounds can potentially be
+improved.
+Third, for special cases when actions correspond to prices one would like to extend the discretization approach beyond contextual dynamic pricing with a single product. However, this is
+problematic even without contexts: essentially, nothing is known whenever one has multiple resource constraints, and even with a single resource constraint (besides time) the solutions are very
+non-trivial; see Badanidiyuru et al. (2013a) for more discussion.
+Fourth, if there are no contexts or resource constraints then one can achieve O(log T ) regret
+with an instance dependent constant; it is not clear whether one can meaningfully extend this result
+to contextual bandits with resource constraints.
+The model of RCB can be extended in several directions, two of which we outline below. The
+most immediate extension is to an unknown distribution of context arrivals. This extension has been
+addressed, among other results, in the follow-up paper (Agrawal et al., 2015). The most important
+extension, in our opinion, would be from a stationary environment to one controlled by an adversary
+(perhaps restricted in some natural way). We are not aware of any prior work in this direction, even
+for the non-contextual version.
+
+References
+Alekh Agarwal, Miroslav Dudik, Satyen Kale, and John Langford. Contextual bandit learning under
+the realizability assumption. In 15th Intl. Conf. on Artificial Intelligence and Statistics (AISTATS),
+2012.
+Alekh Agarwal, Daniel Hsu, Satyen Kale, John Langford, Lihong Li, and Robert Schapire. Taming
+the monster: A fast and simple algorithm for contextual bandits. In 31st Intl. Conf. on Machine
+Learning (ICML), 2014.
+Shipra Agrawal and Nikhil R. Devanur. Bandits with concave rewards and convex knapsacks. In
+15th ACM Conf. on Economics and Computation (ACM EC), 2014.
+21
+
+BADANIDIYURU L ANGFORD S LIVKINS
+
+Shipra Agrawal and Nikhil R. Devanur. Linear contextual bandits with global constraints and objective, Jul 2015. e-report, arXiv:1507.06738.
+Shipra Agrawal, Nikhil R. Devanur, and Lihong Li. Contextual bandits with global constraints and
+objective, Jun 2015. e-report, arXiv:1506.03374.
+Peter Auer. Using confidence bounds for exploitation-exploration trade-offs. J. of Machine Learning
+Research (JMLR), 3:397–422, 2002. Preliminary version in 41st IEEE FOCS, 2000.
+Peter Auer, Nicolò Cesa-Bianchi, Yoav Freund, and Robert E. Schapire. The nonstochastic multiarmed bandit problem. SIAM J. Comput., 32(1):48–77, 2002. Preliminary version in 36th IEEE
+FOCS, 1995.
+Moshe Babaioff, Shaddin Dughmi, Robert D. Kleinberg, and Aleksandrs Slivkins. Dynamic pricing
+with limited supply. ACM Trans. on Economics and Computation, 3(1):4, 2015. Special issue for
+13th ACM EC, 2012.
+Ashwinkumar Badanidiyuru, Robert Kleinberg, and Yaron Singer. Learning on a budget: posted
+price mechanisms for online procurement. In 13th ACM Conf. on Electronic Commerce (EC),
+pages 128–145, 2012.
+Ashwinkumar Badanidiyuru, Robert Kleinberg, and Aleksandrs Slivkins. Bandits with knapsacks.
+In 54th IEEE Symp. on Foundations of Computer Science (FOCS), 2013a.
+Ashwinkumar Badanidiyuru, Robert Kleinberg, and Aleksandrs Slivkins. Bandits with knapsacks.
+A technical report on arxiv.org., May 2013b.
+Omar Besbes and Assaf Zeevi. Dynamic pricing without knowing the demand function: Risk
+bounds and near-optimal algorithms. Operations Research, 57:1407–1420, 2009.
+Omar Besbes and Assaf Zeevi. On the minimax complexity of pricing in a changing environment.
+Operations Reseach, 59:66–79, 2011.
+Omar Besbes and Assaf J. Zeevi. Blind network revenue management. Operations Research, 60
+(6):1537–1550, 2012.
+Alina Beygelzimer, John Langford, Lihong Li, Lev Reyzin, and Robert E. Schapire. Contextual bandit algorithms with supervised learning guarantees. In 14th Intl. Conf. on Artificial Intelligence
+and Statistics (AISTATS), 2011.
+Sébastien Bubeck and Nicolo Cesa-Bianchi. Regret Analysis of Stochastic and Nonstochastic Multiarmed Bandit Problems. Foundations and Trends in Machine Learning, 5(1):1–122, 2012.
+Sébastien Bubeck and Aleksandrs Slivkins. The best of both worlds: stochastic and adversarial
+bandits. In 25th Conf. on Learning Theory (COLT), 2012.
+Nikhil Devanur and Vijay Vazirani. The spending constraint model for market equilibrium: Algorithmic, existence and uniqueness results. In 36th ACM Symp. on Theory of Computing (STOC),
+2004.
+
+22
+
+R ESOURCEFUL C ONTEXTUAL BANDITS
+
+Nikhil R. Devanur and Thomas P. Hayes. The AdWords problem: Online keyword matching with
+budgeted bidders under random permutations. In 10th ACM Conf. on Electronic Commerce (EC),
+pages 71–78, 2009.
+Nikhil R. Devanur, Kamal Jain, Balasubramanian Sivan, and Christopher A. Wilkens. Near optimal
+online algorithms and fast approximation algorithms for resource allocation problems. In 12th
+ACM Conf. on Electronic Commerce (EC), pages 29–38, 2011.
+Miroslav Dudik, Daniel Hsu, Satyen Kale, Nikos Karampatziakis, John Langford, Lev Reyzin, and
+Tong Zhang. Efficient optimal leanring for contextual bandits. In 27th Conf. on Uncertainty in
+Artificial Intelligence (UAI), 2011.
+D. A. Freedman. On tail probabilities for martingales. The Annals of Probability, 3:100–118, 1975.
+John Gittins, Kevin Glazebrook, and Richard Weber. Multi-Armed Bandit Allocation Indices. John
+Wiley & Sons, 2011.
+Sudipta Guha and Kamesh Munagala. Multi-armed Bandits with Metric Switching Costs. In 36th
+Intl. Colloquium on Automata, Languages and Programming (ICALP), pages 496–507, 2007.
+Sudipta Guha, Kamesh Munagala, and Peng Shi. Approximation algorithms for restless bandit
+problems., 2010. Combined final version of papers in IEEE FOCS 2007 and ACM-SIAM SODA
+2009.
+Anupam Gupta, Ravishankar Krishnaswamy, Marco Molinaro, and R. Ravi. Approximation algorithms for correlated knapsacks and non-martingale bandits. In 52nd IEEE Symp. on Foundations
+of Computer Science (FOCS), pages 827–836, 2011.
+András György, Levente Kocsis, Ivett Szabó, and Csaba Szepesvári. Continuous time associative
+bandit problems. In 20th Intl. Joint Conf. on Artificial Intelligence (IJCAI), pages 830–835, 2007.
+Robert Kleinberg and Aleksandrs Slivkins. Sharp dichotomies for regret minimization in metric
+spaces. In 21st ACM-SIAM Symp. on Discrete Algorithms (SODA), 2010.
+Robert Kleinberg, Aleksandrs Slivkins, and Eli Upfal. Multi-armed bandits in metric spaces. In
+40th ACM Symp. on Theory of Computing (STOC), pages 681–690, 2008.
+John Langford and Tong Zhang. The Epoch-Greedy Algorithm for Contextual Multi-armed Bandits.
+In 21st Advances in Neural Information Processing Systems (NIPS), 2007.
+Brendan McMahan and Matthew Streeter. Tighter bounds for multi-armed bandits with expert
+advice. In 22nd Conf. on Learning Theory (COLT), 2009.
+Adish Singla and Andreas Krause. Truthful incentives in crowdsourcing tasks using regret minimization mechanisms. In 22nd Intl. World Wide Web Conf. (WWW), pages 1167–1178, 2013.
+Maurice Sion. On general minimax theorems. Pac. J. Math., 8:171176, 1958.
+Aleksandrs Slivkins. Dynamic ad allocation: Bandits with budgets.
+arxiv.org/abs/1306.0155, June 2013.
+23
+
+A technical report on
+
+BADANIDIYURU L ANGFORD S LIVKINS
+
+Aleksandrs Slivkins. Contextual bandits with similarity information. J. of Machine Learning Research (JMLR), 15(1):2533–2568, 2014. Preliminary version in COLT 2011.
+Aleksandrs Slivkins and Jennifer Wortman Vaughan. Online decision making in crowdsourcing
+markets: Theoretical challenges. SIGecom Exchanges, 12(2), December 2013.
+William R. Thompson. On the likelihood that one unknown probability exceeds another in view of
+the evidence of two samples. Biometrika, 25(3-4):285294, 1933.
+Long Tran-Thanh, Archie Chapman, Enrique Munoz de Cote, Alex Rogers, and Nicholas R. Jennings. ǫ-first policies for budget-limited multi-armed bandits. In 24th AAAI Conference on Artificial Intelligence (AAAI), pages 1211–1216, 2010.
+Long Tran-Thanh, Archie Chapman, Alex Rogers, and Nicholas R. Jennings. Knapsack based
+optimal policies for budget-limited multi-armed bandits. In 26th AAAI Conference on Artificial
+Intelligence (AAAI), pages 1134–1140, 2012.
+Zizhuo Wang, Shiming Deng, and Yinyu Ye. Close the gaps: A learning-while-doing algorithm for
+single-product revenue management problems. Operations Research, 62(2):318–331, 2014.
+
+Appendix A: RCB: applications and special cases
+In this section we discuss the application domains of resource-constrained (contextual) bandits
+in more detail. We focus on the three main application domains: dynamic pricing, dynamic procurement, and dynamic ad allocation. A more extensive discussion of these and other application
+domains (in the non-contextual version) can be found in Badanidiyuru et al. (2013a,b).
+Dynamic pricing with limited supply. The algorithm is a monopolistic seller with a limited inventory. In the basic version, there is a limited supply of identical items. In each round, a new customer
+arrives, the algorithm picks a price, and offers one item for sale at this price. The customer then
+either buys the item at this price, or rejects the offer and leaves. The “context” represents the available information about the current customer, such as demographics, location, etc. The probability
+of selling at a given price for a given context (a.k.a. the demand distribution) is fixed over time, but
+not known to the algorithm. The algorithm optimizes the revenue; it does not derive any utility from
+the left-over items.
+We represent this problem as an instance of RCB as follows. “Actions” are the possible prices,
+and the “resource constraint” is the number of items. In each round, the outcome vector is a pair
+(reward, items sold); if the offered price is p, the outcome vector is (p, 1) if there is a sale, and (0, 0)
+otherwise.
+Many generalizations of dynamic pricing have been studied in the literature. In particular, RCB
+subsumes a number of extensions. First, an algorithm can sell multiple items to the same customer,
+possibly with volume discounts or surcharges. Second, an algorithm can have multiple products for
+sale, with limited inventory of each. Third, it may be advantageous to offer bundles consisting of
+different products, possibly with non-additive pricing (mirroring the non-additive valuations of the
+customers).
+Dynamic procurement on a budget. The algorithm is a monopolistic buyer with a limited budget.
+The basic version is as follows. In each round, a new customer arrives, the algorithm picks a price,
+24
+
+R ESOURCEFUL C ONTEXTUAL BANDITS
+
+and offers to buy one item at this price. Then the customer either accepts the offer and sells the
+item at this price, or rejects the offer and leaves. The “context” is the available information on the
+current customer. The probability of buying at a given price for a given context (a.k.a. the “supply
+distribution”) is fixed over time, but not known to the algorithm. The algorithm maximizes the
+number of items bought; it has no utility for the left-over money.
+An alternative interpretation is that the algorithm is a contractor which hires workers to perform
+tasks, e.g. in a crowdsourcing market. In each round, a new worker arrives, the algorithm picks
+a price, and offers the worker to perform one task for this price; the worker then either accepts
+and performs the task at this price, or rejects and leaves. The relevant “context” for a worker in a
+crowdsourcing market may include, for example, age, location, language, and task preferences.
+Here, “actions” correspond to the possible prices, and the “resource constraint” is the buyer’s
+budget. In each round, the outcome vector is a pair (items bought, money spent); if the offered price
+is p, then the outcome vector is (1, p) if the offer is accepted, and (0, 0) otherwise.
+Dynamic procurement is a rich problem space, both for buying items and for hiring workers
+(see (Slivkins and Vaughan, 2013) for a discussion of the application to crowdsourcing markets).
+In particular, RCB subsumes a number of extensions of this basic setting. First, the algorithm may
+offer several tasks to the same worker, possibly at a discount. Second, there may be multiple types
+of tasks, each having a different value for the contractor; moreover, there may be additional budget
+constraints on each task type, or on various subsets of task types. Third, a given worker can be
+offered a bundle of tasks, consisting of tasks of multiple types, possibly with non-additive pricing.
+Fourth, there is a way to model the presence of competition (other contractors).
+Dynamic ad allocation with budgets. The algorithm is an advertising platform. In the basic
+version, there is a fixed collection of ads to choose from. In each round, a user arrives, and the
+algorithm chooses one ad to display to this user. The user either clicks on this ad, or leaves without
+clicking. The algorithm receives a payment if and only if the ad is clicked; the payment for a given
+ad is fixed over time and known to the algorithm. The “context” is the available information about
+the user and the page on which the ad is displayed. The click probability for a given ad and a given
+context is constant over time, but not known to the algorithm.
+Each ad belongs to some advertiser (who is the one paying the algorithm when this ad is clicked).
+Each advertiser may own multiple ads, and has a budget constraint: a maximal amount of money
+that can be spent on all his ads. Moreover, an advertiser may specify additional budget constraints
+on various subsets of the ads. The algorithm maximizes its revenue; it derives no utility from the
+left-over budgets.
+Here, “actions” correspond to ads, and each budget corresponds to a separate resource. In a
+round when the chosen ad a is clicked, the reward is the corresponding payment v, and the resource
+consumption is v for each budget that involves a, and 0 for all other budgets. If the ad is not clicked,
+the reward and the consumption of each resource is 0.
+RCB also subsumes more advanced versions in which multiple non-zero outcomes are possible
+in each round. For example, the ad platform may record what happens after the click, e.g. the time
+spent on the page linked from the ad and whether this interaction has resulted in a sale.
+
+Appendix B: Compactness of Ft
+
+25
+
+BADANIDIYURU L ANGFORD S LIVKINS
+
+Recall that ∆t is the set of distributions over Π that is computed by our algorithm in each round
+t, and Ft = Conv(∆t ) is the convex hull of ∆t . In this appendix we prove that Ft is compact for
+each t. Here each distribution over Π is interpreted as a |Π|-dimensional vector, and compactness is
+with respect to the Borel topology on R|Π| .
+Lemma 23 Ft is compact for each t, relative to the Borel topology on R|Π| .
+Since a convex hull of compact set is compact, it suffices to prove that ∆t is compact, i.e. that
+it is closed and bounded. Each distribution is contained in a unit cube, hence bounded. Thus, it
+suffices to prove that ∆t is a closed subset of R|Π| .
+We use the following general lemma, which can be proved via standard real analysis arguments.
+Lemma 24 Consider the following setup:
+• X , Y are compact subsets of finite-dimensional real spaces RdX and RdY , respectively.
+• Functions f, g1 , . . . , gd : X × Y → [0, 1] are continuous w.r.t. product topology on X × Y.
+• H(y) = {x ∈ X : f (x, y) = supx′ ∈X f (x′ , y) and g(x, y) ≤ 0}, for each y ∈ Y.
+Then H(Y) = ∪y∈Y H(y) is a closed subset of RdX .
+We apply this lemma to prove that ∆t is a closed subset of R|Π| . Specifically, we take X to
+be the set of all distributions over policies with support at most d, and Y be the confidence region
+in round t of the algorithm. It is easy to see that both sets are closed and bounded by definition,
+therefore compact. Further, for each distribution P ∈ X , each expected-outcomes tuple µ ∈ Y, and
+each resource i we define f (P, µ) to be the corresponding LP-value, and gi (P, µ) = ci (P, µ)−B/T .
+Then P ∈ H(µ) if and only if P is an LP-perfect distribution with respect to µ, and H(Y) = ∆t .
+This completes the proof of Lemma 23.
+B.1. Proof of Lemma 24
+Suppose x∗ ∈ RdX is an accumulation point of H(Y), i.e. there is a sequence x1 , x2 , . . . ∈ H(Y)
+such that xj → x∗ . Note that x∗ ∈ X since X is closed. We need to prove that x∗ ∈ H(Y).
+For each j, there is yj ∈ Y such that xj ∈ H(yj ). Recall that Y is closed and bounded. Since
+Y is bounded, sequence {yj }j∈N contains a convergent subsequence. Since Y is closed, Y contains
+the limit of this subsequence. From here on, let us focus on this convergent subsequence.
+Thus, we have proved that there exists a sequence of pairs {(xj , yj )}j∈N such that
+• xj ∈ H(yj ) and yj ∈ Y for all j ∈ N,
+• xj → x∗ ∈ X and yj → y ∗ ∈ Y.
+We will prove that x∗ ∈ H(y ∗ ). For that, we need to prove two things: (i) gi (x∗ , y ∗ ) ≤ 0 for each
+i, and (ii) f (x∗ , y ∗ ) = supx∈X f (x, y ∗ ).
+First, gi (x∗ , y ∗ ) ≤ 0 for each i because gi (x∗ , y ∗ ) = limj gi (xj , yj ) ≤ 0 by continuity of gi .
+Second, we claim that f (x∗ , y ∗ ) = supx∈X f (x, y ∗ ). For the sake of contradiction, suppose
+ǫ , supx∈X f (x, y ∗ ) − f (x∗ , y ∗ ) > 0. By continuity of f , the following holds:
+• f (x∗∗ , y ∗ ) = supx∈X f (x, y ∗ ) for some x∗∗ ∈ X .
+• there exists an open neighborhood S of (x∗ , y ∗ ) on which |f (x, y) − f (x∗ , y ∗ )| < ǫ/4.
+• there is an open neighborhood S ′ of (x∗∗ , y ∗ ) on which |f (x, y) − f (x∗∗ , y ∗ )| < ǫ/4.
+
+26
+
+R ESOURCEFUL C ONTEXTUAL BANDITS
+
+In particular, there are open balls BX , BX′ ⊂ X and BY ⊂ Y such that (x∗ , y ∗ ) ∈ BX × BY ⊂ S and
+(x∗∗ , y ∗ ) ∈ BX′ × BY ⊂ S ′ . For a sufficiently large j it holds that xj ∈ BX and yj ∈ BY . It follows
+that (xj , yj ) ∈ S and (x∗∗ , yj ) ∈ S ′ . Therefore:
+f (x∗ , y ∗ ) > f (xj , yj ) − ǫ/4
+
+(since (xj , yj ) ∈ S)
+
+∗∗
+
+≥ f (x , yj ) − ǫ/4
+∗∗
+
+(using the optimality of xj )
+
+∗
+
+(since (x∗∗ , yj ) ∈ S ′ ).
+
+> f (x , y ) − ǫ/2
+
+We obtain a contradiction which completes the proof.
+
+27
+
+

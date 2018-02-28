@@ -1,0 +1,901 @@
+104
+
+Integrating Model Construction and Evaluation
+
+Robert P. Goldman
+
+John S. Breese
+
+Department of Computer Science
+Tulane University
+New Orleans, LA 70118-5698
+rpg@cs.tulane.edu
+
+Rockwell International Science Center
+444 High Street
+Palo Alto, CA 94301
+breese@rpal.rockwell.com
+
+Abstract
+
+To date, most probabilistic reasoning sys­
+tems have relied on a fixed belief network
+constructed at design time. The network is
+used by an application program as a rep­
+resentation of (in )dependencies in the do­
+main. Probabilistic inference algorithms op�
+erate over the network to answer queries.
+Recognizing the inflexibility of fixed models
+has led researchers to develop automated net­
+work construction procedures that use an ex­
+pressive knowledge base to generate a net­
+work that can answer a query. Although
+more flexible than fixed model approaches,
+these construction procedures separate con­
+struction and evaluation into distinct phases.
+In this paper we develop an approach to com­
+bining incremental construction and evalu­
+ation of a partial probability model. The
+combined method holds promise for improved
+methods for control of model construction
+based on a trade-off between fidelity of re­
+sults and cost of construction.
+
+1
+
+Introduction
+
+Most applications of belief networks for probabilistic
+reasoning systems have relied on a fixed belief net­
+work. The network is constructed by the system de­
+signer {possibly in concert with a domain expert) and
+then used by the application to evaluate the probabil­
+ity of various hypotheses g iven observations. Recent
+work, much of it reported at this conference, has made
+clear that evaluation of such predefined, static models
+is not sufficient in many applications [1, 7, 6, 12]. Some
+drawbacks of such static models are inflexibility, lack
+of expressive power, and an inability to model a pri­
+ori all possible situations [16]. One approach, which
+has been gaining in populaJ:ity, has been to mate a
+declarative model-construction component with a sys­
+tem for model evaluation. We refer to this approach
+as Knowledge-based model construction (KBMC).
+
+In most previous KBMC systems, there has been a
+separation between the construction and evaluation
+components. The system generates a network from
+an expressive knowledge base which is then passed to
+an evaluative method. In the work described here, we
+present an algorithm which integrates these two com­
+ponents. The method described here uses a database,
+which describes a class of probabilistic models, to an­
+swer queries of the form: "What is the probability
+of proposition x, given evidence y?" Rather than
+building a model and then evaluating it, our approach
+searches through the knowledge base of model infor­
+mation to answer the query more directly in a deduc­
+tive style of reasoning. The basic approach combines
+elements of query-based probabilistic inference algo­
+rithms (such as [14, 3]) with existing model construc­
+tion approaches [1]. The result is an approximation
+algorithm for probabilistic inference, based on evalu­
+ation of a partial model at each stage of the model
+construction process.
+The primary motivation for combining model con­
+struction with evaluation is to provide better mech­
+anisms for control of model construction. From a
+decision-theoretic perspective, one wishes to continue
+to elaborate a model only if the benefits (quality of the
+answer to the query) exceed the costs (in terms of com­
+putational effort). By combining evaluation with con­
+struction, we can build an "anyti m e" algorithm by cal­
+culating the implications of the partially constructed
+model. We can then stop at any time and return par­
+tial information about the probability of a proposi­
+tion. This will allow us, in turn, to take a decision­
+theoretic look at the control of model-building, in a
+simpler way than if we have to allow our model con­
+struction component to run to completion, and then
+control the model evaluation.
+Automated model construction techniques are most
+appropriate where it is not practical to construct a
+fixed model in advance due to changes in the nature
+of queries or dependencies from case to case. Sepa­
+rating construction and evaluation is useful in a situa­
+tion where we need to configure the belief network to
+answer a class of queries over some period. A com­
+bined construction and evaluation technique is use-
+
+Integrating Model Construction and Evaluation
+
+ful in time-pressured, knowledge-rich domains, where
+time constraints make it impossible to use a large ex­
+tensive model.
+The paper is organized as follows. In the next section,
+we review the model description language our program
+uses. Then we present and discuss the algorithm. We
+discuss a sample use of the algorithm. We comment on
+a prototype implementation. We conclude with some
+discussion of research directions that this algorithm
+opens up.
+2
+
+Review of ALTERID Language
+
+We have adopted the language of ALTERID for our ap­
+proach. The basic structures are described briefly here
+(see [1] for a more detailed discussion). We will illus­
+trate the constructs using relationships from a network
+originally presented in [2}.
+Deterministic relationships in the domain are repre­
+sented with a set of logical formulae. A formula is
+atomic if it is of the form P(:c1, z2, ... , :en ) where P
+is a relational constant and the Zi are variables (low­
+ercase) or object constants (uppercase). Facts (P - )
+and rules (P- Q) are defined in the normal manner
+for Horn-clause logic programs.
+To capture the notion of mutually exclusive, collec­
+tively exhaustive, sets of outcomes for a variable, we
+introduce the notion of alternative outcomes. The
+notation P(z, {A, B}) means that for all values of
+z, exactly one of P(:c, A) and P(:c, B) is true.
+We
+will denote this set of outcomes by n, for example,
+flp(:z:,{A,B}) = {P(z,A),P(:c,B)}. One of these out­
+comes will be indicated by wp. For our test domain,
+the set of alternative outcomes is as follows:
+Cancer( {YES, NO},y)
+Serum-Calcium({BAD ,GOOD} ,y)
+Tumor ({ YES, NO},y)
+Coma({YES, NO},y)
+Headache({YES, NO},y)
+A probabilistic dependency is an expression of the
+form
+
+where P is an alternative outcome expression and each
+Qi is an atomic formula (possibly an alternative out­
+come expression ) and Pr is a conditional probability
+distribution over the alternative outcomes of P given
+the alternative outcomes for Q1 1\ Q21\ ...I\ Qn. The
+dependency describes the uncertainty regarding P in
+the state of information where Ql 1\ Q2 1\ ... 1\ Qn is
+true. For the cancer domain, we describe the condi­
+tional probability of coma given its predecessors as:
+
+( { YES,IO } , y)!pTumor( { YES,lfO } , y)
+�{ BAD,GOOD } ,y )
+:::::: Pr(wcoma]WTumor,WCalc) =
+
+Coma
+
+1\Serum-Calci
+
+Other conditional probability relationships are repre­
+sented in a similar manner. In Section 4 we illustrate
+the construction procedure on this example.
+Algorithm MCE
+
+3
+
+The MCE (Model Construction/Evaluation) algo­
+rithm constructs and evaluates a model for a condi­
+tional probability query of the form P(HJE), where H
+is a alternative outcome statement, and E is an evi­
+dence set of the form E1 = WE1,i, E2 = WEl.i
+En =
+WE.,,l:· All evidence relevant to the hypothesis H is in­
+cluded in the set E. The output of the algorithm is a
+matrix describing the probability distribution for ran­
+dom variable H, given evidence in E and probability
+model information given in the database. In addition,
+at any time during the operation of the algorithm, a
+search state can be queried to generate an approxima­
+tion to the query. This bound is based on evaluation
+of partial probabilistic model.
+•
+
+.
+
+•
+
+MCE is an agenda-based search algorithm. In the sec­
+tion below we describe the search states, and the oper­
+ators which can be used to yield successors of a search
+state.
+3.1
+
+Search state s
+
+Search states will contain information about the goal
+of the search, information about the unifications that
+have been done in the search, a graph which repre­
+sents an expression, possibly partially-evaluated, for
+the target probability distribution, as it is known so
+far, and some control information. Formally, we de­
+scribe a search state as a tuple, S = (P*, e, G, M*).
+We address each of the components of the search state
+in turn:
+1. Sub-goals, p•. These are formulae, which may
+represent random variables or categorical facts to
+be retrieved from the database.
+They may have associated out-edges when added
+by the algorithm below. This is because we add a
+node to the query graph (see below) only when we
+have found all of its parents (causal influences).
+2. A substitution (most general unifier), e. Since we
+will be retrieving modeling information from a de­
+ductive database, information about the binding
+of logical variables must be maintained.
+3. A graph which represents the current form of the
+expression for the queried probability, G = (V, E).
+Associated with every vertex v E V is a distribu­
+tion. Note that a vertex v may correspond to a set
+of random variables whose distributions have been
+
+105
+
+106
+
+Goldman and Breese
+
+multiplied together. There is an index function
+from formulae/random variables to graph nodes.
+4. A set of formulae whose probability has been
+marginalized out of the above expression, M•.
+This information is used to detect when a ran­
+dom variable has been prematurely marginalized
+out of the conditional probability expression.
+The algorithm is invoked initially with a state of
+({H,E},0,(0,0),0). The goal is construction of the
+graph G that can be used to correctly answer the
+query.
+3.2
+
+Search actions
+
+Search actions fall into two broad classes: those that
+serve to construct the current model and those that
+partially evaluate the model. Broadly speaking, the
+model construction/extension search actions take a
+sub-goal (a random variable), and add a correspond­
+ing node to the graph. In the process, new sub-goals
+may be generated, since causal influences on the cur­
+rent sub-goal must be found. The model construction
+actions are all based on the "Causal Belief Net Algo­
+rithm," in [1].
+The alternative to expanding the model is to partially
+evaluate the probability expression. The two actions
+used to evaluate the graph are 1) combination of nodes,
+and 2) marginalizing out a random variable. The for­
+mer corresponds to clustering (9], and the latter to
+node absorption [13]. Our treatment of the evaluation
+actions follows conventions introduced in the Symbolic
+Probabilistic Inference algorithm [14]. Marginalization
+is necessary to find a numerical answer to the query.
+Marginalizing early also may reduce the cost of eval­
+uating the expression, by eliminating some multipli­
+cations. However, it also has the potential of wasting
+effort, if the marginalization is done too soon (if a node
+is marginalized out before all direct influences on it are
+found).
+
+Note that the search must be controlled so that find­
+prob-dependency is never applied to a sub-goal P in
+S to which the find-in-graph action may be applied
+(see below).
+
+prove-goal{P, S) P an atomic formula. For every
+9' E prove(P, 9), create a new search state as fol­
+lows:
+S'
+
+=
+
+(r- {P}, 9', G, M•)
+
+In the new search state the subgoal P has been re­
+moved because it has been proven.
+
+prove(F, 9) is a standard Prolog-style horn-clause de­
+duction system. It returns a set of substitutions every
+one of whose elements is some 6' such that FB' fol­
+lows from the contents of the database, and 6' is an
+extension of the previous substitution, e.
+find-in-graph(P, S) there is a node N
+SUbstitution e'1 extension Of e SUCh that
+
+E
+
+V, and a
+
+Ne'=Pe'
+create a new search state as follows:
+
+S' = (r- {P},6',G',M•)
+G' differs from G only in the addition of out-edges
+from N to children of P.
+In this case we have found a new path from some child
+node to a random variable that has already been in­
+cluded in the model.
+
+detect-marg-error(P, S) there is a node N E M•,
+and 3 SUbstitution 9' 1 extension Of e SUCh that
+NS' = Pe'
+then Fail. This search state is invalid because some
+node has been marginalized out before all of its chil­
+dren have been included in the model.
+
+We now describe each search action, starting with the
+model construction operators, and then the evaluation
+
+3.2.2
+
+3.2.1
+
+multiply(N, N', S) For N, N' E V. The multiply
+action merges together two graph nodes, and in par­
+allel, multiplies together their distributions to give a
+new distribution (possibly with a larger state space).
+
+operators.
+
+Model Construction Operators
+
+find-prob-dependency(P, S) For P a sub-goal of
+the search state S and for each probabilistic de­
+pendency statement of the form (AlB) with B =
+( Ql ...Qn) for which there is a substitution, e' ex­
+tending e such that
+Ae'
+
+create
+
+a
+
+new search state
+
+=
+as
+
+Pe'
+follows:
+
+((P'*- {P} U B0'), 9', G', M•)
+G' is formed by adding P to G. A node for Pis added
+to V and all edges from P to nodes it causally influ­
+ences are added to E.
+
+Evaluation Operators
+
+The result of the multiply action is a new search state
+as follows:
+s' = (P'*, e, G', M.)
+It is exactly as the previous search state, but
+We replace N and N'
+with an altered G.
+with a new node NN·N'.
+We replace all
+edges (z, N), ( z, N'), (N, z) , (N' , x ) with new edges
+( z, NN·N') and (NN·N', x ) . We multiply the proba­
+bility distributions of N and N' to give the matrix for
+NN·N', whose dimension is the union of the dimen­
+sions of N a.nd N'.
+
+Integrating Model Construction and Evaluation
+
+margin(F, S) For F a formula whose state is referred
+to in exactly one N E V. Marginalize out the random
+variable F to give a new search state as follows:
+
+S'
+
+=
+
+(P•,e,G',M• u { F} )
+
+The new graph, G', is the same as G, but the values of
+random variable F have been marginalized out of the
+node which is indexed under F. We mark the state
+to indicate that F has been marginalized out. This is
+used to detect errors in action detect-marg-error.
+3.3
+
+Evaluating Partial Models
+
+The benefits from a combined constructor/evaluator
+arise from the ability to monitor the progress of the
+construction algorithm in terms of its progress towards
+answering the query. For example, in time pressured
+domains or with extremely large knowledge bases, it
+may be necessary to cease model construction activity
+before all causal and diagnostic links have been ex­
+plored. We need to be able to access each search state
+and use the currently constructed model to provide
+partial information (e.g. probability bounds) about
+the query.
+In the model construction algorithm described here,
+each search state contains a network Gs = (V, E)
+representing a partial model, that if successfully com­
+pleted, will be capable of answering the query exactly.
+Let GJ = (V,,E1) be a complete and consistent net­
+work constructed through a successful termination of
+the MCE algorithm. Let 9s be the set of all such
+possible successful completions:
+
+9s
+
+=
+
+{GJIGJ E Descendants(S)}
+
+where Descendants(S) are the search states accessi­
+ble from state S. Evaluation of the partial model Gs
+consists of making probability statements about dis­
+tributions consistent with all networks in 9s. Obvi­
+ously, we do not have the completion set 9s to work
+with when we do the partial evaluation, but we can
+make some statements about its characteristics based
+on the the current state of the search alogorithm and
+the query. In general, this involves making some as­
+sumptions about how the model construction sequence
+will terminate.
+We have identified three modes for evaluation of par­
+tial models during a construction sequence:
+3.3.1
+
+Correct Scoring
+
+In this alternative, we make no conclusions regarding
+the ultimate distributions without a conclusive proof
+of correctness.
+Thus, probability statements must
+be consistent with all possible completions. Unfor­
+tunately, for most construction algorithms, including
+ours, a highly evocative diagnostic link may be added
+to a model at any time rendering proper bounds non­
+informative.
+
+3.3.2
+
+Default Scoring
+
+Here we assume that any completely specified frag­
+ment of the network currently being constructed will
+constitute the finally constructed network. We look for
+all nodes whose immediate predecessors and indirect
+predecesso rs are fully specified in Gs. Any nodes in
+Gs that rely on subgoals still in p• are not included.
+We apply an exact algorithm to this subnet. This pro­
+cedure is equivalent to assuming that all remaining
+subgoals in p• will fail. Another way of viewing this
+assumption is that at the time we ask for the answer,
+the currently constructed model is all that is avail­
+able and should therefore be used. Obviously, as new
+subgoals are proven the structure and results of the
+query will change. This nonmonotonic behavior of the
+partial evaluation reflects the same concerns identified
+in previous defeasible probabilistic reasoning schemes
+
+[8, 10].
+3.3.3
+
+Interval Scoring
+
+In this method, we treat the partially constructed
+model as an interval-based network. In this method,
+we treat nodes that have been identified but whose
+parameters are as yet unspecified as having probabil­
+ities in [0, 1]. We process the resulting intervals on
+the query using node absorption and arc reversal pro­
+cedures developed for interval probabilities [4, 5]. In
+contrast to default scoring, we assume that the sub­
+goals in p• will succeed, but the complete specification
+of the parameters of the model is incomplete. This
+techniques also exhibits nonmonotonic behavior.
+We are currently experimenting with the behavior of
+these alternatives as mechanisms for partial evalua­
+tion. We are continuing to further refine partial evalu­
+ation methods applicable to particular types of search.
+3.4
+
+Search Control
+
+Two issues dominate the control of search for MCE.
+The first is management of the search for a model.
+As soon as possible, we would like to discard partial
+models which do not fit the query. We argue that this
+issue is similar to the issue of discarding inappropriate
+proof trees in automated deduction, and will have little
+to say about this here.
+The second search issue is the scheduling of margin
+actions relative to other search actions. We are in­
+debted to Schachter, et. al. [14] for this perspective on
+model evaluation. Two search decisions must be made
+in choosing to employ the margin operation. The first
+is when the operation is likely to be correctly applica­
+ble. The search algorithm should have heuristic infor­
+mation which prevents it from prematurely marginal­
+izing out nodes. Assuming that one avoids incorrectly
+removing nodes,the second decision addresses select­
+ing the order of marginalization to minimize the cost
+of evaluating the query expression.
+
+107
+
+108
+
+Goldman and
+
+Breese
+
+We are just beginning to explore the issues of search
+control for the MCE algorithm. We return to the sub­
+ject of search control in the section on future work.
+4
+
+Example
+
+To give a flavor for the use of the algorithm, we will
+describe one way of answering a query from the sim­
+ple medical diagnosis domain introduced in Section 2.1
+We will assume that we have observed that our patient,
+Sam, has a headache and is in a coma. We would like
+to assess the probability that Sam has cancer.
+We create a search state with the following sub-goals:
+{(cancer ?a.lt SAM), (headache HEADACHE
+SAM), (coma COMA SAM)}
+The search state also has an empty digraph (G =
+{0, 0)), empty substitution (e = 0) and empty list of
+marginalized nodes (M• = 0).
+Note that we have felt free to direct the search in this
+example by hand, for instructional purposes, and also
+to keep the number and size of search states manage­
+able.
+Let us assume that the algo­
+rithm chooses the first of these subgoals, the query
+to be investigated, and the find-prob-dependency
+search action. 2
+First search action
+
+In the database, there is a probabilistic dependency
+statement which gives a prior probability for the query
+(cancer ?alt sam). This yields a new search state.
+In this new search state, the only two remaining sub­
+goals correspond to the two pieces of evidence. The
+node contains a digraph which contains only one node
+which represents the query variable. There are a num­
+ber of bindings in the substitution. Because the logic­
+programming aspects of this example are simple, and
+in the interests of brevity, we will not further discuss
+the management of substitutions.
+We also now have a partial probability model. There
+is a single node for cancer in the network. Partial
+evaluation of this model at this point can proceed in
+several ways as discussed above. Under the default
+method the incremental answer is just the prior. We
+assume that additional subgoals will fail in the sense
+they will add no relevant dependencies to the model.
+Second search action At this point, with only one
+node in the graph (and that the query node), there
+are no nodes available for multiplication or marginal-
+
+ization. So the search algorithm will apply the find�
+action again, to find a probabilis­
+tic dependency for another sub-goal. This time we
+search for causal influences on the headache observa­
+tion.
+
+prob-dependency
+
+We retrieve from the database the statement which
+reports that headache depends on the presence or ab­
+sence of a tumor. The conditional probabilities of
+headache and no-headache based on the possible val­
+ues of tWilor are also retrieved from the database.
+The resulting search state has three sub-goals: a new
+goal for the predecessor of the headache variable,
+tWilor, and the previously-existing one for the remain­
+ing piece of evidence from the initial query: (COMA
+COMA SAM). The two nodes in the digraph now are:
+one for headache and one for cancer, whose connec­
+tion is still unknown.
+Partial evaluation at this point still returns the prior.
+There is no dependency yet uncovered by the algo­
+rithm.
+Third and fourth search actions There are still
+no nodes available for evaluation actions, so we choose
+to apply find-proh-dependency to the tWilor sub­
+goal. We find that tWilor depends on the outcome of
+cancer. Cancer is once again added to the list of sub­
+goals. Note that the connection between cancer and
+tWilor nodes has not yet been found.
+
+Applying the find-in-graph action to the new cancer
+subgoal uncovers the connection. The node for the
+cancer variable (which we added in our first search
+action) is found already in the digraph. The resulting
+search state has only one remaining sub-goal: coma.
+The corresponding digraph is given as Figure 1.
+Early evaluation (actions 5,6) We are now pre­
+sented with the first opportunity to employ the eval­
+uation actions. We may be certain by inspecting the
+database that the headache node will not causally in­
+fluence any other nodes.3 Accordingly, we have the op­
+portunity to multiply it into its parent, and marginal­
+ize it out of the graph. Note that since we have ob­
+served the value of the headache node, the effect of
+marginalizing it out is only to remove a number of ze­
+ros from the combined node's matrix. The result of
+these two actions may be seen in Figure 2.
+
+At this point the partial evaluation action could also be
+undertaken under the default method, assuming that
+network illustrated in Figure 2 will be the final net­
+work. Calculation of the query probability would pro­
+ceed by calculating the joint probability of cancer and
+tWilor and summing out tumor.
+
+1There will, in general, be ma.ny sequences of actions
+which would produce an answer to the query.
+
+�Note tha.t it is necessa ry always to make sure that the
+
+find-in-graph action would fa.il before using find-prob­
+dependency. This is easy to achieve a.nd we will let this
+pass without comment from now on.
+
+At this
+node into
+
+Completing the diamond (actions 7-10)
+
+point, we could either multiply the
+
+cancer
+
+3In Section 3 we discuss ways to use the structure of the
+database to control search.
+
+Integrating Model Construction and Evaluation
+
+P*
+AI*
+
+=
+
+{cancer}
+{ headache}
+
+Figure 3: The search state just before the diamond is
+completed.
+P* = {coma}
+Figure 1: The search state after four search ops.
+
+the node for tumor, or we could apply the find­
+proh·dependency action to the remaining sub-goal,
+coma. Assuming we choose the latter, we will find
+that the coma variable depends on tumor and on
+serum-calcium.
+
+Further applying the find-in-graph action to the
+sub-goal and the find-prob-dependency ac­
+tion to the serum-calcium sub-goal, we arrive at the
+search state depicted in Figure 3.
+tumor
+
+At this point we have an incomplete network. We
+know serum-calcium is in the network, but we do
+not know its probabilities. We apply a combination
+of interval and exact transformations to the diagram
+to calculate a bound on the query probability, get­
+ting a result that the probability lies in the interval
+(.20, 3744]. Note that this result ignores the possibility
+of a dependency between cancer and serum-calcium.
+A final find-in-graph action will complete the dia­
+mond.
+
+p•
+Af•
+
+=
+
+{coma}
+{headache}
+
+Figure 2: The search state after two evaluation oper­
+ations.
+
+Completing the query The process of answering
+the query may now be completed by a series of eval­
+uation actions. We suggest the following series, but
+others are also suitable:
+1. marginalize out serum-calcium. This leaves a
+generalized distribution at coma which depends
+only on cancer and tumor.
+2. marginalize out tumor
+3. multiply cancer into coma
+4. marginalize out coma and normalize to get the
+distribution for cancer, P(canceri Ev ) r:::: .438.
+
+109
+
+110
+
+Goldman and Breese
+
+5
+
+Implementation
+
+The algorithm described here has been implemented in
+(Sun/Lucid) Common Lisp, running on Sun SPARe­
+stations. It has been tested on the example given here
+and other examples like it. The program has been
+written in several different modules: one that manages
+the deductive database; one that manages the matrix
+operations; and one which manages the search opera­
+tions. Influence diagram processing is performed with
+IDEAL [15). We thank Peter Norvig for allowing us
+to use his Prolog interpreter in Common Lisp for our
+deductive retrieval [11].
+The code is still in prototype version, and many oppor­
+tunities for optimization remain. The bounding calcu­
+lus has not been integrated into the construction cycle.
+We are still using only a generic agenda-based search
+algorithm. For this algorithm to be practically usable,
+we will have to extend the code for agenda mainte­
+nance to better control the search. Elsewhere in this
+paper we have suggested search control methods we
+believe will be successful for this program. We will
+be investigating these heuristics and their interaction
+with other aspects of the work (.e.g interval process­
+ing). We will also be developing better implementa­
+tions of existing elements of the system.
+6
+
+Future Directions
+
+The work described in this paper is continuing on a
+number of avenues. We will be conducting experimen­
+tal tests to explore the behavior of the algorithm over
+several databases. In particular, we wish to explore
+the interaction of partial evaluation with various meth­
+ods for search control. A related issue revolves around
+maintaining probability interval information in prod­
+uct form for generalized distributions.
+To avoid premature marginalization, we are experi­
+menting with a technique which makes use of infor­
+mation about the structure of the knowledge base.
+We suggest an application of the technique of marker
+passing, treating the rule base as a graph. There will
+be nodes corresponding to alternative outcome state­
+ments. There would be edges from alternative outcome
+statements to causal influences, corresponding to the
+probabilistic dependency statements. As is character­
+istic of marker-passing, the values of variables would
+be ignored - edges would be drawn everywhere there
+was a possible probabilistic dependency relation to oc­
+cur. Before carrying out the search for a particular
+query, nodes corresponding to query variables would
+be marked. Marks would be propagated from children
+to possible parents. Marks would have limited "mem­
+ory" to cut off cycles. Each type of node would have a
+counter. Nodes would not be marginalized out until a
+number of children equal to the number of marks had
+been found (or until all possible CBN operations were
+done). This could be an over-cautious heuristic (espe­
+cially in the case of rule-bases with much recursion),
+
+but should prevent premature marginalization. This
+technique can, of course, be 'outwitted,' by poorly­
+structured databases (ones where there are few pred­
+icates but many propositions), but well-known tech­
+niques for improving Prolog programs will also make
+this heuristic more accurate.
+We would like to complement a technique like that
+discussed above with a search control method which
+would weigh the chance of premature marginalization
+against its benefits (reduction in the dimensionality
+of the matrices, and hence the number of multipli­
+cations). As mentioned in the previous section, we
+are also interested in taking an "anytime" approach
+to the MCE algorithm, taking into account the trade­
+off between further model construction and evaluation
+actions, and termination of search with estimated re­
+sponses to a query.
+The present version of the algorithm assumes that ev­
+idence relevant to the query is identified in the query.
+Previous work [I] conducted a search for such evidence
+in the database. We wish to investigate the tradeoff in
+search efficiency for these alternatives.
+As discussed in the introduction, the ultimate goal
+of this research is to provide a facility for informed
+control of model construction. A construction proce­
+dure that can evaluate its progress toward answering
+a query is an important step in this direction.
+References
+
+[1] J. S. Breese. Construction of belief and decision
+networks. Technical Report Technical Memoran­
+dum 30, Rockwell International Science Center,
+Palo Alto, California, January 1990.submitted to
+Computational Intelligence.
+[2] G.F. Cooper. NESTOR:
+
+A Computer-based Med­
+ical Diagnost ic Aid that Integrates Causal and
+Probabilistic Knowledge. PhD thesis, Computer
+
+Science Department, Stanford University, Nov
+1984. Rep. No. STAN-CS-84-48. Also numbered
+HPP-84-48.
+[3) G.F. Cooper. Bayesian belief-network inference
+using nested dissection. Technical Report KSL90-05, Stanford University, February 1990.
+[4] K.W. Fertig and J.S. Breese. Interval influence
+diagrams. In Proceedings of Fifth Workshop on
+Uncert aint y in Artificial Intelligence, Detroit, MI,
+August 1989.
+[5] K.W. Fertig and J .S. Breese.Probability intervals
+over influence diagrams. Technical report, Rock­
+well International Science Center, March 1990.
+Rockwell Research Report 4.
+[6] R. P. Goldman and E. Charniak. A language
+for construction of belief networks. Submitted to
+IEEE Transactions on Pattern Analysis and Ma­
+chine Int elligence.
+
+Integrating Model Construction and Evaluation
+
+[7] R. P. Goldman and E. Charniak. Probabilistic text
+understanding. Statistic s and Computing: to ap­
+pear, 1992.
+[8] B. Grosof. Nonmonotonic reasoning in probabilis­
+tic reasoning. In J.F. Lemmer and L.N. Kanal,
+editors, Uncertainty in Artificial Intelligence £,
+pages 237-250. North Holland, 1988.
+(9] S.L. Lauritzen and D.J. Spiegelhalter. Local com­
+putations with probabilities on graphical struc­
+tures and their application to expert systems. J.
+Royal Statistical Society B, 50:157-224, 1988.
+(10) R. Loui. Theory and Computation of Uncertain
+Inference. PhD thesis, Department of Computer
+Science, University of Rochester, 1987.Also avail­
+able as TR-228, University of Rochester, Depart­
+ment of Computer Science.
+[11] Peter Norvig. Paradigms of Artificial Intelligence
+Programming:
+
+Case Studies in Common Lisp.
+
+Morgan Kaufmann Publishers, Inc., Los Altos,
+CA, 1991.
+[12] G. Provan.Dynamic network updating techniques
+for diagnostic reasoning. In B. D. D'Ambrosio,
+P. Smet, and P.P Bonissone, editors, Proceedings
+of the Seventh Conference on Uncertainty in Arti­
+ficial Intelligence, Los Angeles, CA, August 1991.
+
+Morgan Kaufmann Publishers.
+[13] R.D. Shachter. Probabilistic inference and influ­
+ence diagrams. Operations Research, 36:589-604,
+1988.
+[14] R.D. Shachter, B. D'Ambrosio, and B. DelFavero.
+Symbolic probabilistic inferecne in belief net­
+works.In Proceedings Eighth National Conference
+on Artificial Intelligence, Cambridge, MA, Au­
+gust 1990. American Association for Artificial In­
+telligence.
+[15] S. Srinivas and J.S. Breese. IDEAL: A software
+package for the analysis of belief networks. In
+Proceedings of Sixth Workshop on l!ncertaintg in
+Artificial Intelligence, Cambridge, MA, August
+
+1990.
+[16] M.P. Wellman , J. S. Breese, and R. P. Goldman.
+From knowledge bases to decision models. Knowl­
+edge Engineering Review, 7(1):to appear, 1992.
+
+111
+
+

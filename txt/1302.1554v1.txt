@@ -1,0 +1,2023 @@
+302
+
+Object-Oriented Bayesian Networks
+
+Daphne Koller
+
+Stanford University
+koller@cs.stanford.edu
+
+Abstract
+Bayesian networks provide a modeling language and
+associated inference algorithm for stochastic domains.
+They have been successfully applied in a variety of
+medium-scale applications. However, when faced with
+a large complex domain, the task of modeling using
+Bayesian networks begins to resemble the task of pro­
+gramming using logical circuits. In this paper, we de­
+scribe an object-oriented Bayesian network (OOBN) lan­
+guage, which allows complex domains to be described in
+terms of inter-related objects. We use a Bayesian net­
+work fragment to describe the probabilistic relations be­
+tween the attributes of an object. These attributes can
+themsel ves be objects, providing a natural framework for
+encoding part-of hierarchies. Classes are used to pro­
+vide a reusable probabilistic model which can be applied
+to multiple similar objects. Classes also support inher­
+itance of model fragments from a class to a subclass,
+allowing the common aspects of related classes to be
+defined only once. Our language has clear declarative
+semantics: an OOBN can
+
+be
+
+interpreted as a stochas­
+
+tic functional program, so that it uniquely specifies a
+probabilistic model. We provide an inference algorithm
+for OOBNs, and show that much of the structural infor­
+mation encoded by an OOBN-particularly the encap­
+
+sulation of variables within an object and the reuse of
+
+model fragments in different contexts--can also be used
+to speed up the inference process.
+
+1
+
+Introduction
+
+Over the past decade, Bayesian networks [Pearl, 1 988] have
+established themselves as an effective and principled frame­
+work for knowledge representation and reasoning under un­
+certainty. The sound probabilistic semantics, explicit encod­
+ing of relevance relationships, and inference algorithms that
+are fairly efficient in practice, have led to the use of Bayesian
+networks in a wide variety of applications.
+Despite their great success, Bayesian networks (BNs) are in­
+adequate as a general knowledge representation languag e for
+large and complex domains [Mahoney and Laskey, 1 996]. In
+a traditional BN, each node corresponds to some basic at­
+tribute of the domain. The set of nodes and the network struc­
+ture are fixed in advance, so that the network can only be used
+
+Avi Pfeffer
+Stanford University
+avi@cs.stanford.edu
+
+in the specific domain for which it was created. The construc­
+tion of a network is a painstaking manual process, somewhat
+analogous to programming using logical circuits. For exam­
+ple, the only mechanism for "code reuse" is manually copy­
+ing a network fragment and pasting it somewhere else. This
+manual duplication has the same drawbacks as the analogous
+process in a programming task. For example, if the original
+network fragment is modified, the knowledge engineer must
+manually go back and change all of the models which used it.
+These difficulties have been encountered and largely solved
+in the context of programming languages, primarily via the
+introduction of abstract data types. Object-oriented pro­
+gramming languages [Goldberg and Robson, 1 983] provide
+a framework for organizing abstract data types in a way that
+allows for robust, flexible and efficient construction of pro­
+grams. Similarly, object-oriented database systems [Banerjee
+et al., 1987] provide tools for managing rich, complex data.
+In this paper, we present object-oriented Bayesian networks
+(OOBNs), a powerful and general framework for large-scale
+knowledge representation using Bayesian networks. As we
+will show, OOBNs combine clear declarative probabilistic se­
+mantics with many of the organizational benefits of an object­
+oriented framework. We will also show that object-oriented
+models help reveal the locality structure of a domain, thereby
+supporting more efficient probabilistic inference.
+The basic element in an OOBN is an object. The most basic
+object is a standard random variable, as in traditional BNs.
+However, an OOBN also has more complex objects. In gen­
+eral, an object has some set of attributes, each of which is an
+object. Thus, a car object may have several attributes, such
+as the car's color, its owner, its engine, etc. The car's color is
+a simple object, taking values in some finite range, while the
+car's owner is itself a complex object with its own attributes.
+The value of an object is an assignment of values to all of
+its attributes. We use Bayesian networks to define a proba­
+bilistic model over the assignments of values to an obj ect. As
+usual, this probabilistic model must take into account the in­
+fluences of the environment on the object. Based on our work
+in [Koller et al., 1 997b], we view each object as a stochastic
+function from its inputs-the attributes which influence it­
+to its outputs. Briefly, a stochastic function is a function that ,
+
+Object-Oriented Bayesian Networks
+
+303
+
+for each value of its inputs, returns a probability distribution
+
+to refine the model by using a more specific class for one or
+
+over the value of its outputs. A conditional probability ta­
+
+more of the objects in the model. At the same time, the user
+
+ble (CPT) in a traditional Bayesian network is a simple kind
+
+can focus in along the part-of hierarchy to refine those parts
+
+of stochastic function, that can be used to define a simple
+
+of a model that are most relevant.
+
+object-a basic random variable in a BN. Stochastic func­
+tions can be composed, and more complex functions can be
+defined in terms of simpler ones, as in a functional program­
+ming language.
+
+A complex object is defined by assigning
+
+stochastic functions to each of its attributes, and connecting
+the attributes in a Bayesian network. The result is a stochas­
+tic function for the complex object. A very simple version of
+this representation was used by Srinivas [Srinivas,
+
+1 994] in
+
+OOBNs are more than just a nice language for representing
+complex probabilistic models. By representing the domain as
+a hierarchy of interconnected objects, an OOBN makes ex­
+plicit certain organizational structure. As we have seen many
+times before, by making additional structural information ac­
+cessible to the inference algorithm, we can significantly im­
+prove the performance of inference.
+
+the context of model-based fault diagnosis in a hierarchical
+
+Specifically, in the network defined by an OOBN model, the
+
+component model.
+
+internal parts of an object are encapsulated within the object.
+
+OOBNs allow us to generalize over multiple objects. For­
+mally, we define classes of objects, all of which are described
+using the same probabilistic model. Classes provide the abil­
+ity to describe a general, reusable model that can be used
+in many different contexts. The encapsulation of the inter­
+nal details of a class description by the class interface allows
+classes to be used as libraries and combined into a model
+as needed.
+
+It is important to realize that OOBNs are not
+
+Probabilistically, this implies that the encapsulated attributes
+are d-separated from the rest of the network by the object's in­
+puts and outputs. This separation property can be utilized to
+localize probabilistic computation within objects, with only
+a limited interaction between them. The multiply sectioned
+Bayesian network (MSBN) framework of Xiang et al. [Xiang
+eta/., 1993] turns out to be a particularly appropriate mecha­
+
+nism for utilizing this structure.
+
+simply a library of C++ classes each of which constructs a
+
+Since objects of the same class have the same probabilis­
+
+Bayesian network fragment. Models defined in OOBNs have
+
+tic model, we can precompute certain parts of the inference
+
+clear declarative probabilistic semantics: just like a BN, an
+
+task on the level of the class, and reuse them for different in­
+
+OOBN uniquely specifies a probability distribution. Thus,
+
+stances. Localization and reuse of computation also provide
+
+an OOBN can be interpreted unambiguously, without hav­
+
+advantages during the refinement process. When a particu­
+
+ing to understand some associated infrastructure of procedu­
+
+lar part of a model is refined, the effects of that refinement
+
+ral model construction code.
+In addition to supporting generalization, classes serve an­
+other important role. In general, many different classes share
+common substructures. For example, while we may have a
+general class for people, we may also want a more specific
+
+can be computed locally within the refined object, and prop­
+agated (but only if necessary) through the object's interface.
+Furthermore, if the new class for the object inherits parts of its
+definition from its superclass, our algorithm can simply reuse
+its previous computation for those parts that stay the same.
+
+class for college students, with a probabilistic model describ­
+ing their performance as students based on their background
+and abilities. Clearly, the two models are not completely dis­
+joint, since students also have all of the attributes used to
+describe a person, probably described using the same prob­
+abilistic model. The class mechanism in OOBNs allows the
+student class to inherit much of its structure from the per­
+son class, modifying or augmenting it where necessary. The
+stochastic function perspective helps provide a clean seman­
+tics: since each attribute in a class is a stochastic function, a
+subclass simply redefines some of the functions and/or adds
+some new ones.
+
+2
+
+The object-oriented framework
+
+2.1
+
+Objects and types
+
+The basic unit of discourse in an OOBN is the object. One
+way of viewing an object is as a collection of properties that
+are associated with some entity in our domain. An object will
+sometimes correspond to a physical entity in the world be­
+ing modeled, but it may also represent an abstract entity, or a
+relationship between different entities. For example, a vehi­
+cle surveillance model may use objects such as cars, drivers
+
+We can view the inheritance hierarchy over classes as sup­
+
+and roads, that correspond to physical entities. The objects in
+
+porting an is-a hierarchy over objects. The ability to enclose
+
+a medical diagnosis model may correspond to more abstract
+
+objects within other objects (as values of attributes) provides
+
+entities such as diseases and symptoms, as well as physiolog­
+
+an orthogonal part-of hierarchy. The combination of these
+
+ical systems such as the respiratory system. We begin with
+
+two hierarchies provides a natural framework for dynamic ab­
+
+some basic type definitions, which will form the foundation
+
+straction and refinement of models. In many cases, we can
+
+for the type system of our language.
+
+view a class as a more abstract version of its subclasses, one
+which ignores some (less important) details. For example, we
+
+Definition 2.1: A basic type is a set of values, which is ei­
+
+can iconize a class, compiling away all of the details about its
+
+ther one of the predefined basic types-Booleans, Integers or
+
+internal structure. As inference proceeds, the user can decide
+
+Reals-or some user-defined enumerated set (e.g., WEATHER
+=
+
+{ raining,
+
+cloudy, sunny } ).
+
+304
+
+Koller
+
+and
+
+Pfeffer
+
+A basic variable is a variable which takes values in some ba­
+sic type. I
+
+denoted A( X). The input attributes are (basic or structured)
+variables. The value attributes are themselves objects. I
+
+A structured type is defined recursively out of the basic types.
+
+Note that input attributes are not objects. As we will see later,
+they correspond to "parameters" passed by value to the en­
+closing object X.
+
+Definition 2.2: A structured type is a set of values defined
+by a tuple{At: lt, ...,An: tn) , where At, ... ,An are altribute labels and t t, ..., tn are corresponding (basic or structured) types. The set of values of this type are all those of the
+form {At : Vt, ..., An : Vn) where each v; is of type t;. A
+structured variable is a variable which takes values in some
+structured type. I
+
+For any variable V, let Val(V) denote the set of values that V
+can take. (Val(V) for a set of variables V is defined in the
+obvious way.) If v {At : Vt, ... , Ak : vk ) is a value for V,
+then v .A; refers to v;.
+=
+
+A structured type representing a person may
+have the attributes Age, Gender, Description, and Income.
+The Age attribute has a basic user-defined type AGES = {020yr; 2I-30yr; 3I-60yr; 60+yr}. The Gender attribute also
+has a user-defined type GENDERS = {male, female}. In­
+come takes values in the user defined type INCOMES = { $0I OK, $I 0-30K, $30-80K, $80K+}. The Description attribute
+has a structured type, with attributes Hair-Color, Eye-Color,
+and Height, each of which takes values in some appropri­
+ately defined type. One possible value v of this type may
+be {Age: 2I-30yr; Gender: female, Income: $80K+, De­
+scription: (Hair-Color: brown, Eye-Color: green, Height
+: 5ft8in)}. The value of v.Gender is female and the value of
+v.Description.Height is 5ft8in.l
+Example 2.3:
+
+Given these basic definitions, we can now define objects. Ob­
+jects are composed of two types of attributes: input attributes
+and value attributes. Input attributes are parameters to the
+object; their value influences the choice of values for the en­
+capsulated and output attributes. Value attributes are part of
+the specification of the object itself. Complex objects are cre­
+ated when these attributes take other objects as values. Value
+attributes are divided into two types: output attributes, and
+encapsulated attributes. The former are visible to the rest of
+the model, whereas the latter are encapsulated within the ob­
+ject.
+A simple object X is composed of a set of la­
+belled input attributes It, ... , Ik and a single output attribute
+labelled Output. All of X's attributes are basic variables. I
+
+Definition 2.4:
+
+Intuitively, a simple object corresponds to a random variable
+in a Bayesian network. It takes on values in some simple type,
+and depends on other random variables (its inputs). Complex
+objects are composed of simple objects.
+Definition 2.5: A complex object X is composed of a set of
+labelled attributes. The attributes are partitioned into three
+sets: the input attributes I(X), the output attributes O(X),
+and the encapsulated attributes £(X). The output attributes
+and encapsulated attributes are called value attributes, and
+
+We use X.A; to denote the object or variable represented
+by the attribute A; of an object X. More generally, we
+can define the object or variable X.p for an attribute chain
+p
+
+=
+
+At.A2.
+
+· ·
+
+·
+
+.Ak.
+
+An object can be viewed as defining two structured variables,
+one corresponding to its full value, and one only to the part
+which is visible to the rest of the objects in the model. For
+simple objects, these two variables are the same.
+Definition 2-li
+
+For a simple object X, its full variable tJ+ (X)
+and its output variable t?(X) are defined to be X's output
+variable X.Output. I
+
+Definition 2.7 : For a complex object X, its full vari­
+able tJ+(X) is a structured variable whose value is {A1 :
+Vt, ... , An : Vn}. where At, . .. , An are X's value attributes,
+and v; istJ+(X.A; ). Analogously, the output variable t?(X)
+is a structured variable whose value is (01 : ul' . .. 'ok :
+Uk}, where 01, . . . , Ok are X 's output attributes and U; is
+19(X.O;).I
+
+Clearly, 19( X) is a projection of tJ+ (X).
+The distinction between objects and the variables they define
+is important to ensure clean semantics of our language. Ob­
+jects are organizational units, describing the entities in the
+domain and the relationships between them. The variables
+defined by objects correspond to actual random variables in a
+probabilistic model. The variable corresponding to an object
+defines its type.
+Definition 2.8: A value type of an object X is the type of
+tJ+ (X). The output type of X is the type oft?(X). I
+Example 2.9: A complex object X representing a car may
+be composed of the following attributes: I(X) contains
+a single attribute Owner which is a variable of structured
+type PERSON, as described in Example 2.3. £(X) con­
+sists of the attributes Original-Value, Age, Mileage, Type,
+and Maintenance, each of which is a simple object, and
+the attributes Tires, Engine, Brakes and Steering, each of
+which is a complex object. The (output or value) type of
+Original- Value is the user-defined type { $0-I OK, $1 0-20K,
+$20K + }. The output type of Engine is {Reliability : {good,
+bad}, Power: {high, medium, low}}. O(X) consists of
+the attributes Current-Value, Max-Speed, Braking-Power and
+Steering-Safety, all of which correspond to simple objects.
+One value of t?(X) may be {Current-Value: $0-JOK, Max­
+Speed: 70mph, Braking-Power: medium, Steering-Safety:
+good}. A value for tJ+(X) would, of course, be much more
+complex. I
+
+305
+
+Object-Oriented Bayesian Networks
+
+Stochastic functions
+
+2.2
+
+Since we are interested in modeling our uncertainty about the
+possible values of an object, we associate each object with a
+probabilistic model. The model defines a distribution over the
+object's value as a function of the values of its input attributes.
+More precisely, we associate a stochastic function [Koller et
+al., 1997b) with the object that defines, for each assignment
+of values to the object's inputs, a distribution over the possible
+values for the object.
+Definition 2.10: Lett= t1, .. . , tk and
+
+stochastic function from t to
+
+u
+
+u be value types. A
+is a function from Val(t) to
+
+probability distributions over Val( u ) .
+
+I
+
+In our representation, we describe stochastic functions using
+recursive composition of object-oriented (Bayesian) network
+fragments (OONF), each of which specifies a conditional dis­
+tribution of a set of value attributes given some set of input
+attributes.
+Definition 2.11: A simple object-oriented network fragment
+F has a set of input attributes I(F) and a single value at­
+tribute Output, all of which are basic variables. The network
+
+consists of a conditional probability function defining a dis­
+tribution over Val(Output) for each assignment of values in
+
+Val(I).I
+A simple OONF can be represented as a conditional prob­
+
+ability table (CPT), as in most Bayesian networks. Often,
+however, a more compact representation is appropriate (par­
+ticularly when one of the attributes takes values in an infinite
+space such as the integers or reals). In the ensuing discussion,
+we assume simple OONFs are represented by CPTs, but the
+same arguments hold for any representation.
+Definition 2.12: An object-oriented networkfragment F over
+
+the input attributes T(F) and the value attributes A(F) con­
+sists of a directed acyclic graph whose nodes are the attributes
+ofF, and, for each value attribute A E A( F):
+•
+
+•
+
+For each input I, an annotation B.p, where B is a par­
+ent of A and p is an attribute of lJ( B). We require that
+the attributes A.I and lJ(B).p have the same type. We
+also require that every parent of A be used to annotate at
+least one input of A.
+An OONF FA. If A is a simple attribute, then FA must
+be a simple OONF. I
+
+Intuitively, the annotations on the inputs of an attribute A rep­
+resent the exact mapping between the parameters to A and the
+values which are passed to them.
+Figure I (a) demonstrates the DAG for the probabilistic model
+associated with a CAR object. We use the exact end­
+points of the edges to represent the annotation on the edges.
+Thus, for example, one of the input attributes of the Max­
+Speed attribute is mapped to the output variable of the sim­
+ple object Type, while the other is mapped to the attribute
+
+fJ(Engine).Power. The input attributes are not shown since
+they are usually clear from context.
+An OONF F encodes a certain set of assumptions about the
+probabilistic model over variables defined by the objects in
+the OONF:
+
+1. Conditional independence assumptions:
+
+For each
+value attribute A in F, and each attribute Bin F which
+is a non-descendant of A, fJ +(A) is conditionally inde­
+pendent of()+ (B) given a value for I(A) .
+
+2 . Equality assumptions: For each input
+annotated with B.p, A.I = fJ(B.p).
+
+I
+
+of attribute A
+
+3. Distribution assumptions: The conditional distribution
+over lJ+ (A) given T(A) is defined via FA.
+
+Under the assumptions (1)-(3), an OONF F
+over I( F) and A( F) uniquely specifies a stochastic function
+from (the type of) I(F) to (the type of) A( F).
+Theorem 2.13:
+
+Proof: The proof proceeds by induction on the depth of the
+OONF, where the depth of a simple OONF is 0, and the depth
+of a complex OONF is defined to be the maximal depth of
+the OONFs for its attributes plus l. The base case is trivial:
+a simple OONF is a CPT, which clearly defines a conditional
+distribution of the type that we want.
+
+The inductive step essentially uses a very similar chain rule
+to the one used for standard Bayesian networks [Pearl, 19881
+Let A1, . .. , An be the value attributes in A( F), ordered in
+a way which is compatibl e with the DAG defined by F. Fix
+a value for the variables in I(F), and consider some assign­
+ment of values v,, . . . , Vn to lJ+(A,), ... , t?+(An). By sim­
+ple probabilistic reasoning, we have that
+
+P(lJ+(Al) = Vt, . .. ,lJ+(An) = Vn ) =
+f]; P(lJ+(A;) = v; I -a+(A,) = v,, .. . ,lJ+(A;_t) = v;_!).
+Now, consider a single tenn in the product P(tJ+(A;) = v; I
+lJ+(At) = v1, ... ,lJ+(A;_1) = v;_1), and let A denote
+A1, ... , A;_1 and v denote v1, ... , v;_1. Since the DAG is
+acyclic and the ordering on variables is compatible with the
+DAG, all of the full variables corresponding to A; 's parents
+are assigned values in the right hand side of the conditional
+probability. The equality assumption (2) therefore implies
+that all of A; 's input attributes are also assigned unique val­
+ues. Thus, using the conditional independence assumption
+(l), there is some unique value u such that
+
+P(t9+(A;) = v; I tJ+(A) = v) =
+P(lJ+(A; ) = v; llJ+(A) = v,I(A1)
+P(fJ+(A;) = v; I I(Ai) = u ) .
+
+= u
+
+)
+
+=
+
+Finally, the distribution assumption (3) implies that the con­
+ditional distribution for A;- P(lJ+(A;) J I(A;))-is de­
+fined via the OONF FA. The inductive hypothesis applied
+to FA implies the existence of a unique stochastic function
+for lJ+(A;) given T(A;).
+
+306
+
+Kol le r and P£effer
+
+(a)
+
+(b)
+
+Figure 1 : (a) A graphical depiction of the interconnection model for Mcar· (b) OOBN model for a car accident.
+
+Thus, the value of each term in the product is uniquely
+defined, so that the entire conditional distribution is also
+uniquely defined, as required. I
+
+2.3
+
+Classes and OOBNs
+
+A stochastic function, as described in the previous section,
+describes the probabilistic relation between a set of input at­
+tributes and a set of value attributes. We can associate a
+stochastic function with an object whose type matches the
+type of the stochastic function. More precisely, an object X
+is type-compatible with an OONF F if F is an OONF over
+the input attributes I(X) and the value attributes A(X).
+Recall that the OONF for X would also have to specify an
+OONF for each of X's attributes. In general, complex models
+often involve many similar objects (or attributes of objects),
+whose stochastic functions are essentially identicaL There­
+fore, we would like to be define generic OONFs, which can
+be used multiple times in defining many similar objects. We
+accomplish this goal using the notion of a class. A class C
+is simply an OONF which is not associated with any specific
+object. We can associate an OONF with an object simply by
+asserting that the object is of class C. Clearly, we can also
+associate the same OONF with multiple objects.
+We are now ready to define an object-oriented Bayesian net­
+work. An OOBN is essentially a single situation object with
+no inputs, whose probabilistic properties are defined using an
+associated OONF.
+Definition 2.14: An object-oriented Bayesian network con­
+sists of a set of class definitions C1, . .. , Cm, and a single
+Situation object, which has no input attributes, with an asso­
+ciated OONF. An object X in the model (including within
+a class definition) can only be associated with one of the
+defined classes C; (i = 1 , .. . , m), and C; must be type­
+
+compatible with X. I
+
+definitions are non-recursive.1 The value type of an attribute
+X .A must be strictly simpler than the value type of X. There­
+fore, if a class C' is used to specify an OONF for an attribute
+A within a class C, then C cannot be used (even indirectly)
+within C'. Thus, we can translate an OONF incorporating
+class definitions into an OONF without such definitions sim­
+ply by "unrolling" class definitions. Combining this observa­
+tion with Theorem 2.13, we obtain the following result:
+Theorem 2.15: An OOBN B uniquely specifies a probability
+distribution over tJ + (Situation).
+Example 2.16: Let us outline the construction of a simple
+OOBN model for a car accident. Our OOBN will contain
+class definitions for the following classes: CAR, ENGINE,
+STEERING, TIRES, BRAKES, WEATHER, ROAD, and DRIVER.
+The internal structure of the OONFs for the CAR class is
+shown in Figure 1(a). The DRIVER class defines an OONF
+for an object whose type is more detailed than the PERSON
+type described in Example 2.3. (I.e., DRIVER contains more
+attributes than PERSON. ) As we discuss in Section 4, the
+DRIVER class can easily be defined as a subclass of PERSON,
+allowing most of the DRIVER attributes to be inherited rather
+than redefined. In addition to the class definitions, the OOBN
+specifies a situation object and an associated OONF describ­
+ing the situation of interest. The OONF for Situation, whose
+structure is shown in Figure 1 (b), contains the following com­
+plex attributes: Driver, Car, Weather, and Road, from the
+appropriate classes. As the figure shows, there are also four
+attributes which are simple objects. The OOBN must supply
+CPTs for these objects. I
+
+Once we define an OOBN, we can use it to answer arbitrary
+queries about the objects in our domain. As usual, a. query
+assigns values (evidence) to some objects and inquires about
+others. Objects which are not at the high level can be accessed
+using notation such as X.A, as described above. For example,
+one possible query for the accident OOBN is:
+P(Damage none I
+=
+
+Note that the type-compatibility requirement, which incorpo­
+rates all of the value attributes of an object, ensures that class
+
+1 Under
+
+the obvious assumption that types in our type system
+
+must be finitely nested tuples.
+
+307
+
+Object-Oriented Bayesian Networks
+
+Driver.Age
+
+=
+
+"<20yr", Road.Location =rural)
+
+now implies the claim. I
+
+Note that this query mentions the object Road. Location which
+is encapsulated in the Road object and is therefore not visible
+within the model. Clearly, even objects that are not visible
+within the model may be of interest to the user and should be
+accessible to user queries.
+
+3
+
+be an input attribute
+p. If the
+type of X.p is basic, then X.p refers to the output attribute of
+some unique simple object 5 E S.
+E
+
+X be an object,
+
+I
+
+Proof: The proof is by top-down induction on the structure
+
+Inference in OOBNs
+
+of objects in X. Since the situation object has no inputs, the
+
+Now that we have presented the basic language for defining
+OOBN models, we turn to the subject of performing infer­
+ence in OOBNs. The proof of Theorem 2. I 3 shows how an
+OONFdefines a structure much like a standard Bayesian net­
+work. In principle, one could define a Bayesian network over
+the variables 19+(X) for every object X in an OOBN. One
+could then apply a standard BN inference algorithm such as
+junction trees [Lauritzen and Spiegelhalter, 19881 Unfortu­
+nately, the BN produced in this manner is not structured in a
+way that supports effective inference. The random variables
+corresponding to complex objects usually range over a very
+large set of values, rendering most algorithms impractical.
+The key to effective inference in OOBNs is the observation
+that the complex objects are only used to group together sim­
+ple objects into coherent units. These higher-level units en­
+capsulate the simple objects, making it easier to define the in­
+puts and outputs of a model in terms of cognitively meaning­
+ful entities. However, only simple objects can have a mean­
+ingful effect on the model, i.e., by influencing the outcome
+of some random choice (the value of a random variable).
+This observation allows us to reformulate OOBN inference
+in tenns of basic variables. Note that this property is specific
+to the language we have chosen. In a richer language, such
+as that of [Koller et a/., 1997b], the structured objects play
+a much more important role, preventing us from simplifying
+the inference algorithm by restricting to simple objects.
+For the remainder of this section, let 8 be an OOBN, and let
+X be the set of objects defined in
+
+Lemma 3.2: Let X
+
+of X. and p be a (possibly empty) attribute chain
+
+8. LetS be the set of sim­
+
+ple objects defined in B. Given an assignment
+
+v
+
+of values to
+
+19(S), we can uniquely reconstruct a value for 19+(X) for ev­
+ery object X in the model: complex objects are composed out
+of simpler objects, and for a simple objectS, 19+(S)
+
+=
+
+tJ(S).
+
+Therefore any distribution over Val( 19( S)) can be ex.tended to
+a distribution over Val( tJ+(X)). The following lemma allows
+us to construct a BN over 19(S).
+
+Let X E X be an object and p an attribute
+chain in 19+ (X) such that the type of19+(X).p is basic. Then
+X.p is the is the output attribute of some unique simple object
+SE S.
+Lemma 3.1:
+
+base case is trivial. Now, consider some object
+
+X,
+
+an input
+
+attribute I of X, and an attribute chain p such that the type of
+
+X.I .pis basic. Let LetY be the enclosing object containing
+X. ln the OONF for Y, X .I is annotated with some anno­
+'
+tation B.p . By type compatibility, the output type of B .p'
+must be the same as that of X.I. Hence, the type of B p' .p
+is basic. T here are now two cases. If B is a value attribute
+of Y, then it is itself an object. By Definition 2.12, p.p' must
+.
+
+be an attribute of 19(B) and therefore also of
+
+19+(B).
+
+Thus,
+
+by Lemma 3.1, B .p.p' is the output attribute of some simple
+object5 E S. Otherwise, B is an input attribute of Y, which
+is a higher level object than X. In this case, the inductive
+hypothesis applies toY,
+
+B, and p.p'. I
+
+We can now define a Bayesian network BN(B) which carries
+the same information as the distribution defined by 8. BN(B)
+contains a node 19(5) for each simple object 5 defined by
+
+B. By the lemma, each input attribute of5 must refer to an
+output attribute of some unique simple object S'.
+an edge between
+
+S'
+
+We add
+
+and 5 whenever the input attribute of5
+
+refers to the output of5'. The CPT for 19(5) is given by the
+OONFfor5.
+
+Theorem 3.3: BN(B) is a well-defined Bayesian network.
+The distribution defined by BN(B) over 19(S) is the same as
+that defined by B.
+Proof: We first show that BN(B) is a DAG. We define a lex­
+as follo ws . The situ­
+ation object gets the label 1 . If the label for an object X is
+u, label the value attributes of X with the labels cr.l, ... , u.k
+i n a manner consistent with the DAG structure of the OONF
+for X. Suppose 19(5') is a parent of 19(5) in BN(B), and the
+containing object for5 is X. Then either S' is an attribute of
+an object contained in X that precedes 5, or else S' is an at­
+
+icographic ordering over objects in X
+
+tribute of an input of X, in which case it must be an attribute
+of an object that precedes X. Either way,5' must precede 5
+in the ordering.
+Since there is an edge from {)(51) to 19(5) precisely when
+the CPT for 19(5) depends on 19(5'), BN(B) is a well-defined
+Bayesian network. To see that it defines the same distribu­
+tion over '19(S) as B, consider the nodes of BN(B) in order.
+
+Proof: The proof is by induction on the length of p . If p
+
+Clearly BN(B) and 8 define the same distribution over a root
+
+has length 1, then
+
+must be a simple object, because all
+
+node, since they use the same CPT, and it has no parents. For
+
+value attributes of complex objects are themselves objects,
+
+any other node 19( 5), the conditional probability in B of 19(5)
+
+and the type of an object cannot be basic. If p is a longer
+
+given its inputs is defined by the CPT in the OONF for5. By
+
+X.A is a value attribute of X and therefore
+The inductive hypothesis applied to A and p'
+
+chain A.p', then
+also an object.
+
+X
+
+the equality constraints on the distribution defined by B, If
+
+an input I of5 refers to 19(5'), 19(5') must be a parent of S
+
+308
+
+Koller and Pfeffer
+
+in BN(B), and 5.! must be equal to 19(5') in the distribution
+defined by B. Therefore the conditional probability in BN(B)
+of 19(5) given its parents is the same in both distributions. I
+
+Corollary 3.4 : For an OOBN B with situation object
+Situation, BN(B) induces a probability distribution over
+t9+(Situation) which is the same as that defined by B.
+Since BN(B) is a standard Bayesian network, we can use any
+BN inference algorithms to answer queries. However, we can
+do even better if we design our inference algorithm to take ad­
+vantage of the organizational structure encoded in the OOBN.
+The basic intuition is that most of the attributes o f an object
+are encapsulated within it. Others are passed only to the en­
+closing object. Only a few attributes have "long-range" in­
+fluences. Therefore, we would like to design our inference
+algorithm so that it localizes as much of the computation as
+possible within objects.
+We say that an object Y is defined in X if Y is a value at­
+tribute of X or a value attribute of an object defined in X.
+A basic variable 19(5) is used by an object X if an attribute
+chain of an input of X refers to the output of S. A basic vari­
+able 19(5) is exported by X if Sis defined in X and t?(5) is
+used by some object not defined in X. A basic variable t?(5)
+is imported by X if 5 is not defined in X but !9(5) is used by
+some object defined in X.
+Intuitively, the only information that an object needs to com­
+municate to an enclosing object are the variables that it im­
+ports and exports. More formally, we define the I/O-set of a
+complex object to be the set of variables that it imports and
+exports. As we now show, the I/O-set of a complex object is
+enough to d-separate the variables corresponding to objects
+defined in it from the other variables in the model.
+Lemma 3.5: Let
+
+U be the set of basic variables correspond­
+simple objects defined in some complex object X. Let
+Y be X 's I/O-set. Then U is conditionally independent of
+S- U given Yin BN(B).
+ing to
+
+Proof: Consider any path between U and S - U. Such a
+path must contain adjacent nodes 51 E U and S2 E S- U.
+There are two po ssibil it ies . In the first case, there is an edge
+fr om S1 to S2. In such a case 51 is defined in X and used
+outside of it, so that it is exported by X and therefore in X's
+I/O-set. Since the path does not have converging arrows at
+51, it must be blocked when we condition on 51. In the other
+case, there is an edge from S2 to S 1, so S2 is imported by X,
+and it similarly blocks the path. Therefore the d-separation
+criterion is satisfied for every path. I
+
+This lemma allows us to localize the inference in the graph
+according to the structure of the objects. More precisely, we
+can define a set of variables Ex for each object X in B. The
+set L:x consists of the basic variables corresponding to sim­
+ple value attributes of X, the UO-set of X, and the I/O-sets
+of the complex value attributes of X. Thus, Ex consists of
+
+the variables that are local to X, as well as any variables "in
+transit" in either direction (between objects containing X and
+the objects which X contains). These sets are organized in
+a tree structure in a natural manner, with the tree-parent of
+Ex being Ey if X is an attribute of Y. We can now con­
+struct a separate junction tree for each Ex. Essentially, we
+make sure that both the junction tree for an object X and the
+junction tree for its enclosing object Y contain a clique con­
+taining all of the variables in X 's I/O-set. Since X's 110 set
+d-separates X from Y (and, in general, from any part of the
+model not enclosed in X), we can simply connect these two
+cliques in the two junction trees, and get a viable model for
+the two objects together. This is precisely the process used by
+Srinivas [Srinivas, 1 994] in his work on hierarchical model­
+based diagnosis.
+Unfortunately, even with the locality property of an OOBN,
+the interfaces corresponding to I/O-sets can still be quite
+large. We now provide a more efficient construction, based
+on the MSBN (multiply-section Bayesian network) framework
+of Xiang, Poole, and Beddoes [Xiang et al., 1 993]. Their
+construction follows the same general lines as the simple one
+described above. However, they show how to construct the
+various junction trees in a way that aJiows the clique corre­
+sponding to the UO-set to be decomposed, while still support­
+ing correct probabilistic propagation. As a consequence, their
+construction results in junction trees with smaller cliques,
+leading to more efficient probabilistic inference.
+Space considerations prevent us from describing the MSBN
+framework in its entirety. We simply survey some of the basic
+data structures and their application in our framework. (The
+simplified definitions are adapted from [Xiang, 1995] .) An
+MSBN partitions the random variables in a BN into a set
+of non-disjoint subnets. Each subnet contains some "local­
+ized" set of random variables of the BN, with their associated
+edges. The intersection between two subnets is called a d­
+sepset, and has the property that it "locally" separates the two
+subnets. I.e., when the two subnets are considered in isola­
+tion of the remainder of the network, their intersection ren­
+ders them conditionally independent. An MSBN of hypertree
+structure is one in which the subnets are organized into a hy­
+pertree. The hyperlinks correspond to the d-sepsets between
+two adjacent subnets in the hypertree. Each hyperlink has
+the propeny that it renders the two parts of the network that
+it connects conditionally independent. Xiang et al. provide
+an inference algorithm for hypertree MSBNs that guarantees
+correct probabilistic inference. Given the network BN(B), we
+define MSBN(B) to contain a subnet Ex for every object X
+in B, where :Ex is the set of nodes described above. Consider
+the tree defined by the set of objects X in B, where Y is the
+parent of X if X is a value attribute of Y. The subnets of
+MSBN(B) are organized into a hypertree, in which there is an
+hyperlink between I;y and Ex when Y is a parent of X.
+Theorem 3.6:
+
+MSBN(B) is an MSBN ofhypertree structure.
+
+Proof: Let
+
+be the set of simple variables contained in the
+
+Z
+
+Obj ect-Oriented Bayesian Networks
+
+subnets beneath I:x in the hypertree (including I:x ). By the
+definition of subnet, Z contains all the simple variables de­
+fined as well as the IO-sets of objects defined in X. Now, let
+t9( S) be any simple object not defined in X , but contained in
+the IO-set of some object defined in X . Then t9( S) must be
+defined outside X, but used by some object defined in X, so
+it is i mported by X. Hence t9( S) is contained in the IO-set of
+X. Therefore, in the notation of Lemma 3 . 5 , Z � U U Y. By
+the lemma, Y renders U conditionally independent of S- U ,
+s o i t also renders Z conditionally independent o fS - Z .
+Hence each hyperlink renders the two parts o f the hypertree
+that it connects conditionally independent, as required. I
+Figure 2 shows the structure of the MSBN constructed for
+the accident model. Note that many of the objects appear
+only within a single subnet, a property induced by the locality
+structure of the obj ect-oriented model. In a hypertree MSBN,
+all the message passing i n the probabilistic inference process
+is done along the paths of the tree. For example, in Figure 2,
+there is no edge between the subnets for Weather and Road
+even though they share Weather. Wetness. The communication
+concerning this attribute i s passed between these subnets via
+the containing Accident Model subnet.
+The efficient localized inference algorithms of [Xiang et al. ,
+1993] apply directly to MSBNs of hypertree structure. They
+organize the j unction-tree according to the OOBN structure,
+thereby exploiting the separation properties of Lemma 3.5.
+The decomposition of the junction tree into a tree of smaller
+junction trees immediately leads to the following result:
+
+Theorem 3.7 : For each object X in the OOBN, let
+
+c(X)
+
+denote the complexity of inference in the junction tree de­
+fined by the MSBN algorithm for the subnet of X.
+
+Then
+
+the complexity of the inference in the MSBN defined above
+is
+
+O ( I: xEX c(X)).
+
+Thus, the complexity of inference grows linearly with the
+number of objects in our OOBN. The complexity is expo­
+nential in the l argest clique used in the j unction tree for an
+individual object. However, if the OOBN is structured in a
+way that mirrors the locality of the domain, it is unlikely that
+an object will define very many simple objects, or that its I/O­
+set will be very large. Thus, we believe that complex j unction
+trees for any individual object will be rare in practice.
+Note that the j unction tree constructed for an object by the
+MSBN algorithm may be larger than the optimal junction
+tree over a stand-alone BN of the same structure, because of
+the need to have the junction trees of neighboring subnets be
+compatible with each other. The MSBN construction plays
+a crucial role in reducing the impact of this problem. As we
+mentioned above, rather than creating a clique in the junction­
+tree for the entire I/O-set of an object, MSBNs allow the de­
+composition of the d-sepset into a sort of junction tree itself.
+(The cliques in the d-sepset junction tree are called linkages.)
+So long as neighboringjunction trees are structured similarly
+with respect to their shared variables, correct probabilistic in-
+
+309
+
+ference is possible even without having a single clique as an
+i nterface between the j unction trees. A full discussion of this
+issue i s beyond the scope of this paper; see [Xiang e t al. ,
+1993] for details.
+The organizational information provided by the object­
+structure of the OOBN plays two roles in our construction.
+First, i t helps identify a partition of the BN nodes which i s
+more likely t o support locality of inference. It is, o f course,
+possible that a standard BN algorithm would naturall y find
+this partition when creating a j unction tree. However, this is
+not guaranteed to happen, particularly since the task of find­
+ing an optimal junction tree is known to be NP-hard. The
+second role of the OOBN structure is the fact that it allows a
+straightforward construction of an MSBN. As shown in [Xi­
+aug et al. , 1993], the d-sepset decomposition provided by an
+MSBN can result in a data structure which is more efficient
+than that provided by any single junction tree.
+Another advantage of MSBNs arises in repeated interaction
+with a network. If a user asks repeated queries or incremen­
+tall y adds evidence about a particular subnet of an MSBN,
+all computation can be performed locally within that subnet.
+Evidence asserted on that subnet does not need to be propa­
+gated to the rest of the network until the user shifts attention
+elsewhere. This advantage is very relevant in the context of
+OOBNs, where a user may often focus attention on one object
+for an extended period.
+Finally, MSBNs are also a useful data structure for reusing
+computation for multiple objects in the same class. If we
+have two objects of the same class, their subnets will be es­
+sentially identical (up to renaming of variables). We can often
+use the same j u nction tree for both obj ects, avoiding the work
+of recomputing it.2 In fact, we can even reuse some of the
+results of the actual inference process. When an MSBN i s
+first constructed, a n initial calibration phase (as in standard
+junction trees) i s used to make the various junction trees in­
+ternally consistent (calibrating the cliques within a tree) and
+consistent with each other. Analogously to the j unction tree
+process, this process consists of two phases: collecting be­
+liefs from the entire tree into a single root, and distributing
+them back. Assume that we conduct this process with the
+situation object (the root of the object tree) playing the role
+of the root. Now, consider some object X of class C and
+the subtree of the MSBN hypertree rooted at Ex . The phase
+of collecting beliefs within this subtree depends only on the
+stochastic function of the object X and not on its location
+within the model as a whole. In particular, the inference pro­
+cess for another object X' of the same class would be identi­
+cal. By caching (or precompiling) the results of this phase of
+the process, we can reuse it for other identical obj ects. Note
+that this caching process also applies to very complex objects
+that contain many nested levels of other objects. (E.g., if our
+2
+It is not always the case that the same junction tree can be used,
+since the tre e ' s exact structure may depend on the structure of the
+junction tree of the containing object. However, since objects of the
+
+same class are often used in similar contexts, this problem is unlikely
+to occur very often.
+
+Koller and Pfeffer
+
+310
+
+: Dril-·u.Age
+
+·
+
+� "We��i��;_·W���;_,:; ·
+·
+
+·
+·
+
+: Road.Location
+Road.Ma mtenance
+: Road.Con.d1twn
+
+: �?�� �F.���:���i!
+
+_
+
+_.
+
+Road
+
+r��::;::�� .
+
+...
+
+: Driver.Gender
+
+·
+
+/: Driwr.Dri�·illg-Skiil
+/ ; Dril-'tr.Aguss
+- ion.
+:
+
+--
+
+··
+z
+'
+
+-
+
+·-
+
+..
+
+__ __ _ _
+
+- ---
+
+�_ c__
+
+..
+
+:
+
+.
+
+- . . . . . ' 'A��id�-�tM�del
+I
+
+._,_. o_rig
+_
+_ 1_ _�-:_a_l_ . _ _ _ _a_,_.
+_ ,_-•_•
+
+_
+
+.
+
+. -. . .. ..\
+
+.
+
+_
+
+Car.Curr�:nr- Vul
+Car.MlU.TSpetd
+
+Car.Bruking-Powt:"r
+
+Damage
+
+...................
+
+; Ca.r.Type
+
+;
+
+..... . . ......................
+
+Ca r.Age
+
+: W£ather.Temperatutt
+
+i; �:���t;,�:�;;••
+
+:
+
+�
+
+CarMileage
+
+Car.Engine.Powa
+
+Car.En.gint'.Rdiabilir,·
+
+�:; �;:: ;� :;:
+i
+
+:
+
+��:::�;;�::wer
+
+:n�� - - - - - - - ---·
+
+: Car.Maintrnance
+
+;
+;
+
+:
+
+; Tir<s.Balance ;
+i_����s_. !��-'-���- -�
+
+__
+
+Car.Mainrtnance
+
+Car.Original- Val
+
+;
+;
+
+: _ -��e�':$:1!������� . . . . .
+:
+Car.Steering
+
+__
+
+Car.Engine
+
+�:�:��=r�;F;
+
+Car. Tires
+
+linN
+
+i
+
+Car.Tiru.Trt..� cti(m
+
+; �,���·�
+
+w:;;�:7
+
+_ __ _ _______
+
+Engine Pow.,.
+.
+Engint.Reliability
+c M
+__"_'_·"-'-'-"-"-"-'.'-
+
+Car. Typ<
+
+: Car.Milragr
+
+. . .. . . . . . .. . . . . .
+
+· ----· - · · ·
+
+-----
+
+·
+: ::::::::�:��-
+
+. "i
+
+�l��F��
+;
+
+--
+
+Road.Currdirlon
+
+.-
+
+.
+t::�;:::f��-kili
+
+·. -����-- .- ... 1
+
+Car-Speed
+ident
+Acc
+Accident-Level
+
+Wra rlla.Wrmess
+
+Road.Spet!d·Limir
+
+; f)ri.,.·u.fn.l'Ome
+
+;
+
+:
+
+�
+
+Ca
+
+r
+Ca .M•Iragr
+
+B:�-k p-��.e:. . . . . .
+
+;_ _
+
+CarMaintenance
+es ••
+___
+
+_
+
+Car.Brakes
+
+Figure 2: Structure of the MSBN constructed for the accident modeL The subnet associated with each object is shown by a box
+containing the simple objects in the subnet. Obj ects that are defined locally within a subnet are shown in bold face . There is an
+edge between any two subnets that interact in the MSBN.
+
+model contains two car objects.) In this case, the computation
+
+I(C)
+
+for the entire object, including all the enclosed ones, can be
+
+type of attribute
+
+reused. For models involving many complex objects of the
+same class, the savings can be considerable.
+It might seem that the caching can save us at most a fac­
+tor of
+
+{h ,
+
+.
+
+.
+
+.
+
+, Ik}, O(C)
+A.
+
+=
+
+{01 , . . , 0m}
+.
+
+and tA is the
+
+Definition 4.1: An interface type t' is a subtype o f an interface
+type
+
+2: In the second phase-distribute beliefs-the beliefs
+
+•
+
+t if:
+
+If t has an output attribute named
+a corresponding output attribute
+
+for different identical objects are typically different {based on
+
+A.
+
+A, then t' must have
+The output type of
+
+t'.A must be a subtype of the output type of t . A .
+• I f t' has a n input attribute A, then t must have a corre­
+
+their location within the model), so we cannot use our results
+for one object
+
+=
+
+X for another object X'. However, this work
+
+is not always necessary. Unless we assert evidence about an
+
+sponding input attribute
+
+object or query its i nternal nodes, there is no need to have its
+
+A. The type of t .A must be a
+I
+
+subtype of the type of t' .A.
+
+internal beliefs be calibrated . Thus, we can execute a l azy in­
+
+C be a class of i nterface type
+
+t
+
+C'
+
+ference process: We leave all obj ects uncalibrated, and only
+
+Let
+
+calibrate them when it becomes necessary. Of course, an in­
+
+subclass of C with an interface type t' . The first condition
+
+ference process such as this requires some bookkeeping in
+
+guarantees that, if we replace a C object
+
+order to remember which calibration operations have not al­
+ready been done. We defer further discussion to the full paper.
+
+Subtyping and inheritance
+
+be a candidate
+
+X with a C' object
+
+X', the outputs of X' can be used in place of the outputs of
+X. The second condition guarantees that any inputs that X'
+requires are available, since
+
+4
+
+and
+
+X also required them.
+
+At this point, one might define C' to be a subclass of C if the
+interface type of C' is a subtype of the interface type of C.
+
+One of the best known and most useful features of object ori­
+
+However, this definition is too restrictive. Part of our goal i n
+
+ented modeling is the ability to create
+
+defining a subclass is t o provide additional attributes. While
+
+subclasses that inherit
+
+the properties of existing classes. Classes are organized in
+
+the definition does not prevent that, it does prevent the new
+
+an
+
+attributes from depending on the rest of the model
+
+is-a hierarchy-an
+
+instance of a subclass is an instance
+
+in any new
+
+of its parent class. This inclusion property implies that an
+
+way.
+
+instance of a subclass can be used whenever an instance of
+
+COMM UTE-ROAD subclass of the ROAD class. We may want
+
+the parent class is expected.
+
+to add a new output attribute Traffic to the model. The logical
+
+In other words, the subclass
+
+Assume, for example, that we are trying to define a
+
+must supply all the outputs of the parent class, and cannot
+
+inputs for that attribute are the
+
+require any input that was not supplied to the parent class.
+
+internal to the ROAD class, and some attribute representing
+
+Recall that a class is simply an OONF over some set of input
+
+the time of day. Since there is no appropriate attribute in the
+
+and value attributes. The
+
+(h
+
+:
+
+t1, ,
+
+...,h
+
+:
+
+t1.
+
+--+
+
+interface type of a class C
+
+01
+
+:
+
+to, , .
+
+.
+
+.
+
+, Om
+
+:
+
+is tuple
+
+to, )
+
+where
+
+Locatio n
+
+attribute, which is
+
+ROAD class, we would have to add a new input to the class as
+
+a whole, thereby violatin g the subtyping requirement.
+
+Object-Oriented Bayesian Networks
+
+311
+
+substitute a COMM UTE-ROAD object for a ROAD object, the
+
+and their input mappi ng are i nherited from C to C'. Addi­
+tional attributes A in C' are declared as usual, using a type
+declaration, an OONF, and an annotation for every input at­
+
+since it does not exist in the ROAD
+
+tribute in I( A ) . The resulting network structure of C' must,
+
+In this example, it seems that the violation of the subtyping
+property is not a problem. After all, in any situation where we
+
+Traffic output is irrelevant:
+
+object, it could not have been needed in this context. How­
+
+of course, continue to be a DAG. If an attribute A is declared
+
+ever, the subtyping assumption, as stated, is required if we
+want our language to be strongly typed. We finesse our way
+
+i n C and an attribute by the same name already exists in C,
+then the C' definition replaces the one in C . Of course, the
+
+out of the problem by associating with each class definition a
+
+subtype restrictions (Definition 4. 1 ) have to be maintained i n
+
+set of different interface types, corresponding to various com­
+
+this case. (We note that our definition avoids the trap o f mul­
+
+binations of input and output attributes, such that the output
+
+tiple inheritance by the simple expedient of disallowing it.)
+
+attributes have all of the required inputs.
+Formally, an attribute A in a class C requires another attribute
+B if B is one of A 's ancestors in the DAG of the OONF for C .
+
+I f CJ ' is a subset o f the outputs CJ of C, the projected inte iface
+type of C onto CJ' is a subtuple of the interface type of C, with
+
+output attributes l imited to CJ' and input attributes limited to
+those input attributes required by ()'. The notion of projected
+type allows us to provide a less restrictive notion of subclass.
+Definition 4.2: C' is a
+
+subclass of C if CJ( C) � CJ( C'), and
+
+Example 4.3: We can augment our class definitions from Ex­
+ample 2 . 1 6 with several subclasses that interact with each
+other in interesting ways.
+
+The subclass FUEL - I NJECTED­
+
+ENG INE c ENGINE may have a new complex hidden attribute
+
+Fuel-Injection-System. The Reliability attribute is modified
+to take an additional input, which is mapped to this new
+attribute. The CPT over FUEL-INJECTED-ENGINE.Power
+gives a higher probability to the value
+SPORTS-CAR C CAR, the
+
+high. In the subclass
+Engine attribute is of type FUEL­
+
+the projected interface type of C' onto CJ( C) is a subtype of
+
+INJECTED-ENG INE. The annotations for the inputs of Engine
+
+the i nterface type of C. An is-a hierarchy over classes is a
+
+are left unspecified, and are therefore i nherited from CAR.
+There is a different CPT over the simple attribute Original­
+
+hierarchy C over the set of classes such that, if C' C C, then
+C' is a subclass of C.
+
+Value. There is a new output attribute Acceleration with an
+
+I
+
+associated probabilistic model. The attributes Engine.Power
+
+The definition of an is-a hierarchy over classes serves two
+
+and Original-Value are assigned to the inputs of Acceleration.
+
+main roles. The first is our ability to use a class
+
+All other aspects of the model are inherited from CAR. I
+
+as
+
+an ab­
+
+stracted (approximate) version of its subclasses. A class and
+its subclasses may describe the same type of object, but the
+subclass may be more detailed. For example, we can view the
+
+5
+
+Refining models
+
+class of PERSON as an abstract class, which has other classes
+such as STUDENT or DRIVER as subclasses. Each of the sub­
+
+OOBNs provide two orthogonal organizational hierarchies:
+
+classes specifies additional details about the object. Further­
+more, the distribution specified by a class can be an approxi­
+
+the pan-of hierarchy, corresponding to the inclusion of one
+object within another, and the is-a hierarchy over classes.
+
+mation of the distribution specified by the subclass, but may
+
+These two hierarchies combine to provide a powerful and
+
+support more efficient inference.
+
+The user can choose the
+
+level of detail appropriate to a given problem.
+The abstraction property provided by an is-a hierarchy is also
+useful for simple obj ects. For example, we may want to re­
+fine our INCOMES type, which consisted of { $0-JOK, $1030K, $30-80K, $80K+ } , into a finer-grained partition: { $0JOK, $10-30K, $30-80K, $80-JJOK, $130-250K, $250K+ } .
+Since we can directly map between these values and the orig­
+inal ones, this new type is a subtype of INCOMES. We can
+therefore use this new type as our value type for the Income
+attribute of a new class R I C H - PERSON C PERSON.
+The second role of the is-a hierarchy is based on the observa­
+tion that the model for a subclass often has much in common
+with the model for a superclass. For example, the distribu­
+tion over the Description attribute is the same for the PERSON
+class and for the R I C H -PERSON class. Our class hierarchy can
+
+be used to support "code reuse'' by allowing subclasses to i n­
+herit parts of the specification for the superclass.
+More precisely, we allow a subclass C' to be defined by nam­
+ing a parent class C, and then listing any modifications to its
+definition. By default, all attributes, their types, their OONFs,
+
+flexible tool for abstraction and refinement. The part-of hier­
+archy allows us to iconize an object, ignoring its component
+attributes. More precisely, the iconization process defines an
+object with no hidden variables, but that induces an identi­
+cal probabilistic model over its interface. The is-a hierarchy
+allows us to describe an object using a variety of classes, cor­
+responding to different levels of detail in their description. In
+general, these more abstract classes are also computationally
+more efficient. Note that iconization naturally fits into the is­
+a hierarchy: Since the interface type of an iconized object is
+the same as that of the uniconized version, we can define a
+class representing the iconized objects, which will then be a
+(more abstract) superclass of the original class.
+These abstraction mechanisms can be applied by the user at
+runtime to construct models that represent each of the various
+aspects at the appropriate level of granularity. The user may
+begin by modeling a domain at a fairly high level of abstrac­
+tion. Perhaps all the objects will be iconized or represented
+by high-level classes. As a result of incorporating evidence
+and querying the model, the user finds certain objects in the
+model to be particularly relevant. The user can then focus
+on those objects by deiconizing or refining their models. This
+
+312
+
+Koller and Pfeffer
+
+pro�ess can be repeated, with the user focusing along the part­
+of hierarchy and refining along the is-a hierarchy.
+For example, when modeling an accident domain, it makes
+
+sense to begin with iconized versions of car objects. While
+describing the general circumstances of an accident, the en­
+capsulated attributes of a car are not yet relevant. Inference
+may be performed more quickly if they are ignored. Suppose
+the user begins with a model of an accident in which the car
+i s iconized. After asking some queries, that perhaps consider
+the driver's age and the weather conditions, the user decides
+to refine the model by specifying that the car is a sports car.
+After asking some more queries, the user decides to deiconize
+the sports car, and consider the properties of its brakes.
+Consider the work done by the inference algorithm for each
+refinement. When the car is changed to a sports car, the model
+remains iconized. The only aspect of the change which is vis­
+ible to the rest of the model is the probabilistic relationship
+.
+between mputs
+and outputs of the car object (the information
+encoded in the d-sepset between the car object and the rest
+of the model). This new i n formation needs to be propagated
+to the rest of the model, but no computation needs to be per­
+formed on the internals of the sports car.3 Later, when the
+sports car is deiconized, we get the opposite behavior. Evi­
+dence about the rest of the model now has to be propagated
+to the encapsulated attributes of the car. However, the input­
+output relationship of the sports car object remains the same,
+so o ork has to be done outside of it. This process of propa­
+� v.:
+.
+gatmg mformatwn only to certain parts of the model is easily
+
+work a �atural extension. We believe that our approach has
+several Important advantages: The ability to naturally repre­
+.
+sent objects that are composed of lower level objects. And,
+the abil i ty to explicitly represent classes of objects, crucial
+for the i ncorporation of inheritance into the language. These
+� roperties are crucial for large-scale knowledge representa­
+tiOn. In particular, these mechanisms allow us to reuse model
+fragments in a way that is natural and semantically coherent,
+thereby easing knowledge acquisition for complex structured
+domains. We have also shown that the encapsulation of ob­
+j cts within other objects and the code reuse can provide sig­
+�
+mficant advantages in inference.
+Independently of our work, Laskey and Mahoney [Laskey
+and Mahoney, 1 997] have developed a framework for rep­
+resenting probab i listic knowledge that shares some features
+with OOBNs.
+
+In their framework, based on network frag­
+
+ments, complex fragments are built out of simpler ones, in
+much the same way as complex OONFs are built out of sim­
+pler ones. Their framework currently supports the represen­
+tation of certain features such as hypotheses that we are in
+the process of incorporating into OOBNs. However, their ap­
+proach to building complex models is procedural in nature,
+whereas ours uses a declarative object-oriented representation
+l anguage. As a result, our approach allows the organizational
+structure of a model, in particular the encapsulation of ob­
+jects and the reuse of OONFs within a model, to be expressed
+explicitly and utilized by the inference algorithm.
+These organizational structures also enable one of the most
+
+accomodated by the MSBN algorithm.
+Suppose instead that the u ser had deiconized the car before
+changing it to a sports car. In that case, we already have a
+representation of the i n ternal probabilistic model of the ob­
+ject. When the model is changed, one might think that the
+representation needs to be recomputed entirely from scratch.
+In
+
+guage [Koller et al. , 1 997b], with the object-oriented frame­
+
+fact, this is not necessary. The sports car inherits much of
+
+its model from the car modeL In particular, the models for
+many subparts of the car are unchanged. Each of these ob­
+jects i s a separate subnet, with its own j unction tree. Previous
+
+attractive features of OOBNs: its ability to support a natu­
+
+�
+
+ral r
+
+ework for abstraction and refinement. Currently, the
+�
+declSlon as to what level of abstraction to use when model­
+
+i n g a situation is completely up to the user. We are working
+on mechanisms for automated abstraction and refinement in
+
+�
+
+�
+
+w ich the reasoning system automatically decides the ap ro­
+pnate level of detail to use in answering a query, and incre­
+mentally refines the model during the reasoning process.
+We are also working on extending the expressive power of
+
+computation done on these objects typically does not need to
+
+OOBNs to allow natural modeling of more complex domains.
+
+be changed when the car model is changed.
+
+While OOBNs allow us to utilize the same class hierarchy
+to define models of a variety of different structures, once a
+
+6
+
+model is described in the language, its structure is fixed. In
+
+Discussion and future work
+
+particular, the language does not allow us to express uncer­
+
+This
+
+aper describes a flexible modeling language for
+�
+B ayestan networks, based on the object-oriented approach.
+
+Of co rse, OOBNs are not the first proposal for extendi n g
+�
+Bayestan networks beyond the attribute-based leveL How­
+
+�
+
+e er, OOBNs differ from prior proposals in a crucial way.
+VIrtually all of the prior work on this topic focuses on com­
+bining B ayesian networks with logic-programming-like rules
+(see, for example, [Breese, 1 992; Ngo et
+
+al. , 1 995; Poole,
+
+1 993]). Our approach is based on a stochasticfunctional lan3
+
+We note that, while MSBNs do not currently allow part of the
+
+model to be changed at runtime, they can be adapted to support this
+type of interaction.
+
+tainty about the i dentity and number of objects in the model
+and about the relationships between them. Suppose, for ex­
+ample, that we wanted to consider passengers in the accident
+model. Since the number of passengers in a car is variable,
+we would need a different model for each possible number
+of passengers. A related restriction is that we cannot express
+global constraints on a set of objects. For example, we cannot
+say that a car contains three passengers, at least one of whom
+is a child. The solution is to allow a set of obj ects to be a type
+of object. We can then express uncertainty about the number
+of objects in the set, as well as global properties of the set.
+Such a language would allow us, for example, to describe
+
+Object-Oriented Bayesian Networks
+
+a distribution over the number of passengers in a vehicle: a
+sports car usually has 0 or 1 passengers, while a mi ni van is
+l i kely to have several. Other objects will depend on propert ies
+of the set as a whole, rather than on individual objects within
+the set. In [Koller et at. , 1997al, we developed a language
+and inference algorithm that deals with such sets; we believe
+the techniques we used can be applied to OOBNs. Of course,
+there are many other forms of structural uncertainty; we are
+working on an extension of OOBNs that would allow us to
+deal with this issue.
+The other main limitation of OOBNs is the fact that it does
+not have the expressive power to deal suitably with situations
+that evolve over time. Objects in an OOBN are static: once
+an object i s defined, its properties are determined once and
+for all (although we may still be uncertain about them). We
+would like to be able to appl y OOBNs to domains involving
+multiple interacting entities (e.g., cars) whose state changes
+over time. One natural model for such a system would define
+an object for each such entity, with attributes corresponding
+to its state at different time points. Unfortunately, this type
+of architec ture is not compatible with our current framework.
+The resulting model is not acyclic, si n ce the different entities
+i nfluence each other over time. As an alternative, we coul d
+define a h i gh level object corresponding to the global state of
+the system at any given time. While this solution does yield a
+co he ren t model, it is inelegant and inefficient, since it requires
+that we group together the full states of the different objects,
+thereby breaking their encapsulation. We are currently work­
+ing on more natural models for modeling dynamic objects.
+Despite these l imitations, we believe that OOBNs are a sig­
+nificant advance in scaling up Bayesian networks to complex
+knowledge representation tasks. The key feature of OOBNs
+t hat we believe will allow them to scale up is that the rep­
+resentation and the inference go hand in hand. The repre­
+sentation language allows a knowledge engineer to organize
+a model in a natural and coherent manner. The organi za
+tion chosen by the engineer contains much knowledge about
+how the problem decomposes. By following the same or­
+ganization, the inference algorithm can utilize this knowl­
+edge. In essence, where Bayesian networks contain two
+types of knowledge-relevance relationships and conditional
+probabi li ties-OOBNs contain a third type of knowledge­
+organizational structure.
+­
+
+Acknowledgements
+
+We would l i ke to thank Kathy Laskey for her great help
+in making some of our definitions more coherent. We also
+thank Kathleen Fi sher, Uri Lerner, Suzanne Mahoney, David
+McAllester, Yang Xiang and the anonymous referees for use­
+ful comments and discussions relating to this work. This
+work was supported through the generosity of the Pow­
+ell foundation, by ONR grant N0001 4-96- l -07 1 8, and by
+DARPA contract DACA76-93-C-0025 under subcontract to
+Information Extraction and Transport, Inc. Some of the work
+was done while both authors were visiting AT&T Research.
+
+313
+
+References
+[Banerjee et a!., 1 9 87] J. Banerjee, H.-T. Chou, J.F. Garza,
+
+W. Kim, D. Woelk, N . Ballou, and H.-J. Kim. Data model
+i ssues for object-oriented applications. ACM Transactions
+on Office Information Systems, 5( 1 ):3-27, 1 987.
+[Breese, 1 992] J.S. B reese. Construction of belief and deci­
+sion networks. Computational lntelligence, 1 992.
+(Goldberg and Robson, 1 983] A. Goldberg and D. Robson.
+Smalltalk-80:
+
+The Language and its Implementation.
+
+Addison-Wesley, I 983.
+[Koller et al. , 1 997a] D. Ko l l er, A. Levy, and A. Pfeffer. P­
+Classic: A tractable probabilistic description logic. In
+Proc. AAAI-97, 1 997. To appear.
+[Koller et al. , 1 997b] D. Koller, D. McAllester, and A. Pfef­
+fer. Effective B ayesi an inference for stochastic programs.
+In Proc. AMI-97, 1 997. To appear.
+(Laskey and Mahoney, 1 997] K.B. Laskey and S.M. Ma­
+honey. Network fragments: Representing knowledge for
+constructing probabil istic models. In Proc. UA/-97, 1 997.
+In this proceedings.
+[Lauritzen and Spiegelhalter, 1 988] S. L. Lauritzen and D. J.
+Spiegelhalter. Local computations with probabil ities on
+graphical structures and their application t o expert sys­
+tems. Journal of the Royal Statistical Society, pages 1 57224, 1 988.
+Mahoney
+[M ah oney and Laskey, 1 996] S.M.
+and K.B. Laskey. Network engineering for c omp lex be­
+l ief networks. In Proc. UA/-96, pages 389-396, 1 996.
+
+[N g o et al. , 1 995] L. Ngo, P. Haddawy, and J. Helwig. A
+theoretical framework for context sensi tive temporal prob­
+ability model construction with application to plan projec­
+tion. In Proc. UA/-95, pages 4 1 9-426, 1 995.
+-
+
+[Pearl,
+
+1 988] J. Pearl. Probabilistic Reasoning in Intelligent
+Kaufmann, 1988.
+
+Systems. M org an
+
+[Poole, 1 993] D. Poole. Probabilistic Horn abduction and
+B ayesian networks. Artificial Intelligence, 64( 1 ) : 8 1 - 1 29,
+1 993.
+[Srinivas, 1 9 9 4] S. Srinivas. A probabi l ist i c approach to hi­
+
+erarchical model-based diagnosis. In Proc. UA/-94, pages
+5 3 8-545, 1 994.
+[Xiang et al. , 1 993] Y. Xiang, D. Poole, and M .P. B eddoes .
+Multiply sectioned Bayesian networks and junction forests
+for large knowledge based systems. Computational Intel­
+ligence, 9(2): 1 7 1 -220, 1 993.
+(X i ang 1 995] Y. Xi ang. Optimization of inter-subnet be­
+l ief updating in mult i p ly sectioned Bayesian networks. In
+Proc. UAI-95, pages 565-573, 1 995.
+,
+
+

@@ -1,0 +1,1480 @@
+Asynchronous Dynamic Bayesian Networks
+
+Avi Pfeffer
+avi@eecs.harvard.edu
+Division of Engineering and Applied Sciences
+Harvard University
+Cambridge, MA 02138
+
+Abstract
+Systems such as sensor networks and teams
+of autonomous robots consist of multiple autonomous entities that interact with each
+other in a distributed, asynchronous manner.
+These entities need to keep track of the state
+of the system as it evolves. Asynchronous
+systems lead to special challenges for monitoring, as nodes must update their beliefs
+independently of each other and no central
+coordination is possible. Furthermore, the
+state of the system continues to change as beliefs are being updated. Previous approaches
+to developing distributed asynchronous probabilistic reasoning systems have used static
+models. We present an approach using dynamic models, that take into account the way
+the system changes state over time. Our approach, which is based on belief propagation,
+is fully distributed and asynchronous, and allows the world to keep on changing as messages are being sent around. Experimental
+results show that our approach compares favorably to the factored frontier algorithm.
+
+1
+
+Introduction
+
+Systems involving multiple autonomous entities that
+communicate with each other in a distributed, asynchronous fashion are becoming more and more prevalent. Sensor networks are a prominent example of
+these kinds of systems; teams of autonomous robots
+are another. In such a system, the entities need to
+keep track of the state of the system as it evolves. In
+order to do so, they need to integrate information from
+throughout the system.
+The problem of keeping track of the state of a system
+as it changes over time is generally called monitoring
+or filtering. In probabilistic monitoring, the goal is to
+
+Terry Tai
+tai@fas.harvard.edu
+Division of Engineering and Applied Sciences
+Harvard University
+Cambridge, MA 02138
+
+maintain a probability distribution over the state of
+the system at each point in time, based on the evidence received up to that point. Distributed, asynchronous systems lead to special challenges to monitoring. Nodes need to update their beliefs about the
+state of the system autonomously. The timing of updates cannot be synchronized. Instead, each node performs computations at intermittent points in time, and
+their is no central coordination of the computations.
+In addition, individual nodes have limited computational power and communication capability.
+A further complication is that the systems exist in real
+time. We cannot stop the evolution of the state as beliefs are being updated. The state continues to change
+as the monitoring algorithms work. There is therefore
+a need for asynchronous, message-based algorithms for
+monitoring and communicating the state of the system, and these algorithms need to be able to work as
+the state continually evolves.
+Techniques for monitoring the state of dynamic systems have typically been centralized and synchronous.
+A standard representation for dynamic systems is dynamic Bayesian networks (DBNs) [3]. A number of
+algorithms have been developed for DBNs. Exact inference algorithms [6] compute a complete joint distribution over the state of the system at each point in
+time. For all but the simplest systems, this joint distribution is too large to be represented and computed, so
+approximate algorithms are needed. One family of approximate inference algorithms is particle filtering [5],
+which approximates the distribution over the state of
+the system by a set of samples. Another approach is
+the Boyen-Koller algorithm [1] which decomposes the
+state distribution into a product of factors. All these
+algorithms rely on centralized computation. One algorithm that can easily be distributed is the factored
+frontier algorithm [8], which is based on loopy belief
+propagation and Boyen-Koller. However, even this algorithm is fully synchronous and requires all nodes to
+coordinate.
+
+Previous work by Crick and Pfeffer [2] showed that
+loopy belief propagation can provide the basis for
+communication in distributed, asynchronous settings.
+They showed that it has several desirable properties.
+However, their work was based on using static models
+of the state of the system that do not take into account the way the system changes over time. In their
+approach, beliefs were based only on current observations, not on history. In monitoring a dynamic system,
+it is vital to take into account the history of observations in forming beliefs.
+In this work we present a framework for distributed,
+asynchronous probabilistic monitoring that does take
+into account system dynamics. We call our framework
+asynchronous dynamic Bayesian networks (ADBNs) .
+In an ADBN, nodes update intermittently at different points in time, and send messages which are then
+received by other nodes and used when those nodes
+subsequently update. In order for observations to influence beliefs in the network, nodes maintain a history
+of beliefs about their state at previous points in time,
+which are influenced by the observations. These beliefs
+then influence the belief at the current point in time.
+Because the time between updates of a node is variable, a continuous time Bayesian network (CTBN) [10]
+representation of the system dynamics is used. This
+raises the question of how to convert the CTBN representation into conditional probability tables that can
+be used in our inference scheme. We present two approaches to answering this question, based on different
+assumptions about the way variables change their values over time. We present experimental results showing that ADBNs compare favorably to the synchronous
+factored frontier algorithm.
+
+2
+
+Preliminaries
+
+We assume that the reader is familiar with the definitions of Bayesian networks (BNs) [11] and dynamic
+Bayesian networks (DBNs) [3]. Figure 1 shows two
+time slices from an example DBN for a fire monitoring
+domain. In this example there are two rooms. Each
+room Ri contains a node indicating whether there is a
+fire in the room. This node depends on whether there
+was previously a fire in the room and in the adjoining
+room. There is a node indicating the temperature in
+the room. This depends on whether or not there is
+a fire, as well as the outside temperature. Each room
+has a sensor reading that depends on the temperature.
+The sensor may be broken.
+2.1
+
+Loopy Belief Propagation
+
+Pearl’s belief propagation (BP) [11] is one of the main
+methods for performing inference in a BN. BP was
+
+Reading(R1)−
+
+Reading(R1)
+
+Broken(R1) −
+
+Broken(R1)
+Temp(R1)−
+
+Temp(R1)
+
+Fire(R1)−
+
+Fire(R1)
+
+Outside−Temp−
+
+Outside−Temp
+
+Fire(R2)−
+
+Fire(R2)
+
+Temp(R2)−
+Broken(R2) −
+
+Temp(R2)
+Broken(R2)
+
+Reading(R2)−
+
+Reading(R2)
+
+Figure 1: Example DBN
+originally defined for networks without loops, which
+are undirected cycles. The inference task performed
+by BP is this: given evidence e which is an assignment
+of values to a subset of variables E ⊆ X, compute the
+posterior probability P (X | E = e) for each variable
+X. BP is a message passing algorithm. Each parent U
+of X sends X a message πX (U ), and each child Y of X
+sends X a message λY (X). Based on these, the node
+X computes π(X) and λ(X). From these X computes
+its belief Bel(X) as
+Bel(x) = απ(x)λ(x)
+where α is a normalizing constant. When the algorithm finishes running, Bel(X) is the desired posterior
+probability distribution P (X | E = e).
+Let the parents of X be U1 , . . . , Uj and the children
+of X be Y1 , . . . , Yk . π(X) and λ(X) are computed as
+follows:
+
+1
+if e : X = x
+
+
+
+ 0
+if e : X 6= x
+j
+π(x) =
+X
+Y
+
+
+P (x | u1 , . . . , uj )
+πX (ui ) if X ∈
+/E
+
+
+u1 ,...,uj
+
+i=1
+
+
+1
+
+
+
+ 0
+k
+λ(x) =
+Y
+
+
+λYi (x)
+
+
+
+if e : X = x
+if e : X 6= x
+if X ∈
+/E
+
+i=1
+
+where the notations e : X = x and e : X 6= x mean
+that the evidence e assigns value x to X or a different
+value to X, respectively.
+
+Let V1 , . . . , V` be the children of U other than X. The
+message πX (U ) is defined by
+πX (u) = π(u)
+
+Ỳ
+
+λVi (u)
+
+i=1
+
+Let W1 , . . . , Wm be the parents of Y other than X.
+The message λY (X) is defined by
+λY (x) =
+X
+λ(y)
+y
+
+X
+
+w1 ,...,wm
+
+P (y | x, w1 , . . . , wm )
+
+m
+Y
+
+πY (wi )
+
+i=1
+
+Pearl showed that the belief propagation algorithm
+produces correct posterior probability distributions
+when run on networks without loops. One may try to
+run this algorithm on networks with loops, using multiple iterations of passing messages around the network.
+The resulting algorithm is called loopy belief propagation (LBP). However, in loopy networks the beliefs
+are not guaranteed to converge, and if they do converge they might not converge to the correct posterior
+distribution. Nevertheless, empirical results [7, 9] have
+shown that in a large number of cases, the algorithm
+converges to approximately correct posterior beliefs in
+a short amount of time. Thus LBP has emerged as
+one of the most competitive algorithms for approximate inference in BNs.
+2.2
+
+The Factored Frontier Algorithm
+
+Let H be the unobserved variables in a DBN, and O
+the observed variables. One of the main inference tasks
+in DBN is filtering: to compute, at each time point,
+P (H(t) | O(1) , . . . , O(t) ). Unfortunately, the cost of
+performing this task is generally exponential in the
+number of state variables. One needs to compute a
+joint distribution over all these variables at every time
+point. Therefore approximate inference algorithms are
+needed.
+One approximate inference method for DBNs is the
+Boyen-Koller algorithm (BK) [1]. In this approach,
+the state variables are factored into clusters. Instead
+of maintaining a joint distribution over all the variables, distributions over the clusters are maintained.
+The joint distribution is approximated by the product of the cluster distributions. In the original BK
+algorithm, a join tree is constructed from a two time
+slice BN, in which there is a cluster containing each of
+the factors. Inference in this join tree is used to compute the marginal distributions at a time step from the
+marginals at the previous time step.
+Unfortunately, even with the factorization, this join
+tree computation may be too expensive. An alternative is to use the factored-frontier algorithm (FF) [8].
+
+This algorithm performs two approximations. The
+first approximation, along the lines of BK, is to factorize the state variables into clusters consisting of individual variables, and to approximate the joint distribution over the variables by the product of marginal
+distributions over the individual variables. The second
+approximation is to compute the marginals over the individual variables at one time slice from the marginals
+at the previous time slice using LBP.
+2.3
+
+Continuous Time Bayesian Networks
+
+Continuous Time Bayesian Networks (CTBNs) [10]
+are a continuous time representation of a dynamic process. CTBNs are based on the theory of Markov jump
+processes. In a Markov jump process, there is a single
+state variable that can take on one of n values. The
+variable begins in a certain state, stays in that state
+for a random amount of time, then transitions to another state, and so on. The transitions can happen at
+any point in time. The amount of time the variable
+stays in a particular state is exponentially distributed.
+The dynamics of the process are characterized by an
+n-by-n intensity matrix Q. The diagonal entries are
+−qi , and control the rate at which the process leaves
+state i. The amount of time that the process stays
+in state i is distributed according to the exponential
+distribution fi (t) = qi exp(−qi t). The off-diagonal entries of Q describe the transition probabilities between
+states. When the process leaves state i, it enters the
+q
+next state j with probability Pij = P ij q . The qij
+ij
+j6=i
+P
+are scaled so that qi = j6=i qij .
+
+If X is governed by a Markov jump process with intensity matrix Q, we use the notation X (t) to indicate the
+value of X at time t. We can derive the conditional
+probability of X (t) given X (s) , where s < t, by matrix
+exponentiation: P (X (t) | X (s) ) = exp(Q(t − s)).
+
+CTBNs make Markov jump processes applicable to
+larger and more complex domains, by factoring the
+state into a number of variables. A CTBN has an associated directed graph. The graph of a CTBN may
+be cyclic, unlike BNs. Associated with each variable is
+a set of conditional intensity matrices (CIMs), one for
+each combination of values of its parents. The CIM
+for X conditioned on the value u for the parents U of
+X will be denoted by Q[X | u]. A CIM specifies an
+intensity matrix to use for the dynamics of a variable
+when its parents take on the given value. Given all
+the CIMs, one can in principle compute a joint intensity matrix where the state space is the cross product
+of the state spaces of all the variables. This defines
+the semantics of the CTBN. Of course, this intensity
+matrix is not computed in practice.
+
+3
+
+Asynchronous Dynamic Bayesian
+Networks
+
+The starting point for our investigation is the factored frontier algorithm. Recall that FF uses loopy
+belief propagation with the fully factorized belief state.
+Since LBP is naturally distributed, FF would seem to
+be an ideal candidate for turning into an algorithm
+for distributed environments. However, FF is still
+synchronous. It requires that at every time step all
+nodes send messages to each other. Furthermore, it
+requires that at every time step the process stops while
+the nodes send enough messages for LBP to converge.
+This means that FF needs a lot of messages to be sent
+in a very short amount of time, or else ignores changes
+in the environment that occur during the belief propagation process.
+3.1
+
+Message Propagation in a Changing
+Environment
+
+We first discuss the issue of the environment changing
+while LBP is running. For the purpose of this section,
+we will still assume a synchronous algorithm. A first
+attempt towards addressing this issue is to adopt a version of FF in which a full LBP process is not performed
+at each time step. Instead, each node only sends one
+message at each time step. So at each time step, nodes
+would update their beliefs, and propagate their messages to other nodes, to be used at the next time step.
+Then at the next time step, each node would take in
+the messages sent at the previous time step, update
+their beliefs using the DBN dynamics, and propagate
+new messages to their neighbors. This follows the suggestion of [2], in which LBP is not run to convergence,
+but rather messages are sent in real time in a changing environment. The difference in the new proposal
+is that the nodes would also take into account the dynamics of the environment as they update their beliefs.
+In fact this proposal would not work as described. The
+problem is that nodes would only be sending messages
+forward in time. Messages are sent at one time step to
+be used at the next. As a result, backward messages
+would not be propagated. This means that any evidence received from observations would not be taken
+into account at any nodes that caused the observations. This is not a problem for static models, where
+the system dynamics are not taken into account. In a
+static model, there is no notion of messages travelling
+forwards and backwards in time. In [2], all messages
+were propagated from one node to another as if time
+stood still and they were always current. With a dynamic model, on the other hand, messages are timestamped and travel in time around the unrolled DBN.
+Therefore backward messages need to be propagated.
+
+A second attempt to make LBP work in a changing environment solves this problem by having nodes propagate backward as well as forward messages. In order to
+do this, nodes need to maintain historical versions of
+themselves to receive the backward messages. We call
+a node X of the DBN a supernode, and an instantiation
+of that supernode X (t) at a particular point in time a
+subnode. In an unrolled fragment of the DBN, there
+may be many subnodes of the same supernode. In
+the simplest configuration, a supernode would maintain beliefs about its current state and about its state
+at the two previous time points. At each point in time,
+the current subnode will send π messages forward to
+the next time point, and λ messages to its parents at
+the current and previous time points. The λ messages
+will be picked up by the historical subnodes. Meanwhile, the historical subnodes will themselves send π
+messages forward to future time points.
+In this scheme, there are two kinds of messages that get
+passed around, those between supernodes and those
+between subnodes. Supernodes are the entities in the
+distributed system that communicate with each other.
+In contrast, the belief propagation process involves π
+and λ messages sent between subnodes. These π and λ
+messages are packaged into communications between
+the supernodes. A supernode then redirects the messages to the appropriate subnode. To avoid confusion,
+we will call the π and λ messages “messages”, and the
+messages between supernodes “communications”.
+This scheme, however, is not an adequate solution.
+The problem is that messages that are propagated forwards from historical subnodes will never reach the
+current node and modify the current belief. For example, if a π message is sent from the subnode representing time t − 1 at the current time step, this will
+be picked up by a subnode representing time t at the
+next time step. But by the next time step, t is no
+longer the current time, and the subnode that picks
+up the message will represent the previous time step.
+Thus, even though backward messages are passed in
+this scheme, evidence from observations is never taken
+into account in the current beliefs. This problem is
+illustrated in Figure 2.
+A better solution, and the one we actually use, builds
+on the idea of storing historical versions of nodes. Now,
+though, each supernode performs full-scale inference
+between its subnodes. This is acceptable since all inference happens within a single supernode, which is a
+single node in the distributed system. It is the supernodes that communicate with each other. In addition,
+the inference performed at a supernode is quite simple. The series of subnodes within a supernode form a
+chain. In order to perform inference amongst them, a
+single forward and backward pass is sufficient.
+
+U
+
+0
+
+U
+
+U
+
+X
+
+X
+
+1
+
+0
+
+π
+
+U
+
+U
+
+U
+
+U
+
+U
+
+U
+
+U
+
+U
+
+X
+
+X
+
+X
+
+X
+
+X
+
+X
+
+X
+
+X
+
+Y
+
+Y
+
+Y
+
+Y
+
+Y
+
+Y
+
+1
+
+2
+
+0
+
+λ
+
+X
+
+0
+
+1
+
+(a)
+
+0
+
+1
+
+2
+
+0
+
+1
+
+1
+
+2
+
+2
+
+0
+
+0
+
+1
+
+1
+
+2
+
+2
+
+(b)
+
+Figure 2: Example illustrating the problem with the
+second attempt. Thick arrows indicate messages that
+are sent. (a) Time step 1: a λ message is sent from X1
+to U0 . (b) Time step 2: a π message is sent from U0
+to U1 , but the current time is 2.
+
+To be precise, a supernode performs inference on the
+fragment of the unrolled DBN consisting of its subnodes. Communications will have been received from
+other supernodes consisting of current and historical
+π and λ messages. These messages from subnodes of
+other supernodes remain constant throughout the local inference process. The oldest subnode computes a
+π message based on the messages from its non-local
+neighbors, non-local meaning that they are subnodes
+of other supernodes (Figure 3 (a)). Then, working forward to the current subnode, each subnode computes
+a π message based on the π message from its local
+parent, the π messages from its other parents, and the
+λ messages from its non-local children (Figure 3 (b)).
+The current subnode then computes a λ message from
+the messages from its non-local neighbors and its local evidence (Figure 3 (c)). Then, working backwards,
+each node computes a λ message from the λ message
+from its local child, the λ messages from its other children, and the π messages from its non-local parents
+(Figure 3 (d)). During the backwards pass, each node
+updates its beliefs based on the π and λ messages it
+has received. Also on this pass, each node computes π
+and λ messages to send to its non-local children and
+parents. At the end of the update, the supernode communicates these messages to its neighbors.
+Even with this scheme, we still cannot use the beliefs
+at the current subnode as the beliefs about the system
+state. Instead we have to use beliefs at a historical
+subnode. The problem is that the current subnodes
+will always have just received their first messages at
+the time they form their first beliefs. Thus they will
+not have had time to converge to the correct beliefs. In
+contrast, historical subnodes will have received multiple sets of messages that will have traveled around the
+loops several times. The belief of a historical subnode
+about the state of the system at its time point will be
+much more accurate than the belief of the current node
+about the current state. We call the subnode used to
+estimate beliefs about the current state of the system
+the reporting subnode. There is a natural tradeoff here.
+Older reporting subnodes will have had more chance
+
+0
+
+1
+
+2
+
+0
+
+(a)
+
+1
+
+2
+
+(b)
+
+U
+
+U
+
+U
+
+U
+
+U
+
+U
+
+X
+
+X
+
+X
+
+X
+
+X
+
+X
+
+Y
+
+Y
+
+Y
+
+Y
+
+Y
+
+Y
+
+0
+
+0
+
+0
+
+1
+
+1
+
+1
+
+2
+
+2
+
+2
+
+0
+
+0
+
+0
+
+(c)
+
+1
+
+1
+
+1
+
+2
+
+2
+
+2
+
+(d)
+
+Figure 3: Update of a single supernode. Thick arrows
+show outgoing messages, and dashed arrows show the
+messages used to compute them.
+to converge to the approximately correct beliefs and
+will be more accurate about the state at their time
+point. On the other hand, as nodes get older, their
+beliefs become more stale and become a less accurate
+reflection of the state at the current time point. In
+our experiments, we find that the second most current
+subnode is the best one to use.
+One might think that using beliefs about a historical
+state as a substitute for beliefs about the current state
+is a drawback of our approach. However, this is unavoidable for any system that updates beliefs in real
+time. Consider the factored frontier algorithm. Proper
+beliefs will not be obtained until the loopy belief propagation has had time to converge. By that time, the
+system will have evolved, so the resulting beliefs will
+be beliefs about a historical state. It is inevitable that
+in any system that takes time to process information,
+the information will be old by the time it has been
+processed.
+3.2
+
+Asynchronous Operation
+
+The scheme described so far is still synchronous. All
+supernodes update at the same time, and subnodes are
+created at fixed, discrete time intervals. To transform
+this into an asynchronous scheme, we allow supernodes
+to update at any point in time. A subnode is created
+whenever a supernode updates.
+In the asynchronous scheme, the amount of time between subnodes of a supernode is variable. In order
+to represent the dynamics of the system with such
+
+(t 0)
+
+(t 1)
+
+(t 1)
+
+U
+
+(t 0)
+
+(t 2)
+
+X
+
+X
+
+(a)
+
+(t 0)
+
+(t 2)
+
+X
+
+U
+
+U
+
+(t 3)
+
+X
+
+U
+
+(t 0)
+
+(t 2)
+
+U
+
+X
+
+(b)
+
+(t 3)
+
+X
+
+(t 1)
+
+(t 2)
+
+(t 1)
+
+U
+
+(t 4)
+
+X
+
+(t 5)
+
+X
+
+(t 6)
+
+X
+
+(t 4)
+
+V
+
+X
+
+X
+
+(t 5)
+
+(t 3)
+
+U
+
+V
+
+(c)
+
+(d)
+
+Figure 4: Examples of the two approaches to converting CIMs to CPTs
+variable time lags, we use a continuous time Bayesian
+network. In a CTBN, each node has a set of conditional intensity matrices, one for each combination of
+values of the parents. When creating a subnode to
+participate in the belief propagation process, we need
+a conditional probability table (CPT) for the subnode.
+Thus we need to convert the set of CIMs to a CPT for
+a subnode given its local and non-local parents. We
+discuss two approaches to this, using different assumptions about the way variables change value over time.
+To make things simple, we will discuss the first approach for a case where a subnode X (t2 ) has a single non-local parent U (t1 ) and the local parent X (t0 ) ,
+where t0 < t1 < t2 . This situation is described in
+Figure 4 (a). The figure shows the set of subnodes,
+their timing, and which subnodes are parents of which
+other subnodes. For each value of U (t1 ) and X (t0 ) , we
+need a probability distribution over X (t2 ) . Now we
+make a strong simplifying assumption, that the value
+of U was constant throughout the time period [t0 , t2 ].
+This of course is only an approximation, because in
+reality the value of U might change at any point in
+the time period. Thus our method has three approximations: this one, and the two inherited from FF,
+namely, the use of a fully factored representation of
+the belief state and the use of loopy belief propagation.
+Because of this assumption, we know that throughout the time period the dynamics of X are governed
+by the CIM for X conditioned on the value of U (t1 ) .
+For a particular value u(t1 ) of U (t1 ) , we can now get
+P (X (t2 ) | X (t0 ) , u(t1 ) ) = exp(Q[X | u(t1 ) ](t2 − t0 )).
+Now, consider the case shown in Figure 4 (b), where
+U has two updates since the last update of X, i.e.
+we have X (t0 ) , U (t1 ) , U (t2 ) and X (t3 ) . By the simplifying assumption, the dynamics of X throughout the
+period [t0 , t3 ] are governed by the most recent value
+of U , which is u(t2 ) . Thus U (t1 ) is not the parent of
+any subnode of X. Now consider the opposite case,
+shown in Figure 4 (c), where X has two updates after
+an update of U , i.e. we have U (t0 ) , X (t1 ) and X (t2 ) .
+Since U (t0 ) is the most recent update of X before t1
+and t2 , U (t0 ) is a parent of both X (t1 ) and X (t2 ) and
+receives λ messages from both of them. This makes
+sense; while X (t1 ) provides direct evidence about U (t0 ) ,
+
+the λ message from X (t2 ) will incorporate the influence
+of X (t1 ) and provide additional evidence about U (t0 )
+which should not be ignored.
+All of the above discussion generalizes naturally to
+cases where children have multiple parents. To be
+precise, let U1 , . . . , Un−1 be the parents of X. Let
+t0 be the time of the previous update of X, and tn
+the time of the new update. Let ti , i = 1, . . . , n − 1,
+be the time of the most recent update of Ui prior to
+tn . (The ti are unordered, and we may have ti < t0 .
+This notation is different from the ti used before.
+Whereas before i indicated time ordering, now it inn
+0
+dexes parents.) Then the parents of X (t ) are X (t )
+(ti )
+
+and Ui
+by
+
+, i = 1, . . . , n − 1. The CPT of X (t
+
+P (X (t
+
+n
+
+)
+
+0
+
+n
+
+)
+
+is given
+
+(tn−1 )
+
+(t1 )
+
+| X (t ) , u1 , . . . , un−1 ) =
+(t1 )
+
+(tn−1 )
+
+exp(Q[X | u1 , . . . , un−1 ](tn − t0 )
+The second approach to converting the CIMs into
+CPTs makes a different fundamental assumption. In
+this approach, we assume that the value of a parent
+remains constant between updates of the parent. To
+capture the way a subnode depends on its parents,
+the period between the last update of a variable and
+its current update is divided into subperiods, with the
+beginnings of subperiods corresponding to the times
+at which parents update. In each subperiod, a particular configuration of values of the parents governs the
+dynamics of the variable.
+Suppose X has parents U and V , and let the updates of the variables be U (t0 ) , V (t1 ) , X (t2 ) , U (t3 ) ,
+V (t4 ) , U (t5 ) and X (t6 ) . We divide the period [t2 , t6 ] between updates of X into the subperiods [t2 , t3 ], [t3 , t4 ],
+[t4 , t5 ] and [t5 , t6 ]. In each period, the dynamics of
+X are governed by the values of the parents at the
+most recent update prior to the beginning of the period. Thus in [t2 , t3 ], the dynamics are governed by
+U (t0 ) and V (t1 ) ; in [t3 , t4 ] they are governed by U (t3 )
+and V (t1 ) ; and so on. Now, if we were to create
+a CPT directly for X t6 , its parents would be all of
+U (t0 ) , U (t3 ) , U (t5 ) , V (t1 ) , V (t4 ) as well as X (t2 ) . To
+avoid a variable having a large number of parents,
+we decompose the CPT by introducing the subnodes
+
+(t 0)
+
+(t 0)
+
+U
+
+U
+
+(t 2)
+
+(t 2)
+
+U
+
+U
+
+(t 1)
+
+(t 3)
+
+X
+
+(t 1)
+
+X
+
+(t 3)
+
+X
+
+X
+
+(a)
+
+(b)
+(t 0)
+
+(t 0)
+
+U
+
+U
+
+(t 2)
+
+U
+
+(t 2)
+
+U
+
+(t 3)
+
+U
+(t 1)
+
+X
+
+(t 3)
+
+U
+
+(t 1)
+
+(t 4)
+
+(t 4)
+
+X
+
+X
+
+X
+
+(c)
+
+(d)
+
+Figure 5: Comparison between the two approaches to converting CIMs to CPTs. The lines indicate during what
+time each subnode of U governs X.
+X (t3 ) , X (t4 ) and X (t5 ) . Each of these subnodes has
+only one instantiation of each non-local parent as a
+parent. We then set P (X (t3 ) | X (t2 ) , u(t0 ) , v (t1 ) ) to
+be exp(Q[X | u(t0 ) , v (t1 ) ](t3 − t2 )), and similarly for
+the other subnodes. The subnodes thus created are
+not full-fledged participants in the message passing
+scheme. They do not send π and λ messages to nonlocal neighbors. They are used only in local inference.
+The situation is described in Figure 4 (d). The dashed
+circles indicate intermediate nodes that are created.
+More formally, let t1 be the time of the previous update
+of X, and let tn be the time of the current update of X.
+Let t2 , . . . , tn−1 be the times of updates of non-local
+parents of X between t1 and tn . Let the non-local
+parents of X be U1 , . . . , Um . For each time ti , i =
+2, . . . , n, and each non-local parent Uj , let sji be the
+time of the latest update of Uj prior to ti . Then we
+create subnodes X (ti ) , i = 2, . . . , n. The parents of
+(sji )
+
+X (ti ) are X (ti−1 ) and Uj
+X (ti ) is given by
+
+For an example of how messages propagate in an
+ADBN, and in particular how evidence is propagated
+to the current state, consider the situation shown in
+Figure 6. This example applies to both approaches.
+In this example A is a parent of B, which is a parent
+of C. C is an observed variable. The figure shows the
+various update times of the different variables.
+A(0)
+
+(s1 )
+
+(sm )
+
+(sm )
+
+exp(Q[X | u1 i , . . . , umi ](ti − ti−1 ))
+To compare the two approaches: in many cases one
+cannot say that one is preferred to the other. For example if we have U (t0 ) , X (t1 ) , U (t2 ) , X (t3 ) , the two
+approximations will disagree over which value of U
+will govern X during [t1 , t2 ]. According to the first approach (Figure 5 (a)), it will be U (t2 ) while for the second approach it will be U (t0 ) (Figure 5 (b)). There is
+no inherent reason to prefer one choice over the other.
+On the other hand, in some cases the second approach
+seems more reasonable. If there had been two updates
+of U before the second update of X (so that we had
+U (t3 ) and X (t4 ) ), then according to the the first approach (Figure 5 (c)) U (t3 ) would govern X during
+[t1 , t2 ]. This is a poorer choice than U (t1 ) , which is
+chosen by the second approach (Figure 5 (d)). On the
+other hand, the second approach is much more com-
+
+A(3)
+B(1)
+
+A(6)
+B(4)
+
+C(2)
+
+, j = 1, . . . , m. The CPT of
+
+P (X (ti ) | X (ti−1 ) , u1 i , . . . , umi ) =
+(s1 )
+
+putationally expensive. It does not ensure a constant
+time per update of a supernode. A constant amount
+of work per update is important for applications such
+as sensor networks. Therefore the first approach was
+used in our experiments.
+
+A(8)
+B(7)
+
+C(5)
+
+Figure 6: Message propagation example
+Notice first that evidence from node C (2) reaches B (4)
+via B (1) . B (4) cannot incorporate evidence from C (5)
+at the time of its first update, but that is natural since
+C (5) occurs later. At time 7, the evidence from C (5)
+reaches B (4) and B (7) . Now, at time 6,, evidence from
+C (5) has not yet reached B (4) , so it will not reach A(6) .
+Thus A(6) is unable to incorporate evidence from C (5)
+at the time of its first update, even though C (5) has already occured. Thus it is incorrect to say that in our
+scheme, nodes always incorporate all prior evidence
+into their beliefs. However, as soon as A(8) updates,
+the evidence from C (5) will reach A(6) and A(8) , because it will already have reached B (4) and B (7) . Thus
+eventually, even though it might take some time, evidence is propagated around the network.
+3.3
+
+Implementation Considerations
+
+If each supernode has to maintain the entire history
+of its subnodes, the cost of inference within a supern-
+
+ode will grow as the process unfolds. To avoid this, we
+have supernodes phase out their historical subnodes as
+they become older. There are two possibilities for this.
+One is for a supernode to maintain a constant number of subnodes. The other is to maintain all subnodes
+that are younger than a constant amount of time. The
+advantage of the first method is that it allows a constant inference time at each update, so we use it in
+our experiments. When a subnode is phased out, its
+outgoing messages are no longer updated, but remain
+constant for all time. To allow phased out subnodes
+to be deleted from memory, all messages are stored by
+the recipient. That way, if the recipient needs a message from a phased out subnode, it will have the final
+version of the message.
+There is a danger in dropping subnodes too soon. It
+may prevent evidence from following all paths in the
+network. In the example in Figure 6, suppose A0 is
+dropped before A6 updates. Since the evidence from
+C2 does not reach B1 until B4 updates, it will not reach
+A0 when A3 updates. Thus at the time A6 updates,
+since A0 is dropped evidence from C2 will not follow
+the path B1 −A0 −A3 . There is a tradeoff here. As the
+history grows, evidence flows along more paths around
+the network, but the cost of inference is larger.
+So far, we have described a supernode as consisting of
+all the subnodes for one CTBN variable. In reality, a
+number of variables might be controlled by the same
+entity, and no network communication needs to happen between them. Therefore we allow a supernode
+to consist of all subnodes belonging to a set of variables, and perform local inference, via LBP, amongst
+all these subnodes every time the supernode updates.
+In our fire monitoring domain, we have a supernode
+representing each room.
+3.4
+
+The Final Algorithm
+
+Our final algorithm, for the case where each supernode
+corresponds to a single CTBN variable, is shown in
+Figure 7. This figure shows the process for updating a
+supernode. This algorithm uses the first approach to
+converting CIMs to CPTs.
+The notation is as follows. X is the supernode being updated. It has parents U1 , . . . , Um and children
+Y1 , . . . , Y` . The subnodes of X are X1 , . . . , Xn . X0 is
+the subnode of X that has most recently been phased
+out and is not updated. We assume that a π message from X0 to X1 exists, and will never change. We
+also let λXn+1 (xn ) be a vacuous message. The time in
+which subnode Xk was created is tk .
+For each Xk , let Uik be the most recent subnode of Ui
+k,hk
+i
+
+created prior to Xk . For each Xk , let Yik,1 , . . . , Yi
+
+For k = 1 to n
+P (Xk |Xk−1 , uk1 , . . . , ukm ) =
+exp(Q[X | uk1 , . . . , ukm ](tk − tk−1 ))
+For k = 1 to n
+X
+P (xk | xk−1Q
+, uk1 , . . . , ukm )
+π(xk ) =
+m
+πXk (xk−1 ) i=1 πXk (uki )
+k
+xk−1 ,uk
+,...,u
+m
+1
+Q` Qhki
+πXk+1 (xk ) = π(xk ) i=1 j=1
+λY k,j (xk )
+i
+For k = n down to 1
+Q` Qhki
+λ(xk ) = λXk+1 (xk ) i=1 j=1
+λY k,j (xk )
+i
+λX
+(xk−1 ) = X
+k
+X
+P (xk | xk−1 , uk1 , . . . , ukm )
+λ(xk )
+xk
+
+k
+uk
+1 ,...,um
+
+For i = 1 to m
+λXX
+(uki ) =
+k
+λ(xk )
+xk
+
+X
+
+k
+k
+k
+xk−1 ,uk
+1 ,...,ui−1 ,ui+1 ,...,um
+
+P (xk | xk−1 , uk1 , . . . , ukm )
+For i = 1 to `
+For j = 1 to hki
+πY k,j (xk ) =
+i
+
+hk
+i
+
+
+
+hk
+i0
+
+
+
+
+  Ỳ Y
+Y
+
+λY k,j 0 (x ) 
+λ
+π(xk ) 
+k,j 0 (xk )
+
+
+
+Yi
+k
+0
+i
+j 0 =1
+
+i0 =1
+
+j 0 6=j
+
+i0 6=i
+
+j 0 =1
+
+Bel(xk ) = απ(xk )λ(xk )
+Figure 7: The final algorithm
+
+be the set of subnodes of Yi for which Xk is the most
+recent subnode. The number hki of such subnodes may
+be zero. We assume that π messages from Uik to Xk ,
+and λ messages from Yik,j to Xk , exist and are held
+constant throughout the course of the algorithm. For
+brevity, we have omitted the cases in the computation
+of π and λ where the evidence stipulates a value for
+Xj .
+The algorithm begins by computing the CPT for each
+subnode of X. In practice this is computed for the
+subnode once and for all at the time the subnode is
+created, and does not need to be recomputed on each
+update. Next comes the forward pass in which π values
+are computed and π messages are propagated between
+local subnodes. Then comes a backward pass. λ values
+are computed for each subnode of X, and λ messages
+are passed back to their local parents. In addition,
+π and λ messages are computed to send to the nonlocal children and parents. When computing the π
+message send to the child Yik,j , the λ messages from
+all other children are used. This is accomplished by
+incorporating all the messages from other supernodes
+
+Yi0 where i0 6= i, as well as the messages from other
+0
+subnodes Yik,j where j 0 6= j.
+
+4
+
+Experimental Results
+
+In our experiments we use the fire monitoring model of
+Figure 1 extended over a network of 58 rooms, shown
+in Figure 8. Notice that This room configuration contains some areas with multiple paths between rooms,
+and some with only a single path. The areas with a single path could be challenging to our algorithm; Crick
+and Pfeffer [2] showed that redundancy is important to
+allow LBP to overcome poor beliefs at certain nodes.
+
+Figure 8: Room structure for experiments
+Events were generated using a discrete time generating process, but at a very fine level of granularity, thus
+approximating continuous time. In the ADBN, nodes
+updated at much larger time intervals than the time
+step of the generating process. Nodes updated with a
+fixed probability at every time step, with typical values for the probability of update being 0.02 to 0.08.
+The CPTs used in the generating process and for the
+ADBN updates were derived from CIMs that characterized the behavior of the domain in a natural way.
+For example, the probability of a fire being generated
+spontaneously was quite small, but became reasonably
+large when an adjoining room had a fire, and became
+larger the more adjoining rooms had fires. More details on the generating model, including CIMs for all
+the variables, can be found in [12].
+
+6
+
+12
+’FF’
+’ADBN’
+
+5
+4
+
+8
+
+3
+
+6
+
+2
+
+4
+
+1
+
+2
+
+0
+
+0
+0
+
+100 200 300 400 500 600 700 800 900 1000
+
+The results, shown in Figure 4(a), are surprising. In
+the graph, the x-axis represents time; the y-axis represents the average negative log likelihood, taken over
+
+0 100 200 300 400 500 600 700 800 900 1000
+
+(a)
+
+(b)
+
+Figure 9: (a) Comparing ADBN to FF; (b) Varying
+history, using oldest subnode as reporting subnode
+all rooms, of the true state of the Fire node, at each
+point in time. The reason for the pattern is that at
+the beginning of the run, none of the nodes are on fire,
+and beliefs about this are very accurate. Then one or
+two fires break out, and since this is quite unlikely the
+error grows large. Then as time goes on more nodes
+catch fire, and the network comes to believe that a fire
+is more and more likely, so the error decreases. The
+results show that not only did ADBN perform competitively with FF, it outperformed it by a significant
+margin. It was more quick to believe that a fire had
+broken out, and as a result its error in the initial stage
+after a fire had broken out was smaller. The two algorithms converged back to the correct beliefs at about
+the same time. We found similar results in other experiments comparing the two algorithms. A possible
+reason for the superior performance of ADBN is that,
+due to random variation, some nodes will naturally
+update more frequently than others. These more frequently updating nodes might cause evidence to be
+propagated more quickly than expected, particularly
+when there are multiple paths around the network.
+4
+
+6
+’8’
+’5’
+’3’
+’2’
+
+3.5
+3
+
+’.02’
+’.04’
+’.06’
+’.08’
+
+5
+4
+
+2.5
+
+We first compared our algorithm with the synchronous
+factored frontier algorithm. FF updated after a fixed
+number of time steps of the generating process. To ensure a fair comparison, we made sure that the two algorithms sent the same number of messages. This was
+achieved by setting the history length for the ADBN
+equal to the number of LBP iterations for FF, and setting the expected time between updates of each ADBN
+node equal to the time between updates of FF. In FF,
+if the number of messages is held fixed, there is a tradeoff between the number of LBP iterations and the frequency of update. We found that updating more frequently was more important than running more iterations, so we used two iterations in our experiments.
+
+’8’
+’5’
+’3’
+’2’
+
+10
+
+2
+
+3
+
+1.5
+
+2
+
+1
+1
+
+0.5
+0
+
+0
+0 100 200 300 400 500 600 700 800 900 1000
+
+(a)
+
+0
+
+100 200 300 400 500 600 700 800 900 1000
+
+(b)
+
+Figure 10: (a) Varying the history, using the second
+youngest node as the reporting node; (b) Varying the
+frequency of update
+Next, we conducted experiments varying the length of
+history maintained by the ADBN. Figure 4(b) shows
+the results for a case where the oldest subnode was
+used as the reporting subnode, and the update frequency was held constant. The numbers in the legend describe the length of history used. The graph
+shows that a history of 2 clearly does better. This
+indicates that it is more important that the reporting
+
+node not be stale than that a long history be used. Figure 4(a) shows the results of an experiment in which
+we used the second youngest node as the reporting
+node, and varied the length of the history maintained.
+The graphs are indistinguishable, indicating that there
+is no advantage to maintaining a longer history. Finally, we experimented with changing the frequency of
+update of ADBNs. The results are reported in Figure 4(b), where the number in the legend is the probability density of an update occuring at any time point.
+We see, naturally, that performance improves as the
+updates become more frequent, though there are diminishing returns.
+
+would like to extend our framework to monitoring hybrid systems. Currently perhaps the most popular algorithm for this task is Rao-Blackwellised particle filtering [4]. It would be interesting to investigate how
+to adapt this algorithm to a message-passing framework. Finally, we would like to investigate learning
+in the message passing paradigm. When a network
+is deployed in the real world, one rarely has precise
+knowledge in advance of the workings on the domain.
+Therefore it would be beneficial to allow the nodes to
+adapt their model over time, based on the stream of
+information that they receive.
+
+References
+5
+
+Conclusion
+
+We have presented asynchronous dynamic Bayesian
+networks, a framework for asynchronous, distributed
+probabilistic reasoning that takes system dynamics
+into account. Our experimental results show that
+ADBNs compare favorably with the synchronous factored frontier algorithm. It is important to try to understand better why ADBNs perform so much better
+than FF. This is a matter for future investigation.
+Our framework avoids the need for a centralized controller or for synchronization in monitoring dynamic
+systems. Our algorithm does not assume that the
+system stops changing as it updates, but rather performs its message passing in real time as the system
+evolves. Because the algorithm involves only a fairly
+small, constant amount of computation at each update, it is suitable for deployment in a system where
+nodes have limited computational power and communication capability. In a typical run, our algorithm
+took 0.025 seconds per update on a 3.5 GHz desktop.
+Furthermore, the frequency of update can be adapted
+based on the computational resources of a node. This
+provides a natural way to allocate resources as needed.
+More powerful nodes can be placed at more vital locations to update more frequently.
+This paper has opened up a wide design space for
+building systems that perform probabilistic reasoning
+in dynamic and asynchronous environments. We have
+explored some of the options, but there are many variants left unexplored. For example, we presented two
+approaches for converting CIMs to CPTs, but others
+are possible. One could imagine, for instance, letting
+the value of a parent change linearly between updates.
+We hope that investigating these design decisions more
+fully will be a fruitful direction of research.
+The next step for ADBNs is deployment in a working
+network. Sensor networks are being used by a group at
+Harvard in a medical monitoring domain. This could
+be an ideal testbed for the ideas in this paper. We
+
+[1] X. Boyen and D. Koller. Tractable inference for
+complex stochastic processes. In UAI, 1998.
+[2] C. Crick and A. Pfeffer. Loopy belief propagation
+as a basis for communication in sensor networks.
+In UAI, 2003.
+[3] T. Dean and K. Kanazawa. A model for reasoning
+about persistence and causation. Computational
+Intelligence, 1989.
+[4] A. Doucet, N. de Freitas, K. Murphy, and S. Russell. Rao-Blackwellised particle filtering for dynamic Bayesian networks. In UAI, 2000.
+[5] A. Doucet, S. Godsill, and C. Andrieu. On
+sequential Monte Carlo sampling methods for
+Bayesian filtering. Stats. and Computing, 2000.
+[6] U. Kjaerulff. dHugin: A computational system
+for dynamic time-sliced Bayesian networks. International Journal of Forecasting, 1995.
+[7] R. McEliece, D. Mackay, and J. Cheng. Turbo
+decoding as an instance of Pearl’s belief propagation algorithm. IEEE Journal on Selected Areas
+in Communication, 16(2):140–152, 1998.
+[8] K. Murphy and Y. Weiss. The factored frontier
+algorithm for approximate inference in DBNs. In
+UAI, 2001.
+[9] K. Murphy, Y. Weiss, and M. Jordan. Loopy belief propagation for approximate inference: An
+empirical study. In UAI, 1999.
+[10] U. Nodelman, C. R. Shelton, and D. Koller. Continuous time Bayesian networks. In UAI, 2002.
+[11] J. Pearl. Probabilistic Reasoning in Intelligent
+Systems. Morgan Kaufmann, 1988.
+[12] T. Tai. Asynchronous dynamic Bayesian networks. Senior thesis presented to the computer
+science department, Harvard University, 2005.
+
+

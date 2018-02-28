@@ -1,0 +1,993 @@
+Chi-square Tests Driven Method for Learning
+the Structure of Factored MDPs
+
+Thomas Degris
+Thomas.Degris@lip6.fr
+
+Olivier Sigaud
+Olivier.Sigaud@lip6.fr
+
+Pierre-Henri Wuillemin
+Pierre-Henri.Wuillemin@lip6.fr
+
+University Pierre et Marie Curie - Paris 6, LIP6
+4 Place Jussieu
+75252 Paris Cedex 05, France
+
+1
+
+Abstract
+
+the fmdp framework, assuming that the structure of
+the problem is known.
+
+sdyna is a general framework designed to address large stochastic reinforcement learning
+(rl) problems. Unlike previous model-based
+methods in Factored mdps (fmdps), it incrementally learns the structure of a rl problem
+using supervised learning techniques. spiti
+is an instantiation of sdyna that uses decision trees as factored representations. First,
+we show that, in structured rl problems,
+spiti learns the structure of fmdps using
+Chi-Square tests and performs better than
+classical tabular model-based methods. Second, we study the generalization property of
+spiti using a Chi-Square based measure of
+the accuracy of the model built by spiti.
+
+When the transition and reward functions are unknown, learning in fmdps becomes a problem of learning the structure of dbns from experience only. Chickering et al. (1997) and Friedman and Goldszmidt
+(1998) investigate techniques for learning Bayesian
+networks with local structure. From a given set of observations, these techniques explicitly learn the global
+structure of the network and the local structures quantifying this network.
+
+INTRODUCTION
+
+A Markov Decision Process (mdp) is a mathematical
+framework providing a semantic model for planning
+under uncertainty. Solution methods to solve mdps
+based on Dynamic Programming (dp) are known to
+work well on small problems but rely on explicit state
+space enumeration. Factored mdps (fmdps) are an alternative framework to compactly represent large and
+structured mdps (Boutilier et al., 1995). In this framework, Dynamic Bayesian Networks (dbns) (Dean &
+Kanazawa, 1989) are used to represent compactly the
+transition and the reward functions by exploiting the
+dependencies between variables composing a state.
+Solution methods adapted from classical techniques
+such as dp or Linear Programming (lp) have been
+proposed (Hoey et al., 1999; Boutilier et al., 2000;
+Guestrin et al., 2003) and successfully tested on large
+stochastic planning problems. Moreover, model-based
+learning methods (Guestrin et al., 2002) have been
+proposed to learn the parameters of the model within
+
+In this paper, we describe Structured dyna (sdyna),
+a general framework merging supervised learning algorithms with planning methods within the fmdp framework. sdyna does not require to explicitly build the
+global structure of the dbns. More precisely, we focus
+on spiti, an instantiation of sdyna, that uses decision
+trees as factored representations. spiti directly learns
+local structures of dbns based on an incremental decision tree induction algorithm, namely iti (Incremental
+Tree Inducer (Utgoff et al., 1997)). These representations are simultaneously exploited by a modified incremental version of the Structured Value Iteration (svi)
+algorithm (Boutilier et al., 2000) computing a policy
+executed by the agent.
+In the context of incremental decision tree induction,
+we use χ2 as a test of independence between two probability distributions (Quinlan, 1986) to build a model
+of the transition and reward functions. The χ2 threshold used to split two distributions directly impact the
+size of the model learned and may be critical in finding a good policy. First, we show that, setting the χ2
+threshold to a high value makes spiti able to build a
+compact model without impacting the quality of its
+policy. Second, we show that, while keeping its model
+compact, spiti exploits the generalization property in
+its model learning method to perform better than a
+stochastic version of dyna-q (Sutton, 1990), a tabular
+model-based rl method. Finally, we introduce a new
+measure of the accuracy of the transition model based
+
+on χ2 to study the generalization property of spiti.
+We show that the accuracy of the model learned by
+spiti decreases linearly when the size of the problem
+grows exponentially.
+The remainder of this paper is organized as follows:
+in Section 2, we introduce fmdps. In Section 3, we
+describe the sdyna framework. In Section 4, we describe spiti and explain how we exploit χ2 in model
+learning and evaluation. Section 5 describes empirical
+results with spiti. We discuss these results in Section 6. We conclude and describe some future work
+within the sdyna framework in Section 7.
+
+2
+
+3
+
+Similarly to the dyna architecture (Sutton, 1990),
+sdyna proposes to integrate planning, acting and
+learning to solve by trial-and-error stochastic rl problem with unknown transition and reward functions.
+However, sdyna uses fmdps as a representation language to be able to address large rl problems. An
+overview of sdyna is given in Figure 1.
+Input: Acting, Learn, P lan, Fact
+Output: ∅
+1. Initialization
+2. At each time step t, do:
+
+BACKGROUND
+
+A mdp is defined by a tuple hS, A, R, P i. S is a finite set of states, A is a finite set of actions, R is the
+immediate reward function with R : S × A → IR and
+P is the Markovian transition function P (s0 |s, a) with
+P : S × A × S → [0, 1]. A stationary policy π is a
+mapping S → A with π(s) defining the action to be
+taken in state s. Considering an infinite horizon, we
+evaluate a policy π in state s with the value function
+Vπ (s) definedPusing the discounted reward criterion:
+∞
+Vπ (s) = Eπ [ t=0 γ t · rt |s0 = s], with 0 ≤ γ < 1 the
+discount factor and rt the reward obtained at time t.
+The action-value function Qπ (s, a) is defined as:
+X
+Qπ (s, a) =
+P (s0 |s, a)(R(s0 , a) + γVπ (s0 )) (1)
+s0 ∈S
+
+A policy π is optimal if for all s ∈ S and all policies π 0 ,
+Vπ > Vπ0 . The value function of any optimal policy is
+called the optimal value function and is noted V ∗ .
+The factored mdp framework (Boutilier et al., 1995) is
+a representation language exploiting the structure of
+the problem to represent compactly large mdps with
+factored representations. In a fmdp, states are composed of a set of random variables {X1 , . . . , Xn } with
+each Xi taking its value in a finite domain Dom(Xi ).
+A state is defined by a vector of values s = (x1 , . . . , xn )
+with for all i: xi ∈ Dom(Xi ). The state transition
+model Ta of an action a is defined by a transition
+graph Ga represented as a dbn (Dean & Kanazawa,
+1989). Ga is a two-layer directed acyclic graph whose
+nodes are {X1 , . . . , Xn , X10 , . . . , Xn0 } with Xi a variable at time t and Xi0 the same variable at time t + 1.
+The parents of Xi0 are noted P arentsa (Xi0 ). We
+assume that P arentsa (Xi0 ) ⊆ X (i.e. there are no
+synchronic arcs, that is arcs from Xi0 to Xj0 ). A
+graph Ga is quantified by a Conditional Probability
+Distribution CPDaXi (Xi0 |P arentsa (Xi0 )) associated to
+each node Xi0 ∈ Ga . The transition model T of
+the fmdp is then defined by a separate dbn model
+Ta = hGa , {CPDaX1 , . . . , CPDaXn }i for each action a.
+
+SDYNA
+
+(a)
+(b)
+(c)
+(d)
+(e)
+
+s ← current (non-terminal) state
+a ← Acting(s, {Fact(Qt−1 (s, a)), a ∈ A})
+Execute a; observe s0 and r
+Fact(Mt ) ← Learn(Fact(Mt−1 ), s, a, s0 , r)
+{Fact(Vt ), {Fact(Qt (s, a)), a ∈ A}} ←
+P lan(Fact(Mt ), Fact(Vt−1 ))
+
+with Mt the model of the transition and reward functions at time t.
+
+Figure 1: The sdyna algorithm
+Neither the fmdp framework nor sdyna specify which
+factored representations should be used. Factored representations, noted Fact(F ) in sdyna, can exploit certain regularities in the represented function F . These
+representations include rules, decision trees or algebraic decision diagrams. sdyna is decomposed in
+three phases: acting (steps 2.a, 2.b and 2.c), learning
+(steps 2.d) and planning (steps 2.e). The next section
+details these phases in the context of an instantiation
+of sdyna named spiti.
+
+4
+
+SPITI
+
+spiti uses decision trees as factored representations
+(noted Tree(F )). Section 4.1 and Section 4.2 describe,
+respectively, the acting and planning phases and then
+the learning phase in spiti.
+4.1
+
+ACTING AND PLANNING
+
+Acting in spiti is similar to acting in other rl algorithms. The planning phase builds the set SQ
+of action-value functions Tree(Qt−1 (s, a)) representing
+the expected discounted reward for taking action a in
+state s and then following a greedy policy. Thus, the
+agent can behave greedily by executing the best action
+in all states. spiti uses the -greedy exploration policy which executes the best action most of the time,
+and, with a small probability , selects uniformly at
+
+Planning has been implemented using an incremental
+version of the svi algorithm (Boutilier et al., 2000).
+svi is adapted from the Value Iteration algorithm but
+using decision trees as factored representations instead
+of tabular representations. spiti uses an incremental
+version of svi rather than the original svi for two reasons. First, svi returns a greedy policy, which may
+not be adequate for exploration policies other than
+-greedy. Second, svi computes an evaluation of the
+value function until convergence despite an incomplete
+and incrementally updated model of the transition and
+reward functions. The modified version of svi used in
+spiti is described in Figure 2.
+Input: Tree(M ), Tree(Tt ), Tree(Vt−1 )
+Output: Tree(Vt ), {Tree(Qt (s, a)), a ∈ A}
+1. SQ = {Tree(Qt (s, a)), a ∈ A} with:
+Tree(Qt (s, a)) ← Regress(Tree(M ), Tree(Vt−1 ), a)
+2. Tree(Vt ) ← M erge(SQ ) (using maximization over the
+value as combination function).
+3. Return {Tree(Vt ), SQ }
+
+Figure 2: spiti
+
+(1)
+
+: the P lan algorithm based on svi.
+
+At each time step, the P lan algorithm in spiti updates set SQ by producing the action-value function Tree(Qt (s, a)) with respect to the value function
+Tree(Vt−1 ) using the Regress operator (step 1) defined
+in Boutilier et al. (2000). Then, action-value functions Tree(Qt (s, a)) are merged using maximization
+as combination function to compute the value function Tree(Vt ) associated with a greedy policy using the
+M erge({T1 , . . . , Tn }) operator. This operator is used
+to produce a single tree containing all the partitions
+occurring in all trees T1 , . . . , Tn to be merged, and
+whose leaves are labeled using a combination function
+of the labels of the corresponding leaves in the original
+trees. Tree(Vt ) is reused at time t+1 to update the set
+SQ of action-value functions Tree(Qt+1 (s, a)). We refer to Boutilier et al. (2000) for a detailed description
+of the M erge and Regress operators.
+4.2
+
+LEARNING THE STRUCTURE
+
+Trials of the agent compose a stream of examples that
+must be learned incrementally. In spiti, we use incremental decision tree induction algorithms (Utgoff,
+1986), noted LearnT ree. From a stream of examples
+hA, ςi, with A a set of attributes νi and ς the class of
+the example, LearnT ree(Tree(F ), A, ς) builds a decision tree Tree(F ) representing a factored representation of the probability F (ς|A).
+As shown in Figure 3 (step 3), the reward learning
+
+Input: Tree(Mt ), s, a, s, r Output: Tree(Mt+1 )
+1. Tree(Mt+1 ) ← Tree(Mt )
+2. A ← {x1 , . . . , xn }
+3. Tree(R ∈ Mt+1 ) ←
+S
+LearnT ree(Tree(R ∈ Mt ), A {a}, r)
+4. For all i ∈ |X|:
+Tree(CPDaXi ∈ Mt+1 ) ←
+LearnT ree(Tree(CPDaXi ∈ Mt ), A, x0i )
+5. Return Tree(Mt+1 )
+
+Figure 3: spiti
+
+: the Learn(s, a, s, r) algorithm.
+
+(2)
+
+algorithm is straightforward. From an observation
+of the agent hs, a, ri with s = (x1 , . . . , xn ), we use
+LearnT ree to learn a factored representation Tree(R)
+of the reward function R(s, a) from the example hA =
+(x1 , . . . , xn , a), ς = ri.
+The transition model T is composed of a dbn Ga for
+each action a. Ga is quantified with the set of local
+structures in the conditional probability distributions
+CPDa = (CPDaX1 , . . . , CPDaXn )1 . Assuming no synchronic arc in Ga (we have Xi0 Xj0 | X1 , . . . , Xn ),
+spiti uses LearnT ree to learn separately a decision
+tree representation of each CPDaXi from the observation of the agent hs, a, s0 i with s = (x1 , . . . , xn ) and
+s0 = (x01 , . . . , x0n ), as shown in Figure 3 (step 4). Thus,
+the explicit representation of the global structure of
+dbns representing the transition functions is not built.
+|=
+
+random an action, independently of SQ .
+
+The LearnT ree algorithm has been implemented using iti (Utgoff et al., 1997) with χ2 as an informationtheoric metric, as described in the next section. We
+refer to Utgoff et al. (1997) for a detailed description of iti. Ga is quantified by Tree(CPDaXi )
+associated to each node Xi0 .
+LearnT ree computes an approximation of the conditional probability
+CPDaXi (Xi0 |P arentsa (Xi0 )) from the training examples
+present at each leaf of Tree(CPDaXi ) built by iti. The
+model Tree(M ) learned is then used in planning (Figure 2) to compute set SQ of action-value functions.
+4.3
+
+USING CHI-SQUARE TO DETECT
+THE DEPENDENCIES
+
+spiti uses χ2 as an information-theoric metric to determine the best test Tνi to install at a decision node.
+Once Tνi has been selected, we use χ2 as a test of
+independence between two probability distributions
+1
+
+Instead of having a different Tree(CPDaXi ) for each
+action and for each variable, one may maintain only one
+Tree(CPDXi ) for each variable by adding the action a to
+the set of attributes A. We did not consider this case in
+this paper.
+
+to avoid training data overfitting (Quinlan, 1986).
+Thus, a test Tνi on the binary attribute νi is installed
+only if the χ2 value computed for both probabilities
+F (ς|νi = true) and F (ς|νi = f alse) is above a threshold, noted τχ2 , determining whether or not the node
+must be split into two different leaves.
+Neither planning nor acting in spiti require to build an
+explicit representation of the global structure of dbns
+Ga . However, as shown in Figure 4, one may build
+such a representation by assigning to P arentsa (Xi0 )
+the set of variables Xi corresponding to the attributes
+νj used in the tests in each Tree(CPDaXi ).
+T ree(CP DX0 ):
+
+0.8
+
+T ree(CP DX1 ):
+X1
+T rue
+F alse
+0.8
+
+1.0
+
+1.0
+
+X0
+
+X00
+
+X1
+
+X10
+
+X2
+
+X20
+
+Time t
+
+T ree(CP DX2 ):
+X2
+
+with ∆Vl the label of the leaf l and Sl the size of the
+state space represented by l.
+
+X1
+
+0.8
+
+and Vπ as the average of the relative value error ∆V =
+(V ∗ − Vπ )/V ∗ (with V ∗ ≥ Vπ ). We compute ξπ with
+operators using tree representations. Given a policy
+Tree(π) to evaluate, we use the Structured Successive
+Approximation (ssa) algorithm (Boutilier et al., 2000)
+based on the exact transitions and reward functions to
+compute its associated value function Tree(Vπ ). Then,
+from set S∆V = {Tree(V ∗ ), Tree(Vπ )}, we first compute Tree(∆Vπ ) using the M erge(S∆V ) operator and
+using as combination function ∆V , the relative value
+error. Then, ξπ is computed according to:
+P
+l∈Tree(∆Vπ ) ∆Vl · Sl
+(2)
+ξπ = Q
+i∈|X| |Dom(Xi )|
+
+0.3
+
+Time t + 1
+
+Figure 4: Structure of a dbn G from a set of decision
+trees {Tree(CPDXi )}. In Tree(CPDX2 ), the leaf labeled 0.3 means that the probability for X20 to be true
+is P (X20 |X1 = F alse, X2 = F alse) = 0.3.
+spiti is initialized with a set of empty Tree(CPDaXi ),
+assuming when it starts that the variables Xi0 are all
+independent. When an attribute νj is installed at a
+decision node, a new dependency of Xi0 to the variable
+Xj associated with νj is defined.
+
+4.4.2
+
+Accuracy of the Model
+
+We introduce the measure Qχ2 to qualify the accuracy
+of the model learned by spiti. The accuracy of the
+model is complementary to the relative error because
+it evaluates the model learned in spiti independently
+of the reward function. Qχ2 is defined as:
+P
+P
+a∈A
+i∈|X| σa,i
+Q
+Qχ2 =
+(3)
+|A| ∗ i∈|X| |Dom(Xi )|
+with σa,i defined in Figure 5.
+Input: a, i ∈ |X| Output: σa,i
+1. σa,i = 0
+2. M erge({T reedef (CPDaXi ), T reet (CPDaXi )}) using as
+a combination function:
+σa,i = σa,i + Q(χ2(X 0 ,a,s0 ) ) · Sl
+i
+
+4.4
+
+EVALUATING SPITI
+
+We show in Section 5 that spiti performs better than a
+stochastic version of dyna-q (Sutton, 1990) in terms
+of discounted reward and size of the model built in
+structured rl problems. The reward and transition
+functions and the optimal value function are known
+for these problems. Based on that knowledge, additional criteria may be used, namely the relative error
+(Section 4.4.1) and the accuracy of the model (Section 4.4.2) to improve the evaluation of spiti. These
+criteria respectively measure how good a policy is compared to an optimal policy, and how accurate is the
+model of transitions learned by spiti.
+4.4.1
+
+Relative Error
+
+The optimal value function V ∗ , computed off-line using svi, may be used as a reference to evaluate a policy. We define the relative error, noted ξπ , between V ∗
+
+with Sl the size of the state space represented by lt and
+Q(χ2(X 0 ,a,s0 ) ) the probability associated with the value
+i
+
+χ2(X 0 ,a,s0 ) computed from the probability Pdef (Xi ) lai
+beling the leaf in T reedef (CPDaXi ) and Pt (Xi0 |s, a) labeling the leaf lt
+3. Return σa,i
+
+Figure 5: Computation of σa,i used in the evaluation
+of the model learned by spiti.
+The values χ2(X 0 ,a,s0 ) and Q(χ2(X 0 ,a,s0 ) ) are computed
+i
+i
+using implementations proposed in Press et al. (1992)
+with 1 degree of freedom. The probability Q(χ2(X 0 ,a,s0 ) )
+i
+is computed for each leaf and weighted with the size
+of the state space represented by the leaf, penalizing
+errors in the model that covers a large part of the
+state space. The average is obtained by dividing the
+weighted sum by the number of state/action pairs.
+
+RESULTS
+
+We present three different analyses based on empirical
+evaluations of spiti. The first analysis studies the relation between the value of the threshold τχ2 and the
+size of the model built by spiti on one hand, and between τχ2 and the relative error of the value function
+of the induced greedy policy on the other hand. The
+second analysis compares spiti to dyna-q in terms
+of discounted reward and model size. The last analysis studies the generalization property of the model
+learning process in spiti.
+
+πJ ,τ based on MJ ,τ is computed off-line using svi.
+Finally, we compute the relative error ξπ as described
+in Section 4.4.1.
+0.40
+0.35
+0.30
+
+Relative error
+
+5
+
+Coffee Robot
+Process Planning
+
+1600
+
+0.15
+
+0.05
+0.00
+
+1400
+
+Number of nodes
+
+Coffee Robot
+Process Planning
+
+0.20
+
+0.10
+
+1800
+
+0
+
+1
+
+2
+
+3
+4
+5
+Value of the threshold
+
+6
+
+7
+
+8
+
+1200
+1000
+
+Figure 7: Relative error induced from the model
+learned in spiti on the Coffee Robot and Process Planning problems. The value of τχ2 has a limited impact
+on the policy generated by spiti.
+
+800
+600
+400
+200
+0
+0
+
+1
+
+2
+
+3
+4
+5
+Value of the threshold
+
+6
+
+7
+
+8
+
+Figure 6: Number of nodes of the model learned in
+spiti on the Coffee Robot and Process Planning problems. A high value of τχ2 decreases significantly the
+size of the model learned.
+These analyses are run on a set of stochastic problems
+defined in Boutilier et al. (2000). A set of initial states
+and a set of terminal states are added to the problem
+definitions to let the agent perform multiple trials during an experiment. When an agent is in a terminal
+state, its new state is randomly initialized in one of
+the initial states. The set of initial states is composed
+of all the non-terminal states from which there is at
+least one policy reaching a terminal state. We run 20
+experiments for each analysis. When required, we use
+svi to compute off-line optimal policy using the span
+semi-norm as a termination criterion and ssa with the
+supremum norm as a termination criterion. We use
+γ = 0.9 for both algorithms.
+5.1
+
+0.25
+
+CHI-SQUARE THRESHOLD
+
+In order to study the influence of τχ2 on the quality
+of the policy, we use the following protocol: first, a
+random trajectory J is executed for T = 4000 time
+steps. Second, the value of τχ2 is fixed and a transition
+and reward model MJ ,τ is built from the trajectory
+by spiti as described in Section 4.2. Third, a policy
+
+The first empirical study is done on Coffee Robot
+and Process Planning. Both problems are defined in
+Boutilier et al. (2000) and the complete definition of
+their reward and transition functions is available on
+the spudd website2 . Coffee Robot is a stochastic problem composed of 4 actions and 6 boolean variables. It
+represents a robot that must go to a café and buy some
+coffee to deliver it to its owner. The robot reaches a
+terminal state when its owner has a coffee. Process
+Planning is a stochastic problem composed of 14 actions and 17 binary variables (1, 835, 008 state/action
+pairs). A factory must achieve manufactured components by producing, depending on the demand, high
+quality components (using actions such as hand-paint
+or drill) or low quality components (using actions such
+as spray-paint or glue).
+Figure 6 shows the size of the transition model built by
+spiti on the Coffee Robot and Process Planning problems for different values of τχ2 . It illustrates the impact
+of τχ2 on the number of nodes created in the trees and,
+consequently, on the number of dependencies between
+the variables of the fmdp. On both problems, the size
+of the model is at least divided by 2 for high values of
+τχ2 as compared to low values.
+Whereas the value of τχ2 has a significant impact on
+the size of the model, it has a much more limited impact on the generated policy πJ ,τ , as shown in Figure 7. Despite decreasing model sizes, the relative error EJ ,τ computed for πJ ,τ increases only slightly on
+2
+
+http://www.cs.ubc.ca/spider/jhoey/spudd/spudd.html
+
+both Coffee Robot and Process Planning problems.
+
+9000
+
+Noisy Noise:20%
+Noisy Noise:40%
+
+8000
+
+6000
+5000
+4000
+
+5.2
+
+3000
+2000
+1000
+0
+0
+
+1
+
+2
+
+3
+4
+5
+Value of the threshold
+
+6
+
+7
+
+8
+
+Figure 8: Size of the model learned in spiti on the
+Noisy problems with two different levels of noise. A
+high value of τχ2 decreases significantly the size of the
+model learned.
+To examine the consequences of the threshold τχ2 on
+a very stochastic problem, we define a problem named
+Noisy. Boutilier et al. (2000) define two problems,
+namely Linear and Expon, to illustrate respectively
+the best and worst case scenario for spi. The transition
+and reward functions of Noisy are defined according to
+the definition of the Linear problem with a constant
+level of noise on all existing transitions. We present
+additional results about spiti in the Linear , Expon
+and Noisy problems in Section 5.3.
+
+DISCOUNTED REWARD
+
+In this study, we compare spiti to a stochastic implementation of dyna-q (Sutton, 1990) on Coffee Robot
+and Process Planning. We use γ = 0.9 and a -greedy
+exploration policy with a fixed  = 0.1 for both dynaq and spiti. In dyna-q, we used α = 1.0, the number
+of planning steps is set to twice the size of the model,
+and Q(s, a) is initialized optimistically (with high values). In spiti, the results of the previous section show
+that a high value for the threshold τχ2 is appropriate.
+Thus, we set τχ2 = 7, 88 (corresponding to a probability of independence of 0.995).
+
+25
+
+20
+
+Discounted reward
+
+Number of nodes
+
+7000
+
+the impact of the threshold τχ2 is more important
+than in the previous problems Coffee Robot and Process Planning which contain some deterministic transitions. spiti builds a model from more than 9000
+nodes to less than 300 nodes for an identical trajectory. Figure 9 shows that on the Noisy problem, a
+more compact transition model generates a better policy than a larger transition model, even if this model
+has been learned from the same trajectory.
+
+15
+
+Optimal
+DynaQ
+Random
+Spiti
+
+10
+
+5
+
+Noisy Noise:20%
+Noisy Noise:40%
+
+0.8
+
+0
+0
+
+Relative error
+
+0.7
+
+0.6
+
+500
+
+1000
+
+1500
+
+2000
+Time
+
+2500
+
+3000
+
+3500
+
+4000
+
+Figure 10: Discounted reward obtained on the Coffee
+Robot problem. dyna-q and spiti execute quickly a
+near optimal policy on this small problem.
+
+0.5
+
+0.4
+
+0.3
+
+0.2
+0
+
+1
+
+2
+
+3
+4
+5
+Value of the threshold
+
+6
+
+7
+
+8
+
+Figure 9: Relative error induced from the model
+learned in spiti on the Noisy problem with two different levels of noise.
+Figure 8 shows that for a very stochastic problem,
+namely Noisy with two levels of noise, 20% and 40%,
+with a fixed size of 8 binary variables and actions,
+
+We also use as reference two agents noted random
+and optimal, executing respectively a random action
+and the best action at each time step. The discounted
+disc
+reward is defined as Rtdisc = rt + γ 0 Rt−1
+with rt the
+0
+reward received by the agent and γ = 0.993 .
+Figure 10 shows the discounted reward Rdisc obtained
+by the agents on the Coffee Robot problem. On this
+small problem, both dyna-q and spiti quickly execute
+a near optimal policy. However, the model learned by
+3
+We use γ 6= γ 0 to make the results illustrating Rdisc
+more readable.
+
+spiti is composed of approximately 90 nodes whereas
+dyna-q builds a model of 128 nodes, that is the number of transitions in the problem4 .
+
+1.0
+
+0.9
+
+Accuracy of the model
+
+0.8
+80
+70
+
+Discounted reward
+
+60
+50
+
+Optimal
+DynaQ
+Random
+Spiti
+
+40
+
+10
+
+500
+
+1000
+
+1500
+
+2000
+Time
+
+2500
+
+3000
+
+3500
+
+4000
+
+Figure 11: Discounted reward obtained on the Process Planning problem. spiti executes quickly a near
+optimal policy in a large structured problem, unlike
+dyna-q.
+Figure 11 shows the discounted reward Rdisc obtained
+by the agents on the Process Planning problem. spiti
+is able to execute a near optimal policy in approximately 2000 time steps, whereas dyna-q only starts
+to improve its policy after 4000 time steps. Comparing the size of the transition model learned, dyna-q
+builds a representation of approximately 2500 nodes
+which would keep growing if the experiment was continued whereas spiti builds a structured representation stabilized to less than 700 nodes.
+GENERALIZATION IN MODEL
+LEARNING IN SPITI
+
+In this third study, we use Qχ2 to qualify the loss of
+accuracy of the model built by the Learn algorithm
+(Figure 3) when the size of a problem grows whereas
+the experience of the agent does not. We use the following protocol: first, a random trajectory J is executed in the environment for T = 4000 time steps.
+T
+Then, we compute QJ
+χ2 with the transition model MJ
+built from the trajectory J by spiti (as described in
+Section 4.2) and the actual definition of the problem.
+Finally, we restart using the same problem with one
+more action and one more binary variable. We use
+a random trajectory in this experiment to avoid any
+dependency to the reward function learning process.
+The experiment is run on the three following problems:
+Linear , Expon and Noisy, using a level of noise of
+4
+
+0.5
+
+0.3
+4
+
+20
+
+5.3
+
+0.6
+
+0.4
+
+30
+
+0
+0
+
+0.7
+
+A terminal state does not have transitions.
+
+Expon
+Linear
+Noisy
+6
+
+8
+
+10
+
+12
+14
+Problem size
+
+16
+
+18
+
+20
+
+Figure 12: Accuracy of the model learned by spiti after T = 4000 time steps on problems with variable size.
+The accuracy decreases linearly whereas the size of the
+problem grows exponentially (from 64 to 20, 971, 520
+state/action pairs).
+20%. We used τχ2 = 7, 88 to build the model MJT .
+The size of the problem grows from 24 · 4 = 64 to
+220 · 20 = 20, 971, 520 state/action pairs. Figure 12
+shows that the accuracy Qχ2 of the model built by
+spiti decreases linearly with the size of the problems.
+
+6
+
+DISCUSSION
+
+sdyna is an architecture designed to integrate planning, learning and acting in fmdps. In this paper, we
+have focused on spiti, an instantiation of sdyna, that
+uses decision trees as factored representation. spiti simultaneously learns a structured model of the reward
+and transition functions and uses an incremental version of svi to compute its policy.
+spiti learns the structure of a rl problem using χ2 as
+a test of independence between two probability distributions. We have first shown that the threshold τχ2
+used to determine whether or not new dependencies
+should be added to the transition model has a significant impact on the size of the model learned and
+a more limited impact on the quality of the policy
+generated by spiti (Section 5.1). Moreover, figure 8
+and figure 9 show that setting τχ2 to a low value may
+not be adapted in very stochastic problems. Indeed,
+large models may contain unnecessary dependencies
+and, consequently, require more samples to be accurately quantified. When setting τχ2 to a high value,
+spiti is able to build a compact representation of the
+transition and reward functions of the problem without degrading its policy.
+Second, we have shown that spiti is able to learn the
+
+structure of rl problems with more than one million
+state/action pairs and performs better than dyna-q.
+Unlike tabular learning algorithms, decision tree induction algorithms build factored representations that
+endow the agent with a generalization property. The
+decision trees used to represent the transition and reward functions in spiti propose a default class distribution for examples that have not been presented.
+Consequently, an agent may be able to choose adequate actions in states not visited yet. As we have
+shown in Section 5.2, the generalization property in
+spiti accelerates the resolution of large rl problems.
+Third, we have used an accuracy measure to study the
+generalization property of transition model learning in
+spiti. We have shown that for a constant number of
+time steps, the accuracy of the model built by spiti decreases linearly when the number of state/action pairs
+in the problem grows exponentially. This result indicates that spiti is able to scale well in larger structured
+rl problems.
+spiti has been evaluated using three different criteria: the relative error ξπ , the discounted reward Rdisc
+and the accuracy measure Qχ2 . Two of these criteria
+cannot be applied in real world rl problems: the relative error requires to know the optimal value function
+whereas the accuracy measure requires to know the exact transition function of the problem. Moreover, the
+discounted reward is the only criterion that takes into
+account the loss of reward received due to the exploration policy. Thus, ξπ and Qχ2 are complementary to
+Rdisc that fully evaluates all the parameters of spiti
+and may be used on all kind of rl problems.
+
+7
+
+CONCLUSION AND FUTURE
+WORK
+
+We have described in this paper a general approach
+to model-based rl in the context of fmdps, assuming that the structure of problems is unknown. We
+have presented an instantiation of this approach called
+spiti. Our results show empirically that spiti performs better than a tabular model-based rl algorithm
+by learning a compact representation of the problem
+from which it can derive a good policy, exploiting the
+generalization property of its learning method, particularly when the problem gets larger.
+However, spiti is currently limited by its exploration
+policy, -greedy, and its planning method, adapted
+from svi. We are currently working on integrating
+other model-based learning (Guestrin et al., 2002) and
+planning (Hoey et al., 1999; Guestrin et al., 2003)
+methods in fmdps to address larger problems than
+those addressed in this paper.
+
+ACKNOWLEDGEMENT
+We wish to thank Christophe Marsala and Vincent
+Corruble for useful discussions. Thanks to the anonymous referees for their helpful suggestions.
+
+References
+Boutilier, C., Dearden, R., & Goldszmidt, M. (1995). Exploiting Structure in Policy Construction. Proceedings of
+the Fourteenth International Joint Conference on Artificial Intelligence (IJCAI-95) (pp. 1104–1111). Montreal.
+Boutilier, C., Dearden, R., & Goldszmidt, M. (2000).
+Stochastic Dynamic Programming with Factored Representations. Artificial Intelligence, 121, 49–107.
+Chickering, D. M., Heckerman, D., & Meek, C. (1997). A
+Bayesian Approach to Learning Bayesian Networks with
+Local Structure. Proceedings of the 13th International
+Conference on Uncertainty in Artificial Intelligence (pp.
+80–89).
+Dean, T., & Kanazawa, K. (1989). A Model for Reasoning
+about Persistence and Causation. Computational Intelligence, 5, 142–150.
+Friedman, N., & Goldszmidt, M. (1998).
+Learning
+Bayesian Networks with Local Structure. Learning and
+Inference in Graphical Models. M. I. Jordan ed.
+Guestrin, C., Koller, D., Parr, R., & Venkataraman,
+S. (2003). Efficient Solution Algorithms for Factored
+MDPs. Journal of Artificial Intelligence Research, 19,
+399–468.
+Guestrin, C., Patrascu, R., & Schuurmans, D. (2002).
+Algorithm-Directed Exploration for Model-Based Reinforcement Learning in Factored MDPs. ICML-2002 The
+Nineteenth International Conference on Machine Learning (pp. 235–242).
+Hoey, J., St-Aubin, R., Hu, A., & Boutilier, C. (1999).
+SPUDD: Stochastic Planning using Decision Diagrams.
+Proceedings of the Fifteenth Conference on Uncertainty
+in Artificial Intelligence (pp. 279–288). Morgan Kaufmann.
+Press, W. H., Flannery, B. P., Teukolsky, S. A., & Vetterling, W. T. (1992). Numerical Recipes: The Art of
+Scientific Computing. Cambridge University Press.
+Quinlan, J. R. (1986). Induction of Decision Trees. Machine Learning, 1, 81–106.
+Sutton, R. S. (1990). Integrated architectures for learning,
+planning, and reacting based on approximating dynamic
+programming. Proceedings of the Seventh International
+Conference on Machine Learning (pp. 216–224). San
+Mateo, CA. Morgan Kaufmann.
+Utgoff, P. (1986). Incremental Induction of Decision Trees.
+Machine Learning, 4, 161–186.
+Utgoff, P. E., Nerkman, N. C., & Clouse, J. A. (1997). Decision Tree Induction Based on Efficient Tree Restructuring. Machine Learning, 29, 5–44.
+
+

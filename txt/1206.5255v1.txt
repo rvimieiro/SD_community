@@ -1,0 +1,1195 @@
+BRAZIUNAS & BOUTILIER
+
+25
+
+Minimax regret based elicitation of generalized additive utilities
+
+Darius Braziunas
+Department of Computer Science
+University of Toronto
+Toronto, ON M5S 3G4
+darius@cs.toronto.edu
+
+Abstract
+We describe the semantic foundations for elicitation of generalized additively independent (GAI)
+utilities using the minimax regret criterion, and
+propose several new query types and strategies
+for this purpose. Computational feasibility is obtained by exploiting the local GAI structure in the
+model. Our results provide a practical approach
+for implementing preference-based constrained
+configuration optimization as well as effective
+search in multiattribute product databases.
+
+1 Introduction
+Representing, reasoning with, and eliciting the preferences
+of individual users is a fundamental problem in the design
+of decision support tools (and indeed, much of AI). A key
+issue in preference research is dealing with large, multiattribute problems: preference representation and elicitation techniques must cope with the exponential size of the
+outcome space. By exploiting intrinsic independencies in
+preference structure, factored utility models can provide
+tractable (although sometimes approximate) solutions to
+the problem. Utility function structure (such as additive,
+multilinear, generalized additive, etc.) can be used to represent large utility models very concisely [10]. While additive models are the most widely used in practice, generalized additive independence models (GAI) have recently
+generated interest because of their greater flexibility and
+applicability [1, 3, 8, 4, 6]. Even though the semantic
+foundations of the GAI representation were described by
+Fishburn decades ago [7], the design of effective elicitation
+techniques has gained attention only recently [4, 8, 6].
+In this paper, we develop a new model for utility elicitation
+in GAI models based on the minimax regret decision criterion [13, 11]. Minimax regret provides a robust way of
+making decisions under utility function uncertainty, minimizing worst-case loss under all possible realizations of
+a user’s utility function [3, 12, 4]; as such it is applicable when distributional information over utility functions
+
+Craig Boutilier
+Department of Computer Science
+University of Toronto
+Toronto, ON M5S 3G4
+cebly@cs.toronto.edu
+
+is not easily available. Regret has also proven to be an
+effective driver of preference elicitation [14, 4, 5]. However, prior work on regret-based elicitation for GAI models
+has ignored key semantic issues, thus simplifying the approach to both elicitation and regret computation and optimization. By building on the semantic foundations of GAI
+elicitation laid out in [6], we identify new classes of elicitation queries suitable for regret-based elicitation, and propose several new query strategies based on these classes.
+Our approach emphasizes local queries over small sets of
+attributes; but global queries over full outcomes are required to calibrate certain terms across GAI factors (a problem ignored in previous work on regret-based elicitation).
+However, we will demonstrate that most of the “heavy lifting” can be achieved using local queries. Our new approach guarantees the semantic soundness of the utility representation in a way that techniques that ignore interactions
+across factors do not. In addition, our new queries impose
+much more intricate constraints on GAI model parameters
+than those considered in previous work. For this reason,
+we develop new formulations of the linear mixed integer
+programs (MIPs) that are used in regret-based optimization, and show that the problem can be effectively solved
+despite the added complexity.
+We begin in Sec. 2 with relevant background on multiattribute utility. We discuss appropriate forms of both local and global queries for GAI elicitation in Sec. 3. We
+then describe effective MIP formulations for minimax regret computation in Sec. 4, including discussion of regret
+computation in multiattribute product databases. Sec. 5
+presents several elicitation strategies based on the query
+types above as well as empirical evaluation. Future directions are summarized in Sec. 6.
+
+2 Multiattribute preferences
+Assume a set of attributes X1 , X2 , . . . , Xn , each with finite
+domains, which define a set of outcomes X = X1 × · · · ×
+Xn . The preferences of a user, on whose behalf decisions
+are made, are captured by a utility function u : X 7→ R. A
+utility function can viewed as reflecting (qualitative) pref-
+
+26
+
+BRAZIUNAS & BOUTILIER
+
+erences over lotteries (distributions over outcomes) [10],
+with one lottery preferred to another iff its expected utility
+is greater. Let hp, x> ; 1 − p, x⊥ i denote the lottery where
+the best outcome x> is realized with probability p, and
+the worst outcome x⊥ with probability 1 − p; we refer to
+best and worst outcomes as anchor outcomes. Since utility
+functions are unique up to positive affine transformations,
+it is customary to set the utility of the best outcome x> to
+1, and the utility of the worst outcome x⊥ to 0. If a user
+is indifferent between some outcome x and the standard
+gamble hp, x> ; 1 − p, x⊥ i, then u(x) = p.
+2.1 Additive utilities
+Since the size of outcome space is exponential in the number of attributes, specifying the utility of each outcome
+is infeasible in many practical applications. Most preferences, however, exhibit internal structure that can be used
+to express u concisely. Additive independence [10] is commonly assumed in practice, where u can be written as a
+sum of single-attribute subutility functions:1
+u(x) =
+
+n
+X
+i=1
+
+ui (xi ) =
+
+n
+X
+
+λi vi (xi ).
+
+i=1
+
+The subutility functions ui (xi ) = λi vi (xi ) can be defined
+as a product of local value functions (LVFs) vi and scaling constants λi . This simple factorization allows us to
+separate the representation of preferences into two components: “local” and “global.” Significantly, LVFs can be
+defined using “local” lotteries that involve only a single attribute: vi (xi ) = p, where p is the probability at which
+the user is indifferent between two local outcomes xi and
+⊥
+2
+hp, x>
+i ; 1 − p, xi i, ceteris paribus. Since we can define
+value functions independently of other attributes, we can
+also assess them independently using queries only about
+values of attribute i. This focus on preferences over individual attributes has tremendous practical significance, because people have difficulty taking into account more than
+five or six attributes at a time [9].
+The scaling constants λi are “global” and are required to
+properly calibrate LVFs across attributes. To define the
+scaling constants, we first introduce a notion of a reference
+(or default) outcome, denoted by x0 = (x01 , x02 , . . . , x0n ).
+The reference outcome is an arbitrary outcome, though it is
+common to choose the worst outcome x⊥ as x0 (more generally, any salient outcome, such as an “incumbent” will
+prove useful in this role). Let x>i be a full outcome where
+the ith attribute is set to its best level whereas other attributes are fixed at their reference levels; x⊥i is defined
+similarly. Then, λi = u(x>i ) − u(x⊥i ). To assess scaling
+1
+
+This decomposition is possible iff a user is indifferent between lotteries with the same marginals on each attribute.
+2 >
+xi and x⊥
+i are the best and worst levels of attribute i. With⊥
+out loss of generality, we assume vi (x>
+i ) = 1, vi (xi ) = 0.
+
+constants λi , one must ask queries about 2n global outcomes x>i and x⊥i for each attribute i.3 These global
+outcomes are special because they involve varying only a
+single feature from the reference outcome. This ease of assessment makes additive utility the model of choice in most
+practical applications.
+2.2 Generalized additive utilities
+Simple additive models, although very popular in practice,
+are quite restrictive in their assumptions of attribute independence. A more general utility decomposition, based
+on generalized additive independence (GAI), has recently
+gained more attention because of its additional flexibility
+[1, 3, 8, 4, 6]. It can model “flat” utility functions with no
+internal structure as well as linear additive models. Most
+realistic problems arguably fall somewhere between these
+two extremes.
+GAI models [7, 1] additively decompose a utility function
+over (possibly overlapping) subsets of attributes. Formally,
+assume a given collection {I1 , . . . , Im } of possibly intersecting attribute (index) sets, or factors. Given an index set
+I ⊆ {1, . . . , n}, we define XI = ×i∈I Xi to be the set of
+partial outcomes (or suboutcomes) restricted to attributes in
+I. For a factor j, xIj , or simply xj , is a particular instantiation of attributes in factor j. The factors are generalized
+additively independent if and only if the user is indifferent
+between any two lotteries with the same marginals on each
+set of attributes [7]. Furthermore, if GAI holds, the utility
+function can be written as a sum of subutility functions [7]:
+u(x) = u1 (xI1 ) + . . . + um (xIm ).
+The key difference between additive and GAI models with
+regard to elicitation (rather than representation) lies in the
+semantics of subutility functions ui . In additive models, the
+quantities ui (xi ) = λi vi (xi ) have a very clear decisiontheoretic meaning.4 In contrast, GAI subutility functions
+are not unique and, in the absence of further qualifications, do not have a well-defined semantic interpretation.
+This makes elicitation of GAI model parameters problematic. Intuitively, since utility can “flow” from one subutility
+factor to another through shared attributes, the values of
+subutility uj do not directly represent the local preference
+relation among the attributes in factor j.
+For effective elicitation we therefore need a representation of GAI utilities such that: 1) all GAI model parameters have a sound semantic interpretation; and, 2) the GAI
+structure is reflected by separating the parameters into local
+and global groups, in a way analogous to additive models.
+Building on the foundational work of Fishburn [7], we [6]
+Only n outcomes if the reference outcome is also the worst.
+In additive utility models, the LVF vi (xi ) is simply the
+probability p at which the user is indifferent between xi and
+⊥
+>i
+) − u(x⊥i ).
+hp, x>
+i ; 1 − p, xi i, ceteris paribus, and λi is u(x
+3
+4
+
+BRAZIUNAS & BOUTILIER
+demonstrate that the following canonical representation of
+GAI utilities achieves both goals:
+u(x) =
+
+m
+X
+
+uj (xj ) =
+
+j=1
+
+m
+X
+
+λj ūj (xj ).
+
+(1)
+
+j=1
+
+Here, similar to additive models, λj is a scaling constant,
+and ūj is an unscaled subutility function, which itself is a
+sum of the values of a function vj (to be defined later) at
+certain suboutcomes related to xj :
+ūj (xj ) = vj (xj ) +
+
+j−1
+X
+
+(−1)
+
+k=1
+
+k
+
+X
+
+vj (xj [
+
+1≤i1 <···ik <j
+
+k
+\
+
+27
+
+Knowing the dependency structure, Eq. 2 can be simplified
+by introducing the following notation. Let Nj be the number of local configurations (settings of attributes) in factor
+j (e.g., with 3 boolean attributes, Nj = 8). The LVF vj
+N
+can be expressed by Nj parameters vj1 , . . . , vj j such that
+vji = vj (xj ), where i is the index of the local configuration
+xj . Then, Eq. 2 can be rewritten as
+X
+Cxi j vji ,
+(3)
+ūj (xj ) =
+i∈1..Nj
+
+Iis ∩Ij ]).
+
+s=1
+
+(2)
+
+The sum in the equation is only over non-empty interTk
+sections s=1 Iis ∩ Ij . For any x, x[I] is an outcome
+where attributes not in I are set to the reference value (i.e.,
+Xi = xi if i ∈ I, and Xi = x0i if i ∈
+/ I). For further
+details, we refer to [6].
+Our key result [6] shows that the function vj in Eq. 2 generalizes LVFs defined earlier for additive models. Let the
+conditioning set Kj of factor j be the set of all attributes
+that share GAI factors with attributes in j. Intuitively,
+fixing the attributes in the conditioning set to any value
+“blocks” the influence of other factors on factor j. In a
+manner similar to additive models, the local value vj (xj )
+of suboutcome xj is simply p, the probability that induces
+indifference between xj and the local standard gamble
+⊥
+hp, x>
+j ; 1 − p, xj i, given that attributes in the conditioning set Kj are fixed at reference levels, ceteris paribus. We
+refer to the setting of attributes in Kj to their reference values (ceteris paribus) as the local value condition. Here x>
+j
+and x⊥
+j are the best and worst suboutcomes in factor j assuming the local value condition; by definition, the LVFs
+⊥
+are normalized, so vj (x>
+j ) = 1 and vj (xj ) = 0. We
+see, then, that LVFs have a very clear semantic interpretation; they calibrate local preferences relative to the best
+and worst factor suboutcomes under the local value condition. Thus LVFs are local, involving only attributes in
+single factors and their (usually small) conditioning sets.
+The global scaling constants λj are defined in a way analogous to the additive utility case. Let x>j and x⊥j be the
+best and the worst (full) outcomes, given that attributes
+not in factor j are set to their reference levels. Then,
+⊥
+λj = u(x>j ) − u(x⊥j ) = u>
+j − uj . We will refer to
+⊥
+u>
+j and uj as anchor utilities for factor j.
+To compute the unscaled subutility function ūj (xj ), one
+needs to know
+Tk which local suboutcomes are involved (in
+the form xj [ s=1 Iis ∩ Ij ]) on the right-hand side of Eq. 2;
+Tk
+this amounts to finding all nonempty sets s=1 Iis ∩ Ij
+and recording the sign (+/−) for the corresponding LVFs.
+We refer to this procedure as computing the dependency
+structure of a GAI model. An efficient graphical search
+algorithm for computing such dependencies among LVFs
+was first described in [6].
+
+where the Cxi j are integer coefficients precomputed using
+the dependency structure (most of these are zero).
+Thus, a GAI model, similar to simple additive utility functions, is additively decomposed into factors that are a prod⊥
+uct of scaling constants, or weights, λj = u>
+j − uj , and a
+linear combination of LVF parameters:
+u(x) =
+
+X
+
+2
+⊥
+4(u>
+j − uj )
+
+j
+
+X
+
+3
+Cxi j vji 5 .
+
+(4)
+
+i∈1..Nj
+
+This representation of GAI utilities achieves the goals described above: the representation is unique, all parameters
+have a well-defined semantics, and they are grouped into
+local (LVFs) and global (anchor utilities) parameters. The
+next section introduces appropriate queries for assessing
+these GAI model parameters. (The GAI model structure
+is represented by parameters Cxi j .)
+
+3 Elicitation queries
+In general, eliciting complete preference information is
+costly and, in most cases, unnecessary for making an optimal decision. Instead, elicitation and decision making can
+be viewed as a single process whose goal is to achieve the
+right tradeoff between the costs of interaction, potential improvements of decision quality due to additional preference
+information, and the value of a terminal decision [2].
+The types of queries one considers is an integral part of
+the preference elicitation problem. Some queries are easy
+to answer, but do not provide much information, while
+more informative queries are often costly. Computing or
+estimating the value of information can vary considerably
+for different query types. Finally, allowable queries define the nature of constraints on the feasible utility set. We
+broadly distinguish global queries over full outcomes from
+local queries over subsets of outcomes. In most multiattribute problems, people can meaningfully compare outcomes with no more than five or six attributes [9]. Therefore, we propose local counterparts to global queries that
+apply to a subset of attributes.
+From Eq. 4, we can see that a GAI utility function can be
+fully assessed by eliciting the LVF parameters vji and the
+⊥
+anchor utilities u>
+j and uj . The LVF parameters can be
+
+28
+
+BRAZIUNAS & BOUTILIER
+
+determined by posing local queries; such queries do not
+require a user to consider the values of all attributes. In addition, to achieve the right calibration of the LVFs, we need
+to elicit utilities of a few full outcomes: for each factor, we
+must know the utility of the best and the worst outcomes
+given that attributes in other factors are set to their refer⊥
+ence levels (i.e., elicit the values u>
+j and uj ).
+
+Anchor comparison queries We can also ask a user
+to compare anchor outcomes from different factors: “Do
+you prefer global outcome x>k to x⊥l ”? If “yes”, then
+⊥
+>
+⊥
+u>
+k ≥ ul ; if “no”, then uk < ul . Such anchor comparison (AC) queries are usually much easier to answer than
+anchor bound queries.
+
+We will consider four types of queries for elicitation. The
+following queries are well-defined semantically, relatively
+simple, and easy to explain to non-expert users.
+
+4 Minimax regret calculation
+
+Local bound queries An LVF calibrates utilities of partial outcomes with respect to partial “anchor” outcomes x>
+j
+and x⊥
+j , given that the attributes in conditioning set Kj are
+fixed at their reference levels. A local bound (LB) query on
+parameter vjx is as follows: “Assume that the attributes in
+Kj are fixed at reference levels. Would you prefer the par⊥
+tial outcome xj to a lottery hx>
+j , p; xj , 1 − pi, assuming
+that the remaining attributes are fixed at same levels (ceteris paribus)?” If the answer is “yes”, vjx ≥ p; if “no”,
+then vjx < p. By definition, the local value parameters vjx
+lie in [0,1]. This binary (yes/no) query differs from a direct
+(local) standard gamble query since we do not ask the user
+to choose the indifference level p, only bound it.
+Local comparison queries Local comparisons are natural and easy to answer. A local comparison (LC) query
+asks a user to compare two partial outcomes: “Assume that
+the attributes in Kj are fixed at reference levels. Would
+you prefer partial outcome xj to partial outcome x0j , ce0
+teris paribus?” If the answer is “yes”, vjx ≥ vjx ; if “no”,
+0
+then vjx < vjx .
+Anchor bound queries The scaling constant, or weight,
+⊥
+for a subutility function ūj is λj = u>
+j − uj , where
+>
+uj is the global utility of the outcome in which the j th
+factor is set to its best value, and all the other attributes
+are fixed at reference levels. Similarly, u⊥
+j is the utility of the “bottom anchor” of factor j. Utilities of an⊥
+>
+⊥
+chor levels u>
+1 , u1 , . . . , um , um must be obtained using
+global queries. However, we need only ask 2m direct utility queries over full outcomes; this is the same number
+of global queries required for scaling in the additive case
+(considering each attribute as a factor).
+Instead of eliciting exact anchor utilities directly, we propose global queries that are easier to answer. An anchor
+bound (AB) query asks: “Consider a full outcome x>j ,
+where attributes in factor j are set to their best values, and
+other attributes are fixed at reference levels. Do you prefer
+x>j to a lottery hx> , p; x⊥ , 1 − pi?” A “yes” response
+>
+gives u>
+j ≥ p; and “no”, uj < p (assuming, without loss
+>
+of generality, that u(x ) = 1 and u(x⊥ ) = 0). An analogous query exists for the “bottom” anchor x⊥j .
+
+In our model, the uncertainty over user utility functions is
+defined by (linear) constraints on utility function parameters, specifically, those induced by responses to queries of
+the form above. Without distributional information w.r.t.
+possible utility functions, the minimax regret decision criterion is especially suitable. It requires that we recommend
+a feasible outcome x∗ that minimizes maximum regret with
+respect to all possible realizations of the user’s utility function [3, 12, 4]. This guarantees worst-case bounds on the
+quality of the decision made under the type of strict uncertainty induced by the queries above [14, 4, 5]. In case
+further preference information is available, a regret-based
+elicitation policy can be employed to reduce utility uncertainty and minimize interaction costs to the extent where
+an (approximately) optimal decision can be recommended
+(see Sec. 5).
+Let U be the set of feasible utility functions, defined by
+constraints—induced by user responses to queries—on the
+⊥
+values of factor anchors u>
+j , uj (for each factor j), and
+constraints on the LVF parameters vji . Let F eas(X) ⊆ X
+be the set of feasible outcomes (e.g., defined by a set of hard
+constraints H). We define minimax regret in three stages
+(following [4]). The pairwise regret of choosing x instead
+of x0 w.r.t. U is R(x, x0 , U) = maxu∈U u(x0 ) − u(x). The
+maximum regret of choosing outcome x is M R(x, U) =
+maxx0 ∈F eas(X) R(x, x0 , U). Finally, the outcome that
+minimizes max regret is the minimax optimal decision:
+M M R(U) = minx∈F eas(X) M R(x, U). We develop
+tractable formulations of these definitions for GAI models.
+Pairwise regret Given a GAI model, the pairwise regret
+of x w.r.t. x0 over U is:
+R(x, x0 , U) = max u(x0 ) − u(x)
+u∈U
+X
+[uj (x0j ) − uj (xj )]
+= max
+u∈U
+
+=
+
+=
+
+j
+
+max
+
+⊥ i
+{u>
+j ,uj ,vj }
+
+max
+
+⊥ i
+{u>
+j ,uj ,vj }
+
+X
+j
+
+X
+j
+
+(5)
+
+⊥
+0
+(u>
+j − uj )(ūj (xj ) − ūj (xj ))
+
+2
+4(u>
+j
+
+−
+
+u⊥
+j )
+
+X
+i∈1..Nj
+
+3
+(Cxi 0j
+
+−
+
+Cxi j )
+
+vji 5 .
+
+In general, when constraints on utility space tie together
+parameters from different factors, regret computation has a
+quadratic objective. Such constraints might arise, for example, from global comparison queries. With linear constraints, this becomes a quadratic program.
+
+BRAZIUNAS & BOUTILIER
+Since factors reflect intrinsic independencies among attributes, it is natural to assume that utility constraints involve only parameters within the same factor. The constraints induced by local comparison or bound queries, for
+instance, have this form. We call constraints involving parameters within a single factor local. This allows modeling
+regret computation linearly as we discuss below.
+If the constraints on local value parameters vji are local then
+Eq. 5 can be simplified by pushing one “max” inward. This
+⊥
+is made possible by the fact that the scaling factors u>
+j −uj
+0
+are always positive: R(x, x , U) =
+=
+
+=
+=
+
+X
+
+max
+
+⊥ i
+{u>
+j ,uj ,vj }
+
+max
+
+max
+
+⊥
+{u>
+j ,uj }
+
+i∈1..Nj
+
+2
+4(u>
+j
+
+u⊥
+j ) max
+{vji }
+
+−
+
+j
+
+X
+
+3
+
+X
+
+⊥
+4(u>
+j − uj )
+
+j
+
+X
+
+⊥
+{u>
+j ,uj }
+
+2
+
+(Cxi 0j − Cxi j ) vji 5
+
+X
+i∈1..Nj
+
+3
+(Cxi 0j
+
+−
+
+Cxi j )
+
+vji 5
+
+0
+
+⊥
+x,x
+(u>
+,
+j − uj ) r̄j
+
+(6)
+
+{vj }
+
+0
+
+r̄jx,x =
+
+X
+
+max (Cxi 0j − Cxi j ) vji ,
+{vji }
+
+(Cxi 0 − Cxi j ) max(vji ), if Cxi 0 − Cxi j ≥ 0,
+j
+
+j
+
+j
+
+Maximum regret The max regret of choosing x is
+M R(x, U):
+
+=
+
+x0 ∈F eas(X) {u> ,u⊥ }
+j
+
+XX
+
+max
+
+0
+⊥
+{Zjx ,u>
+j ,uj }
+
+j
+
+R(x, x0 , U)
+
+max
+
+0
+
+0
+
+⊥
+x,x
+(u>
+Zjx ,
+j − uj ) r̄j
+
+x0j
+
+where A are state definition constraints tying binary indi0
+cators Zjx with consistent attribute assignments, and H are
+domain constraints defining feasible configurations. For
+0
+each factor j, only one of the indicators Zjx = 1.
+Using the “big-M” transformation, the quadratic optimization above can be linearized by introducing variables
+0
+Yjx which can be thought of as representing the product
+⊥
+x0 5
+(u>
+j − u j ) Zj :
+XX
+
+max
+
+0
+0
+⊥
+{Yjx ,Zjx ,u>
+j ,uj }
+
+j
+
+0
+
+0
+
+r̄jx,x Yjx ,
+
+(10)
+
+x0j
+
+8
+0
+0
+0 ≤ Yjx ≤ Mj Zjx , ∀j, x0j ,
+>
+<P
+0
+x
+⊥
+= u>
+subject to
+j − uj , ∀j,
+x0j Yj
+>
+:
+A, H and U.
+
+In the formulation above, the first constraint ensures that
+0
+0
+0
+0
+Yjx = 0 whenever Zjx = 0. If Zjx is one, Yjx is bounded
+⊥
+by some constant Mj ≥ u>
+j −uj , and the second constraint
+x0
+⊥
+ensures that Yj achieves the optimal value of u>
+j − uj .
+0
+The Yjx ≥ 0 constraint is included because the difference
+⊥
+u>
+j − uj is by definition always positive. Since the objective is now linear, the problem is a linear MIP.
+
+(8)
+
+min
+
+x∈F eas(X)
+
+M R(x, U).
+
+We can express this optimization as (linear) MIP, too:
+M M R(U) = min
+m, subject to
+x
+{Zj ,m}
+
+(11)
+
+8
+P >
+x,x0
+⊥
+v
+<m ≥
+[(uj −u⊥
+] Zjx , ∀x0 ∈ F eas(X), u>
+j )r̄j
+j , uj ∈ U ,
+
+:
+u(x0 ) − u(x)
+A, H and U,
+2
+3
+X
+X
+where Uv ⊂ U is a set of vertices of the polytope that
+⊥
+4(u>
+(Cxi 0 − Cxi j ) vji 5
+j − uj )
+>
+⊥
+
+⊥ i
+x0 ∈F eas(X),{u>
+j ,uj ,vj }
+
+j
+
+i∈1..Nj
+
+defines the feasible values of anchor utilities uj , uj . In
+practice, we avoid the exponential number of constraints
+
+j
+
+If local value constraints involve only local value parameters within their own factors, the max regret expression
+above simplifies to:
+M R(x, U) =
+
+j
+
+j,xj
+
+x0 ∈F eas(X),u∈U
+
+max
+
+0
+
+⊥
+x,x
+(u>
+j − uj ) r̄j
+
+subject to constraints A, H and U,
+
+M M R(U) =
+
+(Cxi 0 − Cxi j ) min(vji ), if Cxi 0 − Cxi j < 0.
+j
+
+X
+
+max
+
+Minimax regret Our goal is to find a feasible configuration x∗ that minimizes maximum regret
+
+j
+
+=
+
+=
+
+(7)
+
+where max{vji } (Cxi 0 − Cxi j ) vji =
+
+max
+
+max
+
+j
+
+i∈1..Nj
+
+i∈1..Nj
+
+x0 ∈F eas(X)
+
+M R(x, U) =
+
+M R(x, U) =
+
+can be precomputed by solving a small linear program
+(whose size is bounded by the factor size).
+If constraints on LVF parameters are bound constraints
+only, and therefore independent of each other, we can do
+without linear programming when computing the local re0
+gret r̄jx,x (by pushing the max within the sum):
+
+=
+
+0
+
+where local regrets r̄jx,x can be precomputed beforehand
+and treated as constants.
+This optimization can be recast as a quadratic MIP:
+
+j
+
+where (unscaled) “local regret”
+X
+0
+(Cxi 0j − Cxi j ) vji
+r̄jx,x = max
+i
+
+(
+
+29
+
+max
+
+x0 ∈F eas(X),{u>
+,u⊥
+}
+j
+j
+
+X >
+x,x0
+(uj − u⊥
+,
+j ) r̄j
+j
+
+(9)
+
+5
+In practice, we need not introduce extra variables and constraints, instead placing attribute consistency constraints A di0
+rectly on continuous variables Yjx . However, the somewhat more
+transparent formulation here is presented for clarity (and does not
+perform significantly worse computationally).
+
+30
+
+BRAZIUNAS & BOUTILIER
+
+(one for each feasible adversary configuration x0 and an⊥
+chor utilities u>
+j , uj ) using an iterative constraint generation procedure that generates the (small) set of active constraints at the optimal solution. This requires solving the
+MIP in Eq. 11 with only a subset of constraints, generating the maximally violated constraint at the solution of this
+relaxed MIP (by solving the max regret MIP in Eq. 10 for
+0
+⊥ x,x
+the factor regrets (u>
+), and repeating until no
+j − uj )r̄j
+violated constraints are found (see [4] for details).
+
+Multiattribute product databases The MIP formulations above assume that the space of feasible configurations is defined by a set of constraints H specifying allowable combinations of attributes. Alternatively, the set
+of choices may be the elements of a multiattribute product
+database, in which the set of feasible outcomes is specified explicitly, namely, as the set of all products in the
+database. Preference-based search of, and choice from,
+such a database can be effected using minimax regret as
+well, but can in fact be somewhat simpler computationally.
+For any two database items x and x0 , pairwise regret
+R(x, x0 , U) can be computed using Eq. 6. The max regret M R(x) of x is determined by considering its pairwise regret with each other item. To determine the optimal product (i.e., with minimax regret), we compute the
+M R(x) of each item x and choose the one with least max
+regret. This latter computation can be sped up considerably
+by iteratively generating minimax optimal candidate products against a current set of “adversary” items and testing
+their optimality. In practice, much like constraint generation, this speed up reduces the complexity of the algorithm
+from quadratic to linear in the size of the database.
+
+5 Elicitation strategies
+Minimax regret allows one to bound the loss associated
+with the recommended decision relative to the (unknown)
+optimal. If this bound on utility loss is too high, more utility information must be elicited. A decision support system can query the user until minimax regret reaches some
+acceptable level (possibly optimality), elicitation costs become too high, or some other termination criterion is met.
+We propose a generalization of the current solution (CS)
+elicitation strategy, first described in [4]. This strategy has
+been shown empirically to be very effective in reducing
+minimax regret with few queries in several domains [4, 5].
+The CS strategy considers only parameters involved in
+defining minimax regret (i.e., the current regret-minimizing
+solution x∗ and the adversary’s witness xw ), and asks a
+query about the parameter that offers the largest potential
+reduction in regret. We define below how we score various
+query types, and then define potential query strategies.
+
+Local queries The pairwise regret of regret-minimizing
+outcome x∗ and witness xw (the current solution) is:
+R(x∗ , xw , U) =
+=
+
+⊥
+max (u>
+j − uj )
+
+⊥
+{u>
+j ,uj }
+
+X
+j
+
+⊥
+(u̇>
+j − u̇j )
+
+X X
+
+X
+
+j
+
+i∈1..Nj
+
+max Cji vji ,
+{vji }
+
+Cji v̇ji ,
+
+i∈1..Nj
+
+⊥ i
+where Cji = Cxi w
+− Cxi ∗j , and {u̇>
+j , u̇j , v̇j } are utility paj
+rameter values that maximize regret. A local bound query
+adds a constraint on a local parameter vji . We wish to find
+the parameter vji that offers the largest potential reduction
+in the pairwise regret R(x∗ , xw , U) at the current solution,
+hence in the overall minimax regret. The linear constraints
+on local parameters induce a polytope defining the feasible
+space for the parameters for each factor. Our elicitation
+strategies use the bounding hyperrectangle of this polytope
+as an approximation of this feasible region. This allows for
+quick computation of query quality. (The bounding hyperrectangle can be computed by solving two very small LPs,
+linear in factor size.) Let gapij = vji ↑ −vji ↓. If we ask
+a bound query about the midpoint of the gap, the response
+narrows the gap by half (either lowering the upper bound or
+raising the lower bound). The impact of constraining vji on
+the pairwise regret R(x∗ , xw , U) is mediated by the magnitude of a constant Cji and the current value of a scaling
+⊥
+factor (u̇>
+j − u̇j ). We define the heuristic score for querying parameter vji , a measure of its potential for reducing
+minimax regret, as:
+⊥
+i
+i
+S(vji ) = (u̇>
+j − u̇j ) abs(Cj ) gapj /2
+
+The best bound query is that with the highest score. Determining this is linear in the number of GAI parameters.
+Scoring local comparison queries is a more complicated,
+since it is more difficult to estimate the impact of adding a
+linear constraint on minimax regret. We again approximate
+the feasible local parameter space with a bounding hyperrectangle. Given the current solution, we consider a list of
+all pairs {(vji , vjk )} such that: (a) Cji 6= 0 and Cjk 6= 0; (b)
+vji ↑≥ vjk ↓ and vjk ↑≥ vji ↓; and (c) the relationship between
+vji and vjk is not known due to earlier queries. These conditions severely limit the number of pairs one must consider
+when determining the best local comparison query. The
+first condition eliminates many parameters from consideration because most coefficients Cji are zero. The second
+checks the bounds for implied relationships. Finally, the relationship between two parameters might already be known
+beforehand due to prior constraints or transitive closure of
+previous comparison constraints.
+For each pair (vji , vjk ) considered, we compute a heuristic
+score as follows. First, we project the bounding hyperrectangle on the plane of the two parameters we are considering; the comparison constraint divides our 2-D rectangle
+along the 45-degree line. Fig. 1 shows all four cases and
+demonstrates that, after a response to a comparison query,
+
+BRAZIUNAS & BOUTILIER
+
+Figure 1: Four different ways to bisect a bounding rectangle.
+In all cases, if the response to a comparison query eliminates the
+part of the rectangle which contained the current solution point
+(v̇ji , v̇jk ) (marked with a circle), the new solution point (marked
+with a square) is one of the two intersections of the diagonal and
+the bounding rectangle. The shaded area approximates feasible
+parameter space after a response to a comparison query.
+
+vji , vjk
+
+the values of the parameters
+(as well as the current
+level of regret) either remain the same, or they are pushed
+to lie at one of the two intersections of the diagonal with
+the bounding rectangle. In the latter case, the reduction in
+local regret can be approximated by
+rji,k = Cji v̇ji + Cjk v̇jk − max(Cji t1 + Cjk t1 , Cji t2 + Cjk t2 ),
+
+where (t1 , t1 ), (t2 , t2 ) are the coordinates of the two intersections. The heuristic score for comparing xij to xkj is:
+⊥
+i,k
+S(xij , xkj ) = (u̇>
+j − u̇j ) rj .
+
+The complexity of finding the best comparison query is
+linear in the number factors and quadratic in the number of
+local outcomes in each factor.
+Global queries We use similar heuristic methods to compute the score of global anchor queries. In this case, we
+look at the impact of imposing constraints on anchor
+P i pa-i
+⊥
+rameters u>
+,
+u
+,
+while
+keeping
+local
+regrets
+j
+j
+i Cj v̇j
+constant. The resulting heuristic scores for both local and
+global queries are commensurable, allow comparison of
+different query types during elicitation.
+Combining different queries If all types of queries are
+available, we can simply choose the next query to ask based
+on the heuristic score S described above. However, in general we want to consider not only the impact of a query in
+reducing regret, but also its cost to a user. Global queries
+are generally harder to answer than local queries; similarly,
+most users will find comparing two outcomes easier than
+dealing with bound queries (which require some numerical
+calibration w.r.t. anchors). As such, the scores above are
+viewed as ranking queries of a specific type relative to each
+other. We can compare queries of different types by scaling these scores by, for example, cost factors that penalize
+different types of queries.6
+6
+
+Queries of a single type could also be differentiated by various means (e.g., the number of attributes involved, the number set
+to non-reference levels, etc.).
+
+31
+
+Instead, we consider several strategies that combine different query types without explicitly differentiating for
+cost; but we examine strategies that use only the “easiest” queries. The LC strategy uses only local comparison
+queries; when our heuristic cannot recommend a comparison query, a comparison query is then picked at random. If
+instead of a random comparison query we select the best local bound query, we get the LC(LB) strategy. The LB strategy uses only local bound queries. The remaining strategies do not favor any query type, but simply recommend a
+query from the set of allowed types with the highest score:
+LC+LB combines local comparison and bound queries, and
+AB+LC+LB and AB+LB mix global anchor bound queries
+with local queries.
+Experimental results We tested our CS elicitation strategies on the car rental configuration problem from [4, 6]
+and a small apartment rental database problem. The carrental problem is modeled with 26 attributes that specify
+various attributes of a car relevant to typical rental decisions. The domain sizes of the attributes range from two
+to nine values, resulting in 6.1 × 1010 possible configurations. The GAI model consists of 13 local factors, each
+defined on at most five variables; the model has 378 utility
+parameters. There are ten hard constraints defining feasible configurations. The apartment rental problem comprises a database of 186 apartments, described by eight attributes, each having between two and 33 domain values.
+The GAI model has five factors, and can be specified with
+156 utility parameters. The implementation was in Python,
+using CPLEX 9.1 to solve MIPs in the car-rental problem
+(the apartment database requires no MIPs). Computing the
+regret-minimizing solution, which has to updated after each
+query, takes about 1 second; determining the next query for
+any given strategy is even faster. Thus our approach admits
+real-time interaction.
+We evaluated the six query strategies described above.
+Fig. 2 shows their performance on (a) the car rental configuration problem, and (b) the apartment rental database
+problem. The results are averaged over 20 random samples of the underlying user utilities as well as random prior
+bounds on utility parameters. The upper anchor bounds
+are drawn uniformly from [1,50], and lower bounds from
+[-50,-1]. The LVF bounds are drawn uniformly from [0,1].
+With the exception of the LC strategy, all strategies (including those that use only local queries) exhibit a sharp initial
+reduction in minimax regret (from .30 to .05 with less than
+40 interactions in the car-rental case). This means that in
+many cases we can either avoid costly global queries altogether or use them only in situations where very strict
+worst-case loss guarantees are required. Even though the
+LC strategy does not perform as well as bound query strategies, we note that comparison queries (which are generally less costly in terms of user effort, time and accuracy than bound queries) are very effective during the first
+
+32
+
+BRAZIUNAS & BOUTILIER
+
+Figure 2: The performance of different query strategies on a) car rental configuration problem; b) apartment rental catalog problem.
+After averaging over 20 random instantiations of user utilities, the LB strategy curve was virtually indistinguishable from LC+LB;
+similarly, AB+LB was very close to AB+LC+LB. We omit these two curves for clarity.
+
+ten or so interactions, and do not hinder the performance
+of strategies in which they are used together with bound
+queries. Not surprisingly, only strategies that use anchor
+queries (AB+LC+LB and AB+LB) are able to reduce the
+regret level to zero; however, the the performance of localqueries-only strategies, such as LC(LB), LC+LB and LB is
+very encouraging.
+
+6 Conclusions
+We have provided a semantically justifiable approach to
+elicitation of utility functions in GAI models using the minimax regret decision criterion. The structure of a GAI
+model facilitates both elicitation and decision making via
+the semantically sound separation of local and global components. We described suitable forms of local and global
+queries and developed techniques for computing minimax
+optimal decisions under strict utility uncertainty, captured
+by linear constraints on the parameters of the GAI model.
+Our elicitation strategies combine both local and global
+queries and provide a practical way to make good decisions
+while minimizing user interaction.
+We are currently pursuing several extensions of this work.
+We are: investigating techniques for the effective elicitation
+of GAI utility structure (something we take as given in this
+work); exploring the incorporation of probabilistic knowledge of utility parameters to help guide elicitation (while
+still considering regret in making final decisions [14]); and
+experimenting with additional query types. Query strategies that take into account explicit query costs are of interest, too. Finally, experiments with human decision makers
+will allow us to consider the impact of psychological and
+behavioral issues—such as framing and ordering effects,
+sensitivity analysis, and different modes of interaction—on
+our normative model of elicitation.
+
+References
+[1] F. Bacchus and A. Grove. Graphical models for preference
+and utility. In Proc. of UAI-95, pp.3–10, Montreal, 1995.
+[2] C. Boutilier. A POMDP formulation of preference elicitation problems. AAAI-02, pp.239–246, Edmonton, 2002.
+[3] C. Boutilier, F. Bacchus, and R. I. Brafman. UCP-Networks:
+A directed graphical representation of conditional utilities.
+In Proc. of UAI-01, pp.56–64, Seattle, 2001.
+[4] C. Boutilier, R. Patrascu, P. Poupart, and D. Schuurmans. Constraint-based optimization and utility elicitation
+using the minimax decision criterion. Artifical Intelligence,
+170(8–9):686–713, 2006.
+[5] C. Boutilier, T. Sandholm, and R. Shields. Eliciting bid taker
+non-price preferences in (combinatorial) auctions. In Proc.
+of AAAI-04, pp.204–211, San Jose, CA, 2004.
+[6] D. Braziunas and C. Boutilier. Local utility elicitation in
+GAI models. In Proc. of UAI-05, pp.42–49,Edinburgh,2005.
+[7] P. C. Fishburn. Interdependence and additivity in multivariate, unidimensional expected utility theory. International
+Economic Review, 8:335–342, 1967.
+[8] C. Gonzales and P. Perny. GAI networks for utility elicitation. In Proc. of KR-04, pp.224–234, Whistler, BC, 2004.
+[9] P. E. Green and V. Srinivasan. Conjoint analysis in consumer research: Issues and outlook. Journal of Consumer
+Research, 5(2):103–123, September 1978.
+[10] R. L. Keeney and H. Raiffa. Decisions with Multiple Objectives: Preferences and Value Trade-offs. Wiley, NY, 1976.
+[11] P. Kouvelis and G. Yu. Robust Discrete Optimization and Its
+Applications. Kluwer, Dordrecht, 1997.
+[12] A. Salo and R. P. Hämäläinen. Preference ratios in multiattribute evaluation (PRIME)–elicitation and decision procedures under incomplete information. IEEE Trans. on Systems, Man and Cybernetics, 31(6):533–545, 2001.
+[13] L. Savage. The Foundations of Statistics. Wiley, NY, 1954.
+[14] T. Wang and C. Boutilier. Incremental utility elicitation with
+the minimax regret decision criterion. In Proc. of IJCAI-03,
+pp.309–316, Acapulco, 2003.
+
+

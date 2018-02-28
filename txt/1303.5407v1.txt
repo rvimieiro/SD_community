@@ -1,0 +1,1380 @@
+121
+
+A computational scheme for reasoning in dynamic probabilistic
+networks
+
+Uffe Kjrerulff
+Department of Mathematics and Computer Science
+Institute of Electronic Systems
+Aalborg University
+DK-9220 Aalborg, Denmark
+uk@iesd.auc.dk
+
+Abstract
+
+A computational scheme for reasoning about
+dynamic systems using (causal) probabilistic
+networks is presented. The scheme is based
+on the framework of Lauritzen and Spiegel­
+halter {1988), and may be viewed as a gen­
+eralization of the inference methods of clas­
+sical time-series analysis in the sense that
+it allows description of non-linear, multi­
+variate dynamic systems with complex con­
+ditional independence structures. Further ,
+the scheme provides a met hod for efficient
+backward smoothing and possibilities for effi­
+cient, approximate forecasting methods. The
+scheme has been implemented on top of the
+HUGIN shell.
+1
+
+INTRODUCTION
+
+The application of probabilistic graphical models
+(belief nets, influence diagrams, etc.) for model­
+ing domains with inherent uncertainties has become
+widespread. A common trait of the domains, where
+such applications turn out most successfully, is their
+static nature. That is, each observable quantity is ob­
+served once and for all, and confidence in the observa­
+tions remaining true is not questioned. However, do­
+mains involving repeated observations of a collection
+of random quantities arise in many fields of science
+(e.g. medical, economic, biological). For such domains
+a static model is not very useful: the estimation of
+probability distributions of domain variables based on
+appropriate prior knowledge and observation of other
+domain variables is reliable only for a limited period
+of time, and further, upon arrival of new observations,
+both these and the old observations must be taken into
+account in the reasoning process. Thus, to cope with
+such dynamic systems using probabilistic networks we
+need to interconnect multiple instances of static net­
+works. Obviously, as time evolves, new 'slices' must
+be added to the model and old ones cut off. This
+introduces the notion dynamic probabilistic networks
+(DPNs).
+
+In general, a dynamic model may be defined as a se­
+quence of submodels each representing the state of a
+dynamic system at a particular point or i nte rval in
+time; henceforth, such a time instance will be referred
+to as a times/ice. Hence, a DPN consists of a series of,
+most often structurally identical, subnetworks inter­
+connected by temporal relations. To make es t i mates of
+variables of a dynamic system in a way that makes full
+use of the information about past observations of t.he
+system, requires a compact representation of this in­
+formation. The creation of this representation is part
+of the process of reducing the dynamic model. This
+reduction process includes elimination of parts of the
+model representing past time slices, and should have
+no effect on future estimates, that is, the information
+conveyed by the eliminated part of the model should
+be completely represented in the remaining part. The
+complementary process of expanding the model must
+be carried out whenever new time slices have to be
+included in the model.
+In classical time-series analysis (see e.g. Box and .Jenk­
+ins (1976) or West and Harrison (1989)) the emphasis
+is on model assessment, i.e. estimation of model pa­
+rameters given a time series of observations of some
+stochastic process. The model thereby selected is then
+used for making predictions about future behaviour
+of the time series. Although the classical time-series
+analysis techniques have been quite successful, their
+ability to cope with such important issues as complex
+independence structures and non-linear relationships
+of have appeared to be rather modest. By formu­
+lating the analysis in terms of DPNs both of these
+limitations vanish. Attempts to integrate methods of
+classical time-series analysis with network representa­
+tion and inference techniques have been presented hy
+Dagum, Galper and Horvitz {1992). This paper, how­
+ever, does not address the issue of model assessment,
+but merely problems related to making inferences (in­
+cluding prediction and backward smoothing, in classi­
+cal time-series analysis terms). That is, the dynamic
+model is assumed to be given.
+Among research activities applying DPNs, as defined
+above, are a model for glucose prediction and insulin
+dose adjustment by Andreassen, Hovorka, Benn, Ole-
+
+122
+
+Kjcerulff
+
+sen and Carson (1991), an approach to building plan­
+ning and control systems by Dean, Basye and Lejter
+(1990), a model for making judgements concerning
+persistence of propositions by Dean and Kanazawa
+(1989), and a model for sensor validation by Nicholson
+and Brady (1992). However, none of these activities
+have dealt with the issues of reasoning in DPNs.
+In Section 2 we briefly review some relevant graph the­
+oretic concepts as well as some fundamental charac­
+teristics of conventional (static) probabilistic networks
+and some of the DPNs introduced. The processes of re­
+ducing and expanding DPNs are described in detail in
+Section 3 as well as the processes of backward smooth­
+ing and forecasting. Section 4 briefly summarizes the
+presented scheme and provides a list of some of the yet
+unresolved issues.
+
+2
+
+TERMINOLOGY
+
+Commonly used graphtheoretic terms like 'directed
+graph', 'undirected graph', 'triangulated graph', 'par­
+ent', 'children', 'cliques', 'paths', 'cycles', etc. shall be
+used without formal definitions; see e.g. Lauritzen and
+Spiegelhalter (1988) for details on relevant the termi­
+nology. We shall use the following abbreviations: the
+set of parents, children, ancestors, and neighbours of
+a vertex a are denoted by, respectively, pa(a), ch(a),
+an ( a), and adj(a). In the sequel the symbol® denotes
+the binary operator producing the set of all unordered
+pairs of distinct elements of its arguments. In the fol­
+lowing two paragraphs we review some less common
+graphtheoretic notation.
+For a directed graph g = (V, E), gm denotes its moral
+graph obtained by adding edges between pairs of ver­
+tices with common children and dropping the direc­
+tions of the edges. A decomposition of an undirected
+graph g = (V, E) is a triple (A, B, C) of non-empty
+and disjoint subsets of V such that V = AU BU C,
+C separates A from B, and C is a complete subset of
+V (i.e. each pair of vertices in C are neighbours). A
+decomposition (A, B, C) decomposes g into subgraphs
+OAuC and 9Buc (i.e. subgraphs induced by AUG and
+BUG, respectively). g is decomposable (triangulated)
+if and only if (A, B, C) decomposes g and both 9AuC
+and fJBuC are decomposable.
+When a vertex a E V and the edges incident to o: are
+removed from g = (V, E), o: is said to be deleted, but
+when adj(a) are made a complete subset by adding
+the necessary edges (if any) to the graph before o: and
+the edges incident to a are removed, then o: is said
+to be eliminated. Note that connectivity of a graph is
+invariant under elimination, but not necessarily under
+deletion. The set, say T, of edges added by eliminating
+all vertices in V in any order is called a triangulation
+of g as (V, E U T) is triangulated. The edges of T
+are called fill edges or fill-ins. An elimination order is
+a bijection # : V ...... {1, ... , lVI}. g# is an ordered
+graph. The triangulation T((i#) is the set of edges
+
+produced by eliminating the vertices of g in order #.
+An elimination order # is perfect if T(g#) = 0.
+
+A probabilistic network, as used in this paper, is built
+on a directed, acyclic graph (DAG) g = (V, E), where
+each vertex a E V corresponds to a discrete random
+variable X01 with finite state space X01• For A � V,
+XA denotes the vector of variables indexed by A. Sim­
+ilarly, XA denotes an element of the joint state spA.ce
+XA = XaeAXa. Each random variable X01 of a. proba­
+bilistic network is described in terms of a conditional
+probability distribution p(xa I Xpa(a)) over X01, where
+p(x01 I Xpa(a)) reduces to an unconditional distribution
+if pa(a) = 0. In (i, the conditioning variables of Xa are
+represented by pa(a). The joint probability, p = p11,
+over Xv is the product of all conditional and uncon­
+ditional probabilities. (i is called the independence
+graph of p, since for each non-adjacent pair a, {3 E V,
+all /31 r if and only if any path between a: and f3 in
+Am contains at least one member of r � V, wher e A
+is the subgraph of (i induced by { o:, /3}U an( a)Uan ({J)
+(Lauritzen, Dawid, Larsen and Leimer 1990). Let V be
+a set of non-empty subsets of V. Then p has potent.ial
+representation if
+
+p(x) =
+
+z-1 1/;( :c )
+
+= z-1
+
+IT 1/!A(xA),
+
+AEV
+
+where 1/!A are called potentials and z is called the nor­
+malization constant. In particular, the product of all
+p(x01 I Xpa(a)), a E V, is a potential representation wit.h
+normalization constant 1.
+By exploiting the conditional independence relations
+represented by g, the joint probability space, Xv, may
+be decomposed into a set of subspaces {Xc }cec, where
+C is the set of cliques of (V, EU T(O#)) (Spiegelhal­
+ter 1986, Lauritzen and Spiegelhalter 1988), such t.ha.t
+computation of marginal distributions can be done
+in a junction tree T = (C, £) (Jensen 1988, Jensen,
+Lauritzen and Olesen 1990) with nodes C and arcs
+£ � C 0 C representing clique intersections, where for
+each path {C = C1, ... , Ck =D) in T, CnD c CinCi
+for all 1 $ i -:/: j $ k. The existence of a potential rep­
+resentation is guaranteed in a junction tree, and the
+tree is said to be calibrated if f/lc(xcnD) = T/JD (xcnD)
+for all xcnD E XcnD and all C, D E C, where
+C n D -:/: 0. Two junction trees T1 = (Ct, £1) and
+T2 = (C2,£2) with non-empty and complete intersec­
+tion S = Ct n C2, where Ct E C1 and C2 E C2, are
+said to be jointly calibrated if both T1 and T 2 are
+calibrated and 1/!c1(:cs) = 1/!c�(xs) for all xs E Xs.
+Calculation of marginal distributions in a junction tree
+is done in a two-stage process involving collection and
+distribution of marginal potentials between all neigh­
+bours in the tree. These two operations performed
+in sequence are jointly referred to as propagation (or
+fusion and propagation).
+
+A DPN represents a finite (though possi b l y varying)
+number, say n, of time slices. Thus, the vertices V
+of the graph g = (V, E) of the network consists of
+disjoint subsets each representing the random variables
+
+A
+
+X(t) of a particular time slice
+appropriately chosen t
+V = V(t- n + 1) U
+
+Computational Scheme for Reasoning in Dynamic Probabilistic Networks
+
+t. That is, for some
+· ·
+
+·
+
+U
+
+The subset int(t) r; V(t) is called the
+is defined as
+int(t) ={a E
+
+V(t).
+
+The time slices of a DPN are assumed to be chosen
+such that the DPN obeys the Markov property: the
+future is conditionally independent of the past given
+the present. Formally this may be written as
+
+interface of time
+
+slice t and
+
+V(t) 1.8
+
+E
+
+V(t- 1), {a,j3}
+
+E
+
+Eint(t)}.
+
+The moralized graph of the sample DPN DAG in Fig­
+ure 1 appears in Figure 31 where the interfaces are
+indicated by filled circles ( note that int(O) = 0).
+
+X(O), . .. ,X(t- 1} ll X(t + 1), ..., X(t + k) I X(t)
+
+for all t > 0 and k
+time slice.
+
+>
+
+0. Time slice 0 is called the initial
+
+The set of directed edges
+
+{(a, ,8) I a E V(t- 1), ,8 E V(t)} r; E
+
+is called the temporal edges (or temporal relations )
+of time slice t and express conditional independence
+assumptions between slices t-1 and t. Thus, temporal
+edges are those between vertices of adjacent time slices
+( see Figure 1).
+
+1
+
+0
+
+Figure
+
+1:
+
+n-1
+
+� "future" slices
+
+Figure 2: Time slices of a DPN.
+of the corresponding graph
+
+V
+
+=
+
+V(t -1r) u . .
+
+and the edges by
+
+·
+
+u
+
+g = (V, E) is given by
+
+V(t + r/J),
+
+E= E(t- 1r) U E*(t- 1r + 1)U ..
+
+where
+
+At any point in time, there is a series P,, ... , PN
+of distinct but strongly related models, where each
+Pn1 1 ::5 n ::5 N, is specified by the quadruple
+(p, (in,t,..(n)1t.p(n)), where t,..(n) < t.p(n) is the old­
+est and t.p(n) the newest time slice represented by P,.,
+and where gn = (Vn 1 En) is the independence graph of
+the probability p. At any time , PN refers to the most
+recent model called the current model.
+
+(Vn, En)=
+
+B···�···G
+V
+
+Figure 3: Sample initial DPN moral graph.
+
+Sample initial DPN DAG.
+
+"past" slices
+
+,.. � 0, r/J � 0.
+
+·
+
+U
+
+(1)
+
+E*(t + r/J), ( 2)
+
+E(t) r; V(t)® V(t),
+E*(t) = E(t)U Eint(t)
+
+,
+E int(t) r; V(t- 1)® V(t),
+
+Obviously, the set of temporal edges of time slice
+a subset of Eint(t).
+
+n-1
+
+By the series P1, ... 1 PN we understand the following.
+For any 1 ::5 n ::5 N the graph 9n of Pn is given by
+
+At time slice t > 0, a DPN represents 7r "past" slices
+and rjJ ''future" slices (see Figure 2) . Thus, the vertices
+'If
+
+0
+
+( V, E )
+
+(V U in�{t' ) ,
+E U Emt(t'))
+
+if n=
+
+N
+
+if n <
+
+N
+
+(:'1)
+
+where t' = t,..(n+1), and VandE are given by (1) and
+( 2) , respectively, with t- 1r = t ..(n) < t + ¢ = t.p(n).
+Although Pn, n < N, contains variables of Pn+l we
+define tr/>(n) = t..(n + 1} -1. Thus t4>(n) represents the
+latest time slice about which Pn is guaranteed to be
+capable of containing complete information. For any
+1 ::5 n < N, t,..(n) and t.p(n) are fixed. Also t.,..(N) =
+t.p(N- 1) + 1 is fixed, but t.p(N) is a non-decreasing
+number meaning that the expanded model generated
+by including new time slices to PN is still referrecl t.o
+
+asPN.
+
+Finally, by
+
+gN
+
+Q CQ, Q )
+
+Vn,
+En
+gn =
+n l
+l
+composite graph of g,, ... , 9 N.
+
+=
+
+we denote the
+
+3
+
+REASONING IN DPNs
+
+The time slices
+
+t is
+
+{
+
+t:or(N), ... , t.p(N) of the current moclel,
+
+PN, are divided into two groups: the first w slices .con­
+stitute a group referred to as the window of time slices
+
+123
+
+124
+
+Kj<l"rulff
+
+(or simply the window ) and the remaining time slices
+comprising t.- (N) + w, ..., tq,(N) are referred to as the
+forecasting slices; see Figure 4. Similarly, the time
+Forecasting
+
+Backward smoolhillg
+
+·-----------------·�h·----------··-··-·-----------------------------------�-···-·--------------------...
+
+l �.(N)+�--·a!
+:
+s...�::
+:3����
+J
+........
+.. .. :: .. .. ..... ..
+i
+p
+:... --------------'!:'--·
+
+w-l
+
+i\i
+Window
+-----_; �·::: ·.-:: ·:::.-: ..·.-::.-·::.-.-:.-: ·:.-:
+:
+
+:
+
+Figure 4: The current model,
+of w time slices.
+
+PN,
+
+---...!'!
+
+-·.- -- .. �---- ---- ---- --�
+
+includes a window
+
+slices 0, .. . , tq,(N- 1) are referred to as the backward
+smoothing slices. Note that the term forecasting slices
+is slightly imprecise since all inference concerning vari­
+ables of time slices for which no observations have been
+entered, actually are forecasts, even if such time slices
+belong to the window. For similar reasons the term
+backward smoothing slices is also slightly imprecise.
+For the purpose of making inferences, the window is
+assumed to consist of a triangulated version of the
+composite graph of the time slices involved. Hence a
+junction tree is associated with the window such that
+inferences in it are carried out as in a conventional
+static network. Inferences involving backward smooth­
+ing and forecasting are described in Sections 3.4 and
+
+3.5.
+
+The process of moving the window forward involves the
+two more or less separate processes of model expansion
+and model reduction discussed in detail in Sections 3.2
+and 3.3. Since the window is represented by a junction
+tree, these processes roughly amount to, respectively,
+adding a new subtree to the junction tree and cutting
+off a part of the tree.
+Model expansion by, say, k new time slices consists
+of (a) adding k new slices (conditional representation)
+to the current model (i.e. t¢(N) :::;: tq,(N) + k), (b)
+moralizing the hybrid composite graph of the trian­
+gulated graph of the window and the DAGs of the k
+consecutive time slices starting at t.-(N) + w, (c) tri­
+angulating that graph and identifying the new clique
+set, (d) constructing the new (expanded) junction tree,
+and (e) calibrating the new clique potentials with ap­
+propriate consideration of the old ones. As discussed
+in Section 3.2, the last step is optional. Expanding the
+current model by k new time slices causes the width
+of the window to b e increased by k, while the number
+of forecasting slices remains unchanged.
+Model reduction by k time slices involves elim­
+ination of all variables pertaining to time slices
+t..-(N), ... , t..-(N) + k- 1. Recall that elimination of a
+vertex a (variable Xcr) forms a complete subset of the
+vertices adj( a: ) unless the y already constitute a com­
+plete set. The end-product of the elimination process
+is a potential involving the variables int(t.-(N) + k).
+This potential, represented in one of the cliques of the
+reduced junction tree,
+say, represents all informa-
+
+TN
+
+tion about the past necessary for the reduced m o del to
+take full account of the knowledge about t he history
+of the system. Reducing the current model by k time
+slices causes the number of backward smoothing slices
+to be increased by k and the width of the wi nd o w t.o he
+decreased by k, while the number of forecasting slicr.s
+remains unchanged.
+Two issues are of major importance here: (a) if back­
+ward smoothing is to be performed, the cliques of t.he
+triangulated graph resulting from the reduction pro­
+cess must be linked together in a new junction t r ee ,
+say, such that backward smoothing can be per­
+formed by passing messages from 1 N to 1 N _1 via the
+potential involving variables int(t.-(N) + k), and (b)
+since both the expansion and the reduction process
+performs a triangulation (i.e. finds an elimination or­
+der) of {basically) the same model, these two processes
+should be coordinated such that the same elimination
+order is employed.
+
+TN-1
+
+The triangulation carried out as a subtask of the ex­
+pansion process is unconstrained in the sense that the
+search space of elimination orders consists of all per­
+mutations of the set V of vertices of the (expanded)
+window, whereas the reduction process may be per­
+ceived as a constrained triangulation, where the ver­
+tices eliminated define the prefix of orders compris­
+
+ing all vertices in V. Then obviously it might be ad­
+vantageous to make a constrained decomposition in
+the first place, rendering the reduction process triv­
+ial, provided it is carried out in the fundamental way
+described above (i.e. assuming the reduction concerns
+k lumps of 'PN, where each lump inclu des all vertices
+of a particular time slice). This introduces the notion
+of a constrained elimination order which is discut=:sed
+further in Section 3.1.
+
+3.1
+
+CONSTRAINED ELIMINATION
+ORDERS
+
+A constrained elimination order is defined
+
+as
+
+follows.
+
+gN
+
+= Lj�=I gn = (V, E) be a com­
+posite graph and let # : V ...... {1, ... , lVI} define nn
+elimination order. This order is said to be constrained
+if #(a:) < #(/3) for all 1 ::; i < j ::; N, a: E V; and
+{3 E Vj. Similarly, T(g�) is said to be a constrained
+triangulation of gN .
+
+Definition 1 Let
+
+Constrained elimination orders have a number of i m­
+portant properties which shall be used in Sections 3.3
+and 3.4.
+
+First, we observe that the order in which the vertices
+are eliminated does not affect the com­
+plexity of PN. This fact follows from L emma 1 Lhe
+proof of which has been made by Rose, Tarjan and
+Lueker (1976).
+
+Uo<n<N Vn
+
+Lemma 1 (Rose et al. (1976)) Let g# = (V, E)
+be an ordered graph. Then {a:, /3} E E U T(9#) if
+
+A
+
+Computational Scheme for Reasoning in Dynamic Probabilistic Networks
+
+and only if there is a path (o: = 0:1, ... , O:k = {3} such
+that #(o:i) < min{ #(o:), #(.B)} for al1 1 < i < k.
+
+implicit as part of the operation of moving the window
+k time slices forward.
+
+This property implies that, under constrained elimina­
+tion, an optimal elimination order for gN = U�=l fJn
+is given by optimal orders for fJn, 1 :::; n :::; N.
+
+A new time slice is added to the current model via con­
+ditional probability relations such that the variables
+added have parents among the variables of the current
+model (relations in the opposite direction are not al­
+lowed). The structure of the DAGs of the conditional
+models of individual time slices will most often be iden­
+tical. Note, however, that we make no structural or
+logical restrictions as to the conditional networks and
+temporal relations added. Thus, if an initial assump­
+tion implying identical time slice models turn ou I. t.o be
+inadequate or erroneous, the presented scheme poses
+no obstacles to changing such assumptions.
+
+Let 'P1 , . ., 'PN be a series of conditional
+models with composite moral graph ((}N)m, and let
+Pi, .. ., 'Piv be the corresponding constrainedly decom­
+posable models with composite Jraph ((}*)N. Then for
+any 1 :::; t :::; t4>(N), int(t) in ((} )m is a complete sep­
+arator of (fJ*)N.
+Lemma 2
+
+.
+
+Proof: From the definition of int(t) it follows that
+int(t) is a separator of ((}N)m. Since 'Pi, ..., Piv are
+constrainedly decomposable it follows from Lemma 1
+that for all paths {o: = o:1, .. , o:;; = {3}, where o: E
+V(t- 1) and {3 E V(t)\int(t), {o:1, ... , a;;}nint(t) # 0.
+That is , int(t) is also a separator of((}*)N. Also due
+to the constrained elimination order it follows from
+Lemma 1 that int(t) induces a complete subgraph of
+D
+((}*')N.
+.
+
+Thus under constrained elimination the interface of
+time slice t, 1 :::; t :::; t4>(N), is identical in the moral
+and the corresponding decomposable graphs. This re­
+sult is used in the following.
+3 Let 'P1, ... , 'P be a series of constrainedly
+N
+decomposable models with composite graph
+
+Lemma
+
+gN
+
+N
+
+=
+
+U fJn
+
+=
+
+In order to produce a junction tree for the expanded
+window we perform the operations of moralization and
+triangulation. The moralization step involves moral­
+ization of the hybrid composite graph (of the triangu­
+lated graph of the window and the DAGs of the k new
+time slices) and implies that the conditional probabil­
+ities of the k new time slices of the window are con­
+ceived as potentials. These potentials are in turn at­
+tached to appropriate cliques of the triangulated graph
+resulting by employing the constrained triangulation
+scheme to the moralized graph. A sample model ex­
+pansion is shown in F igure 5, where the dashed lines
+are the edges added by moralization. In this example,
+the window is assumed to consist of a single time slice
+(the initial one).
+
+(V,E).
+
+n=l
+
+Then gN is constrainedly triangulated.
+Proof: From Lemma 2 we have that for any 1 :::;
+t :::; t4>(N), int(t) is a complete separator of gN and
+hence (A, B, int(t)) is a decomposition of gN, where
+A = V(l)U···UV(t -1) and B = V\(AUint(t)).
+The graphs 9fuint(t) and 9f:uint(t) have complete sep­
+arators int(l), ... , int(t) and int(t), ... , int(t4>(N)), re­
+spectively. Continuing this argument we end up with
+subgraphs (}1, .., 9N all of which are constrainedly
+D
+triangulated, and the result follows.
+.
+
+This shows that backward smoothing, at least in prin­
+ciple, can be accomplished by constructing a junction
+tree for gN and performing propagation in that tree.
+However, a less space consuming technique exists as
+described in Section 3.4.
+3.2
+
+MODEL EXPANSION
+
+The operation of expanding the current model by, say,
+k new time slices t4>(N) + 1, .. , t4>(N) + k is carried
+out for the purpose of including k new time slices (not
+necessarily tq,(N) + 1, ..., t.p(N) + k) into the window.
+The wish to expand the window may be explicit or
+.
+
+·
+� �-·---··"'·--- ·· .........................
+·
+
+rune
+
+sliceO
+
+Time slice 1
+
+Figure 5: Sample model expansion.
+Obviously, in finding an optimal elimination order, we
+have to take into consideration the topology of the
+graph as it appears after addition of the next time
+slice. Since we want the model complexity in terms of
+the state space size to be as low as possible to minimize
+the complexity of inference, and since the state space
+size varies heavily over the range of elimination orders,
+a careful analysis must be conducted to establish an
+appropriate order. To find an optimum elimination
+order for an arbitrary graph is, however, an NP-hard
+problem as proved by Wen (1990). Yet, in practice
+
+125
+
+126
+
+Kj<erulff
+it turns out that near optimum triangulations may be
+found using simple heuristic ordering strategies (Rose
+1973, Kjrerulff 1992). In Figure 5 the applied elimina­
+tion order is b, e, /, c, g, d, a, h. (The original directed
+and moral graphs are shown in Figures 1 and 3.)
+Having found the cliques of the new expanded graph
+on the basis of an appropriate elimination order, the
+next step concerns construction of a junction tree for
+those cliques. As much as possible of the junction
+tree, l' = (C,£), in existence prior to the expansion
+should be reused in order to minimize the amount of
+work required to construct the expanded junction tree
+l'' = (C',£'). Note that as a direct consequence of
+the constrained decomposition scheme there is for each
+'old' clique C E C a 'new' clique C' E C' such that
+C � C'. For some cliques the containment might be
+strict. The creation of l'' can be described as follows.
+1. Identify the set C' of cliques of 1'.
+2. Construct a 'skeleton' of l'':
+(a) Create clique objects for all members of C'\C
+and clique intersection objects for all mem­
+bers of£'\ C.
+(b) Initiate the potential tables of these new
+clique and clique intersection objects to unity.
+(The potentia.! tables of the cliques in C n C'
+and of the clique intersections in en£' remain
+unchanged.)
+3. For each C E C\ C' and each E E£\£' (i.e. 'old'
+cliques rendered redundant and their associated
+intersections) attach (by multiplication) the asso­
+ciated potential tables to the tables of appropriate
+clique and clique intersection objects.
+4. Attach the conditional probability tables of the
+variables of the new time slices to appropriate new
+cliques.
+(The term 'appropriate' in points 3 and 4 refers to the
+index set of the table to be attached being a subset of
+the clique or clique intersection upon which it is at­
+tached.) The expanded junction tree 1' has now been
+created. That is, a potential representation for the
+joint probability distribution for the expanded win­
+dow has been established. In Figure 6 the cliques and
+clique intersections remaining unchanged are shown in
+bold and the attachment of potential tables of redun­
+dant 'old' cliques and clique intersections are indicated
+by dashed arrows. Note that the cliques has been
+numbered according to the order of creation using the
+above elimination order and that clique 5 in part a is
+a proper subset of clique 5 in part b.
+
+Now, if we have an immediate interest in the marginal
+distributions of variables (or sets of variables) in the k
+new time slices of the window, a propagation can be
+performed; otherwise we might postpone the propaga­
+tion step until e.g. new observations has been recorded.
+If l' was calibrated immediately before the model ex­
+pansion was executed, we only need to perform prop-
+
+a
+
+b
+
+Figure 6: Sample junction tree expansion
+agation
+cliques.
+3.3
+
+m
+
+the subtree induced by the set of
+
+new
+
+MODEL REDUCTION
+
+Due to the constrained decomposition scheme em­
+ployed by the model expansion process, model reduc­
+tion becomes a relatively easy task as previously dis­
+cussed. In developing a model reduction scheme it is
+important to recognize the requirements for convenient
+backward smoothing beyond time slice tr(N}. Below
+we develop a reduction scheme which meets such re­
+quirements and which is based on the results of the
+following theorem.
+Theorem 1 Let 'P1, ... , 'PN be a series of con­
+strainedly decomposable models, where each 'P;, l �
+i � N, is calibrated. Assume 'Pn-1 and Pn are jointly
+uncalibrated for some 1 < n $ N. Complete informa­
+tion required to calibrate 'Pn-I to 'Pn or vice versa is
+represented by the marginal-rf;int(t .(n))• where there is
+a. clique
+of9n-1 and a clique c2 of9n such that
+int(t .. (n)) c Ct and int(tr(n)) � C2.
+
+cl
+
+•
+
+Proof: From Lemma 2 we have that int(tr(n)) is a
+complete separator of Yn-1 U Yn and hence tPint(t.(n))
+contains complete mutual information between 'Pn-1
+and 'Pn. From the definition of Yi, 1 � i < N, (cf.
+(3)) we have that int(tr(n)) C V (t cl> (n - 1)), and since
+for each pair {a,P}, where a E V(tcl>(n- 1)) and
+P E int(tr(n)), #(a) < #(P), int(tr(n)) induces a
+complete subgraph of Yn-l· Hence there is a clique C1
+of Yn-1 such that int(t .. (n)) C Ct. Since int(t .. (n.)) is
+complete in Yn-1 it follows immediately that it is also
+complete in 9n and hence there is a clique C2 in 9n
+0
+such that int(t ... (n)) � c2.
+
+So far we have not been concerned with the pro­
+cess of creating new models to be added to a series
+P1. . . . , 'PN. However, the reduction process partition
+'PN into two models, one representing the time slices
+eliminated and the other the remaining time slices of
+'PN (subsequently defining the new current model).
+That is, whenever 'PN is subjected to reduction, the
+number, N, of models is increased by one. Thus, r.on­
+forming to (3), we define the reduction of 'PN by the
+
+A
+
+Computational Scheme for Reasoning in Dynamic Probabilistic Networks
+
+k oldest time slices by sequentially executing the fol­
+lowing steps.
+
+1.
+
+Let 1'' = (g' = (V', E'), to = t1r(N), tk
+k), where 0 � k < t�(N)- t1r(N) and
+
+V'
+
+=
+
+V(to) U
+
+·
+
+·
+
+·
+
+U
+
+=
+
+t,.(N) +
+
+V(tk) u int(tk + 1),
+
+E(to) U E*(t1) U U E*(tk)·
+2. Let N := N + 1.
+3. Let 'PN = (g N = (VN,EN),t'lr(N) = tk +
+1, t�(N) = t¢(N- 1)), where
+E'
+
+=
+
+VN
+
+· ·
+
+=
+
+·
+
+VN-I \ (V' \ int(t1r(N))),
+EN= EN-I\ E'.
+
+4. Let
+
+'PN-l
+
+=
+
+1''.
+
+In terms of operations on the junction tree of 'PN (ac­
+tually the junction tree of the window) an equivalent
+description of the reduction process may be formulated
+as follows, where t = t1r(N) + k + 1 is the oldest time
+slice of the window when the reduction has been com­
+pleted.
+
+1.
+
+2.
+
+3.
+
+Prior to the reduction, let
+tree for 'PN.
+Let C'
+
+=
+
+{C
+
+E
+
+i = (C, £) be a junction
+
+C I C n U������� V(i) ::f 0}
+
+be the
+
+cliques containing variables to be eliminated, and
+C" = C \ C' the remaining cliques.
+
+Let i' = iC' an d i" = ien be the junction trees
+induced by C' and C", respectively (see Figure 7).
+
+4. Let B = {C
+
+E
+
+C" I adj(C ) n C' ::f 0 in i}.
+
+E B such that int(t) <;;;; C then add
+int(t) to C" and let adj(int(t)) = B; otherwise add
+B\ {C} to adj(C) .
+
+5. If there is no C
+
+6. Let
+
+N
+
+:=
+
+N + 1.
+
+First assume that the condition of the 'if' part of
+Step 5 holds. Since the constrained decomposition
+forces int(t) to induce a complete subgraph of g N and
+since there is no clique in C" containing int(t), then
+int( t) itself must be a clique of g N. The subset B <;;;; C",
+where for each B E B there is a non-empty intersec­
+tion between the adjacency set of B and C' in T, is
+then made the adjacency set of int(t). Since the path
+in 1 between any pair of elements of B includes ele­
+ments of C' (i.e. C' separates the elements of B from
+one another), this does not violate the tree structure
+ofi•. Neither does it violate the property ofi• being
+a junction tree, as the intersection of any pair (C', C'")
+of cliques, where C' E C' and C" E C", is a subset of
+int (t ) .
+
+Next, assume the condition to fail (i.e. there is a clique
+E C" such that int(t) <;;;C
+; ) in which case B\ {C} is
+made a subset of the adjacency set of C in 1". With
+arguments similar to those above it is readily reali:r.ed
+that the property of T* being a junction tree is not
+violated.
+
+C
+
+3.4
+
+BACKWARD SMOOTHING
+
+Clearly, the arrival of external evidence (observations)
+affects not only the estimates of (unobserved) variables
+of the relevant time slice(s), but may also have sig­
+nificant effect on estimates of variables of other time
+slices. The process of re-estimating variables of past
+slices in light of new evidence (retrospective assess­
+ment) is often referred to as backward smoothing. If
+the variables for which re-estimated probability distri­
+butions are required, are all included in the current
+model, 'PN, backward smoothing is an implicit part of
+propagation in the window of time slices. However, if
+we want to backward smooth from 'PN to 'PN-1 special
+actions should be taken. Specifically, complete infor­
+mation about observations pertaining to the window
+should be transferred from 'PN to 'PN-l·
+Given the model reduction strategy described in Sec­
+tion 3.3 the process of propagating complete relevant
+information backward from 'Pn to 'Pn-1 or forward
+from 'Pn-1 to Pn becomes very simple. Consider t,he
+example where 1'1,
+, 'PN are calibrated, but jointly
+uncalibrated. Let the inconsistency be caused by a
+series E2,
+, EN of sets of external evidence, such
+that 'Pn, 1 � n � N, is uninformed of En+l• . . . , EN.
+Now, 'Pn may become informed of En+l•···,EN by
+the following calibration process (see also Figure 8).
+For convenience we first define the concept of an inl.er­
+fa.ce clique as follows.
+•
+
+T
+
+.
+
+.
+
+• • •
+
+Figure 7: Partitioning i into
+
+i'
+
+and 1".
+
+After the execution of Steps 1-6, 'PN-1 is given by i'
+and 'PN by 1• which is the result of modifying i" as
+described in Step 5 above. It is easily verified that
+i * is a junction tree for g N of Step 3 of the four-step
+description of the reduction process.
+
+Definition 2 Let 1'1, .. . , PN be a series of con­
+strainedly decomposable models. Then for any 1 �
+n � N let I;; denote the set of cliques of9n such that
+for any IC;; E I;;, int(t1r(n)) <;;;; IC;;. Similarly, for
+any 1 � n < N let I;t denote the set of cliques of 9n
+such tha.t for any IC;t E I;t, int(t1r(n + 1)) C IC't.
+IC;; a.nd 1c: are called interface cliques of'Pn.
+
+127
+
+128
+
+Kjcerulff
+
+1. Initially let i = N. Then repeat steps 2 and 3
+sequentially while i > n.
+2. Let ICi- E Ii-, /Ct_1 E It_1, and I= int(t,..(i)).
+=
+
+tP1c+
+
+•-�
+
+L:1c·v
+?/!Ic-:'
+'
+
+L:w;_. \I t/JJet_,
+
+where superscript "*" denotes the updated poten­
+tial.
+3. Calibrate Pi-t by propagation and decrement i
+by one.
+
+cases even larger than those required by exact meth­
+ods, but of course with much less space requirements
+since the sampling is performed in the DAG struc­
+ture involving relatively low-dimensional probability
+tables. Another important feature of sampling meth­
+ods is that the time complexity grows only linearly in
+the dimensionality of the tables involved, whereas it
+grows exponentially for exact methods.
+Another method that might be fruitful is based on the
+fact that (a subset of) the conditional probabilities of a
+probabilistic model quite often exhibits linearity in the
+sense that they are (approximately) linear functions in
+the variables upon which they are given. That is,
+
+�---=-···--=--�
+Figure 8: Backward smoothing from PN to Pn.
+3.5
+
+FORECASTING
+
+In time-series analysis applications there is typically a
+desire to make optimal forecasts of the random pro­
+cess considered. Within the computational framework
+presented above, forecasts which do not exceed the
+extent of the window are an implicit part of propaga­
+tion in the junction tree of the window; otherwise it
+may be performed by expanding the window by the
+required number time slices. If forecasts are wanted
+for a large number of time slices ahead of the window,
+the complexity of the resulting decomposable model
+might, however, easily exceed the capacity of the avail­
+able computing resources. Such cases may be solved
+in a number of ways.
+One is to move the window the required number of
+steps, where propagation is performed in each step,
+and subsequently, moving it back again. This might,
+however, be a very time consuming operation, and fur­
+thermore, a lot of unnecessary calculations will quite
+often be carried out as we typically only want the fore­
+casts for a limited number of variables. Therefore,
+there is a demand for alternative forecasting methods
+which either avoids the junction tree approach and/or
+exploits the fact that forecasts are only required for a
+limited number of variables.
+Concerning non-junction-tree methods (i.e. no trian­
+gulation), various Monte-Carlo sampling schemes may
+be useful. A common trait of these schemes is the fact
+that the variance of the resulting distributions can be
+made arbitrarily small. In fact, some of the most fruit­
+ful approaches to variance reduction is Monte-Carlo
+sampling (Ripley 1987). Note, however, that a reduc­
+tion of the standard error of an estimator by a factor
+of k requires an increase in the sampling size, n, by
+around a factor of k2 due to the ubiquitous 1j.,fii. law
+of statistical variation. Thus, to get forecasts within a
+small distance from the 'exact' values, we should ex­
+pect the computing time to be relatively large; in some
+
+p(xa) �
+
+L
+
+Xpa(<>)
+
+p(xOI I Xpa(a))
+
+rr
+
+PEpa(a)
+
+p(xp).
+
+The method is then simply given by calculating n.ll
+such approximate marginal probability distributions
+in an appropriate order (i.e. the distributions of all
+parents of a variable should be calculated before the
+distribution of the variable itself). Given that the di­
+vergence between such approximate distributions and
+the 'exact' ones are below an acceptable upper bound
+for the variables of interest, this is a very fast fore­
+casting method. The interesting point concerning the
+exactness of the method is that an upper bound on
+the error can be computed in advance by application
+of theorems of linear algebra.
+4
+
+SUMMARY
+
+We have presented a computational scheme for rea­
+soning in dynamic probabilistic networks featuring de­
+scription of non-linear, multivariate dynamic systems
+with complex conditional independence structures and
+providing a mechanism for efficient backward smooth­
+ing. As opposed to a static network representing a
+finite and fixed number of time slices (i.e. capable of
+reasoning only about a finite series of observations of a
+dynamic system) the proposed scheme can handle infi­
+nite series of observations. Further, in applying static
+networks representing a fixed number of time slices as
+models of dynamic systems, there is typically a desire
+to include as many time slices as possible in the model.
+Thus, inference easily becomes time consuming and in­
+flexible (i.e. propagation involves all time slices in the
+model even if updated distributions are wanted only
+for a limited number of time slices). The proposed
+scheme, on the other hand, provides a high degree of
+flexibility in the reasoning process, since the widt.h of
+the window of time slices can be changed dynamically
+as well as the number of 'backward smoothing slices'
+and the number of 'forecasting slices'. In addition, the
+scheme provides selective inference in the sense t.hat
+inference can be performed in (i) the window, as (ii)
+backward smoothing, or as (iii) forecasting.
+Since the presented model reduction scheme supports a
+convenient and efficient backward smoothing method
+
+A
+
+Computational Scheme for Reasoning in Dynamic Probabilistic Networks
+
+it also supports inclusion and modification of obser­
+vations pertaining to time slices 'to the left of ' the
+window. Delayed observations is a quite typical phe­
+nomenon; for example, in a medical setting delays may
+be caused by processing time in a laboratory (e.g. anal­
+ysis of a blood sample).
+
+Dean, T. and Kanazawa, K. ( 1 989). A model for rea­
+soning about persistence and causation, Compu­
+
+Although we have presented a scheme for reasoning in
+dynamic networks, a range of issues still remain to be
+dealt with. A couple of the most important issues are
+the following.
+
+Workshop on Innovative Approaches to Planning,
+Scheduling, and Control, pp. 271-276.
+
+Only preliminary studies has been carried out to inves­
+tigate the applicabilities the various forecasting meth­
+ods discussed in Section 3.5. Especially, a scheme for
+establishing an upper bound on the forecast error by
+applying the linear approximation algorithm is desir­
+able. But also a study of the applicability of various
+Monte-Carlo sampling schemes should be conducted.
+Since many applications feature a large number of tem­
+poral relations, the state space sizes of the interface
+cliques of the time slices of the window and of the
+'backward smoothing slices' may become unmanage­
+ably large. In such cases there will be a need for
+approximations. One obvious way of approximating
+the inference is to exclude some of the edges required
+between members of the interface set of a time slice.
+An extreme approach could be assumption of indepen­
+dence between all parents of interface variables (i.e. no
+fill edges at all added between interface vertices). To
+that end, studies on the upper bounds of the resulting
+error and its attenuation as time evolves, should be
+conducted.
+An implementation of the computational scheme pre­
+sented in this paper has been built on top of the
+H U GIN shell.
+
+Acknowledgements
+I wish to thank Steffen L. Lauritzen for his valuable
+comments on an earlier draft of this paper and other
+members of the ODIN group at Aalborg University for
+stimulating discussions.
+
+R eferences
+Andreassen, S., Hovorka, R., Benn, J ., Olesen, K. G.
+and Carson, E. R. ( 1991). A model-based ap­
+proach to insulin adjustment , in M. Stefanelli ,
+A. Hasman, M. Fieschi and J. Talman (eds), Pro­
+ceedings of the Third Conference on Artificial In­
+telligence in Medicine, Springer-Verlag, pp. 239-
+
+248.
+Box, G. E. P. and Jenkins, G. M.
+
+(1976). TIME
+SERIES A NA L YSIS: Forecasting and Control,
+
+Holden-Day Series in Time Series Analysis and
+Digital Processing, Holden-Day Inc.
+Dagum, P. , Galper, A. and Horvitz , E. (1992). Dy­
+namic network models for forecasting, Proceed-
+
+ings of the Eighth Conference on Uncertainty in
+A rtificial Intelligence.
+
+tational Intelligence
+
+5: 142-150.
+
+Dean, T., Basye, K. and Lejter, M. ( 1990). Planning
+and active perception, Proceedings of the DA RPA
+
+Jensen , F. V. (1988). Junction trees and decompos­
+able hypergraphs, Research report, Judex Data­
+systemer A/S, Aalborg, Denmark.
+Jensen, F. V. , Lauritzen, S. L. and Olesen, K . G.
+(1990). Bayesian updating in causal probabilistic
+networks by local computations, Computational
+Statistics Quarterly 4 :
+
+269-282.
+
+Kjll:!rulff, U. ( 1 992). Optimal decomposition of prob­
+abilistic networks by simulated annealing, Statis­
+tics and Computing 2:
+
+7-17.
+
+Lauritzen, S. L. and Spiegelhalter, D . J. ( 1988). Lo­
+cal computations with probabilities on graphical
+structures and their application to expert sys­
+tems, Journal of the Royal Statistical Society, Se­
+ries B
+
+50(2): 157-224.
+
+Lauritzen, S. L., Dawid, A. P., Larsen, B. N. and
+Leimer, H.-G. ( 1990). Independence properties of
+directed Markov fields, Networks 20(5): 491-505.
+Special Issue on Influence Diagrams.
+Nicholson , A. E. and Brady, J. M. ( 1992). Sensor val­
+idation using dynamic belief networks, Proceed­
+ings of the Eighth Conference on Uncertainty in
+A rtificial Intelligence.
+
+Ripley, B. D. ( 1987). Stochastic Simulation, Wiley &
+Sons , Inc.
+Rose , D. J. ( 1973). A graph-theoretic study of the
+numerical solution of sparse positive definite sys­
+tems of linear equations, in R. C. Read (ed.) ,
+Graph Theory and Computing, Academic Press,
+New York, pp. 183-217.
+Rose , D. J ., Tarjan, R. E. and Lueker, G. S. ( 1976) . Al­
+gorithmic aspects of vertex elimination on graphs,
+SIAM Journal on Computing 5:
+
+266-283.
+
+Spiegelhalter, D. J. ( 1 986). Probabilistic reasoning in
+predictive expert systems, in J. F. Lemmer and
+L. N. Kanal (eds) , Uncertainty in Artificial Intel­
+ligence, Elsevier Science Publishers B. V. (North­
+Holland).
+Wen, W. X. ( 1990). Optimal decomposition of belief
+networks , Proceedings of the Sixth Workshop on
+Uncertainty in Artificial Intelligence, Cambridge,
+MA, pp. 245-256.
+West, M. and Harrison, J.
+
+(1989). Bayesian Fore­
+casting and Dynamic Models, Series in Statistics ,
+
+Springer-Verlag, New York Inc.
+
+129
+
+

@@ -1,0 +1,1117 @@
+UAI 2009
+
+COHN ET AL.
+
+91
+
+Mean Field Variational Approximation for Continuous-Time Bayesian
+Networks
+
+Ido Cohn
+Tal El-Hay
+Nir Friedman
+School of Computer Science
+The Hebrew University
+{ido cohn,tale,nir}@cs.huji.ac.il
+
+Abstract
+Continuous-time Bayesian networks is a natural structured representation language for multicomponent stochastic processes that evolve continuously over time. Despite the compact representation, inference in such models is intractable
+even in relatively simple structured networks.
+Here we introduce a mean field variational approximation in which we use a product of inhomogeneous Markov processes to approximate
+a distribution over trajectories. This variational
+approach leads to a globally consistent distribution, which can be efficiently queried. Additionally, it provides a lower bound on the probability of observations, thus making it attractive for
+learning tasks. We provide the theoretical foundations for the approximation, an efficient implementation that exploits the wide range of highly
+optimized ordinary differential equations (ODE)
+solvers, experimentally explore characterizations
+of processes for which this approximation is suitable, and show applications to a large-scale realworld inference problem.
+
+1
+
+Introduction
+
+Many real-life processes can be naturally thought of as
+evolving continuously in time. Examples cover a diverse range, including server availability, changes in socioeconomic status, and genetic sequence evolution. To realistically model such processes, we need to reason about systems that are composed of multiple components (e.g., many
+servers in a server farm, multiple residues in a protein sequence) and evolve in continuous time. Continuous-time
+Bayesian networks (CTBNs) provide a representation language for such processes, which allows to naturally exploit
+sparse patterns of interactions to compactly represent the
+dynamics of such processes [9].
+Inference in multi-component temporal models is a notoriously hard problem [1]. Similar to the situation in dis-
+
+Raz Kupferman
+Institute of Mathematics
+The Hebrew University
+raz@math.huji.ac.il
+
+crete time processes, inference is exponential in the number of components, even in a CTBN with sparse interactions [9]. Thus, we have to resort to approximate inference
+methods. The recent literature has adapted several strategies from discrete graphical models to CTBNs. These include sampling-based approaches, where Fan and Shelton
+[5] introduced a likelihood-weighted sampling scheme, and
+more recently we [4] introduced a Gibbs-sampling procedure. Such sampling-based approaches yield more accurate answers with the investment of additional computation. However, it is hard to bound the required time in advance, tune the stopping criteria, or estimate the error of
+the approximation. An alternative class of approximations
+is based on variational principles.
+Recently, Nodelman et al. [11] introduced an Expectation Propagation approach, which can be roughly described as a local message passing scheme, where each
+message describes the dynamics of a single component
+over an interval. This message passing procedure can automatically refine the number of intervals according to the
+complexity of the underlying system [14]. Nonetheless,
+it does suffer from several caveats. On the formal level,
+the approximation has no convergence guaranties. Second,
+upon convergence, the computed marginals do not necessarily form a globally consistent distribution. Third, it
+is restricted to approximations in the form of piecewisehomogeneous messages on each interval. Thus, the refinement of the number of intervals depends on the fit of
+such homogeneous approximations to the target process.
+Finally, the approximation of Nodelman et al does not provide a provable approximation on the likelihood of the
+observation—a crucial component in learning procedures.
+Here, we develop an alternative variational approximation, which provides a different trade-off. We use the strategy of structured variational approximations in graphical
+models [8], and specifically by the variational approach of
+Opper and Sanguinetti [12] for approximate inference in
+Markov Jump Processes, a related class of models (see below). The resulting procedure approximates the posterior
+distribution of the CTBN as a product of independent components, each of which is an inhomogeneous continuous-
+
+92
+
+COHN ET AL.
+
+time Markov process. As we show, by using a natural representation of these processes, we derive a variational procedure that is both efficient, and provides a good approximation both for the likelihood of the evidence and for the
+expected sufficient statistics. In particular, the approximation provides a lower-bound on the likelihood, and thus is
+attractive for use in learning.
+
+2
+
+UAI 2009
+probability of various events given the evidence (e.g., that
+the state of the system at time t is x), and to compute conditional expectations (e.g., the expected amount of time Xi
+was in state xi ). Direct computations of these quantities
+involve matrix exponentials of the rate matrix Q, whose
+size is exponential in the number of components, making
+this approach infeasible beyond a modest number of components. We therefore have to resort to approximations.
+
+Continuous-Time Bayesian Networks
+
+Consider a D-component Markov process X (t) =
+(t)
+(t)
+(t)
+(X1 , X2 , . . . XD ) with state space S = S1 × S2 × · · · ×
+SD . A notational convention: vectors are denoted by boldface symbols, e.g., X, and matrices are denoted by blackboard style characters, e.g., Q. The states in S are denoted
+by vectors of indexes, x = (x1 , . . . , xD ). We use indexes
+1 ≤ i, j ≤ D for enumerating components and X (t) and
+(t)
+Xi to denote the random variable describing the state of
+the process and its i’th components at time t.
+The dynamics of a time-homogeneous continuous-time
+Markov process are fully determined by the Markov transition function,
+px,y (t) = Pr(X (t+s) = y|X (s) = x),
+where time-homogeneity implies that the right-hand side
+does not depend on s. These dynamics are fully captured by a matrix Q—the rate matrix with non-negative
+offP
+diagonal entries qx,y and diagonal qx,x = − y6=x qx,y .
+This rate matrix defines the transition probabilities
+px,y (h) = δx,y + qx,y · h + o(h)
+where δx,y is a multivariate Kronecker delta and o(·)
+means decay to zero faster than its argument. Using the
+rate matrix Q, we can express the Markov transition function as px,y (t) = [exp(tQ)]x,y where exp(tQ) is a matrix
+exponential [2, 7].
+A continuous-time Bayesian network is defined by assigning each component i a set of components Pai ⊆
+{1, . . . , D} \ {i}, which are its parents in the network [9].
+With each component i we then associate a set of condii|Pa
+tional rate matrix Q·|ui i for each state ui of Pai . The
+i|Pa
+off-diagonal entries qxi ,yii|ui represent the rate at which Xi
+transitions from state xi to state yi given that its parents are
+in state ui . The dynamics of X (t) are defined by a rate
+
+matrix Q with entries qx,y , which amalgamates the conditional rate matrices as follows:
+ i|Pa
+i
+
+δ(x, y) = {i}
+ qxi ,yi |ui
+P i|Pai
+qx,y =
+(1)
+x=y
+i qxi ,xi |ui
+
+
+0
+otherwise,
+where δ(x, y) = {i|xi 6= yi }. This definition implies that
+changes are one component at a time.
+Given a continuous-time Bayesian network, we would
+like to evaluate the likelihood of evidence, to compute the
+
+3
+
+Variational Principle for Continuous Time
+Markov Processes
+
+We start by defining a variational approximations principle in terms of a general continuous-time Markov process
+(that is, without assuming any network structure). For convenience we restrict our treatment to a time interval [0, T ]
+with end-point evidence X (0) = e0 and X (T ) = eT . We
+discuss more general types of evidence below. Here we
+aim to define a lower bound on ln PQ (eT |e0 ) as well as to
+approximate the posterior probability PQ (· | e0 , eT ).
+Marginal Density Representation Variational approximations cast inference as an optimization problem of a
+functional which approximates the log probability of the
+evidence by introducing an auxiliary set of variational parameters. Here we define the optimization problem over a
+set of mean parameters [15], representing possible values
+of expected sufficient statistics.
+As discussed above, the prior distribution of the process
+can be characterized by a time-independent rate matrix Q.
+It is easy to show that if the prior is a Markov process, then
+the posterior is also a Markov process, albeit not necessarily a homogeneous one. Such a process can be represented
+by a time-dependent rate matrix that describes the instantaneous transition rates. Here, rather than representing the
+target distribution by a time-dependent rate matrix, we consider a representation that is more natural for variational
+approximations. Let Pr be the distribution of a Markov
+process. We define a family of functions:
+µx (t) = Pr(X (t) = x)
+Pr(X (t) = x, X (t+h) = y)
+, x 6= y (2)
+γx,y (t) = lim
+h↓0
+h
+X
+γx,x (t) = −
+γx,y (t).
+y6=x
+
+The function µx (t) is the probability that X (t) = x.
+The function γx,y (t) is the probability density that X transitions from state x to y at time t. Note that this parameter is not a transition rate, but rather a product of a pointwise probability with the point-wise transition rate of the
+approximating probability, i.e., γx,y (t)/µx (t) is the x, y
+entry of the time-dependent rate matrix. Hence, unlike the
+(inhomogeneous) rate matrix at time t, γx,y (t) takes into
+account the probability of being in state x and not only the
+
+UAI 2009
+
+COHN ET AL.
+
+rate of transitions. This definition implies that
+Pr(X (t) = x, X (t+h) = y) = µx (t)δx,y +γx,y (t)h+o(h),
+
+93
+terms in the continuous functional correspond to an entropy,
+Z
+
+We aim to use the family of functions µ and γ as a
+representation of a Markov process. To do so, we need
+to characterize the set of constraints that these functions
+should satisfy.
+Definition 3.1: A family η = {µx (t), γx,y (t) : 0 ≤ t ≤
+T } of continuous functions is a Markov-consistent density
+set if the following constraints are fulfilled:
+X
+µx (t) ≥ 0,
+µx (0) = 1,
+x
+
+γx,y (t) ≥ 0
+γx,x (t)
+
+∀y 6= x,
+X
+
+= −
+
+γx,y (t),
+
+y6=x
+
+d
+µx (t)
+dt
+
+=
+
+X
+
+γy,x (t).
+
+y
+
+Let M be the set of all Markov-consistent densities.
+Using standard arguments we can show that there exists a correspondence between (generally inhomogeneous)
+Markov processes and density sets η. Specifically:
+Lemma 3.2: Let η = {µx (t), γx,y (t)}. If η ∈ M, then
+there exists a continuous-time Markov process Pη for which
+µx and γx,y satisfy (2).
+The processes we are interested in, however, have additional structure, as they correspond to the posterior distribution of a time-homogeneous process with end-point evidence. This additional structure implies that we should
+only consider a subset of M:
+Lemma 3.3: Let Q be a rate matrix, and e0 , eT be states
+of X. Then the representation η corresponding to the posterior distribution PQ (·|e0 , eT ) is in the set Me ⊂ M that
+contains Markov-consistent density sets satisfying µx (0) =
+δx,e0 , µx (T ) = δx,eT .
+Thus, from now on we can restrict our attention to density sets from Me . The constraint that µx (0) and µx (T )
+also has consequences on γx,y at these points.
+Lemma 3.4: If η ∈ Me then γx,y (0) = 0 for all x 6= e0
+and γx,y (T ) = 0 for all y 6= eT .
+Variational Principle We can now state the variational
+principle for continuous processes, which closely tracks
+similar principles for discrete processes.
+We define a free energy functional,
+F(η; Q) = E(η; Q) + H(η),
+
+T
+
+XX
+
+H(η) =
+0
+
+γx,y (t)[1 + ln µx (t) − ln γx,y (t)]dt,
+
+x y6=x
+
+and an energy,
+Z
+E(η; Q) =
+0
+
+T
+
+
+X
+
+
+
+µx (t)qx,x +
+
+x
+
+X
+
+γx,y (t) ln qx,y  dt.
+
+y6=x
+
+Theorem 3.5: Let Q be a rate matrix, e = (e0 , eT ) be
+states of X, and η ∈ Me . Then
+F(η; Q) = ln PQ (eT |e0 ) − ID(Pη (·)||PQ (·|e))
+where ID(Pη (·||PQ (·|e)) is the KL divergence between the
+two processes.
+We conclude that F(η; Q) is a lower bound of the loglikelihood of the evidence, and that the closer the approximation to the target posterior, the tighter the bound.
+Proof Outline The basic idea is to consider discrete approximations of the functional. Let K be an integer. We
+define the K-sieve X K to be the set of random variables
+X (t0 ) , X (t1 ) , . . . , X (tK ) where tk = kT
+K . We can use
+the variational principle [8] on the marginal distributions
+PQ (X K |e) and Pη (X K ). More precisely, define
+
+
+PQ (X K , eT | e0 )
+,
+FK (η; Q) = EPη ln
+Pη (X K )
+which can, by using simple arithmetic manipulations, be
+recast as
+FK (η; Q) = ln PQ (eT |e0 ) − ID(Pη (X K )||PQ (X K |e)).
+We get the desired result by letting K
+→
+∞. By definition limK→∞ ID(Pη (X K )||PQ (X K |e)) is
+ID(Pη (·)||PQ (·|e)). The crux of the proof is in proving the
+following lemma.
+Lemma 3.6: F(η; Q) = limK→∞ FK (η; Q).
+Proof: Since both PQ and Pη are Markov processes,
+FK (η; Q) =
+
+K−1
+X
+
+h
+i
+EPη ln PQ (X (tk+1 ) |X (tk ) )
+
+k=0
+
+−
+
+K−1
+X
+
+h
+i
+EPη ln Pη (X (tk ) , X (tk+1 ) )
+
+k=0
+
++
+
+K−1
+X
+
+h
+i
+EPη ln Pη (X (tk ) )
+
+k=1
+
+which, as we will see, measures the quality of η as an approximation of PQ (·|e). (For succinctness, we will assume
+that the evidence e is clear from the context.) The two
+
+We now express these terms as functions of µx (t), γx,y (t)
+and qx,y . By definition, Pη (X (tk ) = x) = µx (tk ). Each
+
+94
+
+COHN ET AL.
+
+of the expectations either depend on this term, or on the
+joint distribution Pη (X (tk−1 ) , X (tk ) ). Using the continuity of γx,y (t) we write
+Pη (X (tk ) = x, X (tk+1 ) = y) = δx,y µx (tk )
++ ∆K · γx,y (tk ) + o(∆K )
+where ∆K = T /K. Similarly, we can also write
+PQ (X (tk+1 ) = y|X (tk ) = x) = δx,y +∆K ·qx,y +o(∆K )
+
+UAI 2009
+Q
+\i
+where µx (t) = j6=i µjxj (t) is the joint distribution at time
+t of all the components other than the i’th. (It is not hard to
+see that if η i ∈ Mie for all i, then η ∈ Me .) We define the
+set MF
+e to contain all factored density sets. From now on
+we assume that η = η 1 × · · · × η D ∈ MF
+e.
+Assuming that Q is defined by a CTBN, and that η is a
+factored density set, we can rewrite
+E(η; Q) =
+
+ln (1 + ∆K · z + o(∆K ))
+
+=
+
++
+
+∆K · z + o(∆K ).
+
+XZ
+i
+
+Using these relations, we can rewrite after tedious yet
+straightforward manipulations,
+
+EK (η; Q) =
+
+∆K eK (tk ), HK (η) =
+
+k=0
+
+∆K hK (tk ),
+
+k=0
+
+and
+eK (t) =
+
+XX
+
+γx,y (t)[1 + ln µx (t) − ln γx,y (t)] + o(∆K )
+
+
+X
+x
+
+µx (t)qxx +
+
+X
+
+
+
+γxi i ,yi (t)Eµ\i (t) ln qxi ,yi |U i dt,
+
+xi ,yi 6=xi
+
+and
+X
+
+H(η i ).
+
+This decomposition involves only local terms that either
+include the i’th component, or include the i’th component
+and its parents in the CTBN
+ defining Q. Note that terms
+such as Eµ\i (t) qxi ,xi |U i involve only µj (t) for j ∈ Pai .
+To make the factored nature of the approximation explicit in the notation, we write henceforth,
+
+
+X
+
+γx,y (t) log qx,y  + o(∆K )
+
+y6=x
+
+P
+Letting K → ∞ we have that k ∆k [f (tk ) + o(∆K )] →
+RT
+f (t)dt, hence EK (η; Q) and HK (η) converge to
+0
+E(η; Q) and H(η), respectively.
+
+4
+
+xi
+
+F(η; Q) = F F (η 1 , . . . , η D ; Q).
+
+x y6=x
+
+hK (t) =
+
+
+
+µixi (t)Eµ\i (t) qxi ,xi |U i dt
+
+i
+
+where
+K−1
+X
+
+0
+
+T
+
+X
+
+H(η) =
+
+FK (η; Q) = EK (η; Q) + HK (η),
+K−1
+X
+
+0
+
+i
+
+Finally, using properties of logarithms we have that
+
+T
+
+XZ
+
+Factored Approximation
+
+The variational principle we discussed is based on a representation that is as complex as the original process—the
+number of functions γx,y (t) we consider is equal to the size
+of the original rate matrix Q. To get a tractable inference
+procedure we make additional simplifying assumptions on
+the approximating distribution.
+Given a D-component process we consider approximations that factor into products of independent processes. More precisely, we define Mie to be the continuous Markov-consistent density sets over the component
+Xi , that are consistent with the evidence on Xi at times
+0 and T . Given a collection of density sets η 1 , . . . , η D
+for the different components, the product density set η =
+η 1 × · · · × η D is defined as
+Y
+µx (t) =
+µixi (t)
+i
+\i
+
+δ(x, y) = {i}
+ γxi i ,yi (t)µx (t)
+P i
+\i
+γx,y (t) =
+γ
+(t)µ
+(t)
+x=y
+x
+x ,x
+
+ 0 i i i
+otherwise
+
+Fixed Point Characterization We can now pose the optimization problem we wish to solve:
+Fixing i, and given η 1 , . . . , η i−1 , η i+1 , . . . , η D ,
+D
+i+1
+respecin M1e , . . . Mi−1
+e , Me , . . . , Me ,
+F
+1
+tively, find arg maxηi ∈Mie F (η , . . . , η D ; Q).
+If for all i, we have a µi ∈ Mie , which is a solution
+to this optimization problem with respect to each component, then we have a (local) stationary point of the energy
+functional within MF
+e.
+To solve this optimization problem, we define a Lagrangian, which includes the constraints in the form of
+Def. 3.1. The Lagrangian is a functional of the functions
+µixi (t) and γxi i ,yi (t) and Lagrange multipliers (which are
+functions of t as well). The stationary point of the functional satisfies the Euler-Lagrange equations, namely the
+functional derivatives of L vanish. Writing these equations
+in explicit form we get a fixed point characterization of the
+solution in term of the following set of ODEs:
+X
+
+d i
+γyi i ,xi (t) − γxi i ,yi (t)
+µxi (t) =
+dt
+yi 6=xi
+
+d i
+ρ (t) = −ρixi (t)(q̄xi i ,xi (t) + ψxi i (t))
+dt xi
+X
+−
+ρiyi (t)q̃xi i ,yi (t)
+yi 6=xi
+
+where ρi are the exponents of the Lagrange multipliers.
+
+(3)
+
+UAI 2009
+
+COHN ET AL.
+
+In addition we have the following algebraic constraint
+ρixi (t)γxi i ,yi (t) = µixi (t)q̃xi i ,yi (t)ρiyi (t), xi 6= yi .
+
+(4)
+
+In these equations we use the following shorthand notations
+for the average rates
+h
+i
+i|Pa
+q̄xi i ,yi (t) = Eµ\i (t) qxi ,yii|U i
+h
+i
+i|Pa
+q̄xi i ,yi |xj (t) = Eµ\i (t) qxi ,yii|U i | xj ,
+Similarly, we have the following shorthand notations for
+the geometrically-averaged rates,
+h
+io
+n
+i|Pa
+q̃xi i ,yi (t) = exp Eµ\i (t) ln qxi ,yii|U i
+h
+io
+n
+i|Pa
+q̃xi i ,yi |xj (t) = exp Eµ\i (t) ln qxi ,yii|U i | xj ,
+The last auxiliary term is
+X X
+µjxj (t)q̄xj j ,xj |xi (t)+
+ψxi i (t) =
+j∈Childreni xj
+
+X
+
+X
+
+γxj j ,yj (t) ln q̃xj j ,yj |xi (t).
+
+j∈Childreni xj 6=yj
+
+The two differential equations (3) for µixi (t) and ρixi (t)
+describe, respectively, the progression of µixi forward, and
+the progression of ρixi backward. To uniquely solve these
+equations we need to set the boundary conditions. The
+boundary condition for µixi is defined explicitly in MF
+e as
+µixi (0)
+
+= δxi ,ei,0
+
+(5)
+
+The boundary condition at T is slightly more involved. The
+i
+constraints in MF
+e imply that µxi (T ) = δxi ,ei,T . As stated
+i
+by Lemma 3.4, we have that γei,T ,xi (T ) = 0 when xi 6=
+ei,T . Plugging these values into (4), and assuming that Q
+is irreducible we get that ρxi (T ) = 0 for all xi 6= ei,T .
+In addition, we notice that ρei,T (T ) 6= 0, for otherwise the
+whole system of equations for ρ will collapse to 0. Finally,
+notice that the solution of (3) for µi and γ i is insensitive
+to the multiplication of ρi by a constant. Thus, we can
+arbitrarily set ρei,T (T ) = 1, and get the boundary condition
+ρixi (T ) = δxi ,ei,T .
+
+(6)
+
+Theorem 4.1: η i ∈ Mie is a stationary point (e.g., local
+maxima) of F F (η 1 , . . . , η D ; Q) subject to the constraints
+of Def. 3.1 if and only if it satisfies (3–6).
+It is straightforward to extend this result to show that at a
+maximum with respect to all the component densities, this
+fixed-point characterization must hold for all components
+simultaneously.
+Example 4.2: Consider the case of a single component,
+for which our procedure should be exact, as no simplifying
+assumptions are made on the density set. In this case, the
+
+95
+averaged rates q̄ i and the geometrically-averaged rates q̃ i
+both reduce to the unaveraged rates q, and ψ ≡ 0. Thus,
+the system of equations to be solved is
+X
+d
+µx (t) =
+(γy,x (t) − γx,y (t))
+dt
+y6=x
+
+X
+d
+ρx (t) = −
+qx,y ρy (t),
+dt
+y
+along with the algebraic equation
+ρx (t)γx,y (t) = qx,y µx (t)ρy (t),
+
+y 6= x.
+
+In this case, it is straightforward to show that the backward propagation rule for ρx implies that
+ρx (t) = Pr(eT |X (t) ).
+This system of ODEs is similar to forward-backward propagation, except that unlike classical forward propagation
+(which would use a function such as αx (t) = Pr(X (t) =
+x|e0 )), here the forward propagation already takes into account the backward messages, to directly compute the posterior. Given this interpretation, it is clear that integrating
+ρx (t) from T to 0 followed by integrating µx (t) from 0 to
+T computes the exact posterior of the processes.
+This interpretation of ρx (t) also allows us to understand
+the role of γx,y (t). Recall that γx,y (t)/µx (t) is the instantaneous rate of transition from x to y at time t. Thus,
+ρy (t)
+γx,y (t)
+= qx,y
+.
+µx (t)
+ρx (t)
+That is, the instantaneous rate combines the original rate
+with the relative likelihood of the evidence at T given y and
+x. If y is much more likely to lead to the final state, then
+the rates are biased toward y. Conversely, if y is unlikely
+to lead to the evidence the rate of transitions to it are lower.
+This observation also explains why the forward propagation of µx will reach the observed µx (T ) even though we
+did not impose it explicitly.
+Example 4.3: We define an Ising chain to be a CTBN
+X1 ↔ X2 ↔ · · · ↔ XD such that each binary component prefers to be in the same state as its neighbor. These
+models are governed by two parameters: a coupling parameter β which determines the strength of the coupling
+between two neighboring components, and a rate parameter τ that determines the propensity of each component to
+change its state. More formally, we define the conditional
+
+−1
+P
+i|Pa
+rate matrices as qxi ,yii|ui = τ 1 + e−2yi β ∈Pai xj
+where xj ∈ {−1, 1}.
+As an example, we consider a two-component Ising
+(0)
+(0)
+chain with initial state X1 = −1 and X2 = 1, and a
+(T )
+(T )
+reversed state at the final time, X1 = 1 and X2 = −1.
+For a large value of β, this evidence is unlikely as at
+
+96
+
+COHN ET AL.
+
+UAI 2009
+imation behaves in this manner, we notice that in the single
+component case we have
+qx,y =
+
+ρx (t)γx,y (t)
+,
+ρy (t)µx (t)
+
+which should be constant. Consider the analogous quantity
+in the multi-component case: q̃xi i ,yi (t), the geometric average of the rate of Xi , given the probability of parents state.
+Not surprisingly, this is exactly a mean field approximation,
+where the influence of interacting components is approximated by their average influence. Since the distribution of
+the parents (in the two-component system, the other component) changes in time, these rates change continuously,
+especially near the end of the time interval. This suggests
+that a piecewise homogeneous approximation cannot capture the dynamics without a loss in accuracy.
+Optimization Procedure If Q is irreducible, then ρixi
+and µxi are non-zero throughout the open interval (0, T ).
+As a result, we can solve (4) to express γxi i ,yi as a function
+of µi and ρi , thus eliminating it from (3) to get evolution
+equations solely in terms of µi and ρi . Abstracting the details, we obtain a set of ODEs of the form
+
+Figure 1: Numerical results for the two-component Ising chain
+described in Example 4.3 where the first component starts in state
+−1 and ends at time T = 1 in state 1. The second component
+has the opposite behavior. (top) Two likely trajectories depicting
+the two modes of the model. (middle) Exact (solid) and approximate (dashed/dotted) marginals µi1 (t). (bottom) The log ratio
+log ρi1 (t)/ρi0 (t).
+
+both end points the components are in a undesired configurations. The exact posterior is one that assigns higher
+probabilities to trajectories where one of the components
+switches relatively fast to match the other, and then toward
+the end of the interval, they separate to match the evidence.
+Since the model is symmetric, these trajectories are either
+ones in which both components are most of the time in
+state −1, or ones where both are most of the time in state 1
+(Fig. 1 top). Due to symmetry, the marginal probability of
+each component is around 0.5 throughout most of the interval (Fig. 1 middle). The variational approximation cannot
+capture the dependency between the two components, and
+thus converges to one of two local maxima, corresponding
+to the two potential subsets of trajectories. Examining the
+value of ρi , we see that close to the end of the interval they
+bias the instantaneous rates significantly (Fig. 1 bottom).
+This example also allows to examine the implications
+of modeling the posterior by inhomogeneous Markov processes. In principle, we might have used as an approximation Markov processes with homogeneous rates, and conditioned on the evidence. To examine whether our approx-
+
+d i
+µ (t) = α(µi (t), ρi (t), µ\i (t)) µi (0) = given
+dt
+d i
+ρ (t) = −β(ρi (t), µ\i (t))
+ρi (T ) = given.
+dt
+where α and β can be inferred from (3) and (4). Since the
+evolution of ρi does not depend on µi , we can integrate
+backward from time T to solve for ρi . Then, integrating
+forward from time 0, we compute µi . After performing a
+single iteration of backward-forward integration, we obtain
+a solution that satisfies the fixed-point equation (3) for the
+i’th component. (This is not surprising once we have identified our procedure to be a variation of a standard forwardbackward algorithm for a single component.) Such a solution will be a local maximum of the functional w.r.t. to η i
+(reaching a local minimum or a saddle point requires very
+specific initialization points).
+This suggests that we can use the standard procedure
+of asynchronous update, where we update each component in a round-robin fashion. Since each of these singlecomponent updates converges in one backward-forward
+step, and since it reaches a local maximum, each step improves the value of the free energy over the previous one.
+Since the free energy functional is bounded by the probability of the evidence, this procedure will always converge.
+Another issue is the initialization of this procedure.
+Since the iteration on the i’th component depends on µ\i ,
+we need to initialize µ by some legal assignment. To do
+so, we create a fictional rate matrix Q̃i for each component
+and initialize µi to be the posterior of the process given
+the evidence ei,0 and ei,T . As a reasonable initial guess,
+we choose at random one of the conditional rates in Q to
+determine the fictional rate matrix.
+
+UAI 2009
+
+COHN ET AL.
+
+97
+
+Figure 2: (a) Relative error as a function of the coupling parameter β (x-axis) and transition rates τ (y-axis) for an 8-component Ising
+chain. (b) Comparison of true vs. estimated likelihood as a function of the rate parameter τ . (c) Comparison of true vs. likelihood as a
+function of the coupling parameter β.
+
+The continuous time update equations allow us to use
+standard ODE methods with an adaptive step size (here we
+use the Runge-Kutta-Fehlberg (4,5) method). At the price
+of some overhead, these procedure automatically tune the
+trade-off between error and time granularity.
+
+spent in state x, and Mx,y , the number of transitions from
+state x to y. In a discrete-time model, we can capture the
+statistics for every random variable. In a continuous-time
+model, however, we need to consider the time derivative of
+the statistics. Indeed, it is not hard to show that
+
+5
+
+d
+E [Tx (t)] = µx (t)
+dt
+
+Perspective & Related Works
+
+Variational approximations for different types of
+continuous-time processes have been recently proposed [12, 13]. Our approach is motivated by results of
+Opper and Sanguinetti [12] who developed a variational
+principle for a related model. Their model, which they call
+a Markov jump process, is similar to an HMM, in which
+the hidden chain is a continuous-time Markov process and
+there are (noisy) observations at discrete points along the
+process. They describe a variational principle and discuss
+the form of the functional when the approximation is a
+product of independent processes. There are two main
+differences between the setting of Opper and Sanguinetti
+and ours. First, we show how to exploit the structure of the
+target CTBN to reduce the complexity of the approximation. These simplifications imply that the update of the i’th
+process depends only on its Markov blanket in the CTBN,
+allowing us to develop efficient approximations for large
+models. Second, and more importantly, the structure of
+the evidence in our setting is quite different, as we assume
+deterministic evidence at the end of intervals. This setting
+typically leads to a posterior Markov process in which
+the instantaneous rates used by Opper and Sanguinetti
+diverge toward the end point—the rates of transition into
+the observed state go to infinity, leading to numerical
+problems at the end points. We circumvent this problem by
+using the marginal density representation which is much
+more stable numerically.
+Taking the general perspective of Wainwright and Jordan [15], the representation of the distribution uses the natural sufficient statistics. In the case of a continuous-time
+Markov process, the sufficient statistics are Tx , the time
+
+and
+
+d
+E [Mx,y (t)]
+dt
+
+= γx,y (t).
+
+Thus, our marginal density sets η provide what we consider a natural formulation for variational approaches to
+continuous-time Markov processes.
+Our presentation focused on evidence at two ends of
+an interval. Our formulation easily extends to deal with
+more elaborate types of evidence: (1) If we do not observe
+the initial state of the i’th component, we can set µix (0)
+to be the prior probability of X (0) = x. Similarly, if we
+do not observe Xi at time T , we set ρix (T ) = 1 as initial data for the backward step. (2) In a CTBN where one
+(or more) components are fully observed, we simply set µi
+for these components to be a distribution that assigns all
+the probability mass to the observed trajectory. Similarly,
+if we observe different components at different times, we
+may update each component on a different time interval.
+Consequently, maintaining for each component a marginal
+distribution µi throughout the interval of interest, we can
+update the other ones using their evidence patterns.
+
+6
+
+Experimental Evaluation
+
+To gain better insight into the quality of our procedure, we
+performed numerical tests on models that challenge the approximation. Specifically, we use Ising chains where we
+explore regimes defined by the degree of coupling between
+the components (the parameter β) and the rate of transitions
+(the parameter τ ). We evaluate the error in two ways. The
+first is by the difference between the true log-likelihood and
+our estimate. The second is by the average relative error in
+the estimate of different expected sufficient statistics deP |θ̂ −θ |
+fined by j jθj j where θj is exact value of the j’th ex-
+
+98
+
+COHN ET AL.
+
+pected sufficient statistics and θ̂j is the approximation.
+Applying our procedure on an Ising chain with 8
+components, for which we can still perform exact inference, we evaluated the relative error for different
+choices of β and τ . The evidence in this experiment is
+e0 = {+, +, +, +, +, +, −, −}, T = 0.64 and eT =
+{−, −, −, +, +, +, +, +}. As shown in Fig. 2a, the error
+is larger when τ and β are large. In the case of a weak coupling (small β), the posterior is almost independent, and
+our approximation is accurate. In models with few transitions (small τ ), most of the mass of the posterior is concentrated on a few canonical “types” of trajectories that can
+be captured by the approximation (as in Example 4.3). At
+high transition rates, the components tend to transition often, and in a coordinated manner, which leads to a posterior that is hard to approximate by a product distribution.
+Moreover, the resulting free energy landscape is rough with
+many local maxima. Examining the error in likelihood estimates (Fig. 2b,c) we see a similar trend.
+Next, we examine the run time of our approximation
+when using fairly standard ODE solver with few optimizations and tunings. The run time is dominated by the time
+needed to perform the backward-forward integration when
+updating a single component, and by the number of such
+updates until convergence. Examining the run time for different choices of β and τ (Fig. 3), we see that the run time
+of our procedure scales linearly with the number of components in the chain. Moreover, the run time is generally
+insensitive to the difficulty of the problem in terms of β.
+It does depend to some extent on the rate τ , suggesting
+that processes with more transitions require more iterations
+to converge. Indeed, the number of iterations required to
+achieve convergence in the largest chains under consideration are mildly affected by parameter choices. The scalability of the run time stands in contrast to the Gibbs sampling procedure [4], which scales roughly with the number
+in transitions in the sampled trajectories. Comparing our
+method to the Gibbs sampling procedure we see (Fig. 4)
+that the faster Mean Field approach dominates the Gibbs
+procedure over short run times. However, as opposed to
+Mean Field, the Gibbs procedure is asymptotically unbiased, and with longer run times it ultimately prevails. This
+evaluation also shows that adaptive integration procedure
+in our methods strikes a better trade-off than using a fixed
+time granularity integration.
+
+7
+
+Inference on Trees
+
+The abovementioned experimental results indicate that our
+approximation is accurate when reasoning about weaklycoupled components, or about time intervals involving few
+transitions (low transition rates). Unfortunately, in many
+domains we face strongly-coupled components. For example, we are interested in modeling the evolution of biological sequences (DNA, RNA, and proteins). In such systems,
+we have a phylogenetic tree that represents the branching
+
+UAI 2009
+
+Figure 3: Evaluation of the run time of the approximation versus
+the run time of exact inference as a function of the number of
+components.
+
+process that leads to current day sequences (see Fig. 5a). It
+is common in sequence evolution to model this process as
+a continuous-time Markov process over a tree [6]. More
+precisely, the evolution along each branch is a standard
+continuous-time Markov process, and branching is modeled by a replication, after which each replica evolves independently along its sub-branch. Common applications
+are forced to assume that each character in the sequence
+evolves independently of the other.
+In some situations, assuming an independent evolution
+of each character is highly unreasonable. Consider the evolution of an RNA sequence that folds onto itself to form
+a functional structure. This folding is mediated by complementary base-pairing (A-U, C-G, etc) that stabilizes the
+structure. During evolution, we expect to see compensatory
+mutations. That is, if a A changes into C then its basedpaired U will change into a G soon thereafter. To capture
+such coordinated changes, we need to consider the joint
+evolution of the different characters. In the case of RNA
+structure, the stability of the structure is determined by
+stacking potentials that measure the stability of two adjacent pairs of interacting nucleotides. Thus, if we consider
+a factor network to represent the energy of a fold, it will
+have structure as shown in Fig. 5b. We can convert this
+factor graph into a CTBN using procedures that consider
+the energy function as a fitness criteria in evolution [3, 16].
+Unfortunately, inference in such models suffers from computational blowup, and so the few studies that deal with it
+explicitly resort to sampling procedures [16].
+To consider trees, we need to extend our framework to
+deal with branching processes. In a linear-time model, we
+view the process as a map from [0, T ] into random variables
+X (t) . In the case of a tree, we view the process as a map
+from a point t = hb, ti on a tree T (defined by branch b
+and the time t within it) into a random variable X (t) . Similarly, we generalize the definition of the Markov-consistent
+density set η to include functions on trees. We define continuity of functions on trees in the obvious manner.
+The variational approximation on trees is thus similar
+
+UAI 2009
+
+COHN ET AL.
+
+Figure 4: Evaluation of the run time vs. accuracy trade-off for
+several choices of parameters for Mean Field and Gibbs sampling
+on the branching process of Fig. 5(a).
+
+99
+
+Figure 5: (a) An example of a phylogenetic tree. Branch lengths
+denote time intervals between events with the interval used for
+the comparison in Fig. 6a highlighted. (b) The form of the energy
+function for encoding RNA folding, superimposed on a fragment
+of a folded structure; each gray box denotes a term that involves
+four nucleotides. (c) Illustration of the ODE updates on a directed
+tree.
+
+Figure 6: (a) Comparison of exact vs. approximate inference along the branch from C to D in the tree of Fig. 5(a) with and without
+additional evidence at other leaves. Exact marginals are shown in solid lines, whereas approximate marginal are in dashed lines. The
+two panels show two different components. (b) Evaluation of the relative error in expected sufficient statistics for an Ising chain in
+branching-time; compare to Fig. 2(a). (c) Evaluation of the estimated likelihood on a tree; compare to Fig. 2(b).
+
+to the one on intervals. Within each branch, we deal with
+the same update formulas as in linear time. We denote by
+µixi (b, t) and ρixi (b, t) the messages computed on branch b
+at time t. The only changes occur at vertices. Suppose we
+have a branch b1 of length T1 incoming into vertex v, and
+two outgoing branches b2 and b3 (see Fig. 5c). Then we
+use the following updates for µixi and ρixi
+µixi (bk , 0) = µixi (b1 , T1 ) k = 2, 3,
+ρixi (b1 , T1 ) = ρixi (b2 , 0)ρixi (b3 , 0).
+The forward propagation of µi simply uses the value at the
+end of the incoming branch as initial value for the outgoing
+branches. In backward propagation of ρi the value at the
+end of b1 is the product of the values at the start of the
+two outgoing branches. This is the natural operation when
+we recall the interpretation of ρi as the probability of the
+downstream evidence given the current state.
+When switching to trees, we increase the amount of evidence about intermediate states. Consider for example the
+
+tree of Fig. 5a. We can view the span from C to D as an
+interval with evidence at its end. When we add evidence at
+the tip of other branches we gain more information about
+intermediate points between C and D. To evaluate the impact of these changes on our approximation, we considered the tree of Fig. 5a, and compared it to inference in
+the backbone between C and D (Fig. 2). Comparing the
+true marginal to the approximate one along the main backbone (see Fig. 6a) we see a major difference in the quality
+of the approximation. The evidence in the tree leads to a
+much tighter approximation of the marginal distribution. A
+more systematic comparison (Fig. 6b,c) demonstrates that
+the additional evidence reduces the magnitude of the error
+throughout the parameter space.
+As a more demanding test, we applied our inference
+procedure to the model introduced by Yu and Thorne [16]
+for a stem of 18 interacting RNA nucleotides in 8 species in
+the phylogeny of Fig. 5a. We compared our estimate of the
+expected sufficient statistics of this model to these obtained
+
+100
+
+COHN ET AL.
+
+UAI 2009
+our variational procedure to generate initial distribution
+for Gibbs sampling skip the initial burn-in phase and produce accurate samples. Another attractive aspect of this
+new variational approximation is its potential use for learning model parameters from data. It can be easily combined with the EM procedure for CTBNs [10], to obtain
+a Variational-EM procedure for CTBNs, which monotonically increases the likelihood by alternating between steps
+that improve the approximation η (the updates discussed
+here) and steps that improve the model parameters θ.
+
+Figure 7: Comparison of estimates of expected sufficient statistics in the evolution of 18 interacting nucleotides, using a realistic
+model of RNA evolution. Each point is an expected statistic value;
+the x-axis is the estimate by the variational procedure, whereas
+the y-axis is the estimate by Gibbs sampling.
+
+by the Gibbs sampling procedure. The results, shown in
+Fig. 7, demonstrate that over all, the two approximate inference procedures are in good agreement about the value
+of the expected sufficient statistics.
+
+8
+
+Discussion
+
+In this paper we formulate a general variational principle
+for continuous-time Markov processes (by reformulating
+and extending the one proposed by Opper and Sanguinetti
+[12]), and use it to derive an efficient procedure for inference in CTBNs. In this mean field-type approximation, we
+use a product of independent inhomogeneous processes to
+approximate the multi-component posterior. Our procedure
+enjoys the same benefits encountered in discrete time mean
+field procedure [8]: it provides a lower-bound on the likelihood of the evidence and its run time scales linearly with
+the number of components. Using asynchronous updates
+it is guaranteed to converge, and the approximation represents a consistent joint distribution. It also suffers from expected shortcomings: there are multiple local maxima, and
+it cannot captures certain complex interactions in the posterior. By using a time-inhomogeneous representation, our
+approximation does capture complex patterns in the temporal progression of the marginal distribution of each component. Importantly, the continuous time parametrization enables straightforward implementation using standard ODE
+integration packages that automatically tune the trade-off
+between time granularity and approximation quality. We
+show how to extend it to perform inference on phylogenetic
+trees, and show that it provides fairly accurate answers in
+the context of a real application.
+One of the key developments here is the shift from
+(piecewise) homogeneous parametric representations to
+continuously inhomogeneous representations based on
+marginal density sets. This shift increases the flexibility
+of the approximation and, somewhat surprisingly, also significantly simplifies the resulting formulation.
+A possible extension of the ideas set here is to use
+
+Acknowledgments
+We thank the anonymous reviewers for helpful remarks on
+previous versions of the manuscript. This research was
+supported in part by a grant from the Israel Science Foundation. Tal El-Hay is supported by the Eshkol fellowship
+from the Israeli Ministry of Science.
+
+References
+[1] X. Boyen and D. Koller. Tractable inference for complex
+stochastic processes. In UAI, 1998.
+[2] K.L. Chung. Markov chains with stationary transition probabilities. 1960.
+[3] T. El-Hay, N. Friedman, D. Koller, and R. Kupferman. Continuous time markov networks. In UAI, 2006.
+[4] T. El-Hay, N. Friedman, and R. Kupferman. Gibbs sampling
+in factorized continuous-time markov processes. In UAI,
+2008.
+[5] Y. Fan and C.R. Shelton. Sampling for approximate inference in continuous time Bayesian networks. In AI and Math,
+2008.
+[6] J. Felsenstein. Inferring Phylogenies. 2004.
+[7] C.W. Gardiner. Handbook of stochastic methods. 2004.
+[8] M. I. Jordan, Z. Ghahramani, T. Jaakkola, and L. K. Saul.
+An introduction to variational approximations methods for
+graphical models. In Learning in Graphical Models. 1998.
+[9] U. Nodelman, C.R. Shelton, and D. Koller. Continuous time
+Bayesian networks. In UAI, 2002.
+[10] U. Nodelman, C.R. Shelton, and D. Koller. Expectation
+maximization and complex duration distributions for continuous time Bayesian networks. In UAI, 2005.
+[11] U. Nodelman, C.R. Shelton, and D. Koller. Expectation
+propagation for continuous time Bayesian networks. In UAI,
+2005.
+[12] M. Opper and G. Sanguinetti. Variational inference for
+Markov jump processes. In NIPS, 2007.
+[13] C. Archambeau, M. Opper, Y. Shen, D. Cornford and J.
+Shawe-Taylor. Variational inference for Diffusion Processes. In NIPS, 2007.
+[14] S. Saria, U. Nodelman, and D. Koller. Reasoning at the right
+time granularity. In UAI, 2007.
+[15] M. J. Wainwright and M. Jordan. Graphical models, exponential families, and variational inference. Found. Trends
+Mach. Learn., 1:1–305, 2008.
+[16] J. Yu and J. L Thorne. Dependence among sites in RNA
+evolution. Mol. Biol. Evol., 23:1525–37, 2006.
+
+

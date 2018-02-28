@@ -1,0 +1,1631 @@
+"Bayesian net" (BN), which succinctly encodes a dis­
+tribution over a set of variables. Often the underlying
+distribution, which should be used to map questions to
+appropriate responses, is not known a priori. In such
+cases, if we have access to training examples, we can
+try to learn the model.
+There are currently many algorithms for learning
+BNs [Hec95, Bun96] . Each such learning algorithm
+tries to determine which BN is optimal, usually based
+•
+
+Also: NEC Research Institute, Princeton, NJ
+
+Dale Schuurmans*
+Inst. for Research in Cognitive Science
+University of Pennsylvania
+Philadelphia, PA 19104-6228
+daes@linc.cis.upenn.edu
+
+on some measure such as log-likelihood (possibly aug­
+mented with a "regularizing" term, leading to mea­
+sures like MDL [LB94], and Bayesian Information Cri­
+terion (BIC) [Sch78]) . However, these typical mea­
+sures are independent of the queries that will be posed.
+To understand the significance of this, note that we
+may only care about certain queries (e.g., the prob­
+ability of certain specific diseases given a set of ob­
+served symptoms); and a BN with the best (say) log­
+likelihood given the sample may not be the one which
+produces the appropriate answers for the queries we
+care about. This paper therefore argues that BN­
+learning algorithms should consider the distribution
+of queries, as well as the underlying distribution of
+events, a.nd should therefore seek the BN with the best
+performance over the query distribution, rather than
+the one that appears closest to the underlying event
+distribution.
+
+To make this point more concrete, suppose we knew
+that all queries will be of the form p( H I J, B) for some
+assignments to these variables (e.g ., Hepatitis, given
+the possible symptoms Jaundice=false and Blood test
+=true). Given a set of examples, our learner has to de­
+cide which BN (perhaps from some specified restricted
+set) is best. Now imagine we had two candidates BNs
+from this set: B1, which performs optimally on the
+queries p( H I J, B), but does horribly on other queries
+(e.g., incorrectly claims that J and E are conditionally
+independent, has the completely wrong values for the
+conditional probability of H to the treatment T ("Take
+aspirin") , and so on); versus B2, which is slightly off
+on the p( H I J, B) queries, but perfect on all other
+queries. Here, most measures would prefer B2 over
+B1, as they would penalize B1 for its errors on the
+queries that will never occur!
+Of course, if we re­
+ally do only care about p( H I J, B ), this B2-over-B1
+preference is wrong.
+This assumes we have the correct distributions, of both
+the real world events (e.g., quantities like p( H = 11 J ==
+0, B = 1 ) = 0.42), and the queries that will be
+posed (e.g., 48% of the queries will be of the form
+"What is p(H
+h/J = j, B =b)?"; 10% will be
+"What is p( H = hI sl = VI, s4 = V4, s1 = V7 )?",
+=
+
+Learning Bayesian Nets that Perfonn Well
+
+etc.). Another more subtle problem with the maximal­
+likelihood-based measures arises when these distribu­
+tions are not given expl icit ly, but must instead be es­
+timated from examples. Here, we would, of course,
+like to use the given examples to obtain good esti­
+mates of the conditional probabilities P(HjJ, B). In
+the general maximal-likelihood framework, however,
+the examples would be used to fit all of the param­
+eters within the entire BN, so we could conceivably
+"waste" some examples or computational effort learn­
+ing the value of irrel evant parameters. In general, it
+seems better to focus the learner's resources on the
+relevant queries (but see Section 4).
+Our general challenge is to acquire a BN whose per­
+formance is optimal, with respect to the distribution
+of queries, and the underlying distribution of events.
+Section 2 first lays out the framework by providing
+the relevant definitions. Section 3 then addresses sev­
+eral issues related to learning a BN whose accuracy
+(by this measure) is optimal: presenting the computa­
+tional/ sample complexities of first evaluating the qual­
+ity of a given BN and then of finding the best BN of
+a given structure. It then provides methods for hill­
+climbing to a locally optimal BN. We will see that
+these tasks are computationally difficult for general
+classes of queries; Section 3 also presents a particular
+class of queries for which these tasks are easy. Sec­
+tion 4 then reflects on the general issue of how to best
+use knowledge of the query distribution to improve
+the efficiency of learni ng a good BN under our model.
+Here we show situations where this information may
+lead to ways of learning a BN (of a given structure)
+th at are more sample-efficient than the standard ap­
+proach. We first close this section by discussing how
+our results compare with others.
+
+Related Results: The framework closest to ours is
+
+Friedman and Goldszmidt [FG96], as they also con­
+sider finding th e BN that is best for some distribution
+of queries, and also explain why the BN with (say)
+maximal log-likelihood may not be the one with op­
+timal performance on a specific task. In particular,
+they note that evaluating a Bayesian net B, given a
+set of training data D = { ci, ai , .. . , a�} � 1, under the
+log-likelihood measure, amounts to using the formula
+LL(B\D)
++
+
+where B( x) is the probability that B assigns to the
+event X· If all of the queries, however, ask for the
+value of c given values of (a1, .. . an ) , then only the
+first summation matters. This means that systems
+that use LL(BID) to rank BNs could do poorly if the
+contributions of second summation dominate those of
+the first. The [FG96] paper, however, considers only
+building BNs for classification, i.e., where every query
+is of the specific form p( C = c I A1 =a1, . .. , An= an )
+where C is the only "consequent" variable, and {Ai}
+
+199
+
+is the set of all other variables; their formulation also
+implicitly assumes that all possible query-instances (of
+complete tuples) will occur, and all are equally likely.
+By contrast, we do not constrain the set of queries to
+be of this single form, nor do we insist that all queries
+occur equally often, nor that all variables be involved
+in each query, Note in particular that we allow the
+query's antecedents to not include the Markov blan­
+ket of the consequent; we will see that this restriction
+considerably simplifies the underlying computation.
+Each of the queries we consider is of the form "p( X=
+xI Y = y) = ?", where X, Y are subsets of the vari­
+ables, and x, y are respective (ground) assignments
+to these variables. As such, they resemble the stan­
+dard class of "statistical queries", discussed by Kearns
+and others [Kea93] in the context of noise-tolerant
+learners.1 In that model, however, the learner is pos­
+ing such queries to gather information about the un­
+derlying distribution, and the learner's score depends
+its accuracy with respect to some other specific set of
+queries (here the same p( C = c I At = a1, . . . , An= an )
+expression mentioned ab ove ). In our model, by con­
+trast, the learner is observing which such queries are
+posed by the "environment" , as it will be evaluated
+based on its accuracy with respect to these queries.
+
+Other researchers, including [FY96, Hi:if93], also com­
+pute the sample complexity for learnin g good BNs.
+They, however, deal with likelihood-based measures,
+which (as we shall see) have some fundamental differ­
+ences from our query-answering b ased model; hence,
+our results are incomparable.
+2
+
+FRAMEWORK
+
+As a quick synopsis: a Bayesian net is a directed
+acyclic graph (V, E), whose nodes represent variables,
+and whose arcs represent dependencies. Each node
+also includes a conditional-probability-table that spec­
+ifies how the node's values depends (stochastically) on
+the values of its parents. (Readers unfamiliar with
+these ideas are referred to [Pea88].)
+In general, we assume there is a stationary un­
+derlying distribution P over the N variables V =
+{Vt, .. . , VN } · (I.e., p(Vt = V t , ... ,VN = VN ) � 0
+and L,1, .. ,vN p( Vt = Vt, . . . , VN = VN) = 1). For
+example, perhaps vl is the "disease" random variable,
+whose value ranges over {healthy, cancer, flu, ... }; V2 is
+"gender" E {male, female}, V3 is "body_temperature"
+E [95 .. 105], etc. We will refer to this as the "underly­
+ing distribution" or the "distribution over events".
+A statistical query is a term of the form "p( X =x I Y =
+y) = ?", where S, T C V are (possibly empty) subsets
+of V, and x (resp,, y) is a legal assignment to the
+elements of X (resp, Y). We let SQ be the set of all
+10£ course, other groups have long been interested in
+this idea; cf., the work in finding statistical answers from
+database queries.
+
+200
+
+Greiner, Grove, and Schuunnans
+
+possible legal statistical queries? and assume there is
+a (stationary) distribution over SQ, written sq( X=
+x; Y=y), where sq(X=x; Y=y) is the probability
+that the query "What is the value of p( X = xI Y =
+y )?" will be asked. We of course allow Y = {}; here
+we are requesting the prior value of X, independent of
+any conditioning. We also write sq( x; y) to refer to
+the probability of the query "p( X= x I Y = y) == ?"
+where the variable sets X and Y can be inferred from
+the context.
+While all of our results are based on such "ground"
+statistical queries, we could also define sq( X; Y) to
+refer to the probability that some query of the gen­
+eral form "p( X = xI Y = y) = ?" will be asked,
+for some assignments x, y; we could assume that all
+assignments to these unspecified variables are equally
+likely as queries. Finally, to simplify our notation, we
+will often use a single variable, say q, to represent the
+entire [X=x, Y=y] situation, and so will write sq( q)
+to refer to sq( X=x; Y =y).
+As a simple example, the claim sq( C ; A1,..., An )
+1 states that our BN will only be used to find clas­
+sifications C given the values of all of the variables
+{Ai}· (Notice this is not asserting that p( C = c I A1 =
+a1, ... , An = an ) = 1 for any set of assignments
+{c, ai}.) If all variables are binary, this corresponds
+to the claim that sq( C = c; A1 = a1, . . . , An = an) =
+1/2n+l for each assignment. Alternatively, we can use
+sq( C; A1, A2, A3) = 0.3, sq( C; A1, A2 ) 0.2, and
+sq( D ; C = 1, A1
+0, A3) = 0.25, and sq( D; C =
+1, A1 = 1, A3 ) = 0.25, to state that 30% of the queries
+involve seeking the conditional probability of C given
+the observed values of the 3 attributes {A�, A2, A3};
+20% involve seeking the probability of C given only the
+2 attributes {A � , A2 }; 25% seek the probability of (the
+different "consequent") D given that C
+1, A1
+0
+and some observed value of A3, and the remaining 25%
+seek the probability of D given that C = 1, A1 = 1
+and some observed value of A3.
+
+correlated (or at least, not in any simple way) with the
+value of the conditional probabilityp( X=xI Y = y).
+The fact that the underlying p( · ) is stationary sim­
+ply means that the query sq( · ; . ) has a determi­
+nate answer given by the true conditional probability
+p( X= xI Y = y) E [0, 1]. In general, we call each
+tuple (X=x; Y =y; p(X=x I Y=y)) a "labeled sta­
+tistical query" .
+Now fix a network (over V) B, and let B(xI y) =
+B( X = xI Y = y) be the real-value (probability)
+that B returns for this assignment. Given distribu­
+tion sq( ·; ) over SQ, the "score" of B is
+·
+
+errsq,p ( B
+
+) = L:sq(x;y)[B(xly)-p(xly)]2
+x,y
+
+{1)
+
+where the sum is over all assignments x, y to all sub­
+sets X, Y of variables. (We will often write this simply
+err( B) when the distributions sq and pare clear from
+the context.) Note this depends on both the underly­
+ing distribution p( ) over V, and the sq( · ) distribution
+over queries SQ.
+·
+
+=
+
+=
+
+=
+
+=
+
+=
+
+If each of the N variables has domain {0, 1}, then the
+SQ distribution has 0(5N) parameters, because each
+variable Vi E V can play one of the following 5 roles in
+a query:
+
+{[
+
+[ vv :; ] [ vv: r ]
+[\:�],[���]
+
+vv : ;c ]
+
+,
+
+,
+
+,
+
+}
+
+Notice that we assume that sq( ; · ) can be, in general,
+completely unrelated top( ·I·), because the probabil­
+ity of being asked about sq( X= x ; Y = y ) need not be
+·
+
+sq(X=x; Y=y)
+
+is "legal"
+
+ifp(Y=y) >
+
+0.
+
+Note also that we use CAPITAL letters to represent single
+variables, lowercase letters for that values that the vari­
+
+ables might assume, and the boldface font when dealing
+
+with sets of variables or values.
+
+effJ(B) =
+
+-1
+
+L
+
+IQI (X; Y; p)EQ
+
+[B(xly) -p]2
+
+be the "empirical score" of the Bayesian net.
+For comparison, we will later use KL( B )
+to refer to the Kullback-Liebler di­
+Ld p( d) log
+vergence between the correct distribution p( · ) and
+the distribution represented by the Bayesian net B(·).
+Given a set D of event tuples, we can approximate
+fn-1 L:dED log
+.
+this score using KLD (B)
+Note (1) that small KL divergence corresponds to the
+large (log)likelihood, and (2) that neither KL( B) nor
+-D
+KL (B) depend on sq( · ).
+
+;<(�)
+
+�(�!
+
+Finally, let SQ8 C SQ be the class of queries whose
+"consequent" is single literal X = {V}, and whose
+"antecedents" Y are a superset of V's Markov blanket,
+with respect to the BN B; we will call these "Markov­
+blanket queries".
+3
+
+(We avoid degeneracies by assuming Y n X ={}.)
+
+2A query
+
+Given a set of labeled statistical queries Q
+{(xi; Yii Pi)}i we let
+
+LEARNING ACCURATE
+BAYES IAN NETS
+
+Our overall goal is to learn the Bayesian Net with the
+optimal performance, given examples of both the un­
+derlying distribution, and of the queries that will be
+posed (i.e., instances of {VI = VI, . .., VN = VN} tuples
+and instances of SQ, possibly labeled).
+1 Any Bayesian net B. that encodes
+the underlying distribution p( ) , will in fact produce
+the optimal performance; i.e., err( B.) will be optimal.
+(However, the converse is not true: there could be nets
+
+Observation
+
+·
+
+Learning Bayesian Nets that Perfonn Well
+
+201
+
+whose performance is perfect on the queries that inter­
+est us, i.e., err( B*) = 0, but which are otherwise very
+different from the underlying distribution.)
+I
+
+in the general SQ case, or to estimate KLD (B) from
+incomplete tuples D [CH92, RBKK95]; as here the
+Bayesian net computations are inherently intractabl e.
+We will see these parallels again below.
+
+From this observation we see that, if we have a learn­
+ing algorithm that produces better and better approxi­
+mations t o p( ) as it sees more training examples, then
+in the limit the sq( ·) distribution becomes irrelevant.
+
+Another challenge is computing the sample complexity
+of gathering the information required to compute the
+score for a network. It is easy to collect a sufficient
+number of examples if we are considering learning from
+labeled statistical queries. Here, a simple application
+of Hoeffding's Inequality [Hoe63} shows4
+
+·
+
+Given a small set of examples, however, the sq( · ) dis­
+tribution can play an important role in determining
+which BN is optimal. This section considers both the
+computational and sample complexity of this under­
+lying task. Subsection 3.1 first considers the simple
+task of evaluating a given network, as this informa­
+tion is often essential to learning a good BN. Subsec­
+tion 3.2 then analyses the task of filling in the optimal
+CP-tables for a given graphical structure, and Subsec­
+tion 3.3 discusses a hill-climbing algorithm for filling
+these tables, to produce a BN whose accuracy is locally
+optimal.
+
+3.1
+
+3
+
+Theorem
+
+Let
+
+� ( B)
+
+=:
+
+L
+
+1
+
+MLSQ
+(q,p)ESLsQ
+
+(B( q) - p)2
+
+be the empirical score of the Bayesian net B, based on
+set SLSQ of
+
+a
+
+MLSQ
+
+==
+
+MLsQ(f., 8)
+
+o:::
+
+-D
+
+It is easy to compute the estimate KL ( B) of KL( B ) ,
+based on examples of complete tuples D drawn from
+the p( ) distribution. In contrast, it is hard to com­
+pute the estimate �( B) of err( B) from general
+statistical queries - in fact, it is not even easy to
+approximate this estimate.
+
+2
+
+2 ln 'J
+21'.
+
+labeled statistical queries, drawn randomly from the
+sq( ) distribution and labeled by p( ) . Then, with
+probability at least 1-6, e�LsQ (B) will be within <0 of
+err( B); i.e., P[ !errS'LsQ (B)- err( B )I < t] � 1-o,
+where this distribution is over all sets of MLsQ(e., J)
+I
+randomly drawn statistical queries.
+·
+
+COMPUTING err(B)
+
+1
+
+·
+
+·
+
+2 ([Rot96, DL93]) It is #P-hard3
+to
+compute er;Q ( B) over a set of general queries Q C
+SQ. It is NP-hard to even estimate this quantity to
+within an additive factor of 0.5.
+I
+
+Theorem
+
+The reason is that evaluating the score for an arbi­
+trary Bayesian network requires evaluating the poste­
+rior probabilities of events in Q, which is known to
+be difficult in general. In fact, this is hard even if we
+know the distribution p( ) and consider only a single
+(known) form for the query.
+·
+
+Note, however, that this computation is much easier
+in the SQB case, because there is an trivial way to
+evaluate a Bayesian net on any Markov-blanket query
+[Pea88]; and hence to compute the score.
+There is an obvious parallel between estimating
+
+en=O' (B) when dealing with SQB queries Q1, and estimating KL D' ( B) from complete tuples D1 [Hec95]:
+
+both tasks are quite straightforward, basically because
+their respective Bayesian net computations are simple.
+Similarly, it can be challenging to compute errQ ( B)
+3
+
+A more challenging question is: What if we only get
+unlabeled queries, together with examples of the un­
+derlying distribution? Fortunately, we again need only
+a polynomial number of (unlabeled) query examples.
+Unfortunately, we need more information before we
+can bound on the number of event examples required.
+To see this, imagine sq( ) puts all of the weight on a
+single query, i.e., sq( X = 1 ; Y = 1 ) = 1. Hence,
+a BN's accuracy depends completely on its perfor­
+mance on this query, which in turn depends critically
+on the true conditional probability p( X = 11 Y = 1 ) .
+The only event examples relevant to estimating this
+quantity are those with Y = 1; of course, these ex­
+amples only occur with probability p( Y = 1 ). Un­
+fortunately, this probability can be arbitrarily small.
+Further, even if p( Y = 1) :::::: 0, the true value of
+p(X = II Y = 1) can still be large (e.g., if X is
+equal to Y, then p( X = II Y
+1) = 1, even if
+p( Y 1) = l/2n). Hence, we cannot simply ignore
+such queries (as sq( X= x; Y y) can be high), nor
+can we assume the resulting value will be near 0 ( as
+p( X=x I Y =y) can be high).
+·
+
+=
+
+=
+
+=
+
+We can still estimate the score of a BN, in the following
+on-line fashion:
+Theorem
+of
+
+to a satisfiability problem, and thus #P-hard problems are
+at least as difficult
+
+as
+
+problems in NP.
+
+First, let SsQ
+
+MsQ(E, 8)
+
+Roughly speaking, #P is the class of problems corre­
+
+sponding to counting the number of satisfiable assignments
+
+4
+
+4
+
+=
+
+{ sq( Xi ;
+2
+
+=
+
+2
+
+E
+
+ln
+
+Yi
+
+) }i be
+
+a
+
+set
+
+4
+
+J
+
+Proofs for all new theorems, lemmas and corollaries
+
+appear in
+
+[GGS97].
+
+202
+
+Greiner, Grove, and Schuurmans
+
+unlabeled statistical queries drawn randomly from the
+sq( ·; ·) distributzon. Next, let Sn be the set of (com­
+plete) examples sequentially drawn from the underlying
+distribution p( ), until it includes at least
+·
+
+"
+1 ( f,u
+Mn
+)
+
+==
+
+! In 2 MsQ
+f2
+
+cl
+
+instances that match each Yi value; notice Sn may
+require many more than Mb examples. (The "legal
+query" requirement p( Yi) > 0 insures that this col­
+lection process will terminate, with probability 1.) Fi­
+nally, letp(So)(x; \y;), be the empirically observed es­
+timate of p( Xi I Yi ) , based on this Sn set. Then, with
+probability at least 1 - 8,
+
+e'f'l3sq,Sn(B)
+
+1_
+= _
+
+:L [
+
+B( xly) -p(Sv}(xly)
+\SsQ\ (x,y)E sq
+S
+
+f. of err( B);
+err(B)\<f]2:: 1-J.
+
+will be within
+
+i.e.,
+
+r
+
+P[ \erP59 ,Sn (B) -
+
+I
+
+We can, moreover, get an a priori bound on the total
+number of event examples if we can bound the proba­
+bility of the query's conditioning events. That is,
+
+Corollary 5 If we know that all queries encountered,
+sq( x; y ), satisfy p( y) 2:: .\ for some .\ > 0, then we
+need only gather
+MD(<,o,>.)
+max
+
+{�[
+
+M� + ln
+
+4�59] , �
+
+ln
+
+4
+
+�sg
+
+}
+
+complete event examples, along with
+
+MsQ(f, 8)
+
+2
+
+==
+
+�:2
+
+4
+
+ln "J
+
+3.2
+
+COMPUTING OPTIMAL CP-tables
+FOR A GIVEN NETWORK
+STRUCTURE
+
+The structure of a Bayesian net, in essence, specifies
+which variables are directly related to which others.
+As people often know this "causal" information (at
+least approximately), many EN-learners actually be­
+gin with a given structure, and are expected to use
+training examples to "complete" the BN, by filling in
+the "strength" of these connections - i.e., to learn
+the CP-table entrie s. To further motivate this task of
+''fitting" good CP-tables to a given BN structure, note
+that it is often the key sub-routine of the more general
+EN-learning systems, which must also search through
+the space of structures. This subsection addresses both
+the computational, and sample, complexity of finding
+this best (or near best) CP-table. Subsection 3.3 next
+suggests a more practical, heuristic approach.
+Stated more precisely, the structure of a specific
+is a directed acyclic graph (V, E) with
+nodes V and edges E C V x V. There are, of course,
+(uncountably) many BNs with this structure, corre­
+sponding to all ways of filling in the CP-tables. Let
+LW(V, E) denote all such BNs.
+
+B ayesi an net
+
+We now address the task of finding a BN B E
+whose score is, with high probability, (near)
+minimal among this class ; i.e., find B such that
+
+LW(V, E)
+
+err( B)
+
+<
+
+E
+
++
+
+min
+
+B 'El3/II(V,E)
+
+err( B1)
+
+with probability at least 1- J, for small t:, J > 0. As in
+Subsection 3.1, our learner has access to either labeled
+statistical queries drawn from the query distribution
+sq( ·) over SQ; or unlabeled queries from sq( ) , to­
+gether with event examples drawn from p( ) .
+·
+
+·
+
+example queries, to obtain an E-close estimate, with
+probability at least 1 - J.
+I
+Of course, as.\ can be arbitrarily small (e.g., o (l/2n)
+or worse), this Mn bound can be arbitrarily large,
+in terms of the size of the Bayesian net. Note also
+that the Friedman and Yakhini [FY96] bound similarly
+depends on "skewness" of the distribution, which they
+define as the smallest non-zero probability of an event,
+over all atomic events.5
+Two final comments: (1) Recall that these bounds de­
+scribe only how many examples are required; not how
+much work is required, given this information. Unfor­
+tunately, using these examples to compute the score
+of a BN requires solving a #P-hard problem; see The­
+orem 2. (2) The sample complexity results hold for
+estimating the accuracy of any system for represent­
+ing arbitrary distributions; not just BNs.
+5
+
+Hoffgen [Hof93] was able to avoid this dependency, in
+certain "log-loss" contexts, by "tilting" the empirical dis­
+tribution to avoid 0-probability atomic events. That trick
+does not apply to our query-based error measure.
+
+Unfortunately this task - like most other other in­
+teresting questions in the area - appears computa­
+tionally difficult in the worst case. In fact, we prove
+below the stronger result that finding the (truly) opti­
+mal Bayesian net is not just NP-hard, but is actually
+non-approximatable:
+
+6 Assuming P ::j:. NP, no polynomial­
+time algorithm (using only labeled queries) can com­
+pute the CP-tables for a given Bayesian net structure
+whose error score is within a sufficiently small addi­
+tive constant of optimal. That is, given any structure
+(V, E} and a set of labeled statistical queries Q, let
+B(v,E),Q E BIV(V,E) have the minimal error over Q;
+
+Theorem
+
+i.e., 'VB'
+
+E
+
+/3N(V,E), e;::;Q(B(V,E),Q) ::; �(B1).
+
+Then (assuming P =f. NP) there is some 1 > 0
+such that no polynomial-time algorithm can always
+find a solution within 1 of optimal, i.e., no poly­
+time algorithm can always return a B(1v E),Q such that
+
+er:rQ(B(�,E),Q)-�( B(V,E),Q)::;
+
+,
+
+1'·
+
+I
+
+In contrast, notice that the analogous task is trivial in
+
+Learning Bayesian Nets that Perform Well
+the log-likelihood framework: Given complete train­
+ing examples (and some beni gn assumptions), the CP­
+table that produces the optimal maximal-likelihood
+BN corresponds simply to the observed frequency es­
+timates [Hec95].
+However, the news is not all bad in our case. Although
+the problem may be computationally hard, the sample
+complexity can be p oly nom ial . That is (under certain
+conditions; see below), if we draw a polynomial num­
+ber of labeled queries, and (somehow!) find the BN B
+t ha t gives minimal error for tho se queries, then with
+hi gh probability B will be within t of optimal over the
+ful l distribution sq( ) .
+·
+
+We conjecture that the sample complexity result is
+true in general. However, our results below uses the
+following annoying, but extremely benign, technical
+restriction. Let T
+{y I sq( x; y) > 0} be th e set
+of all conditioning events that might appe ar in queries
+(often Twill simply be the set of all events). For any
+=
+
+c
+
+>
+
+1, define
+
+J3NT�l/2<N (V, E)
+
+=
+
+N
+{BE 13N(V,E) IVy E T,B(y) > l/2° }
+
+to be the subset of BNs that assign, to each condi­
+ti on in g event, a probability that is bounded below by
+N
+the doubly-exponcnttally small number l/2c . (Recall th at N = IV!, the number of variables.) We now
+restrict our attention to these Bayesian nets. 6
+•
+
+Theorem 7 Consider any Bayesian net structure
+(V, E), requiring the specification of K CP-table
+entries CPT
+{[q;lrdh=l..K.
+Let B* E
+I3.Af7�1;2cN (V, E) be the BN that has minimum em-
+
+pirical score with respect to a sample of
+
+M£sQ(t,o)
+
+=
+
+:b ( log � +
+
+Klog2�
+
++
+
+NKlog(2+c-logE))
+
+labeled statistical queries from sq( ). Then, with prob­
+ability at least 1 - J, B* will be no more than t worse
+·
+
+than Bopt, where Bopt is the BN with optimal score
+among !3NT�l/2"N (V, E) with respect to the full dis­
+tribv.tion sq ( ) .
+I
+·
+
+This theorem is nontrivial to prove, and in particular
+is not an immediate corollary to Theorem 3_ That
+earlier result shows how to estimate the score for a
+6Conceivably -
+
+although we
+
+conjecture
+
+otherwise -
+
+there could be some sets of queries and some graphs (V, E),
+such that the best performance is obtained with extremely
+
+small CP-table entries; e.g., of order
+
+o(l/22
+
+2�
+
+).
+
+(But note
+
+that numbers this small can require doubly-exponential
+precision just to write down, so such BNs would perhaps be
+
+impractical anywayr)
+
+Our result assumes that, even if such
+
+BNs do allow improved performance, we are not interested
+in them.
+
+203
+
+single fixed BN, allow in g 6 p robabilit y of error. But
+since B* is chosen after the fact (i.e., to be opt imal on
+the training set) we cannot have the same confidence
+
+that we have estimated its score correctly. Instead,
+we must use sufficiently many examples so that the
+simultaneously estimated scores for all (uncountably
+many) B' E BN T'?:l/2eN (V, E) are all within E of the
+true values, with collective probability of at most J
+that there is any error. Only then can we be confident
+about B*'s accuracy. (See pro of in [GGS97] .)
+
+As i n Sect ion 3.1, we can also consider the slightly
+more complex task of lea rn in g the CP-table entries
+f ro m unlabeled st ati sti cal queries sq( X = x; Y = y ) ,
+augmented with examples of the underlying distribu­
+tion p( ) . However, as above, this is a straightfor­
+ward extension of th e "learning from labeled s tatist i­
+cal query" case: one firs t draws a slightly larger sam­
+ple of unlabeled statistical queries, and then uses a
+sufficient sample of domain tuples to accurately esti­
+mate the lab el s for each of these queries (h enc e sim­
+ulating the effect of drawin g fewer - but still suffi­
+ciently many - labeled statistical queries). Here we
+encounter the s am e caveats that each of the unlabeled
+statistical queries sq( X= x ; Y= y) must involve con­
+ditioning events Y = y that occur with some nontrivial
+probability p( Y y) > 0 (for otherwise one could not
+put an no ntri vial upper bound on the number of tu­
+ples needed to learn a good setting of the CP-table
+entries). A detailed statement and proof of this r e­
+sult is a straightforward exte nsio n of Theorem 7, so
+we omit the details here. (See [GGS97].)
+·
+
+=
+
+The point is that, from a sample complexity per sp ec ­
+tive, it is fe asibl e to learn near optimal settings for the
+CP-table entries in a fixed Bayesian network structure
+under our mod el. The only difficult part is that actu­
+ally computing these optimal entries from (a polyno­
+mial number of) training samples is hard in g ener al;
+cf., Theo rem 6. In fact, we will see, in Section 4, that
+it is not correct to simply fill each CP-table entry with
+the frequency es timat es.
+3.3
+
+HILL CLIMBING
+
+It should not be surprising that finding the optimal
+CP-tables was computationally hard, as this problem
+has a lot in common with the challenge of l e arn in g the
+KL( · ) - bes t network, given partially specified tuples;
+a task for which people often use iterative steepest­
+ascent climbing methods [RBKK95]. We now briefly
+consider the analogous approach in our setting.
+
+Given
+a
+single
+labeled
+statisti­
+cal query "(x; y; p( xI y )}", consider how to change
+the value of the CP-table entry [qlr], whose current
+value is eqlr · We use th e follow in g lem ma :
+8 Let B be a Bayesian net whose CP-table
+includes the value eQ=qiR=r = eqjr E [0, 1] as the
+value for the conditional probability of Q = q given
+R = r. Let sq( X ; Y) be a statistical query, to which
+
+Lemma
+
+Greiner, Grove, and Schuurrnans
+
+204
+
+B assigns the probability B( X I Y). Then the deriva­
+
+tive of B( X I Y), wrt the value
+
+eq\r,
+
+is
+
+d err(X ,Y) ( B)
+d eqlr
+2(B(X[Y)-p)
+B(X[Y) (1-B(X[Y)) (4)
+eqlr
+
+dB(X [Y)
+deqlr
+1
+
+=-B(XfY) [B(q, r [X, Y)-B(q,rjY)]
+eqlr
+As
+
+(2)
+
+produced the score B(X I Y) here, the error for
+this single query is ffi(X,Y) (B)
+(B( X 1 Y) - p) 2 .
+To compute the gradient of this error value, as a func­
+tion of this single CP-table entry (using Equation 2),
+
+B
+
+=
+
+am<XY
+, )( B)
+d eqlr
+
+thus, letting
+
+C
+
+=
+
+=
+
+2(B(XjY) -p)
+
+dB(XfY)
+d eqlr
+
+2(B ( X I Y)- p), we get
+
+0dB (XjY)
+deqlr
+=
+
+:::::
+
+c
+
+- [B(q,r, XJY)- B(XJY)B(q,r [Y)]
+eqlr
+c
+
+-B(X J Y) [B( q,r I X, Y)-B(q,r I Y )] (3)
+eqlr
+
+We can t en ';lse �his derivati�e t� update the eq1r
+.
+value, by htll-chmbmg m the d1rect10n of the gradi­
+ent (i.e., gradient ascent.). Of course, Equation 3 pro­
+vides only that component of the gradient derived from
+a single query; the overall gradient for eq\r will in­
+
+�
+
+volve summing these values of all queries (or perhaps
+all queries in some sample). Furthermore, we must
+constrain the gradient ascent to only move such that
+eq' 1r remains as 1 (i.e., the sum of probabilities of
+
+L:�
+
+all possible values for Q, given a particular valuation
+for Q's parents, must sum to 1). However, the tech­
+niques involved are straightforward and well-known,
+so we omit further analysis here.
+
+Notice immediately from Equation 3 that we will
+no t update eqlr (at least, not because of the query
+
+sq( X; Y)) if the difference B( X I Y)- p is 0 (i.e., if
+B (X I Y ) is correct) or if B(q, r I X, Y) - B( q, r I Y)
+is 0 (i.e., if Y "d-separates" X and q, r); both of which
+makes intuitive sense.
+
+Unfortunately, we see that evaluating the gradient re­
+quires computing conditional probabilities in a BN.
+This is analogous to to th e known result in the tra­
+ditional model [RBKK95]. It thus follows that it can
+be #P-hard to evaluate this gradient in general (see
+Theorem 2). However, in special cases- i.e., BNs for
+which inference is tractable - efficient computation is
+possible.
+One demonstration of this is the class of "Markov­
+bl anket queries" SQB (recall the definition at the end
+of Section 2). Carrying out the gradient computation
+is easy i� this case: Here when updatin� the [qlr] entry,
+Y"e can 1gnore queries sq( X; Y) if [qJr) is outside of
+1ts Markov blanket. We therefore need only consider
+the queries sq( X; Y) where {Q} U R C XU Y and
+moreover, when Q
+q is consistent with X's assign­
+ment; for these queries, the gradient is
+=
+
+which follows from Equation 3 using B( q, r I X, Y) :::::
+q, r is consistent with X's claim (recall we ignore
+sq(X; Y) otherwise), and observing that B(q,rj Y)
+reduces to B( X I Y), as the part of { Q} U R already
+in Y is irrelevant. Notice Equation 4 is simple to com­
+pute, as it involves no non-trivial Bayesian net com­
+putation; see the simple algorithms in [Pea88J.
+1 as
+
+4
+
+HOW CAN THE QUERY
+DISTRIBUTION HELP?
+
+Our intuition throughout this paper is that having ac­
+cess to the distribution of queries should allow us to
+learn better and more efficiently than if we only get to
+see domain tuples alone. Is this really true?
+Note that the simplest and most standard approach
+to learning CP-table entries is simply filling in each
+CP-table entry with the observed frequency estimates
+[OFE] obtained from p( ). Note that this ignores
+any information about the query distribution. Unfor­
+tunately, OFE is not necessarily a good idea in our
+model, even if we have an arbitrary number of ex­
+amples. This follows immediately from Theorem 6:
+If the standard OFE algorithm was always success­
+ful, then we would have a trivial polynomial time al­
+gorithm for computing a near-optimal CP-table for a
+fixed Bayesian net structure - which cannot be (un­
+less P ==
+Yes, Observation 1 does claim that the
+optimal BN is a faithful model of the event distribu­
+tion, meaning in particular that the value of each CP­
+table entry [qlr] can be filled with the true probability
+p(q I r ). However, this claim is not true in general
+in the current context, where we are seeking the best
+CP-table entries for a given network structure, as this
+network structure might not correspond to the true
+conditional independence structure of the underlying
+distribution p( ).
+·
+
+NP).
+
+·
+
+In the case where the BN structure does not corre­
+spond to the true conditional independence structure
+of the underlying p( ) , ignoring the query distribution
+and using straight OFE can lead to arbitrarily bad
+·
+
+results:
+
+Example 4.1
+
+Suppose the EN structure is simply
+A -t X -t C, and the only labeled queries are
+(C; A; 1.0) and (C; A; 0.0). (I.e., A = C with proba­
+bility 11 and we are only interested in querying C given
+A or A.) Suppose further that the intervening X is
+completely independent of A and C -i.e., p( X I A)
+p( X ]•A) p( C I X) p( C I•X) 0.5. (Note that
+this BN structure is seriously wrong.)
+=
+
+=
+
+=
+
+=
+
+205
+
+Learning Bay esian Nets that Perfonn Well
+
+In this situation, the EN that most faithfully follows
+
+the event distribution, Bp, would have CP-table en­
+e x 1 ;t = ec1x = e q x
+0.51 with a per­
+tries e x i A
+
+s core of err( Bp ) = 0.25. (Recall that ex l A
+�s the CP-table entry that specifies the probability of
+X given that A holds; etc.) Now consider Bsq 1 whose
+ent �ies are exiA = eCix
+1.0 and e x 1 Ji = eqx = 0.0
+=
+
+=
+
+formance
+1
+
+make X = A and C ;:::::: X . While Bsq clearly
+has the X -dependencies completely wrong, its score is
+=
+
+- 1.e . ,
+
+perfect, i.e. , err(
+
+Bsq ) = 0.0. 7
+
+I
+
+Thus, filling CP-table entries with observed frequency
+estimates - or using any other technique that con­
+verges to Bp - leads to a bad solution in this case,
+no matter how many training examples are used. On
+the other hand, consider a learning procedure that
+(knowing the query distribution!) ignores the X vari­
+able completely and directly estimates the conditional
+probabilities p( A I C ) and p( A 1 -.C ) before filling in
+the CP-table entries (i. e., which is isomorphic to B89 ) .
+This would eventually learn a perfect classifier. Of
+course, such a procedure might have to be based on the
+(impractical) learning techniques developed in Theo­
+rem 7, or p erhaps (more realistically) use the heuristic
+hill-climbing strategies presented in Section 3.3.
+What about the case when the proposed network
+structure is correct? Here we know that the standard
+OFE approach eventually does converge to an optimal
+CP-table setting for any query distribution ( Observa­
+tion 1 ) . So, unlike the case of an incorrect structure,
+there is no reason in the large-sample-size limit to con­
+sider the query distribution. But what about the more
+realistic situation, where the sample is finite? The
+question then is:
+Given that the known structure is correct,
+can we exploit knowing the true query distribution?
+There is one simple sense in which the answer can
+certainly be yes. It is clearly safe to to restrict our
+attention to those nodes of the BN that are not d­
+separated from every query variable by the condition­
+ing variables that appear in the queries. That is, if
+a B N B contains the edge U � V, and the query
+7The same issue is relevant to understanding the re­
+striction in Theorem 7 to BNT >-l/2cN (V, E) . One might
+
+consider removing this restriction by assuming that all con­
+ditioning events y E T have significant probability accord­
+ing to p( · ) ; i.e. , they are not too unlikely (a la Corol­
+lary 5 ) . But Theorem 7 does not make this assumption,
+for an important reason. Note that; if we are not directly
+interested in queries about p( y ) , then the BN we use to
+answer queries is not constrained to agree with p( y ) . In
+particular, if it helps to get better answers on the queries
+that do occur, the optimal BN Bopt could (conceivably)
+"set" Bopt (y) to be extremely small; knowing that p( y )
+is p erhaps large is j ust irrelevan t . Our theorem, which in­
+s�ead assumes that the former quantity is not too small,
+simply would not be helped by (what might seem to be
+more natural) restrictions on p( y ) .
+
+Figure 1 : Bayesian network structure for Example 4.2
+("Naive Bayes" ) .
+distribution sq( X = x ; Y = y) i s such that, for ev­
+ery query "p( X = x I Y = y ) = ?" , both U and V are
+d-separated from X by Y, then we know that the CP­
+table entry e v l u cannot affect B's answer to the query,
+B( X I Y ). Thus, it seems clear that we do not need
+to bother estimating evJu here. Now suppose we have
+a learning algorithm that uses a computed sample size
+bound (which grows with the number of parameters
+to be estimated) in order to provide certain perfor­
+mance guarantees. Here, our knowledge of the query
+distribution will reduce the effective size of the BN,
+which will allow us to stop learning after fewer sam­
+ples. Thus, using the query distribution can give an
+advantage here, although only in a rather weak sense:
+the basic learning technique might still amount to fill­
+ing in the CP-table entries with frequency estimates
+obtained from the underlying distribution p( ) - the
+only win is that we will know that it is safe to stop
+earlier because a small fragment of the network is rel­
+evant.
+·
+
+Can one do better than simply filling in CP-table
+entries with frequency estimates, given that the BN
+structure is correct? As we now show, this question
+does not seem to have a simple answer.
+Motivated by Example 4.1, one might ignore the EN­
+structure in general, and just directly estimate the con­
+ditional probabilities for the queries of interest. Note
+that this is guaranteed to converge to an optimal solu­
+tion, eventually, even if the BN structure is incorrect.
+However, it can be needlessly inefficient in some cases,
+especially if the postulated BN structure is known to
+be correct. This is because the BN structure can pro­
+vide valuable knowledge about the distribution.
+4 . 2 Consider the standard "Naive Bayes "
+model with n + 1 binary attributes C, A1 , . . . , An such
+that the Ai are conditionally independent given C;
+
+Example
+
+see Figure 1 .
+
+Suppose the single query of interest is
+= ? ".
+If
+= 0, A2 = 0, . . . , An = 0 )
+we attempt to learn this probability directly, we must
+wait for the (possibly very rare} event that A1 = A2
+. . . = An = 0; it is easy to construct situations where
+this will require an exponential (expected) number of
+examples. However, if we use the EN-structure, we
+can compute the required probability as soon as we
+have learned the
++ 1 probabilities p(C = 0) and
+
+''p( C
+
+=
+
+0 I A1
+
+=
+
+2n
+
+206
+
+Greiner, Grove, and Schuunnans
+5
+
+CONCLUSIONS
+
+Remaining Challenges: There are of course several
+other obvious open questions.
+
+Figure 2: Bayesian network structure for Example 4.3
+( "Reverse Naive Bayes" ) .
+
+p(A; = O I C = O ) , p(A; = O I C = 1 ) for all i . If
+p(C = 0) is near 1 /2, these probabilities will all be
+learned accurately after relatively few samples.
+
+I
+
+This example might suggest that we should always try
+to learn the B N as accurately as possible, and ignore
+the query distribution (e.g., just use OFE ) . However,
+there are other examples in which this approach would
+hurt us:
+
+First, the analyses above assume that we had the EN­
+structure, and simply had to fill in the values of the
+CP-tables. In general, of course, we may have to use
+the examples to learn that structure as well. The obvi­
+ous approach is to hill-climb in the discrete, but combi­
+natorial space of BN structures, perhaps using a sys­
+tem like PALO [Gre96] , after augmenting it to climb
+from one structure S; to a "neighboring" structure
+Si+b if Si+b filled with some CP-table entries, appears
+better than S; with (near) optimal CP-table values,
+over a distribution of queries. Notice we can often save
+computation by observing that, for any query q, B1
+and B2 will give the same error scores B1 ( q ) = B2 ( q )
+if the only differences between B1 and B2 are outside
+of q's Markov blanket.
+The second challenge is how best to accommodate both
+types of examples: queries (possibly labeled) , and do­
+main tuples. As discussed above, sq( ) examples are
+irrelevant given complete knowledge of p( ) (Obser­
+vation 1). Similarly, given complete knowledge of the
+query distribution, we only need p ( ) information to
+provide the labels for the queries.
+·
+
+Example 4 . 3
+
+Consider the "reverse " EN-structure
+from Example 4 . 2, where the arrows are now directed
+A; -t C instead of C -t Ai (Figure 2), and assume we
+are only interested in queries of the form ''P( C I { } )
+? . Here the strategy that estimates p( C = c ) di­
+rectly (hence, ignoring the given EN-structure) domi­
+nates the standard approach of estimating the CP-table
+entries. To see this, note that for any reasonable train­
+ing sample size N « 2 n , the frequency estimates for
+most of the 2n CP-table entries eel a, , . . . ,an will be un­
+defined. Even using Laplace adjustments to compen­
+sate for this, the accuracy of the resulting EN estimate
+B (C
+cl { } ) will be poor unless p( C = c ) happens
+to be near 0. 5. So, for example, if the true distribu­
+tion p(- ) is such that C = A1 1\ parity(A2, ... , A n ) , and
+p( A; = 1 ) = 0.5, then p( C = 1 ) will be equal to
+0.25. But here the EN estimator (using Laplace ad­
+justments) will give a value of B (C = I I { } ) :::::: 0.5 for
+any training sample size N << 2 n , whereas the direct
+strategy will quickly converge to an accurate estimate
+P(C = 1) :::::: 0.25. (Note that the standard maximum
+likelihood EN estimator will not even give a defined
+value for E (C = I I { } ) in this case, since most of the
+possible a 1 , . . . , a n patterns will remain unobserved.)
+
+·
+
+·
+
+=
+
+"
+
+=
+
+In general, the question
+What should we actually do if the BN structure
+is known (or assumed) to be correct, and we are
+training on a (possibly small) sample of complete
+instances?
+remains open, and is an interesting direction for future
+work
+asking, in essence, should we trust the given
+EN-structure, or the given query distribution? The
+previous two examples suggest that the answer is not
+a trivial one.
+�
+
+Of course, these extreme conditions are seldom met;
+in general, we only have partial information of either
+distribution. Further, Example 4 . 1 illustrates that
+these two corpora of information may lead to differ­
+ent BNs. We therefore need some measured way of
+combining both types of information, to produce a B N
+that i s both appropriate for the queries that have been
+seen, and for other queries that have not
+even if
+this means degrading the performance on the observed
+queries. (That is, the learner should not "overfit" the
+learned BN to just the example queries it has seen; it
+should be able to "extend" the BN based on the event
+distribution.)
+�
+
+Contributions : As noted repeatedly in Machine
+Learning and elsewhere, the goal of a learning algo­
+rithm should be to produce a "performance element"
+that will work well on its eventual performance task
+[SMCB77, KR94] . This paper considers the task of
+learning an effective Bayesian net within this frame­
+work, and argues that the goal of a EN-learner should
+be to produce a BN whose error, over the distribution
+of queries, is minimal.
+
+Our results show that many parts of this task are, un­
+fortunately, often harder than the corresponding tasks
+when producing a BN that is optimal in more familiar
+contexts (e.g. , maximizing likelihood over the sampled
+event data) � see in particular our hardness results for
+evaluating a BN by our criterion (Theorem 2 ) , for fill­
+ing in a EN-structure's CP-table (Theorem 6 ) , and for
+the steps used by the obvious hill-climbing algorithm
+trying to instantiate these tables. (Note, however, that
+
+Learning Bayesian Nets that Perform Well
+Learning
+"Algorithm"
+
+Structure is
+
+OFE•
+
+Correct
+Incorrect
+
+QDt
+
+Correct
+Incorrect
+
+•
+
+OFE
+
+=
+
+Computational
+Efficiency
+
+Correct convergence
+(in the limit)
+
+Small sample
+
+"easy"
+
+Yes [Obs 1)
+No [Ex 4.1)
+
+> 7 QD [Ex 4.2)"•
+
+Yes
+
+> 7 0FE [Ex 4.3) . .
+
+N P-hard to approx. [Th
+
+6)
+
+207
+
+Yest
+
+Observed Frequency Estimates (or any other algorithm that tries to match the event distribution. )
+
+QD uses the CP-table that i s "best" for given query distribution, using samples from the distrib�tion to
+
+label queries.
+
+QD will produce the BN that has minimum error, for this structure.
+•• Our examples illustrate cases in which one "algorithm" (OFE, QD) is more sample efficient than the other.
+
++
+
+Table 1: Issues when Learning from Distributional Samples
+our approach is robustly guaranteed to converge to
+a BN with optimal performance, while those alterna­
+tive techniques are not.) Fortunately, we have found
+that the sample requirements are not problematic for
+our tasks (see Theorems 3, 4, 7 and Corollary 5),
+given various obvious combination o f example types;
+we also identify a significant subclass of queries (SQs)
+in which some of these tasks are computationally easy.
+We have also compared and contrasted our proposed
+approach to filling in the CP-table-entries with the
+standard "observed frequency estimate" method, and
+found that there are many subtle issues in deciding
+which of these "algorithms" works best, especially in
+the small-sample situation. These results are summa­
+rized in Table 1 . We p lan further analysis (both theo­
+retical and empirical) towards determining when this
+more standard measure, now seen to be computation­
+ally simpler, is in fact an appropriate approximation
+to our performance-based criteria.
+References
+
+[B u n9 6] Wray Buntine. A guide to the literature on
+learning probabilistic networks from data.
+
+IEEE
+
+[Gre96] Russell Greiner. PALO: A probabilistic hill­
+climbing algorithm. Artificial Intelligence, 83(1-2) ,
+July 1996.
+[Hec95] David E. Heckerman. A tutorial on learning
+with Bayesian networks. Technical Report MSR­
+TR-95-06, Microsoft Research, 1 995.
+[Hoe63] Wassily Hoeffding. Probability inequalities
+for sums of bounded random variables. Journal of
+the American Statistical A ssociation, 58(301):13-30,
+March 1963.
+
+[Ho£93] Klaus-U. Hoffgen. Learning and robust learn­
+
+ing of product distributions. In Proc. COLT-93,
+pages 77-83, 1993 1993. ACM Press.
+[Kea93] M. Kearns. Efficient noise-tolerant learning
+from statistical queries. In Proc. STOC- 93, pages
+392-401, 1993.
+[KR94] Roni Khardon and Dan Roth . Learning to
+reason. In Proc . A A A I-94, pages 682-687, 1 994.
+[LB94] Wai Lam and Fahiem Bacchus. Learning Bayesian belief networks: An approach based
+on the MDL principle. Computation Intelligence,
+10( 4) :269-293, 1994.
+[Pea88] Judea Pearl. Probabilistic Reasoning in In­
+
+Transactions on Knowledge and Data Engineering,
+
+telligent Systems: Networks of Plausible Inference.
+
+1996.
+
+Morgan Kaufmann, 1988.
+
+[CH92] G. Cooper and E . Her skovit s. A Bayesian
+method for the induction of probabilistic networks
+from data. Machine Learning, 9:309-347, 1992.
+[DL93] P. Dagum and M. Luby. Approximating prob­
+abilistic inference in Bayesian belief networks is NP­
+h ard . A rtificial Intelligence, 60: 141-153, April 1993.
+[FG96] Nir Friedman and Moises Goldszmidt. Building classifers using Bayesian networks. In Proc.
+AAAI- 96, 1996.
+
+[FY96] Nir Friedman and Z . Yakhi ni. On the sample
+complexity of learning Bayesian networks. In Proc.
+Uncertainty in A I, 1996.
+[GGS97] Russell Greiner, Adam Grove, and Dale
+Schuurmans. Learning Bayesian nets that perform
+well. Technical report , Siemens Corporate Research,
+1997.
+
+[RBKK95] Stuart Russell, John Binder, Daphne
+Koller, and Keiji K anazawa. Local learning i n prob­
+abilistic networks with hidden variables. In Proc.
+IJCAI-95, Montreal, Canada, 1995.
+[Rot96] D. Roth. On the hardness of approximate rea­
+soning. Artificial Intelligence, 82(1-2 ) , April 1996.
+[S ch 78] G. Schwartz. Estimating the dimension of a
+model. Annals of Statistics, 6:461-464, 1978.
+[SMCB77] Reid G. Smith, Thomas M. Mitchell,
+R. Chestek, and Bruce G. Buchanan. A model for
+learning systems. In Proc. IJCAI- 77, pages 338-343,
+MIT. Morgan Kaufmann.
+
+

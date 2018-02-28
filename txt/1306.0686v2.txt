@@ -1,0 +1,1654 @@
+Online Learning under Delayed Feedback
+
+arXiv:1306.0686v2 [cs.LG] 5 Jun 2013
+
+Pooria Joulani
+pooria@ualberta.ca
+András György
+gyorgy@ualberta.ca
+Csaba Szepesvári
+szepesva@ualberta.ca
+Dept. of Computing Science, University of Alberta, Edmonton, AB, T6G 2E8 CANADA
+
+Abstract
+Online learning with delayed feedback has received increasing attention recently due to its
+several applications in distributed, web-based
+learning problems. In this paper we provide a
+systematic study of the topic, and analyze the
+effect of delay on the regret of online learning
+algorithms. Somewhat surprisingly, it turns
+out that delay increases the regret in a multiplicative way in adversarial problems, and
+in an additive way in stochastic problems.
+We give meta-algorithms that transform, in
+a black-box fashion, algorithms developed for
+the non-delayed case into ones that can handle the presence of delays in the feedback
+loop. Modifications of the well-known UCB
+algorithm are also developed for the bandit
+problem with delayed feedback, with the advantage over the meta-algorithms that they
+can be implemented with lower complexity.
+
+1. Introduction
+In this paper we study sequential learning when the
+feedback about the predictions made by the forecaster are delayed. This is the case, for example, in
+web advertisement, where the information whether a
+user has clicked on a certain ad may come back to
+the engine in a delayed fashion: after an ad is selected, while waiting for the information if the user
+clicks or not, the engine has to provide ads to other
+users. Also, the click information may be aggregated
+and then periodically sent to the module that decides
+about the ads, resulting in further delays. (Li et al.,
+2010; Dudik et al., 2011). Another example is parallel,
+distributed learning, where propagating information
+among nodes causes delays (Agarwal & Duchi, 2011).
+Proceedings of the 30 th International Conference on Machine Learning, Atlanta, Georgia, USA, 2013. JMLR:
+W&CP volume 28. Copyright 2013 by the author(s).
+
+While online learning has proved to be successful in
+many machine learning problems and is applied in
+practice in situations where the feedback is delayed,
+the theoretical results for the non-delayed setup are
+not applicable when delays are present. Previous work
+concerning the delayed setting focussed on specific online learning settings and delay models (mostly with
+constant delays). Thus, a comprehensive understanding of the effects of delays is missing. In this paper, we
+provide a systematic study of online learning problems
+with delayed feedback. We consider the partial monitoring setting, which covers all settings previously considered in the literature, extending, unifying, and often
+improving upon existing results. In particular, we give
+general meta-algorithms that transform, in a blackbox fashion, algorithms developed for the non-delayed
+case into algorithms that can handle delays efficiently.
+We analyze how the delay effects the regret of the algorithms. One interesting, perhaps somewhat surprising,
+result is that the delay inflates the regret in a multiplicative way in adversarial problems, while this effect
+is only additive in stochastic problems. While our general meta-algorithms are useful, their time- and spacecomplexity may be unnecessarily large. To resolve this
+problem, we work out modifications of variants of the
+UCB algorithm (Auer et al., 2002) for stochastic bandit problems with delayed feedback that have much
+smaller complexity than the black-box algorithms.
+The rest of the paper is organized as follows. The problem of online learning with delayed feedback is defined
+in Section 2. The adversarial and stochastic problems
+are analyzed in Sections 3.1 and 3.2, while the modification of the UCB algorithm is given in Section 4.
+Some proofs, as well as results about the KL-UCB algorithm (Garivier & Cappé, 2011) under delayed feedback, are provided in the appendix.
+
+2. The delayed feedback model
+We consider a general model of online learning, which
+we call the partial monitoring problem with side in-
+
+Online Learning under Delayed Feedback
+
+Parameters: Forecaster’s prediction set A, set of outcomes B, side information set X , reward function r :
+X × A × B → R, feedback function h : X × A × B → H,
+time horizon n (optional).
+At each time instant t = 1, 2, . . . , n:
+1. The environment chooses some side information
+xt ∈ X and an outcome bt ∈ B.
+2. The side information xt is presented to the forecaster, who makes a prediction at ∈ A, which
+results in the reward r(xt , at , bt ) (unknown to the
+forecaster).
+3. The feedback ht = h(xt , at , bt ) is scheduled to be
+revealed after τt time instants.
+4. The agent observes Ht = {(t′ , ht′ ) : t′ ≤ t, t′ +
+τt′ = t}, i.e., all the feedback values scheduled
+to be revealed at time step t, together with their
+timestamps.
+Figure 1: Partial monitoring under delayed, timestamped feedback.
+
+formation. In this model, the forecaster (decision
+maker) has to make a sequence of predictions (actions), possibly based on some side information, and
+for each prediction it receives some reward and feedback, where the feedback is delayed. More formally,
+given a set of possible side information values X , a
+set of possible predictions A, a set of reward functions
+R ⊂ {r : X × A → R}, and a set of possible feedback
+values H, at each time instant t = 1, 2, . . ., the forecaster receives some side information xt ∈ X ; then,
+possibly based on the side information, the forecaster
+predicts some value at ∈ A while the environment simultaneously chooses a reward function rt ∈ R; finally, the forecaster receives reward rt (xt , at ) and some
+time-stamped feedback set Ht ⊂ N × H. In particular,
+each element of Ht is a pair of time index and a feedback value, the time index indicating the time instant
+whose decision the associated feedback corresponds to.
+Note that the forecaster may or may not receive any direct information about the rewards it receives (i.e., the
+rewards may be hidden). In standard online learning,
+the feedback-set Ht is a singleton and the feedback in
+this set depends on rt , at . In the delayed model, however, the feedback that concerns the decision at time t
+is received at the end of the time period t+τt , after the
+prediction is made, i.e., it is delayed by τt time steps.
+Note that τt ≡ 0 corresponds to the non-delayed case.
+Due to the delays multiple feedbacks may arrive at the
+same time, hence the definition of Ht .
+
+The goal of P
+the forecaster is to maximize its cumulative reward nt=1 rt (xt , at ) (n ≥ 1). The performance
+of the forecaster is measured relative to the best static
+strategy selected from some set F ⊂ {f | f : X → A}
+in hindsight. In particular, the forecaster’s performance is measured through the regret, defined by
+Rn = sup
+
+n
+X
+
+a∈F t=1
+
+rt (xt , a(xt )) −
+
+n
+X
+
+rt (xt , at ).
+
+t=1
+
+A forecaster is consistent if it achieves, asymptotically,
+the average reward of the best static strategy, that is
+E [Rn ] /n → 0, and we are interested in how fast the
+average regret can be made to converge to 0.
+The above general problem formulation includes most
+scenarios considered in online learning. In the full
+information case, the feedback is the reward function itself, that is, H = R and Ht = {(t, rt )}) (in
+the non-delayed case). In the bandit case, the forecaster only learns the rewards of its own prediction,
+i.e., H = R and Ht = {(t, rt (xt , at ))}. In the partial monitoring case, the forecaster is given a reward
+function r : X × A × B → R and a feedback function h : X × A × B → H, where B is a set of choices
+(outcomes) of the environment. Then, for each time
+instant the environment picks an outcome bt ∈ B,
+and the reward becomes rt (xt , at ) = r(xt , at , bt ), while
+Ht = {(t, h(xt , at , bt ))}. This interaction protocol is
+shown in Figure 1 in the delayed case. Note that
+the bandit and full information problems can also be
+treated as special partial monitoring problems. Therefore, we will use this last formulation of the problem.
+When no stochastic assumption is made on how the
+sequence bt is generated, we talk about the adversarial
+model. In the stochastic setting we will consider the
+case when bt is a sequence of independent, identically
+distributed (i.i.d.) random variables. Side information may or may not be present in a real problem; in
+its absence X is a singleton set.
+Finally, we may have different assumptions on the delays. Most often, we will assume that (τt )t≥1 is an i.i.d.
+sequence, which is independent of the past predictions
+(as )s≤t of the forecaster. In the stochastic setting, we
+also allow the distribution of τt to depend on at .
+Note that the delays may change the order of observing the feedbacks, with the feedback of a more recent
+prediction being observed before the feedback of an
+earlier one.
+2.1. Related work
+The effect of delayed feedback has been studied in the
+recent years under different online learning scenarios
+
+Online Learning under Delayed Feedback
+
+Stochastic Feedback
+
+Full Info
+
+No
+Side
+Info
+
+ 
+R(n) ≤ R′ (n) + O(E τt2 )
+(Agarwal & Duchi, 2011)
+L
+
+Side Info
+
+Bandit
+Feedback
+
+No Side
+Info
+Side Info
+
+Partial
+
+No
+Side Info
+
+Monitoring
+
+Side Info
+
+R(n) ≤ R′ (n) + O(D∗ )
+(Mesterharm, 2007)
+R(n) ≤ C1 R′ (n) + C2 τmax log(τmax )
+(Desautels et al., 2012)
+√
+R(n) ≤ R′ (n) + O(τconst log n)
+(Dudik et al., 2011)
+Rn ≤ R′ (n) + O(G∗n )
+
+General (Adversarial) Feedback
+L
+R(n) ≤ O(τconst ) × R′ (n/τconst )
+(Weinberger & Ordentlich, 2002)
+(Langford et al., 2009)
+(Agarwal & Duchi, 2011)
+L
+R(n) ≤ O(D̄) × R′ (n/D̄)
+(Mesterharm, 2007)
+R(n) ≤ O(τconst ) × R(n/τconst )
+(Neu et al., 2010)
+
+
+n
+∗
+ 1 + E [Gn ] 
+n
+Rn ≤ (1 + E [G∗n ]) × R′
+1 + E [G∗n ]
+Rn ≤ (1 + E [G∗n ]) × R′
+
+
+
+Table 1. Summary of work on online learning under delayed feedback. R(n) shows the (expected) regret in the delayed
+setting, while R′ (n) shows the (upper bound on) the (expected) regret in the non-delayed setting. L denotes a matching
+lower bound. D∗ and D̄ indicate the maximum and average gap, respectively, where a gap is a number of consecutive
+time steps the agent does not get any feedback (in the adversarial delay formulation used by Mesterharm (2005; 2007)).
+The term τconst indicates that the results are for constant delays only. For the work of (Desautels et al., 2012), C1 and
+C2 are positive constants, with C1 > 1, and τmax denotes the maximum delay. The results presented in this paper are
+shown in boldface, where G∗t is the maximum number of outstanding feedbacks during
+t time-steps. In particular,
+
+ the firstp
+∗
+∗
+Gn ≤ τmax when the delays have an upper bound τmax , and we show that Gn = O E [τt ] + E [τt ] log n + log n when
+the delays τt are i.i.d. The new bounds for the partial monitoring problem are automatically applicable in the other,
+spacial, cases, and give improved results in most cases.
+
+and different assumptions on the delay. A concise summary, together with the contributions of this paper, is
+given in Table 1.
+To
+the
+best
+of
+our
+knowledge,
+Weinberger & Ordentlich (2002) were the first to
+analyze the delayed feedback problem; they considered the adversarial full information setting with
+a fixed, known delay τconst . They showed that
+the minimax optimal solution is to run τconst + 1
+independent optimal predictors on the subsampled
+reward sequences: τconst + 1 prediction strategies
+are used such that the ith predictor is used at time
+instants t with (t mod (τconst + 1)) + 1 = i. This
+approach forms the basis of our method devised for
+the adversarial case (see Section 3.1). Langford et al.
+(2009) showed that under the usual conditions, a
+sufficiently slowed-down version of the mirror descent
+algorithm achieves optimal decay rate of the average
+regret. Mesterharm (2005; 2007) considered another
+variant of the full information setting, using an
+adversarial model on the delays in the label prediction setting, where the forecaster has to predict
+the label corresponding to a side information vector
+
+xt . While in the full information online prediction
+problem Weinberger & Ordentlich (2002) showed
+that the regret increases by a multiplicative factor of
+τconst , in the work of Mesterharm (2005; 2007) the
+important quantity becomes the maximum/average
+gap defined as the length of the largest time interval
+the forecaster does not receive feedback. Mesterharm
+(2005; 2007) also shows that the minimax regret in
+the adversarial case increases multiplicatively by the
+average gap, while it increases only in an additive
+fashion in the stochastic case, by the maximum gap.
+Agarwal & Duchi (2011) considered the problem of
+online stochastic optimization and showed that, for
+i.i.d. random delays, the
+increases with an
+ regret
+
+additive factor of order E τ 2 .
+
+Qualitatively similar results were obtained in the
+bandit setting. Considering a fixed and known delay τconst
+√, Dudik et al. (2011) showed an additive
+O(τconst log n) penalty in the regret for the stochastic setting (with side information), while (Neu et al.,
+2010) showed a multiplicative regret for the adversarial
+bandit case. The problem of delayed feedback has also
+been studied for Gaussian process bandit optimization
+
+Online Learning under Delayed Feedback
+
+(Desautels et al., 2012), resulting in a multiplicative
+increase in the regret that is independent of the delay and an additive term depending on the maximum
+delay.
+In the rest of the paper we generalize the above results
+to the partial monitoring setting, extending, unifying,
+and often improving existing results.
+
+3. Black-Box Algorithms for Delayed
+Feedback
+In this section we provide black-box algorithms for the
+delayed feedback problem. We assume that there exists a base algorithm Base for solving the prediction
+problem without delay. We often do not specify the
+assumptions underlying the regret bounds of these algorithms, and assume that the problem we consider
+only differs from the original problem because of the
+delays. For example, in the adversarial setting, Base
+may build on the assumption that the reward functions are selected in an oblivious or non-oblivious way
+(i.e., independently or not of the predictions of the
+forecaster). First we consider the adversarial case in
+Section 3.1. Then in Section 3.2, we provide tighter
+bounds for the stochastic case.
+3.1. Adversarial setting
+We say that a prediction algorithm enjoys a regret or expected regret bound f : [0, ∞) → R under the given assumptions in the non-delayed setting if (i) f is nondecreasing, concave, f (0) = 0;
+and (ii) supb1 ,...,bn ∈B Rn ≤ f (n) or, respectively,
+supb1 ,...,bn ∈B E [Rn ] ≤ f (n) for all n. The algorithm
+of Weinberger & Ordentlich (2002) for the adversarial full information setting subsamples the reward sequence by the constant delay τconst +1, and runs a base
+algorithm Base on each of the τconst + 1 subsampled
+sequences. Weinberger & Ordentlich (2002) showed
+that if Base enjoys a regret bound f then their algorithm in the fixed delay case enjoys a regret bound
+(τconst + 1)f (n/(τconst + 1)). Furthermore, when Base
+is minimax optimal in the non-delayed setting, the subsampling algorithm is also minimax optimal in the (full
+information) delayed setting, as can be seen by constructing a reward sequence that changes only in every
+τconst + 1 times. Note that Weinberger & Ordentlich
+(2002) do not require condition (i) of f . However,
+these conditions imply that yf (x/y) is a concave function of y for any fixed x (a fact which will turn out to
+be useful in the analysis later), and are satisfied by all
+regret bounds we are aware of (e.g., for multi-armed
+bandits, contextual bandits, partial monitoring, etc.),
+
+e α)
+which all have a regret upper bound of the form O(n
+for some 0 ≤ α ≤ 1, with, typically, α = 1/2 or 2/3.1 .
+
+In this section we extend the algorithm of
+Weinberger & Ordentlich (2002) to the case when the
+delays are not constant, and to the partial monitoring
+setting. The idea is that we run several instances of
+a non-delayed algorithm Base as needed: an instance
+is “free” if it has received the feedback corresponding
+to its previous prediction – before this we say that
+the instance is “busy”, waiting for the feedback.
+When we need to make a prediction, we use one of
+existing instances that is free, and is hence ready to
+make another prediction. If no such instance exists,
+we create a new one to be used (a new instance is
+always “free”, as it is not waiting for the feedback of a
+previous prediction). The resulting algorithm, which
+we call Black-Box Online Learning under Delayed
+feedback (BOLD) is shown below (note that when the
+delays are constant, BOLD reduces to the algorithm
+of Weinberger & Ordentlich (2002)):
+
+Algorithm 1 Black-box Online Learning under Delayed feedback (BOLD)
+for each time instant t = 1, 2, . . . , n do
+Prediction:
+Pick a free instance of Base (independently
+of past predictions), or create a new instance if
+all existing instances are busy. Feed the instance
+picked with xt and use its prediction.
+Update:
+for each (s, hs ) ∈ Ht do
+Update the instance used at time instant s with
+the feedback hs .
+end for
+end for
+
+Clearly, the performance of BOLD depends on how
+many instances of Base we need to create, and how
+many times each instance is used. Let Mt denote the
+number of Base instances created by BOLD up to
+and including time t. That is, M1 = 1, and we create a new instance at the beginning of any time instant whenP
+all instances are waiting for their feedback.
+t−1
+Let Gt = s=1 I {s + τs ≥ t} be the total number of
+outstanding (missing) feedbacks when the forecaster
+is making a prediction at time instant t. Then we
+have Gt algorithms waiting for their feedback, and so
+Mt ≥ Gt + 1. Since we only introduce new instances
+when it is necessary (and each time instant at most
+1
+e n ) means that there is a β ≥ 0 such that
+un = O(v
+limn→∞ un /(vn logβ n) = 0.
+
+Online Learning under Delayed Feedback
+
+one new instance is created), it is easy to see that
+Mt = G∗t + 1
+
+Now, using the fact that fBase is an (expected) regret
+bound, we obtain
+(1)
+
+for any t, where G∗t = max1≤s≤t Gt .
+
+E [Rn |τ1 , . . . , τn ] ≤
+
+We can use the result above to transfer the regret guarantee of the non-delayed base algorithm Base to a
+guarantee on the regret of BOLD.
+Theorem 1. Suppose that the non-delayed algorithm
+Base used in BOLD enjoys an (expected) regret bound
+fBase . Assume, furthermore, that the delays τt are independent of the forecaster’s prediction at . Then the
+expected regret of BOLD after n time steps satisfies
+
+
+
+n
+E [Rn ] ≤ E (G∗n + 1)fBase
+G∗ + 1
+
+ n
+n
+.
+≤ (E [G∗n ] + 1)fBase
+E [G∗n ] + 1
+Proof. As the second inequality follows from the concavity of y 7→ yfBase (x/y) (x, y > 0), it remains to
+prove the first one.
+For any 1 ≤ j ≤ Mn , let Lj denote the list of time
+instants in which BOLD has used the prediction chosen by instance j, and let nj = |Lj | be the number
+of time instants this happens. Furthermore, let Rnj j
+denote the regret incurred during the time instants t
+with t ∈ Lj :
+X
+
+Rnj j = sup
+
+a∈F t∈L
+j
+
+rt (xt , a(xt )) −
+
+X
+
+rt (xt , at ),
+
+t∈Lj
+
+where at is the prediction made by BOLD (and instance j) at time instant t. By construction, instance
+j does not experience any delays. Hence, Rnj j is its regret in a non-delayed online learning problem. 2 Then,
+Rn = sup
+
+n
+X
+
+a∈F t=1
+
+= sup
+
+rt (xt , a(xt )) −
+
+Mn X
+X
+
+a∈F j=1
+t∈Lj
+
+≤
+=
+
+Mn
+X
+j=1
+
+Mn
+X
+
+
+
+ sup
+
+n
+X
+
+rt (xt , at )
+
+t=1
+
+rt (xt , a(xt )) −
+
+X
+
+a∈F t∈L
+j
+
+Mn X
+X
+
+j=1 t∈Lj
+
+rt (xt , a(xt )) −
+
+X
+
+t∈Lj
+
+rt (xt , at )
+
+
+rt (xt , at )
+
+Rnj j .
+
+j=1
+
+2
+
+Note that Lj is a function of the delay sequence and
+is not a function of the predictions (at )t≥1 . Hence, the
+reward sequence that instance j is evaluated on is chosen
+obliviously whenever the adversary of BOLD is oblivious.
+
+Mn
+X
+j=1
+
+i
+h
+E Rnj j |τ1 , . . . , τn
+
+Mn
+X
+1
+fBase (nj )
+Mn
+j=1
+j=1
+
+
+
+
+Mn
+X
+1
+n
+≤ Mn fBase 
+,
+nj  = Mn fBase
+Mn
+Mn
+j=1
+
+≤
+
+Mn
+X
+
+fBase (nj ) = Mn
+
+where the first inequality follows since Mn is a deterministic function of the delays, while the last inequality follows from Jensen’s inequality and the concavity
+of fBase . Substituting Mn from (1) and taking the
+expectation concludes the proof.
+Now, we need to bound G∗n to make the theorem meaningful. When all delays are the same constants, for
+n > τconst we get G∗n = τt = τconst , and we get back
+the regret bound
+
+
+n
+E [Rn ] ≤ (τconst + 1)fBase
+τconst + 1
+of Weinberger & Ordentlich (2002), thus generalizing their result to partial monitoring.
+We do
+not know whether this bound is tight even when
+Base is minimax optimal, as the argument of
+Weinberger & Ordentlich (2002) for the lower bound
+does not work in the partial information setting (the
+forecaster can gain extra information in each block
+with the same reward functions).
+Assuming the delays are i.i.d., we can give an interesting bound on G∗n . The result is based on the fact that
+although Gt can be as large as t, both its expectation
+and variance are upper bounded by E [τ1 ].
+Lemma 2. Assume τ1 , . . . , τn is a sequence of i.i.d.
+random variables with√finite expected value, and let
+B(n, t) = t + 2 log n + 4t log n. Then
+E [G∗n ] ≤ B(n, E [τ1 ]) + 1.
+Proof. First consider the expectation and the variance
+of Gt . For any t,
+" t−1
+# t−1
+X
+X
+E [Gt ] = E
+I {s + τs ≥ t} =
+P {s + τs ≥ t}
+s=1
+
+=
+
+t−2
+X
+s=0
+
+P {τ1 > s} ≤ E [τ1 ] ,
+
+s=1
+
+Online Learning under Delayed Feedback
+
+and, similarly
+σ 2 [Gt ] =
+
+t−1
+X
+s=1
+
+σ 2 [I {s + τs ≥ t}] ≤
+
+t−1
+X
+s=1
+
+P {s + τs ≥ t} ,
+
+so σ 2 [Gt ] ≤ E [τ1 ] in the same way as above. By
+Bernstein’s inequality (Cesa-Bianchi & Lugosi, 2006,
+Corollary A.3), for any 0 < δ < 1 and any t we have,
+with probability at least 1 − δ,
+q
+Gt − E [Gt ] ≤ log δ1 + 2σ 2 [Gt ] log 1δ .
+Applying the union bound for δ = 1/n2 , and our previous bounds on the variance and expectation of Gt ,
+we obtain that with probability at least 1 − 1/n,
+p
+max Gt ≤ E [τ1 ] + 2 log n + 4E [τ1 ] log n.
+1≤t≤n
+
+Taking into account that max1≤t≤n Gt ≤ n, we get the
+statement of the lemma.
+Corollary 3. Under the conditions of Theorem 1, if
+the sequence of delays is i.i.d, then
+
+
+n
+.
+E [Rn ] ≤ (B(n, E [τ1 ]) + 2)fBase
+B(n, E [τ1 ]) + 2
+
+Note that although the delays can be arbitrarily large,
+whenever the expected value is finite, the bound only
+increases by a log n factor.
+3.2. Finite stochastic setting
+In this section, we consider the case when the prediction set A of the forecaster is finite; without loss of
+generality we assume A = {1, 2, . . . , K}. We also assume that there is no side information (that is, xt is
+a constant for all t, and, hence, will be omitted; the
+results can be extended easily to the case of a finite
+side information set, where we can repeat the procedures described below for each value of the side information separately). The main assumption in this
+section is that the outcomes (bt )t≥1 form an i.i.d. sequence, which is also independent of the predictions
+of the forecaster. When B is finite, this leads to the
+standard i.i.d. partial monitoring (IPM) setting, while
+the conventional multi-armed bandit (MAB) setting is
+recovered when the feedback is the reward of the last
+prediction, that is, ht = rt (at , bt ). As in the previous section, we will assume that the feedback delays
+are independent of the outcomes of the environment.
+The main result of this section shows that under these
+assumptions, the penalty in the regret grows in an additive fashion due to the delays, as opposed to the multiplicative penalty that we have seen in the adversarial
+case.
+
+By the independence assumption on the outcomes, the
+.
+sequences of potential rewards rt (i) = r(i, bt ) and feed.
+backs ht (i) = h(i, bt ) are i.i.d., respectively, for the
+same prediction i ∈ A. In this setting we also assume that the feedback and reward sequences of different predictions are independent of each other. Let
+µi = E [rt (i)] denote the expected reward of predicting i, µ∗ = maxi∈A µi the optimal reward and i∗
+= µ∗ the optimal prediction. Moreover, let
+with µi∗ P
+Ti (n) = nt=1 I {at = i} denote the number of times i
+is predicted by the end of time instant n. Then, defining the “gaps” ∆i = µ∗ − µi for all i ∈ A, the expected
+regret of the forecaster becomes
+E [Rn ] =
+
+n
+X
+t=1
+
+µ∗ − µat =
+
+K
+X
+
+∆i E [Ti (n)] .
+
+(2)
+
+i=1
+
+Similarly to the adversarial setting, we build on a base
+algorithm Base for the non-delayed case. The advantage in the IPM setting (and that we consider expected
+regret) is that here Base can consider a permuted order of rewards and feedbacks, and so we do not have
+to wait for the actual feedback; it is enough to receive
+a feedback for the same prediction. This is the idea at
+the core of our algorithm, Queued Partial Monitoring
+with Delayed Feedback (QPM-D):
+Algorithm 2 Queued Partial Monitoring with Delays
+(QPM-D)
+Create an empty FIFO buffer Q[i] for each i ∈ A.
+Let I be the first prediction of Base.
+for each time instant t = 1, 2, . . . , n do
+Predict:
+while Q[I] is not empty do
+Update Base with a feedback from Q[I].
+Let I be the next prediction of Base.
+end while
+There are no buffered feedbacks for I, so predict
+at = I at time instant t to get a feedback.
+Update:
+for each (s, hs ) ∈ Ht do
+Add the feedback hs to the buffer Q[as ].
+end for
+end for
+Here we have a Base partial monitoring algorithm
+for the non-delayed case, which is run inside the algorithm. The feedback information coming from the
+environment is stored in separate queues for each prediction value. The outer algorithm constantly queries
+Base: while feedbacks for the predictions made are
+available in the queues, only the inner algorithm Base
+runs (that is, this happens within a single time instant
+
+Online Learning under Delayed Feedback
+
+in the real prediction problem). When no feedback is
+available, the outer algorithm keeps sending the same
+prediction to the real environment until a feedback for
+that prediction arrives. In this way Base is run in a
+simulated non-delayed environment. The next lemma
+implies that the inner algorithm Base actually runs in
+a non-delayed version of the problem, as it experiences
+the same distributions:
+Lemma 4. Consider a delayed stochastic IPM problem as defined above. For any prediction i, for any
+s ∈ N let h′i,s denote the sth feedback QPM-D receives
+for predicting i. Then the sequence (h′i,s )s∈N is an i.i.d.
+sequence with the same distribution as the sequence of
+feedbacks (ht,i )t∈N for prediction i.
+To relate the non-delayed performance of Base and
+the regret of QPM-D, we need a few definitions. For
+any t, let Si (t) denote the number of feedbacks for
+prediction i that are received by the end of time instant t. Then the number of missing feedbacks for i
+when making a prediction at time instant t is Gi,t =
+Ti (t − 1) − Si (t − 1). Let G∗i,n = max1≤t≤n Gi,t . Furthermore, for each i ∈ A, let Ti′ (t′ ) be the number
+of times algorithm Base has predicted i while being
+queried t′ times. Let n′ denote the number of steps
+the inner algorithm Base makes in n steps of the real
+IPM problem. Next we relate n and n′ , as well as the
+number of times QPM-D and Base (in its simulated
+environment) make a specific prediction.
+Lemma 5. Suppose QPM-D is run for n ≥ 1 time
+instants, and has queried Base n′ times. Then n′ ≤ n
+and
+0 ≤ Ti (n) − Ti′ (n′ ) ≤ G∗i,n .
+(3)
+Proof. Since Base can take at most one step for each
+feedback that arrives, and QPM-D has to make at least
+one step for each arriving feedback, n′ ≤ n.
+Now, fix a prediction i ∈ A. If Base, and hence,
+QPM-D, has not predicted i by time instant n, (3)
+trivially holds. Otherwise, let tn,i denote the last time
+instant (up to time n) when QPM-D predicts i. Then
+Ti (n) = Ti (tn,i ) = Ti (tn,i − 1) + 1. Suppose Base
+has been queried n′′ ≤ n times by time instant tn,i
+(inclusive). At this time instant, the buffer Q[i] must
+be empty and Base must be predicting i, otherwise
+QPM-D would not predict i in the real environment.
+This means that all the Si (tn,i −1) feedbacks that have
+arrived before this time instant have been fed to the
+base algorithm, which has also made an extra step,
+that is, Ti′ (n′ ) ≥ Ti′ (n′′ ) = Si (tn,i − 1) + 1. Therefore,
+Ti (n) − Ti′ (n′ ) ≤ Ti (tn,i − 1) + 1 − (Si (tn,i − 1) + 1)
+≤ Gi,tn,i ≤ G∗i,n .
+
+We can now give an upper bound on the expected regret of Algorithm 2.
+Theorem 6. Suppose the non-delayed Base algorithm is used in QPM-D in a delayed stochastic IPM
+environment. Then the expected regret of QPM-D is
+upper-bounded by
+K
+
+
+ X
+
+∆i E G∗i,n ,
+E [Rn ] ≤ E RnBase +
+
+(4)
+
+i=1
+
+
+
+where E RnBase is the expected regret of Base when
+run in the same environment without delays.
+When the delay τt is bounded by τmax
+ forall t, we also
+have G∗i,n ≤ τmax , and E [Rn ] ≤ E RnBase + O(τmax ).
+When the sequence of delays for each prediction is
+i.i.d. with a finite expected value but unbounded support, we can use Lemma 2 to bound G∗i,n , and obtain
+p
+
+
+a bound E RnBase + O(E [τ1 ] + E [τ1 ] log n + log n).
+
+Proof. Assume that QPM-D is run longer so that
+Base is queried for n times (i.e., it is queried n − n′
+more times). Then, since n′ ≤ n, the number of times
+i is predicted by the base algorithm, namely Ti′ (n), can
+only increase, that is, Ti′ (n′ ) ≤ Ti′ (n). Combining this
+with the expectation of (3) gives
+
+
+E [Ti (n)] ≤ E [Ti′ (n)] + E G∗i,n ,
+which in turn gives,
+K
+X
+i=1
+
+∆i E [Ti (n)] ≤
+
+K
+X
+i=1
+
+∆i E [Ti′ (n)] +
+
+K
+X
+i=1
+
+
+
+∆i E G∗i,n .
+
+(5)
+
+As shown in Lemma 4, the reordered rewards and feedbacks h′i,1 , h′i,2 , . . . , h′i,T ′ (n′ ) , . . . h′i,Ti (n) are i.i.d. with
+i
+the same distribution as the original feedback sequence
+(ht,i )t∈N . The base algorithm Base has worked on the
+first Ti′ (n) of these feedbacks for each i (in its extended
+run), and has therefore operated for n steps in a simulated environment with the same reward and feedback
+distributions, but without delay. Hence, the first
+
+ summation in the right hand side of (5) is in fact E RnBase ,
+the expected regret of the base algorithm in a nondelayed environment. This concludes the proof.
+
+4. UCB for the Multi-Armed Bandit
+Problem with Delayed Feedback
+While the algorithms in the previous section provide
+an easy way to convert algorithms devised for the nondelayed case to ones that can handle delays in the feedback, improvements can be achieved if one makes modifications inside the existing non-delayed algorithms
+
+Online Learning under Delayed Feedback
+
+while retaining their theoretical guarantees. This can
+be viewed as a ”white-box” approach to extending online learning algorithms to the delayed setting, and
+enables us to escape the high memory requirements
+of black-box algorithms that arises for both of our
+methods in the previous section when the delays are
+large. We consider the stochastic multi-armed bandit
+problem, and extend the UCB family of algorithms
+(Auer et al., 2002; Garivier & Cappé, 2011) to the delayed setting. The modification proposed is quite natural, and the common characteristics of UCB-type algorithms enable a unified way of extending their performance guarantees to the delayed setting (up to an
+additive penalty due to delays).
+
+2002) uses UCBs of the form Bi,s,t = µ̂i,s +
+p
+Ps
+2 log(t)/s, where µ̂i,s = 1s t=1 h′i,t is the average
+of the first s observed rewards. Using this UCB in
+our decision rule (6), we can bound the regret of the
+resulting algorithm (called Delayed-UCB1) in the delayed setting:
+
+Recall that in the stochastic MAB setting, which is a
+special case of the stochastic IPM problem of Section
+3.2, the feedback at time instant t is ht = r(at , bt ), and
+there is a distribution νi from which the rewards of
+each prediction i are drawn in an i.i.d. manner. Here
+we assume that the rewards of different predictions are
+independent of each other. We use the same notation
+as in Section 3.2.
+
+Note that the last term in the bound is the additive penalty, and, under different assumptions, it can
+be bounded in the same way as after Theorem 6.
+The proof of this theorem, as well as a similar regret bound for the delayed version of the KL-UCB
+algorithm (Garivier & Cappé, 2011) can be found in
+Appendix B.
+
+Several algorithms devised for the non-delayed
+stochastic MAB problem are based on upper confidence bounds (UCBs), which are optimistic estimates
+of the expected reward of different predictions. Different UCB-type algorithms use different upper confidence bounds, and choose, at each time instant, a
+prediction with the largest UCB. Let Bi,s,t denote the
+UCB for prediction i at time instant t, where s is the
+number of reward samples used in computing the estimate. In a non-delayed setting, the prediction of
+a UCB-type algorithm at time instant t is given by
+at = argmaxi∈A Bi,Ti (t−1),t . In the presence of delays,
+one can simply use the same upper confidence bounds
+only with the rewards that are observed, and predict
+
+5. Conclusion and future work
+
+at = argmaxi∈A Bi,Si (t−1),t
+
+(6)
+
+at time instant t (recall that Si (t − 1) is the number
+of rewards that can be observed for prediction i before
+time instant t). Note that if the delays are zero, this
+algorithm reduces to the corresponding non-delayed
+version of the algorithm.
+The algorithms defined by (6) can easily be shown to
+enjoy the same regret guarantees compared to their
+non-delayed versions, up to an additive penalty depending on the delays. This is because the analyses of
+the regrets of UCB algorithms follow the same pattern
+of upper bounding the number of trials of a suboptimal
+prediction using concentration inequalities suitable for
+the specific form of UCBs they use.
+As an example, the UCB1 algorithm (Auer et al.,
+
+Theorem 7. For any n ≥ 1, the expected regret of the
+Delayed-UCB1 algorithm is bounded by
+E [Rn ] ≤
+
+ X
+K
+X  8 log n
+
+
+∆i E G∗i,n .
++ 3.5∆i +
+∆i
+i=1
+
+i:∆i >0
+
+We analyzed the effect of feedback delays in online
+learning problems. We examined the partial monitoring case (which also covers the full information and the
+bandit settings), and provided general algorithms that
+transform forecasters devised for the non-delayed case
+into ones that handle delayed feedback. It turns out
+that the price of delay is a multiplicative increase in the
+regret in adversarial problems, and only an additive increase in stochastic problems. While we believe that
+these findings are qualitatively correct, we do not have
+lower bounds to prove this (matching lower bounds are
+available for the full information case only).
+It also turns out that the most important quantity
+that determines the performance of our algorithms is
+G∗n , the maximum number of missing rewards. It is
+interesting to note that G∗n is the maximum number
+of servers used in a multi-server queuing system with
+infinitely many servers and deterministic arrival times.
+It is also the maximum deviation of a certain type of
+Markov chain. While we have not found any immediately applicable results in these fields, we think that
+applying techniques from these areas could lead to an
+improved understanding of G∗n , and hence an improved
+analysis of online learning under delayed feedback.
+
+6. Acknowledgements
+This work was supported by the Alberta Innovates
+Technology Futures and NSERC.
+
+Online Learning under Delayed Feedback
+
+References
+Agarwal, Alekh and Duchi, John. Distributed delayed
+stochastic optimization. In Shawe-Taylor, J., Zemel,
+R.S., Bartlett, P., Pereira, F., and Weinberger, K.Q.
+(eds.), Advances in Neural Information Processing
+Systems 24 (NIPS), pp. 873–881, 2011.
+Auer, Peter, Cesa-Bianchi, Nicolò, and Fischer, Paul.
+Finite-time analysis of the multiarmed bandit problem. Machine Learning, 47(2-3):235–256, May 2002.
+Cesa-Bianchi, Nicolò and Lugosi, Gábor. Prediction,
+Learning, and Games. Cambridge University Press,
+New York, NY, USA, 2006. ISBN 0521841089.
+Desautels, Thomas, Krause, Andreas, and Burdick,
+Joel. Parallelizing exploration-exploitation tradeoffs with gaussian process bandit optimization. In
+Proceedings of the 29th International Conference on
+Machine Learning (ICML), Edinburgh, Scotland,
+UK, 2012. Omnipress.
+Doob, Joseph L. Stochastic Processes. John Wiley &
+Sons, 1953.
+Dudik, Miroslav, Hsu, Daniel, Kale, Satyen, Karampatziakis, Nikos, Langford, John, Reyzin, Lev, and
+Zhang, Tong. Efficient optimal learning for contextual bandits. In Proceedings of the 27th Conference
+on Uncertainty in Artificial Intelligence (UAI), pp.
+169–178, Corvallis, Oregon, 2011. AUAI Press.
+Garivier, Aurélien and Cappé, Olivier. The KL-UCB
+algorithm for bounded stochastic bandits and beyond. In Proceedings of the 24th Annual Conference
+on Learning Theory (COLT), volume 19, pp. 359–
+376, Budapest, Hungary, July 2011.
+Hoeffding, Wassily. Probability inequalities for sums of
+bounded random variables. Journal of the American
+Statistical Association, 58(301):13–30, 1963.
+Langford, John, Smola, Alexander, and Zinkevich,
+Martin. Slow learners are fast. In Bengio, Y., Schuurmans, D., Lafferty, J., Williams, C. K. I., and
+Culotta, A. (eds.), Advances in Neural Information
+Processing Systems 22, pp. 2331–2339. 2009.
+Li, Lihong, Chu, Wei, Langford, John, and Schapire,
+Robert E. A contextual-bandit approach to personalized news article recommendation. In Proceedings
+of the 19th International Conference on World Wide
+Web (WWW), pp. 661–670, New York, NY, USA,
+2010. ACM.
+
+Mesterharm, Chris J. On-line learning with delayed
+label feedback. In Jain, Sanjay, Simon, HansUlrich, and Tomita, Etsuji (eds.), Algorithmic Learning Theory, volume 3734 of Lecture Notes in Computer Science, pp. 399–413. Springer Berlin Heidelberg, 2005.
+Mesterharm, Chris J. Improving on-line learning. PhD
+thesis, Department of Computer Science, Rutgers
+University, New Brunswick, NJ, 2007.
+Neu, Gergely, György, András, Szepesvári, Csaba, and
+Antos, András. Online markov decision processes
+under bandit feedback. In Lafferty, J., Williams, C.
+K. I., Shawe-Taylor, J., Zemel, R.S., and Culotta, A.
+(eds.), Advances in Neural Information Processing
+Systems 23 (NIPS), pp. 1804–1812, 2010.
+Titchmarsh, Edward Charles and Heath-Brown,
+David Rodney. The Theory of the Riemann ZetaFunctions. Oxford University Press, second edition
+edition, January 1987.
+Weinberger, Marcelo J. and Ordentlich, Erik. On
+delayed prediction of individual sequences. IEEE
+Transactions on Information Theory, 48(7):1959–
+1976, September 2002.
+
+Online Learning under Delayed Feedback
+
+A. Proof of Lemma 4
+In this appendix we prove Lemma 4 that was used in the i.i.d. partial monitoring setting (Section 3.2). To that
+end, we will first need two other lemmas. The first lemma shows that the i.i.d. property of a sequence of random
+variables is preserved under an independent random reordering of that sequence.
+Lemma 8. Let (Xt )t∈N , be a sequence of independent, identically distributed random variables. If we reorder
+this sequence according to an independent random permutation, then the resulting sequence is i.i.d. with the
+same distribution as (Xt )t∈N .
+Proof. Let the reordered sequence be denoted by (Zt )t∈N . It is sufficient to show that for all n ∈ N, for all
+y1 , y2 , . . . , yn , we have
+P {Z1 ≤ y1 , Z2 ≤ y2 , . . . , Zn ≤ yn } = P {X1 ≤ y1 , X2 ≤ y2 , . . . , Xn ≤ yn } .
+Since (Xt )t∈N is i.i.d., for any fixed permutation the equation above holds as both sides are equal to
+Πnt=1 P {X1 ≤ yt }. Since the permutations are independent of the sequence (Xt )t∈N , using the law of total
+probability this extends to the general case as well.
+We also need the following result (Doob, 1953, Page 145, Chapter III, Theorem 5.2).
+Lemma 9. Let (Xt )t∈N be a sequence of i.i.d. random variables, and (Xt′ )t∈N be a subsequence of it such that
+the decision whether to include Xt in the subsequence is independent of future values in the sequence, i.e., of Xs
+for s ≥ t. Then the sequence (Xt′ )t∈N is an i.i.d. sequence with the same distribution as (Xt )t∈N .
+We can now proceed to the proof of Lemma 4.
+Proof of Lemma 4. Let (Zi,t )t∈N be the sequence resulting from sorting the variables hi,t by their possible observation times t + τi,t (that is, Zi,1 is the earliest feedback that can be observed if i is predicted at the appropriate
+time, and so on). Since delays are independent of the outcomes, they define an independent reordering on the
+sequence of feedbacks. Hence, by Lemma 8, (Zi,t )t∈N is an i.i.d. sequence with the same distribution as (hi,t )t∈N .
+Note that (h′i,s )s∈N , the sequence of feedbacks (sorted by their observation times) that the agent observes for
+predicting i, is a subsequence of (Zi,t )t∈N where the decision whether to include each Zi,t in the subsequence
+cannot depend on future possible observations Zi,t′ , t′ ≥ t. Also, the feedbacks of other predictions that are used
+in this decision were assumed to be independent of (Zi,t )t∈N . Hence, by Lemma 9, (h′i,s )s∈N is an i.i.d. sequence
+with the same distribution as (Zi,t )t∈N , which in turn has the same distribution as (hi,t )t∈N .
+
+B. UCB for the Multi-Armed Bandit Problem with Delayed Feedback
+This appendix details the framework we described in Section 4 for analyzing UCB-type algorithms in the delayed
+settings, and provides the missing proofs. The regret of a UCB algorithm is usually analyzed by upper bounding
+the (expected) number of times a suboptimal prediction is made, and then using Equation (2) to get an expected
+regret bound. Consider a UCB algorithm with upper confidence bounds Bi,s,t , and fix a suboptimal prediction
+i. The typical analysis (e.g., by Auer et al. (2002)) considers the case when this prediction is made for at
+least ℓ > 1 times (for a large enough ℓ), and uses concentration inequalities suitable for the specific form of
+the upper-confidence bound to show that it is unlikely to make this suboptimal prediction more than ℓ times
+because observing ℓ samples from its reward distribution suffices to distinguish it from the optimal prediction
+with high confidence. This value ℓ thus gives an upper bound on the expected number of times i is predicted.
+Examples of such concentration inequalities include Hoeffding’s inequality (Hoeffding, 1963) and Theorem 10 of
+Garivier & Cappé (2011), which are used for the UCB1 and KL-UCB algorithms, respectively.
+More precisely, the generalPanalysis of UCB-type algorithms in the non-delayed setting works as follows: for
+n
+ℓ > 1, we have Ti (n) ≤ ℓ + t=1 I {at = i, Ti (t) > ℓ}, where the sum on the right hand side captures how much
+larger than ℓ the value of Ti (n) is (recall that Ti (t) is the number of times i is predicted up to and including time
+t). Whenever i is predicted, its UCB, Bi,Ti (t−1),t , must have been greater than that of an optimal prediction,
+
+Online Learning under Delayed Feedback
+
+Bi∗ ,
+
+Ti∗ (t−1),t ,
+
+which implies
+Ti (n) ≤ ℓ +
+
+n
+X
+t=1
+
+I{Bi,Ti (t−1),t ≥ Bi∗ ,Ti∗ (t−1),t , at = i, Ti (t − 1) ≥ ℓ}.
+
+(7)
+
+The expected value of the summation on the right-hand-side is then bounded using concentration inequalities as
+mentioned above.
+In the delayed-feedback setting, if we use upper confidence bounds Bi,Si (t−1),t instead (where Si (t) was defined
+to be the number of rewards observed up to and including time instant t), in the same way as above we can write
+Ti (n) ≤ ℓ +
+
+n
+X
+t=1
+
+I{Bi,Si (t−1),t ≥ Bi∗ ,Si∗ (t−1),t , at = i, Ti (t − 1) ≥ ℓ}.
+
+Since Ti (t − 1) = Gi,t + Si (t − 1), with ℓ′ = ℓ − G∗i,n we get
+Ti (n) ≤ ℓ′ + G∗i,n +
+
+n
+X
+t=1
+
+I{Bi,Si (t−1),t ≥ Bi∗ ,Si∗ (t−1),t , at = i, Si (t − 1) ≥ ℓ′ }.
+
+(8)
+
+Now the same concentration inequalities used to bound (7) in the analysis of the non-delayed setting can be used
+to upper bound the expected value of the sum in (8). Putting this into (2), we see that one can reuse the same
+upper confidence bound in the delayed setting (with only the observed rewards) and get a performance similar
+to the non-delayed setting, with only an additive penalty that depends on the delays. The following two sections
+demonstrate the use of this method on two UCB-type algorithms.
+B.1. UCB1 under delayed feedback: Proof of Theorem 7
+Below comes the proof of Theorem 7 for the Delayed-UCB1 algorithm (Section 4).
+Proof of Theorem 7. Following the outline of the previous section, we can bound the summation in (8) using the
+same analysis as in the original UCB1 paper (Auer et al., 2002). In particular, for any prediction i we can write
+n
+X
+t=1
+
+≤
+
+
+I Bi,Si (t−1),t ≥ Bi∗ ,Si∗ (t−1),t , Si (t − 1) ≥ ℓ′
+
+n
+X
+t=1
+
+n
+X
+
+
+I Bi,Si (t−1),t ≥ µi∗ , Si (t − 1) ≥ ℓ′ .
+I Bi∗ ,Si∗ (t−1),t ≤ µi∗ , Si (t − 1) ≥ ℓ′ +
+
+The event in the second summation implies that either µi + 2
+(otherwise we will have Bi,Si (t−1),t < µi∗ ). Hence,
+
+
+
+8 log(n)
+∆2i
+
+
+
+s
+
+2 log(t)
+> µi∗ or µ̂i,Si (t−1) −
+Si (t − 1)
+
+(
+
+s
+
+2 log(t)
+≥ µi
+Si (t − 1)
+
+s
+
+)
+2 log(t)
+≤ µi∗ +
+(9) ≤
+I µ̂i∗ ,Si∗ (t−1) +
+Si∗ (t − 1)
+t=1
+s
+(
+)
+n
+X
+2 log(t)
+I µ̂i,Si (t−1) −
+≥ µi +
+Si (t − 1)
+t=1
+s
+(
+)
+n
+X
+2 log(t)
+′
+I µi + 2
+> µi∗ , Si (t − 1) ≥ ℓ .
+Si (t − 1)
+t=1
+n
+X
+
+Choosing ℓ′ =
+
+(9)
+
+t=1
+
+(10)
+
+makes the events in the last summation above impossible, because Si (t − 1) ≥ ℓ′ ≥
+
+Online Learning under Delayed Feedback
+
+8 log(n)
+which implies 2
+∆2i
+Ti (n) ≤
+
+
+
+s
+
+2 log(t)
+≤2
+Si (t − 1)
+
+r
+
+2 log(n)
+≤ ∆i . Therefore, combining with (8), we can write
+ℓ′
+
+(
+)
+(
+)!
+r
+r
+
+n X
+t
+X
+2 log(t)
+2 log(t)
+8 log(n)
+∗
+I µ̂i∗ ,s +
++ Gi,n +
+.
+≤ µi∗ + I µ̂i,s −
+≥ µi
+∆2i
+s
+s
+t=1 s=1
+
+Taking expectation gives
+E [Ti (n)] ≤
+
+
+
+)
+(
+(
+)!
+r
+r
+
+n X
+t
+X
+ ∗ 
+8 log(t)
+2 log(t)
+2 log(t)
+P µ̂i∗ ,s +
+.
++ E Gi,n +
+≤ µi∗ + P µ̂i,s −
+≥ µi
+∆2i
+s
+s
+t=1 s=1
+
+As in the original analysis, Hoeffding’s inequality (Hoeffding, 1963) can be used to bound each of the probabilities
+in the summation, to get
+)
+(
+r
+2 log(t)
+P µ̂i∗ ,s +
+≤ µi∗ ≤ e−4 log(t) = t−4 ,
+s
+)
+(
+r
+2 log(t)
+≥ µi ≤ e−4 log(t) = t−4 .
+P µ̂i,s −
+s
+Therefore, we have
+E [Ti (n)] ≤
+
+
+
+
+∞
+X
+
+ ∗ 
+
+8 log(t)
+8 log(n)
++
+2t−3 ≤
++
+E
+G
++ 1 + E G∗i,n + 2ζ(3),
+i,n
+2
+2
+∆i
+∆i
+t=1
+
+where ζ(3) < 1.21 is the Riemann Zeta function.3 Combining with (2) proves the theorem.
+B.2. KL-UCB under delayed feedback
+The KL-UCB algorithm was introduced by Garivier & Cappé (2011). The upper confidence bound used by
+KL-UCB for predicting i at time t is Bi,Ti (t−1),t , where Bi,s,t is
+max {q ∈ [µ̂i,s , 1] : sd(µ̂i,s , q) ≤ log t + 3 log(log t)} ,
+with d(p, q) = p log( pq ) + (1 − p) log( 1−p
+1−q ) the KL-divergence of two Bernoulli random variables with parameters
+p and q. In their Theorem 2, Garivier & Cappé (2011) show that there exists a constant C1 ≤ 10, as well as
+functions 0 ≤ C2 (ǫ) = O(ǫ−2 ) and 0 ≤ β(ǫ) = O(ǫ2 ), such that for any ǫ > 0, the expected regret of the KL-UCB
+algorithm (in the non-delayed setting) satisfies
+"
+#
+X
+C2 (ǫ)
+log(n)
+(1 + ǫ) + C1 log(log n) + β(ǫ) .
+E [Rn ] ≤
+∆i
+(11)
+d(µi , µi∗ )
+n
+∆ >0
+i
+
+Using this upper confidence bound with (6), we arrive at the Delayed-KL-UCB algorithm. For this algorithm, we
+can prove the following regret bound using the general scheme described above together with the same techniques
+used by Garivier & Cappé (2011), again obtaining an additive penalty compared to the non-delayed setting.
+Theorem 10. For any ǫ > 0, the expected regret of the Delayed-KL-UCB algorithm after n time instants satisfies
+E [Rn ] ≤
+
+X
+
+i:∆i >0
+
+∆i
+
+
+
+
+
+ X
+K
+ ∗ 
+C2 (ǫ)  ∗ 
+log(n)
+∆i
++
+1
+,
+(1 + ǫ) + C1 log(log(n)) +
++
+E
+G
+E
+G
+i,n
+i,n
+d(µi , µi∗ )
+nβ(ǫ)
+i=1
+
+where C1 , C2 , and β are the same as in (11).
+3
+
+For properties and theory of the Riemann Zeta function, see the book of Titchmarsh & Heath-Brown (1987).
+
+Online Learning under Delayed Feedback
+
+In this case, working out the proof and reusing the analysis is somewhat more complicated compared to UCB1.
+In particular, we will need an adaptation of Lemma 7 of Garivier & Cappé (2011), which is captured by the
+following lemma.
+Lemma 11. Let d+ (x, y) = d(x, y)I {x < y}. Then for any n ≥ 1,
+n
+n
+X
+X
+
+
+I sd+ (µ̂i,s , µi∗ ) < log(n) + 3 log(log(n)) .
+I at = i, µi∗ ≤ Bi∗ ,Si∗ (t−1),t , Si (t − 1) ≥ ℓ′ ≤ G∗i,n
+t=1
+
+s=ℓ′
+
+Proof of Lemma 11. We start in the same way as the original proof. Note that d+ (p, q) is non-decreasing in its
+second parameter, and that at = i and µi∗ ≤ Bi∗ ,Si∗ (t−1),t together imply Bi,Si (t−1),t ≥ Bi∗ ,Si∗ (t−1),t ≥ µi∗ ,
+which in turn gives
+Si (t − 1)d+ (µ̂i,Si (t−1) , µi∗ ) ≤ Si (t − 1)d(µ̂i,Si (t−1) , Bi,Si (t−1),t ) ≤ log(t) + 3 log(log(t)).
+Therefore, we have
+n
+X
+
+I at = i, µi∗ ≤ Bi∗ ,Si∗ (t−1),t , t > Si (t − 1) ≥ ℓ′
+t=1
+
+≤
+≤
+≤
+=
+=
+
+n
+X
+
+I at = i, Si (t − 1)d+ (µ̂i,Si (t−1) , µi∗ ) ≤ log(t) + 3 log(log(t)), Si (t − 1) ≥ ℓ′
+
+t=ℓ′
+n
+X
+
+t=ℓ′
+n
+X
+
+
+I at = i, Si (t − 1)d+ (µ̂i,Si (t−1) , µi∗ ) ≤ log(n) + 3 log(log(n)), Si (t − 1) ≥ ℓ′
+t
+X
+
+t=ℓ′ s=ℓ′
+n X
+n
+X
+s=ℓ′ t=s
+n
+X
+s=ℓ′
+
+
+
+
+I {at = i, Si (t − 1) = s} × I sd+ (µ̂i,s , µi∗ ) ≤ log(n) + 3 log(log(n))
+
+
+I {at = i, Si (t − 1) = s} × I sd+ (µ̂i,s , µi∗ ) ≤ log(n) + 3 log(log(n))
+n
+X
+
+I sd+ (µ̂i,s , µi∗ ) ≤ log(n) + 3 log(log(n)) ×
+
+t=s
+
+!
+
+I {at = i, Si (t − 1) = s} .
+
+But note that the second summation is bounded by G∗i,n , because for each s, there cannot be more than G∗i,n
+time instants at which i is predicted and Si (t) = s remained constant; otherwise for some t′ ∈ {s, . . . , n} we
+would have Ti (t′ − 1) − Si (t′ − 1) = Gi,t′ > G∗i,n , which is not possible. Substituting this bound in the last
+expression proves the lemma.
+We also recall the following two results from the original paper.
+Theorem 12 (Theorem 10 of Garivier & Cappé (2011)). Let (Yt ), t ≥ 1 be a sequence of independent random
+variables bounded in [0, 1], with common expectation µ = E [Yt ]. Consider a sequence (ǫt ), t ≥ 1 of Bernoulli
+variables such that for all t > 0, ǫt is a random function of Y1 , . . . , Yt−1 4 , and is independent of Ys , s ≥ t. Let
+δ > 0 and for every 1 ≤ t ≤ n, let
+St =
+
+t
+X
+s=1
+
+ǫs
+
+and
+
+µ̂t =
+
+Pt
+
+s=1 ǫs Ys
+
+St
+
+,
+
+with µ̂t = 0 when St = 0, and
+Bn = max {q > µ̂n : Sn d(µ̂n , q) ≤ δ} .
+Then
+P {Bn < µ} ≤ e⌈δ log(n)⌉e−δ .
+4
+
+That is, a function of Y1 , . . . , Yt−1 together with possibly an extra, independent randomization.
+
+Online Learning under Delayed Feedback
+
+Lemma 13 (Lemma 8 of Garivier &
+!%Cappé (2011)). For a suboptimal prediction i, for every ǫ > 0, let Kn =
+$
+1+ǫ
+log(n) + 3 log(log(n)) . Then there exist C2 (ǫ) > 0 and β(ǫ) > 0 such that
+d+ (µi , µi∗ )
+
+
+d(µi , µi∗ )
+C2 (ǫ)
+P d+ (µ̂i,s , µi∗ ) <
+≤ β(ǫ) .
+1+ǫ
+n
++1
+
+∞
+X
+
+s=Kn
+
+Now, we are ready to prove Theorem 10 by reusing the same techniques as in the original paper.
+Proof of Theorem 10. For a suboptimal prediction i, bounding the terms in (8) gives
+n
+X
+
+I at = i, Bi,Si (t−1),t ≥ Bi∗ ,Si∗ (t−1),t , Si (t − 1) ≥ ℓ′
+t=1
+
+≤
+
+n
+n
+X
+X
+
+
+I at = i, µi∗ ≤ Bi∗ ,Si∗ (t−1),t , Si (t − 1) ≥ ℓ′
+I Bi∗ ,Si∗ (t−1),t < µi∗ +
+t=1
+
+t=1
+
+n
+n
+X
+X
+
+
+≤
+I Bi∗ ,Si∗ (t−1),t < µi∗ + G∗i,n
+I sd+ (µ̂i,s , µi∗ ) < log(n) + 3 log(log(n)) ,
+t=1
+
+(12)
+
+s=ℓ′
+
+where the last inequality follows from Lemma 11. Let
+!%
+$
+1+ǫ
+log(n) + 3 log(log(n))
+,
+Kn =
+d(µi , µi∗ )
+
+(13)
+
+and note that d(µi , µi∗ ) = d+ (µi , µi∗ ). Let ℓ′ = 1 + Kn . Then we have:
+n
+X
+
+I sd+ (µ̂i,s , µi∗ ) ≤ log(n) + 3 log(log(n))
+
+s=ℓ′
+
+≤
+≤
+
+∞
+X
+
+s=Kn +1
+∞
+X
+
+s=Kn +1
+
+
+I (Kn + 1)d+ (µ̂i,s , µi∗ ) ≤ log(n) + 3 log(log(n))
+
+
+
+d(µi , µi∗ )
++
+.
+I d (µ̂i,s , µi∗ ) <
+1+ǫ
+
+Putting the value of ℓ′ and inequalities (13) and (14) back into (12) and combining with (8), we get
+!
+
+
+1+ǫ
+log(n) + 3 log(log(n)) + E G∗i,n + 1+
+E [Ti (n)] ≤
+d(µi , µi∗ )
+
+
+n
+∞
+X
+ ∗  X
+
+d(µi , µi∗ )
++
+,
+P Bi∗ ,Si∗ (t−1),t < µi∗ + E Gi,n
+P d (µ̂i,s , µi∗ ) <
+1+ǫ
+t=1
+
+(14)
+
+s=Kn +1
+
+where the last term is a result of the delays being independent of the rewards. The first summation can be
+bounded using Theorem 12, for which it suffices to set ǫt = 1, 1 ≤ t ≤ n, and use the sequence of observed
+rewards (h′i,t ) for the arm under consideration as the sequence (Yt ) in the theorem. In the same way as the
+analysis of Garivier & Cappé (2011), this gives an upper bound of the form C1′ log(log n) with the same value
+of C1′ ≤ 7 as in the non-delayed setting. The second summation can be bounded by Lemma 13. Therefore, the
+expected number of times a suboptimal prediction is made is bounded by:
+!
+
+
+
+C2 (ǫ) 
+1+ǫ
+log(n) + 3 log(log(n)) + C1′ log(log(n)) + β(ǫ) E G∗i,n + E G∗i,n + 1.
+E [Ti (n)] ≤
+d(µi , µi∗ )
+n
+Combining this with (2) and letting C1 = C1′ + 3 finishes the proof.
+
+

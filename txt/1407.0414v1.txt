@@ -1,0 +1,280 @@
+KOMO
+Newton methods for k-order Markov Constrained
+Motion Problems
+
+arXiv:1407.0414v1 [cs.RO] 1 Jul 2014
+
+D OWNLOAD S OURCE C ODE H ERE
+
+Marc Toussaint
+July 3, 2014
+
+Abstract. This is a documentation of a framework for robot motion optimization that aims to
+draw on classical constrained optimization methods. With one exception the underlying algorithms are classical ones: Gauss-Newton (with adaptive stepsize and damping), Augmented
+Lagrangian, log-barrier, etc. The exception is a novel any-time version of the Augmented
+Lagrangian. The contribution of this framework is to frame motion optimization problems
+in a way that makes the application of these methods efficient, especially by defining a very
+general class of robot motion problems while at the same time introducing abstractions that
+directly reflect the API of the source code.
+
+1 Introduction
+Let xt ∈ Rn be a joint configuration and x0:T = (x0 , . . . , xT ) a trajectory of length T . Note
+that troughout this framework we do not represent trajectories in the phase space, where
+the state is (xt , ẋt )—we represent trajectories directly in configuration space. We consider
+optimization problems of a general “k-order non-linear sum-of-squares constrained” form
+min
+x0:T
+
+s.t.
+
+T
+X
+
+ft (xt−k:t )⊤ft (xt−k:t ) +
+
+t=0
+
+∀t : gt (xt−k:t ) ≤ 0 ,
+
+X
+
+k(t, t′ )x⊤t xt′
+
+t,t′
+
+ht (xt−k:t ) = 0 .
+
+(1)
+
+where xt−k:t = (xt−k , .., xt−1 , xt ) are k + 1 tuples of consecutive states. The functions
+ft (xt−k:t ) ∈ Rdt , gt (xt−k:t ) ∈ Rmt , and ht (xt−k:t ) ∈ Rlt are arbitrary first-order differentiable non-linear k-order vector-valued functions. These define cost terms or inequality/equality constraints for each t. Note that the first cost vector f0 (x−k , .., x0 ) depends on
+states xt with negative t. We call these (x−k , .., x−1 ) the prefix. The prefix defines the initial
+condition of the robot, which could for instance be resting at some given x0 . (A postfix to
+constrain the endcondition in configuration space is optional.)
+1
+
+The term k(t, t′ ) is an optional kernel measuring the (desired) correlation between time
+steps t and t′ , which we explored but in practice hardly used.
+The k-order cost vectors ft (xt−k:t ) ∈ Rdt are very flexible in including various elements that
+can represent both transition and task-related costs. This is detailed below. To give first examples, for transitional costs we can penalize square velocities using k = 1 (depending on
+two consecutive configurations) ft (xt-1 , xt ) = (xt − xt-1 ), and square accelerations using
+k = 2 (depending on three consecutive configurations) ft (xt-2 , xt-1 , xt ) = (xt + xt-2 − 2xt-1 ).
+Likewise, for larger values of k, we can penalize higher-order finite-differencing approximations of trajectory derivatives (e.g., jerk). Moreover, for k = 2, using the equations of
+motion M ẍt√
++ F = τt with ẍt ≈ xt+1 + xt−1 − 2xt , we
+√ can explicitly penalize square torques
+using ft = HM (xt − 2xt-1 + xt-2 ) + F ), where H is the Cholesky decomposition of a
+⊤
+torque cost metric H, implying costs f⊤
+t ft = ut Hut .
+The inequality and equality constraints gt and ht are equally general: we can impose korder constraints on joint configuration transitions (velocities, accelerations, torques) or in
+task spaces.
+The optimization problem (1) can be rewritten as
+min f (x0:T )⊤f (x0:T )
+x0:T
+
+s.t. g(x0:T ) ≤ 0 ,
+
+h(x0:T ) = 0
+
+(2)
+
+where f = (f0 ; ..; fT ) is the concatenation of all ft and g = (g0 ; ..; gT ), h = (h0 ; ..; hT ). This
+defines a constrained sum-of-squares problem which lends to Gauss-Newton methods. Let
+J = ∇x0:T Φ be the global Jacobian. It is essential to realize that the pseudo-Hessian J⊤J (as
+used by Gauss-Newton) is a banded symmetric matrix. The band-width is (k + 1)n.
+
+1.1 The KOMO code
+The goal of the implementation is the separation between the code of optimizers and code
+to specify motion problems. The problem form (1) provides the abstraction for that interface. The optimization methods all assume the general form
+min f (x) s.t.
+x
+
+g(x) ≤ 0 ,
+
+h(x) = 0
+
+(3)
+
+of a non-linear constrained optimization problem, with the additional assumption that the
+(approximate) Hessian ∇2f (x) can be provided and is semi-pos-def. Therefore, the KOMO
+code essentially does the following
+• Provide interfaces to define sets of k-order task spaces and costs/constraints in these
+task spaces at various time slices; which constitutes a MotionProblem. Such a MotionProblem definition is very semantic, referring to the kinematics of the robot.
+• Abstracts and converts a MotionProblem definition into the general form (1) using a
+kinematics engine. The resulting MotionProblemFunction is not semantic anymore
+and provides the interface to the generic optimization code.
+• Converts the problem definition (1) into the general forms (2) and (3) using appropriate matrix packings to exploit the chain structure of the problem. This code does not
+refer to any robotics or kinematics anymore.
+• Applies various optimizers. This is generic code.
+2
+
+The code introduces specialized matrix packings to exploit the structure of J and to efficiently compute the banded matrix J⊤J. Note that the rows of J have at most (k + 1)n
+non-zero elements since a row refers to exactly one task and depends only on one specific tuple (xt−k , .., xt ). Therefore, although J is generally a D × (T + 1)n matrix (with
+P
+D = t dim(ft )), each row can be packed to store only (k + 1)n non-zero elements. We
+introduced a row-shifted matrix packing representation for this. Using specialized methods
+to compute J⊤J and J⊤x for any vector x for the row-shifted packing, we can efficiently
+compute the banded Hessian and any other terms we need in Gauss-Newton methods.
+
+2 Formal problem representation
+The following definitions also document the API of the code.
+KinematicEngine is a mapping Γ : x 7→ Γ(x) that maps a joint configuration to a data
+structure Γ(x) which allows to efficiently evaluate task maps. Typically Γ(x) stores
+the frames of all bodies/shapes/objects and collision information. More abstractly,
+Γ(x) is any data structure that is sufficient to define the task maps below.
+Note: In the code there is yet no abstraction KinematicEngine. Only one specific
+engine (KinematicWorld) is used. It would be straight-forward to introduce an abstraction for kinematic engines pin-pointing exactly their role for defining task maps.
+TaskMap is a mapping φ : (Γ−k , .., Γ0 ) 7→ (y, J) which gets k + 1 kinematic data structures
+as input and returns some vector y ∈ Rd and its Jacobian J ∈ R(d × n).
+∗
+∗
+Task is a tuple c = (φ, ̺0:T , y0:T
+, mode) where φ is a TaskMap and the parameters ̺0:T , y0:T
+∈
+d×T +1
+R
+allow for an additional linear transformation in each time slice. Here, d =
+dim(φ) is the dimensionality of the task map. This defines the transformed task map
+
+φ̂t (xt−k , .., xt ) = diag(̺t )(φ(Γ(xt−k ), .., Γ(xt )) − yt∗ ) ,
+
+(4)
+
+which depending on mode ∈ {cost, constraint} is interpreted as cost or constraint
+∗
+term. Note that, in the cost case, y0:T
+has the semantics of a reference target for the
+∗
+∗
+task variable, and ̺0:T of a precision. In the code, ̺0:T , y0:T
+may optionally be given
+as 1 × 1, 1 × T +1, d × 1, or d × T +1 matrices—and an interpreted constant along the
+missing dimensions.
+MotionProblem is a tuple (T, C, x−k:−1 ) which gives the number of time steps, a list C =
+{ci } of Tasks, and a prefix x−k:−1 ∈ Rk×n . The prefix allows to evaluate tasks also for
+time t = 0, where the prefix defines the kinematic configurations Γ(x−k ), .., Γ(x0 ) at
+negative times.1 This defines the optimization problem
+f (x0:T ) =
+
+T
+X
+
+ft (xt−k:t )⊤ft (xt−k:t )
+
+t=0
+
+s.t. ∀t=0,..,T : gt (xt−k:t ) ≤ 0
+
+(5)
+
+Here, ft is the concatenation of all φ̂ct over tasks c ∈ C : c.mode=cost ∧ c.̺t 6= 0; and
+gt is the concatenation of all φ̂ct over tasks c ∈ C : c.mode=constraint ∧ c.̺t 6= 0.
+1 Optionally
+
+one can set a postfix xT +1:T +k which fixes the final condition.
+
+3
+
+3 User Interfaces
+3.1 Easy
+For convenience there is a single high-level method to call the optimization, defined in
+<Motion/komo.h>
+/// Return a trajectory that moves the
+arr moveTo(ors::KinematicWorld& world,
+ors::Shape& endeff,
+ors::Shape& target,
+byte whichAxesToAlign=0,
+uint iterate=1);
+
+endeffector to a desired target position
+//in initial state
+//endeffector to be moved
+//target shape
+//bit coded options to align axes
+//usually the optimization methods may be called just
+//once; multiple calls -> safety
+
+The method returns an optimized joint space trajectory so that the endeff reaches the target. Optionally the optimizer additionaly aligns some axes between the coordinate frames.
+This is just one typical use case; others would include constraining vector-alignments to
+zero (orthogonal) instead of +1 (parallel), or directly specifying quaternions, or using many
+other existing task maps. See expert interface.
+This interface specifies the relevant coordinate frames by referring to Shapes. Shapes (ors::Shape)
+are rigidly attached to bodies (“links”) and usually represent a (convex) collision mesh/primitive.
+However, a Shape can also just be a marker frame (ShapeType markerST=5), in which
+case it is just a convenience to define reference frames attached to bodies. So, the best
+way to determine the geometric parameters of the endeffector and target (offsets, relative
+orientations etc) is by transforming the respective shape frames (Shape::rel).
+The method uses implicit parameters (grabbed from cfg file or command line or default):
+double
+double
+double
+double
+double
+
+posPrec = MT::getParameter<double>("KOMO/moveTo/precision", 1e3);
+colPrec = MT::getParameter<double>("KOMO/moveTo/collisionPrecision", -1e0);
+margin = MT::getParameter<double>("KOMO/moveTo/collisionMargin", .1);
+zeroVelPrec = MT::getParameter<double>("KOMO/moveTo/finalVelocityZeroPrecision", 1e1);
+alignPrec = MT::getParameter<double>("KOMO/moveTo/alignPrecision", 1e3);
+
+3.2 Expert using the included kinematics engine
+See the implementation of moveTo! This really is the core guide to build your own cost
+functions.
+More generically, if the user would like to implement new TaskMaps or use some of the
+existing ones:
+• The user can define new k-order task maps by instantiating the abstraction. There exist a number of predefined task maps. The specification of a task map usually has only
+a few parameters like “which endeffector shape(s) are you referring to”. Typically, a
+good convention is to define task maps in a way such that zero is a desired state or
+the constraint boundary, such as relative coordinates, alignments or orientation. (But
+that is not necessary, see the linear transformation below.)
+• To define an optimization problem, the user creates a list of tasks, where each task is
+defined by a task map and parameters that define how the map is interpreted as a)
+a cost term or b) an inequality constraint. This interpretation allows: a linear transformation separately for each t (=setting a reference/target and precision); how maps
+imply a constraint. This interpretation has a significant number of parameters: for
+each time slice different targets/precisions could be defined.
+4
+
+3.3 Expert with own kinematics engine
+The code needs a data structure Γ(qt ) to represent the (kinematic) state qt , where coordinate frames of all bodies/shapes/objects have been precomputed so that evaluation of task
+maps is fast. Currently this is KinematicWorld.
+Users that prefer using the own kinematics engine can instantiate the abstraction. Note
+that the engine needs to fulfill two roles: it must have a setJointState method that also
+precomputes all frames of all bodies/shapes/objects. And it must be siffucient as argument
+of your task map instantiations.
+
+3.4 Optimizers
+The user can also only use the optimizers, directly instantiating the k-order Markov problem abstraction; or, yet a level below, directly instantiating the ConstrainedProblem abstraction. Examples are given in examples/Optim/kOrderMarkov and examples/Optim/constrained.
+Have a look at the specific implementations of the benchmark problems, esp. the ParticleAroundWalls
+problem.
+
+3.5 Parameters & Reporting
+Every run of the code generates a MT.log file, which tells about every parameter that was
+internally used. You can overwrite any of these parameters on command line or in an
+MT.cfg file.
+Inspecting the cost report after an optimization is important. Currently, the code goes
+through the task list C and reports for each the costs associated to it. There are also methods
+to display the cost arising in the different tasks over time.
+
+4 Potential Improvements
+There is many places the code code be improved (beyond documenting it better):
+– Implementing equality constraints: For a lack of necessity the code does not yet handle equality
+constraints. We typically handle equality tasks (reach a point) using cost terms; while focussing
+on inequality constraints for collisions and joint limits.
+– The KinematicEngine should be abstracted to allow for easier plugin of alternative engines.
+– Our kinematics engine uses SWIFT++ for proximity and penetration computation. The methods
+would profit enormously from better (faster, more accurate) proximity engines (signed distance
+functions, sphere-swept primitives).
+
+5 Disclaimer
+This document by no means aims to document all aspects of the code, esp. those relating
+to the used kinematics engine etc. It only tries to introduce to the concepts and design
+decisions behind the KOMO code.
+5
+
+More documentation of optimization and kinematics concepts used in the code can be
+drawn from my teaching lectures on Optimization and Robotics.
+
+6
+
+

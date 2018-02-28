@@ -1,0 +1,1267 @@
+Message-Passing Algorithms for Quadratic Programming
+Formulations of MAP Estimation
+
+Akshat Kumar
+Department of Computer Science
+University of Massachusetts Amherst
+akshat@cs.umass.edu
+
+Abstract
+Computing maximum a posteriori (MAP) estimation in graphical models is an important
+inference problem with many applications.
+We present message-passing algorithms for
+quadratic programming (QP) formulations of
+MAP estimation for pairwise Markov random
+fields. In particular, we use the concaveconvex procedure (CCCP) to obtain a locally optimal algorithm for the non-convex
+QP formulation. A similar technique is used
+to derive a globally convergent algorithm for
+the convex QP relaxation of MAP. We also
+show that a recently developed expectationmaximization (EM) algorithm for the QP formulation of MAP can be derived from the
+CCCP perspective. Experiments on synthetic and real-world problems confirm that
+our new approach is competitive with maxproduct and its variations. Compared with
+CPLEX, we achieve more than an order-ofmagnitude speedup in solving optimally the
+convex QP relaxation.
+
+1
+
+INTRODUCTION
+
+Probabilistic graphical models provide an effective
+framework for compactly representing probability distributions over high dimensional spaces and performing complex inference using simple local update procedures. In this work, we focus on the class of undirected
+models called Markov random fields (MRFs) [Wainwright and Jordan, 2008]. A common inference problem in this model is to compute the most probable assignment to variables, also called the maximum a posteriori (MAP) assignment. MAP estimation is crucial
+for many practical applications in computer vision and
+bioinformatics such as protein design [Yanover et al.,
+2006; Sontag et al., 2008] among others. Computing
+
+Shlomo Zilberstein
+Department of Computer Science
+University of Massachusetts Amherst
+shlomo@cs.umass.edu
+
+MAP exactly is NP-hard for general graphs. Thus approximate inference techniques are often used [Wainwright and Jordan, 2008; Sontag et al., 2010].
+Recently, several convergent algorithms have been developed for MAP estimation such as tree-reweighted
+max-product [Wainwright et al., 2002; Kolmogorov,
+2006] and max-product LP [Globerson and Jaakkola,
+2007; Sontag et al., 2008]. Many of these algorithms
+are based on the linear programming (LP) relaxation
+of the MAP problem [Wainwright and Jordan, 2008].
+A different formulation of MAP is based on quadratic
+programming (QP) [Ravikumar and Lafferty, 2006;
+Kumar et al., 2009]. The QP formulation is an attractive alternative because it provides a more compact
+representation of MAP: In a MRF with n variables, k
+values per variable, and |E| edges, the QP has O(nk)
+variables whereas the LP has O(|E|k 2 ) variables. The
+large size of the LP makes off-the-shelf LP solvers
+impractical for several real-world problems [Yanover
+et al., 2006]. Another significant advantage of the QP
+formulation is that it is exact. However, the QP formulation is non-convex, making global optimization hard.
+To remedy this, Ravikumar and Lafferty [2006] developed a convex QP relaxation of the MAP problem.
+Our main contribution is the analysis of the QP formulations of MAP as a difference of convex functions
+(D.C.) problem, which yields efficient, graph-based
+message-passing algorithms for both the non-convex
+and convex QP formulations. We use the concaveconvex procedure (CCCP) to develop the message passing algorithms [Yuille and Rangarajan, 2003]. Motivated by geometric programming [Boyd et al., 2007],
+we present another QP-based formulation of MAP
+and solve it using the CCCP technique. The resulting algorithm is shown to be equivalent to a recently
+developed expectation-maximization (EM) algorithm
+that provides good performance for large MAP problems [Kumar and Zilberstein, 2010]. The CCCP approach, however, is more flexible than EM and makes
+it easy to incorporate additional constraints that can
+
+tighten the convex QP [Kumar et al., 2009]. All the developed CCCP algorithms are guaranteed to converge
+to a local optimum for non-convex QPs, and to the
+global optimum for convex QPs. All the algorithms
+also provide monotonic improvement in the objective.
+
+Nonetheless, for several problems, a local optimum of
+this QP provides a good solution as we will show empirically. This was also observed by Kumar and Zilberstein [2010].
+
+We experiment on synthetic benchmarks and realworld protein-design problems [Yanover et al., 2006].
+Against max-product [Pearl, 1988], CCCP provides
+significantly better solution quality, sometimes more
+than 45% for large Ising graphs. On the real-world
+protein design problems, CCCP achieves near-optimal
+solution quality for most instances, and is significantly
+faster than the max-product LP method [Sontag et al.,
+2008]. Ravikumar and Lafferty [2006] proposed to
+solve the convex QP relaxation using standard QP
+solvers. Our message-passing algorithm for this case
+provides more than an order-of-magnitude speedup
+against the state-of-the-art QP solver CPLEX.
+
+2.1
+
+2
+
+QP FORMULATION OF MAP
+
+A pairwise Markov random field (MRF) is described
+using an undirected graph G = (V, E). A discrete
+random variable xi with a finite domain is associated
+with each node i ∈ V of the graph. Associated with
+each edge (i, j) ∈ E is a potential function θij (xi , xj ).
+The complete assignment x has the probability:
+X
+
+p(x; θ) ∝ exp
+θij (xi , xj )
+ij∈E
+
+The MAP problem consists of finding the most probable assignment to all the variables under p(x; θ). This
+is equivalent to finding the assignment
+x that maxP
+imizes the function f (x; θ) =
+ij∈E θij (xi , xj ). We
+assume w.l.o.g. that each θij is nonnegative, otherwise
+a constant can be added to each θij without changing
+the optimal solution. Let pi be the marginal probability associated with each MRF node i ∈ V . The MAP
+quadratic programming (QP) formulation [Ravikumar
+and Lafferty, 2006] is given by:
+X X
+max
+pi (xi )pj (xj )θij (xi , xj ) (1)
+p
+
+subject to
+
+ij∈E xi ,xj
+
+X
+
+pi (xi ) = 1, pi (xi ) ≥ 0 ∀i ∈ V
+
+xi
+
+The above QP is compact even for large graphical
+models and has simple linear constraints: O(nk) variables and n normalization constraints where n = |V |
+and k is the domain size. Ravikumar and Lafferty
+[2006] also show that this formulation is exact. That
+is, the global optimum of the above QP will maximize the function f (x; θ) and an integral MAP assignment can be extracted from it. However this formulation is non-convex, making global optimization hard.
+
+The Concave Convex Procedure
+
+The concave-convex procedure (CCCP) [Yuille and
+Rangarajan, 2003] is a popular approach to optimize a
+general non-convex function expressed as a difference
+of two convex functions. We use this method to obtain message-passing algorithms for QP formulations
+of MAP. We describe it here briefly.
+Consider the optimization problem:
+min{g(x) : x ∈ Ω}
+
+(2)
+
+where g(x) = u(x) − v(x) is an arbitrary function with
+u , v being real-valued convex functions and Ω being a
+convex set. The CCCP method provides an iterative
+procedure that generates a sequence of points xl by
+solving the following convex program:
+xl+1 = arg min{u(x) − xT ∇v(xl ) : x ∈ Ω}
+
+(3)
+
+Each iteration of CCCP decreases the objective
+g(x) and is guaranteed to converge to a local optimum [Sriperumbudur and Lanckriet, 2009].
+2.2
+
+Solving MAP QP Using CCCP
+
+We first show how the CCCP framework can be used
+to solve the QP in Eq. (1). We adopt the convention
+that a MAP QP always refers to the QP in Eq. (1);
+the convex variant of this QP shall be explicitly differentiated when addressed later. Consider the following
+functions u, v:
+u(p) =
+
+X X θij (xi , xj )
+
+p2i (xi ) + p2j (xj )
+2
+ij x x
+
+(4)
+
+X X θij (xi , xj )
+2
+pi (xi ) + pj (xj )
+2
+ij x x
+
+(5)
+
+i
+
+v(p) =
+
+i
+
+j
+
+j
+
+The above functions are convex because the quadratic
+functions f (z) = z 2 and f (y, z) = (y + z)2 are convex,
+and the nonnegative weighted sum of convex functions
+is also convex [Boyd and Vandenberghe, 2004, Ch. 3].
+It can be easily verified that the QP in Eq. (1) can be
+written as minp {u(p) − v(p)} with normalization and
+nonnegativity constraints defining the constraint set
+Ω. Intuitively, we used the simple identity −2xy =
+(x2 + y 2 ) − (x + y)2 . We also negated the objective
+function to convert maximization to minimization. For
+simplicity, we denote the gradient ∂v/∂p(xi ) by ∇xi v.
+X X
+X X
+∇xi v = pi (xi )
+θij (xi , xj )+
+θij (xi , xj )pj (xj )
+j∈Ne(i) xj
+
+j∈Ne(i) xj
+
+The first part of the above equation involves a local
+computation associated with an MRF node and the
+second part defines the messages δj from neighbors
+j ∈ N e(i) of node i. It can be made explicit as follows:
+X X
+X
+θ̂(xi )=
+θij (xi , xj ); δj (xi ) =
+θij (xi , xj )pj (xj )
+j∈Ne(i) xj
+
+xj
+
+X
+
+∇xi v= pi (xi )θ̂(xi ) +
+
+δj (xi )
+
+(6)
+
+j∈N e(i)
+
+CCCP iterations: Each iteration of CCCP involves
+solving the convex program of Eq. (3). First we write
+the Lagrangian function involving only the normalization constraints, later we address the nonnegativity
+inequality constraints. ∇l v denotes the gradient from
+the previous iteration l.
+X X θij (xi , xj ) 
+p2i (xi ) + p2j (xj )
+L(p, λ) =
+2
+ij xi xj
+XX
+X X
+−
+pi (xi )∇lxi v +
+λi (
+pi (xi ) − 1) (7)
+i
+
+xi
+
+xi
+
+i
+
+Solving for the first order optimality conditions
+∇p L(x? , λ? ) and ∇λ L(x? , λ? ), we get the solution:
+pl+1
+i (xi ) =
+
+∇lxi v
+
+− λi
+
+(8)
+
+θ̂(xi )
+
+λi = P
+
+1
+
+1
+xi θ̂(xi )
+
+X
+xi
+
+∇lxi v
+θ̂(xi )
+
+
+−1
+
+(9)
+
+Nonnegativity constraints: Nonnegativity constraints in the MAP QP are inequality constraints
+which are harder to handle as the Karush-KuhnTucker (KKT) conditions include the nonlinear complementary slackness condition µ?j p?j (xj ) = 0 [Boyd
+and Vandenberghe, 2004]. We can use interior-point
+methods, but they lose the efficiency of graph based
+message passing. Fortunately, we show that for MAP
+QP, the KKT conditions are easily satisfied by incorporating an inner-loop in the CCCP iterations.
+Alg. 1 shows the complete message-passing procedure
+to solve MAP QPs. Each outer loop corresponds to
+solving the CCCP iteration of Eq. (3) and is run until the desired number of iterations is reached. The
+messages δ are used for computing the gradient ∇v as
+in Eq. (6). The inner loop corresponds to satisfying
+the KKT conditions including the nonnegativity inequality constraints. Intuitively, the strategy to handle
+inequality constraints is as highlighted in [Bertsekas,
+1999, Sec. 3.3.1] – considering all possible combinations of inequality constraints being active (pi (xi ) = 0)
+or inactive (pi (xi ) > 0) and solving the resulting KKT
+conditions, which is easier as they become linear equations. If the resulting solution satisfies the KKT conditions of the original problem, then we have a valid solution for the original optimization problem. Of course,
+
+1: Graph-based message passing for MAP estimation
+input: Graph G = (V, E) and potentials θij per edge
+//outer loop starts
+repeat
+foreach node i ∈
+PV do
+δi→j (xj ) ← xi pi (xi )θij (xi , xj )
+Send message δi→j to each neighbor j ∈ Ne(i)
+foreach node i ∈ V do
+zeros ← φ
+//inner loop starts
+repeat
+Set pi (xi ) ← 0 ∀xi ∈ zeros
+Calculate pi (xi ) using Eq. (8) ∀ xi ∈
+/ zeros
+zeros ← zeros ∪ {xi : pi (xi ) < 0}
+until all beliefs pi (xi ) ≥ 0
+until stopping criterion is satisfied
+return: The decoded complete integral assignment
+
+this is highly inefficient for the general case. But fortunately for the MAP QP, we show that the inner loop of
+Alg. 1 recovers the correct solution and the Lagrange
+multipliers are computed efficiently for the convex program of Eq. (3). We describe it below.
+The inner loop includes local computation to each
+MRF node i and does not require message passing.
+Intuitively, the set zeros tracks all the settings x0i of
+the variable xi for which pi (x0i ) was negative in any
+previous inner loop iteration. It then clamps all such
+beliefs to 0 for all future iterations. Then the beliefs
+for the rest of the settings of xi are computed using
+Eq. (8). The new Lagrange multiplier λi (which corre?
+?
+sponds to the condition
+P ∇λ L(x , λ ) = 0) is calculated
+using the equation xi \x0 pi (xi ) = 1.
+i
+
+Lemma 1. The inner loop of Alg. 1 terminates with
+worst case complexity O(k 2 ), and yields a feasible point
+for the convex program of Eq. (3).
+Proof. The size of the set zeros increases with each
+iteration, therefore the inner loop must terminate as
+each variable’s domain is finite. With the domain size
+of a variable being k, the inner loop can run for at
+most k iterations. Computing new beliefs within each
+inner loop iteration also requires O(k) time. Thus the
+worst case total complexity is O(k 2 ).
+The inner loop can terminate only in two ways – before iteration k or at iteration k. If it terminates before
+iteration k, then it implies that all the beliefs pi (xi )
+must be nonnegative. The normalization constraints
+are always enforced by the Lagrange multipliers λi ’s.
+If it terminates during iteration k, then it implies that
+k − 1 settings of the variable xi are clamped to zero as
+the size of the set zeros will be exactly k − 1. The size
+cannot be k because that would make all the beliefs
+equal to zero, making it impossible to satisfy the normalization constraint; λi will not allow this. The size
+
+cannot be smaller than k − 1 because the set zeros
+grows by at least one element during each previous iteration. Therefore the only solution during iteration
+k is to set the single remaining setting of the variable
+xi to 1 to satisfy the normalization and nonnegativity
+constraints simultaneously. Therefore the inner loop
+always yields a feasible point upon termination.
+Empirically, we observed that even for large protein
+design problems with k = 150, the number of required
+inner loop iterations is below 20 – far below the worst
+case complexity. For a fixed outer loop l, let the inner
+loop iterations be indexed by r.
+Lemma 2. The Lagrange multiplier corresponding to
+the normalization constraint for a MRF variable xi
+always increases with each inner loop iteration.
+Proof. Each inner loop iteration r computes
+P a new Lagrange multiplier λri for the constraint i pi (xi ) = 1
+using Eq. (8). We show that λr+1
+> λri . For the inner
+i
+loop iteration r, some of the computed beliefs must be
+negative, otherwise the inner loop must have terminated. Let x0i denote those settings of variable xi for
+which pi (x0i ) < 0 in iteration r. From the normalization constraint for iteration r, we get:
+X ∇lx v − λri
+i
+xi
+
+θ̂(xi )
+
+=1
+
+(10)
+
+We used the explicit representation of pi (xi ) from
+Eq. (8). Since pi (x0i ) are negative, we get:
+X ∇lx v − λri
+i
+xi \x0i
+
+θ̂(xi )
+
+>1
+
+(11)
+
+The belief for all such x0i will become zero for the next
+inner loop iteration r + 1. From the normalization
+constraint for iteration r + 1, we get:
+X ∇lx v − λr+1
+i
+i
+xi \x0i
+
+θ̂(xi )
+
+=1
+
+(12)
+
+We used a slight simplification in the above equations
+as we ignored the effect of previous iterations, before
+iteration r. However, it will not change the conclusion as all the beliefs that were clamped to zero earlier
+(before iteration r) shall remain so for all future iterations. Note that ∇xi and θ̂ do not depend on the inner
+loop iterations. Subtracting Eq. 12 from Eq. 11:
+X 1
+(λr+1
+− λri )
+>0
+(13)
+i
+θ̂(xi )
+xi \x0
+i
+
+Since we assumed that all potential functions θij are
+nonnegative, we must have (λr+1
+− λri ) > 0. Hence
+i
+r+1
+r
+λi > λi and the lemma is proved.
+
+Theorem 3. The inner loop of Alg. 1 correctly recovers all the Lagrange multipliers for the equality and inequality constraints for the convex program of Eq. (3),
+thus solving it exactly.
+Proof. Lemma 1 shows that the inner loop provides a
+feasible point of the convex program. We now show
+that this point also satisfies the KKT conditions, thus
+is the optimal solution. The KKT conditions for the
+normalization constraints are always satisfied during
+the belief updates (see. Eq. (8)). The main task is to
+show that for the inequality constraint −pi (xi ) ≤ 0,
+the KKT conditions hold. That is, if pi (xi ) = 0, then
+the Lagrange multiplier µi (xi ) ≥ 0, and if −pi (xi ) < 0,
+then µi (xi ) = 0.
+By using the KKT condition ∇pi (xi ) L(p? , λ? , µ? ) = 0,
+we get:
+X X
+θij (xi , xj )pi (xi )−∇lxi v + λi − µi (xi ) = 0
+j∈N e(i) xj
+
+(14)
+The main focus of the proof is on the beliefs for elements in the set zeros. Let us focus on the end of an
+inner loop iteration r, when a new element x0i is added
+to zeros because its computed belief pi (x0i ) < 0. Using Eq. (8), we know that pi (x0i ) =
+pi (x0i )
+
+∇lx0 v−λri
+i
+
+θ̂(x0i )
+
+. Because
+
+< 0 we get:
+λri > ∇lx0i v
+
+(15)
+
+For all future iterations of the inner loop, pi (x0i ) will be
+set to zero. Therefore the KKT condition for iteration
+r + 1 mandates that µr+1
+(x0i ) ≥ 0. Setting pi (x0i ) = 0
+i
+in Eq. (14), we get:
+µr+1
+(x0i ) = λr+1
+− ∇lx0i v
+i
+i
+
+(16)
+
+We know from Lemma 2 that λr+1
+> λri . Combining
+i
+r+1 0
+this fact with Eq. (15), we get µi (xi ) > 0, thereby
+satisfying the KKT condition. Note that the only component depending on the inner loop in the above condition is λri ; ∇x0i is fixed during each inner loop. Furthermore, for all future inner loop iterations, the KKT
+conditions for all elements x0i ’s in the set zeros will be
+met due to the increasing nature of the multiplier λi .
+Therefore, when the inner loop terminates, we shall
+have correct Lagrange multipliers µ satisfying µ ≥ 0
+for all the elements of the set zeros. For the rest of
+the elements, the multiplier µ = 0, satisfying all the
+KKT conditions. As the first order KKT conditions
+are both necessary and sufficient for optimality in convex programs [Bertsekas, 1999, Sec. 3.3.4], the inner
+loop solves exactly the convex program in Eq. (3).
+
+2.3
+
+Solving Convex MAP QP Using CCCP
+
+Because the previous QP formulation of MAP is
+nonconvex, global optimization is hard. To remedy
+this, Ravikumar and Lafferty [2006] developed a convex QP relaxation for MAP, which performed well
+on their benchmarks. Recently, Kumar et al. [2009]
+showed that the convex QP relaxation is also equivalent to the second order cone programming (SOCP)
+relaxation. Ravikumar and Lafferty [2006] proposed
+to solve such QP using standard QP solvers. We show
+using CCCP that this QP relaxation can be solved efficiently using graph-based message passing, and the
+resulting algorithm converges to the global optimum of
+the relaxed QP. Experimentally, we found the resulting
+message-passing algorithm to be highly efficient even
+for large graphs, outperforming CPLEX by more than
+an order-of-magnitude. The relaxed QP is described
+as follows:
+XX
+XX
+pi (xi )di (xi )+
+pi (xi )pj (xj )θij (xi , xj )
+max
+p
+
+ij xi ,xj
+
+xi
+
+i
+
+−
+
+XX
+i
+
+p2i (xi )di (xi )
+
+(17)
+
+xi
+
+The relaxation is based on adding a diagonal term,
+di (xi ), for each variable xi . Note that under the integrality assumption pi (xi ) = p2i (xi ), thus the first and
+last terms cancel out, resulting in the original MAP
+QP. The diagonal term is given by:
+di (xi ) =
+
+X X |θij (xi , xj )|
+j∈N e(i) xj
+
+2
+
+Consider the convex function u(p) represented as:
+X X θij (xi , xj )
+ X 2
+pi (xi )di (xi )
+p2i (xi ) + p2j (xj ) +
+2
+i,x
+ij x x
+i
+
+j
+
+i
+
+and the convex function v(p) represented as:
+X X θij (xi , xj )
+ij xi xj
+
+2
+
+2 X
+pi (xi )+pj (xj ) +
+pi (xi )di (xi )
+i,xi
+
+The above two functions are the same as the original
+QP formulation, except for the added diagonal terms
+di (xi ). It can be easily verified that the relaxed QP
+objective can be written as minp {u(p) − v(p)} subject
+to normalization and nonnegativity constraints. Note
+that the maximization of the relaxed QP is converted
+to minimization by negating the objective. The gradient required by CCCP is given by:
+X X
+∇xi v = pi (xi )θ̂(xi ) +
+θij (xi , xj )pj (xj ) + di (xi )
+j∈N e(i) xj
+
+Notice the close similarity with the MAP QP case
+in Eq. (6). The only additional term is di (xi ), which
+
+needs to be computed only once before message passing begins. The messages for the relaxed QP case are
+exactly the same as the δ messages for the MAP QP.
+The Lagrangian corresponding to the convex program
+of Eq. (3) is similar to thePMAP QP case (see Eq. (7))
+with an additional term i,xi p2i (xi )di (xi ). The constraint set Ω includes the normalization and nonnegativity constraints as for the MAP QP case.
+Solving for the optimality conditions ∇p L(p? , λ? ) and
+∇λ L(p? , λ? ), we get the new beliefs as follows:
+pil+1 (xi ) =
+
+∇lxi v − λi
+2di (xi ) + θ̂(xi )
+
+(18)
+
+The Lagrange multiplier λi for the normalization
+constraint
+can be calculated by using the equation
+P
+xi pi (xi ) = 1. The only difference from the corresponding Eq. (8) for the MAP QP is the additional
+term di (xi ) in the denominator.
+Thanks to these strong similarities, we can show that
+Alg. 1 also works for the convex MAP QP with minor modifications. First, we calculate the diagonal
+terms di (xi ) once for each variable xi of the MRF.
+The message-passing procedure for each outer loop iteration remains the same. The second difference lies
+in the inner loop that enforces the nonnegativity constraints. The inner loop now uses Eq. (18) instead
+of Eq. (8) to estimate new beliefs pi (xi ). The proof
+is omitted being very similar to the MAP QP case.
+Theorem 4. The CCCP message-passing algorithm
+converges to a global optimum of the convex MAP QP.
+The result is based on the fact that CCCP converges to
+a stationary point of the given constrained optimization problem that satisfies the KKT conditions [Sriperumbudur and Lanckriet, 2009]. Because the KKT
+conditions are both necessary and sufficient for convex
+optimization problems with linear constraints [Bertsekas, 1999], the result follows. We also highlight that
+a global optimum of the convex QP may not solve the
+MAP problem exactly, as the convex QP is a variational approximation to MAP that may not be tight.
+Nonetheless, it has shown to perform well in practice [Ravikumar and Lafferty, 2006].
+2.4
+
+GP Based Reformulation of MAP QP
+
+We now present another formulation of the MAP QP
+problem based on geometric programming (GP). A GP
+is a type of mathematical program characterized by
+objectives and constraints that have a special form.
+For details, we refer to [Boyd et al., 2007]. While the
+QP formulation of MAP in Eq. (1) is not exactly a GP,
+it bears a close resemblance. This allows us to transfer
+some ideas from GP, which we shall describe. We start
+with some basic concepts of GP.
+
+Definition 1. Let x1 , . . . , xn denote real positive variables. A real valued monomial function has the form
+f (x) = cxa1 1 xa2 2 · · · xann , where c > 0 and ai ∈ <. A
+posynomial function
+is a sum of one or more monoPK
+mials: f (x) = k=1 ck x1a1k xa2 2k · · · xannk
+In a GP, the objective function and all inequality
+constraints are posynomial functions. The MAP QP
+(see Eq. (1)) satisfies this requirement – the potential function θij corresponds to ck and is positive (the
+θij = 0 case can be excluded for convenience); node
+marginals pi (xi ) are real positive variables. Since we
+already assumed marginals pi to be positive, nonnegativity inequality constraints are not required. In a
+GP, the equality constraints can only be monomial
+functions. This is not satisfied in MAP QP as normalization constraints are posynomials. Nonetheless,
+we proceed as in GP by converting the original problem using certain optimality-preserving transformations. The first change is to let pi (xi ) = eyi (xi ) , where
+yi (xi ) is an unconstrained variable. This is allowed as
+all marginals must be positive. The second change is
+to take the log of the objective function; because log is
+a monotonic function, this will not change the optimal
+solution. The reformulated MAP QP is shown below:
+X X
+
+
+min: − log
+exp yi (xi )+yj (xj )+log θij (xi , xj )
+ij xi ,xj
+
+subject to:
+
+X
+
+eyi (xi ) = 1 ∀i ∈ V
+
+xi
+
+This nonlinear program has the same optimal solutions
+as the original MAP QP. As log-sum-exp is convex, the
+objective function of the above problem is concave.
+Note that we are minimizing a concave function that
+can have multiple local optima. We again solve it using
+CCCP. Consider the function u(y) = 0 and v(y) as
+the objective of the above program, but without the
+negative sign. The gradient required by CCCP is:
+
+P
+P
+j∈N e(i) xjθij (xi , xj ) exp yi (xi )+yj (xj )
+l
+ (19)
+∇yi v = P P
+ij
+xi ,xj θij (xi , xj ) exp yi (xi )+yj (xj )
+The Lagrangian corresponding to Eq. (3) with constraint set including only normalization constraints is:
+X
+X X
+L(y, λ) = −
+yi (xi )∇lyi v +
+λi (
+eyi (xi ) − 1)
+i,xi
+
+i
+
+xi
+
+Using the first order optimality condition, we get:
+ ∇lyi v
+exp yi (xi ) =
+λi
+
+(20)
+
+We note that the denominator of Eq. (19) is a constant
+for each yi (xi ). Therefore we represent it using cl . Re-
+
+substituting pi (xi ) = eyi (xi ) and ∇lyi v in Eq. (20):
+P
+P
+j∈N e(i)
+xj θij (xi , xj )pi (xi )pj (xj )
+?
+pi (xi ) =
+cl λi
+where p?i (xi ) is the new parameter for the current iteration, and parameters without asterisk (on the R.H.S.)
+are from the previous iteration. Since cl λi is also a constant, we can replace them by a normalization constant
+Ci to get the final update equation:
+P
+P
+j∈N e(i)
+xj θij (xi , xj )pj (xj )
+?
+pi (xi ) = pi (xi )
+Ci
+The message-passing process for this version of CCCP
+is exactly the same as that for MAP QP and convex
+QP. This version does not require an inner loop as
+all the node marginals remain positive using such updates. This update process is also identical to the recently developed message-passing algorithm for MAP
+estimation that is based on expectation-maximization
+(EM) rather than CCCP [Kumar and Zilberstein,
+2010]. However, CCCP provides a more flexible framework in that it handled the nonconvex and convex QP
+in a similar way as shown earlier. Furthermore, the
+CCCP framework allows for additional constraints to
+be added to the convex QP to make it tighter [Sriperumbudur and Lanckriet, 2009].
+In sum, we have shown that the concave-convex procedure provides a unifying framework for the various quadratic programming formulations of the MAP
+problem. Each iteration of CCCP can be easily implemented using graph-based message passing. Interestingly, the messages exchanged for all the QP formulations we discussed remain exactly the same; the differences lie in how new node marginals are computed
+using such messages.
+
+3
+
+EXPERIMENTS
+
+We now present an empirical evaluation of the CCCP
+algorithms. We first report results on synthetic
+graphs generated using the Ising model from statistical physics [Baxter, 1982]. We compare max-product
+(MP) and the CCCP message-passing algorithm for
+the QP formulation of MAP. We generated 2D nearest
+neighbor grid graphs for a number of grid sizes (ranging between 10 × 10 to 50 × 50) and varying values
+of the coupling parameter. All the variables were binary. The node potentials were generated by sampling
+from the uniform distribution U[−0.05, 0.05]. The coupling strength, dcoup , for each edge was sampled from
+U[−β, β] following the mixed Ising model. The binary
+edge potential θij was defined as follows:
+(
+dcoup xi = xj
+θij (xi , xj ) =
+−dcoup xi 6= xj
+
+400
+
+400
+
+400
+300
+
+400
+300
+
+400
+1400
+1400
+1400
+3000
+3000
+3000
+400
+1400
+1200
+1400 1200
+1400 1200
+300
+3000 3000
+3000
+1200
+1200 1000
+1200 1000
+1000
+2000
+2000
+2000
+300
+300
+300
+800
+800
+800
+1000 1000
+1000
+200
+200
+200
+2000 2000
+2000
+800
+800
+800
+600
+600
+600
+1000
+1000
+1000
+200
+200
+200
+CCCP
+CCCP
+600
+400
+400
+400
+600
+600 CCCP
+100
+100
+100
+MP
+MP
+MP
+1000 1000
+1000
+CCCP
+CCCP
+CCCP
+400
+400
+400 MP 200
+200
+200
+0
+0
+0
+100
+100
+100
+MP
+MP
+1
+21
+321
+432
+543
+541
+521
+321
+432
+543
+541
+521
+321
+432
+543
+54
+5
+200
+0
+200
+0
+200
+0
+(a)
+(a)
+Ising423(a)
+! 100
+Ising
+(b)
+Ising423(b)
+! 400
+Ising
+Ising423!
+(c)900
+Ising534! 900 45
+12 100
+5(b)
+12 400
+5(c)
+12900
+5
+1
+21 Ising 3!
+534! 100 45 1
+21 Ising 3!
+534! 400 45 1
+21 Ising 3!(c)
+(a)
+(b)
+(c)
+Ising ! 100
+Ising ! 400
+Ising ! 900
+Ising(a)
+! 100
+Ising(b)
+! 400
+(c)900
+Ising(c)
+! 900
+(a) Ising (a)
+! 100
+(b) Ising (b)
+! 400
+(c) Ising !
+6000
+6000
+6000
+100
+100
+100
+100
+6000 6000
+100
+6000
+100
+7500
+7500
+7500
+95
+95
+95
+4000
+4000
+4000
+7500 7500
+7500
+95
+95
+95
+4000 4000
+4000
+5000
+5000
+5000
+90
+90
+90
+90
+2000
+2000
+2000
+5000 5000
+90
+5000
+90
+85
+85
+85
+2500
+2500
+2500
+2000 2000
+2000
+CCCP
+CCCP
+CCCP
+85
+85
+85
+2500 2500
+2500
+0
+0
+0
+80
+80
+80
+CCCP
+CCCP
+CCCP
+1
+21
+321
+432
+543
+541
+521
+321
+432
+543
+540
+205 0 4020 0604020
+806040
+1008060 10080 100
+0
+80
+0
+80
+0
+80
+(d)
+(d)
+Ising 42(d)
+!3 1600
+Ising534! 160045 1
+(e)
+Ising 42(e)
+!3 2500
+Ising534! 250045 0(f) Protein
+Protein
+(f)
+instances
+design
+Protein
+instances
+design
+5(e)
+5 0(f)design
+20 8060
+40
+60instances
+80 100
+200 60
+40
+100
+1
+21Ising !
+3121600
+21Ising !
+3122500
+20
+40
+10080
+Ising ! 1600
+Ising ! 2500
+(f)instances
+Protein
+design instances
+Ising(d)
+! 1600
+Ising(e)
+! 2500
+(f)design
+Protein
+design instances
+(d) Ising (d)
+! 1600
+(e) Ising (e)
+! 2500
+(f) Protein
+
+(d)
+
+(e)
+
+(f)
+
+Figure 1: (a) – (e) show quality comparison between max-product (MP) and CCCP for Ising graphs with varying number
+of nodes (100 – 2500). The x-axis denotes the coupling parameter β, y-axis shows solution quality. (f) shows the solution
+quality CCCP achieves as a percentage of the optimal value (y-axis) for different protein design instances (x-axis).
+
+For every grid size and each setting of the coupling
+strength parameter β, we generated 10 instances by
+sampling dcoup per edge. For each instance, we considered the best solution quality of 10 runs for both
+max-product and CCCP. We then report the average
+quality of the 10 instances achieved for each parameter
+β. Both max-product and CCCP were implemented
+in JAVA and ran on a 2.4GHz CPU. Max-product was
+allowed 1000 iterations and often did not converge,
+whereas CCCP converged within 500 iterations.
+Fig. 1(a–e) show solution quality comparisons between
+MP and CCCP. For 10 × 10 graphs (Fig. 1(a)), both
+CCCP and MP achieve similar solution quality. The
+gain in quality provided by CCCP increases with the
+size of the grid graph. For 20 × 20 grids, the average gain in solution quality, ((QCCCP − QM P )/QM P ),
+for each coupling strength parameter β is over 20%.
+For 30 × 30 (Fig. 1(c)) grids, the gain is above 30%
+for each parameter β; for 40 × 40 grids it is 36% and
+for 50 × 50 grids it is 43%. Overall, CCCP provides
+much better performance than max-product over these
+Ising graphs. And unlike max-product, CCCP monotonically increases solution quality and is guaranteed
+to converge. A detailed performance evaluation of the
+convex QP is provided [Ravikumar and Lafferty, 2006].
+As such Ising graphs have relatively small QP representation, the CCCP message passing method and
+CPLEX had similar runtime for the convex QP.
+We also experimented on the protein design benchmark (total of 97 instances) [Yanover et al., 2006].
+In these problems, the task is to find a sequence of
+amino acids that is as stable as possible for a given
+backbone structure of protein. This problem can be
+modeled using a pairwise Markov random field. These
+problems are particularly hard and dense with up to
+170 variables, each with a large domain size of up
+
+to 150 values. Fig. 1(f) shows the % of the optimal
+value CCCP achieves against the best upper bound
+provided by the LP based approach MPLP [Sontag
+et al., 2008]. MPLP has been shown to be very effective in solving exactly the MAP problem for several real-world problems. However for these protein
+design problems, due to the large variable domains,
+its reported mean running time is 9.7 hours [Sontag
+et al., 2008]. As Fig. 1(f) shows, CCCP achieves nearoptimal solutions, on average within 97.7% of the optimal value. A significant advantage of CCCP is its
+speed: it converges within 1200 iterations for all these
+problems and requires ≈ 403 seconds for the largest
+instance, much faster than MPLP. The mean running
+time of CCCP was ≈170 seconds for this dataset. Thus
+CCCP can prove to be quite effective when fast, approximate solutions are desired. The main reason for
+this speedup is that CCCP’s messages are easier to
+compute than MPLP’s as also highlighted in [Kumar
+and Zilberstein, 2010]. Compared to the EM approach
+of [Kumar and Zilberstein, 2010], CCCP provides better solution quality: EM achieved 95% of the optimal
+value on average, while CCCP achieves 97.7%. The
+overhead of the inner loop in CCCP is small against
+EM which takes ≈ 352 seconds for the largest instance,
+while CCCP takes ≈ 403 seconds.
+We also tested CCCP on the protein prediction
+dataset [Yanover et al., 2006]. The problems in this
+dataset are much smaller than those in the protein
+design dataset, and both max-product and MPLP
+achieve good solution quality. CCCP’s performance
+was worse in this case, partly due to the local optima
+present in the nonconvex QP formulation of MAP. The
+convex QP formulation was not tight in this case.
+Fig. 2(a) shows runtime comparison of CCCP against
+CPLEX for the convex QP for the 25 largest protein
+
+15%
+
+0.025
+
+relaxation, CCCP provided more than an order-ofmagnitude speedup over the state-of-the-art QP solver
+CPLEX. These results offer a powerful new way for
+solving efficiently large MAP estimation problems.
+
+0.02
+10%
+0.015
+
+Acknowledgments
+
+0.01
+5%
+
+Support for this work was provided in part by the NSF
+Grant IIS-0812149 and by the AFOSR Grant FA955008-1-0181.
+
+0.005
+
+0%
+
+0
+
+10
+20
+(a) Time comparison
+
+0
+
+0
+
+10
+20
+(b) Quality comparison
+
+Figure 2: (a) Time comparison of CCCP for convex
+QP against CPLEX for the largest 25 protein design instances (x-axis). The y-axis denotes TCCCP /TCP LEX as
+a percentage. (b) denotes the signed quality difference
+QCCCP − QCP LEX , a higher value is better.
+
+design problems w.r.t. the number of graph edges.
+After trying different QP solver options available in
+CPLEX, we chose the barrier method which provided
+the best performance. As CPLEX was quite slow, we
+let CPLEX use 8 CPU cores with 8GB RAM, while
+CCCP only used a single CPU. As this figure shows,
+CCCP is more than an order-of-magnitude faster than
+CPLEX even when it uses a single core. The longest
+CPLEX took was 3504 seconds, whereas CCCP only
+took 99 seconds for the same instance. The mean running time of CPLEX was 1914 seconds; for CCCP,
+it was 96 seconds. Surprisingly, CCCP converges in
+only 15 iterations to the optimal solution for all 25
+problems. Fig. 2(b) shows the signed quality difference
+between CCCP and CPLEX for the convex QP objective. CPLEX provides the optimal solution within
+some non-zero  (we used the default setting). This
+figure shows that even within 15 iterations, CCCP
+achieved a slightly better solution. The decoded solution quality provided by the convex QP was decent,
+within 80% of the optimal value, but not as high as
+the CCCP method for the nonconvex QP.
+
+4
+
+CONCLUSION
+
+We presented new message-passing algorithms for various quadratic programming formulations of the MAP
+problem. We showed that the concave-convex procedure provides a unifying framework for different QP
+formulations of the MAP problem represented as a difference of convex functions. The resulting algorithms
+were shown to be convergent – to a local optimum
+for the nonconvex QP and to the global optimum of
+the convex QP. Empirically, the CCCP algorithm was
+shown to work well on Ising graphs and real-world
+protein design problems. The CCCP approach provided much better solution quality than max-product
+for Ising graphs and converged significantly faster than
+max-product LP for protein design problems, while
+providing near optimal solutions. For the convex QP
+
+References
+Baxter, R. (1982). Exactly Solved Models in Statistical Mechanics. Academic Press, London.
+Bertsekas, D. P. (1999). Nonlinear Programming. Athena
+Scientific, 2nd edition.
+Boyd, S., Kim, S.-J., Vandenberghe, L., and Hassibi, A.
+(2007). A tutorial on geometric programming. Optimization and Engineering, 8:67–127.
+Boyd, S. and Vandenberghe, L. (2004). Convex Optimization. Cambridge University Press, New York, NY, USA.
+Globerson, A. and Jaakkola, T. (2007). Fixing MaxProduct: Convergent message passing algorithms for
+MAP LP-relaxations. In NIPS, pages 553–560.
+Kolmogorov, V. (2006). Convergent tree-reweighted message passing for energy minimization. IEEE Trans. Pattern Anal. Mach. Intell., 28:1568–1583.
+Kumar, A. and Zilberstein, S. (2010). MAP estimation for
+graphical models by likelihood maximization. In NIPS,
+pages 1180–1188.
+Kumar, M. P., Kolmogorov, V., and Torr, H. S. P. (2009).
+An analysis of convex relaxations for map estimation of
+discrete mrfs. J. Mach. Learn. Res., 10:71–106.
+Pearl, J. (1988). Probabilistic Reasoning in Intelligent Systems. Morgan Kaufmann Publishers Inc.
+Ravikumar, P. and Lafferty, J. (2006). Quadratic programming relaxations for metric labeling and Markov random
+field MAP estimation. In ICML, pages 737–744.
+Sontag, D., Globerson, A., and Jaakkola, T. (2010). Introduction to Dual Decomposition for Inference. Optimization for Machine Learning.
+Sontag, D., Meltzer, T., Globerson, A., Jaakkola, T., and
+Weiss, Y. (2008). Tightening LP relaxations for MAP
+using message passing. In UAI, pages 503–510.
+Sriperumbudur, B. and Lanckriet, G. (2009). On the convergence of the concave-convex procedure. In NIPS,
+pages 1759–1767.
+Wainwright, M., Jaakkola, T., and Willsky, A. (2002).
+MAP estimation via agreement on (hyper)trees:
+Message-passing and linear programming approaches.
+IEEE Transactions on Information Theory, 51:3697–
+3717.
+Wainwright, M. J. and Jordan, M. I. (2008). Graphical
+models, exponential families, and variational inference.
+Foundations and Trends in Machine Learning, 1:1–305.
+Yanover, C., Meltzer, T., and Weiss, Y. (2006). Linear
+programming relaxations and belief propagation – an
+empirical study. J. Mach. Learn. Res., 7:2006.
+Yuille, A. L. and Rangarajan, A. (2003). The concaveconvex procedure. Neural Comput., 15:915–936.
+
+

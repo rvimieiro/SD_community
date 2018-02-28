@@ -1,0 +1,1088 @@
+on d nodes [Rob73], exact Bayesian model averaging is
+intractable in general.1 Two interesting cases are when it
+is tractable are averaging over trees [MJ06] and averaging over graphs given a known node ordering [DC04]. If
+the ordering is unknown, we can use MCMC techniques
+to sample orders, and sample DAGs given each such order [FK03, EW06, HZ05]. However, Koivisto and Sood
+[KS04, Koi06] showed that one can use dynamic programming (DP) to marginalize over orders analytically. This
+technique enables one to compute all marginal posterior
+edge probabilities, p(Gij = 1|D), exactly in O(d2d ) time.
+Although exponential in d, this technique is quite practical
+for d ≤ 20, and is much faster than comparable MCMC
+algorithms on similar sized problems2
+
+Unfortunately, the DP method has three fundamental limitations, even for small domains. The first problem is that it
+can only be used with certain kinds of graph priors which
+satisfy a “modularity” condition, which we shall explain in
+Section 3 below. Although this seems like a minor technical problem, it can result in significant bias. This can
+lead to unwarranted conclusions about structure, even in
+the large sample setting, as we shall see below. The second
+problem is that it can only compute posteriors over modular features; thus it cannot be used to compute the probability of features like “is there a path between nodes i and
+j via k”, or “is i an ancestor of j”. Such long-distance features are often of more interest than direct edges. The third
+problem is that it is expensive to compute predictive densi1
+For example, the number of DAGs on d nodes for d = 2 : 9
+are 3, 25, 543, 29281, 3781503, 1.1e9, 7.8e11, 1.2e15.
+2
+Our Matlab/C implementation takes 1 second for d = 10
+nodes and 6 minutes for d = 20 nodes on a standard laptop. The
+cost is dominated by the marginal likelihood computation, which
+all algorithms must perform. Our code is freely available at www.
+cs.ubc.ca/˜murphyk/StructureLearning.
+
+102
+
+EATON & MURPHY
+
+ties, p(x|D). Since the DP method integrates out the graph
+structures, it has to keep all the training data D around, and
+predict using p(x|D) = p(x, D)/p(D). Both terms can
+be computed exactly using DP, but this requires re-running
+DP for each new test case x. In addition, since the DP algorithm assumes complete data, if x is incompletely observed
+(e.g., we want to “fill in” some of it), we must run the DP
+algorithm potentially an exponential number of times. For
+the same reason, we cannot sample from p(x|D) using the
+DP method.
+In this paper, we propose to fix all three of these shortcomings by combining DP with the Metropolis Hastings
+(MH) algorithm. The basic idea is simply to use the DP
+algorithm as an informative (data driven) proposal distribution for moving through DAG space, thereby getting
+the best of both worlds: a fast deterministic approximation, plus unbiased samples from the correct posterior,
+Gs ∼ p(G|D). These samples can then be used to compute the posterior mean of arbitrary features, E[f |D] ≈
+PS
+1
+s
+s=1 f (G ), or the posterior predictive distribution,
+S
+PS
+1
+p(x|D) ≈ S s=1 p(x|Gs ). Below we will show that
+this hybrid method produces much more accurate estimates
+than other approaches, given a comparable amount of compute time.
+The idea of using deterministic algorithms as a proposal
+has been explored before e.g. [dFHSJR01], but not, as far
+as we know, in the context of graphical model structure
+learning. Further, in contrast to [dFHSJR01], our proposal
+is based on an exact algorithm rather than an approximate
+algorithm.
+
+2 Previous work
+The most common approach to estimating (features of) the
+posterior p(G|D) is to use the Metropolis Hastings (MH)
+algorithm, using a proposal that randomly adds, deletes or
+reverses an edge; this has been called M C 3 for Markov
+Chain Monte Carlo Model Composition [MY95]. (See also
+[GC03] for some improvements, and [MR94] for a related
+approach called Occam’s window [MR94].) Unfortunately,
+this proposal is very local, and the resulting chains do not
+mix well in more than about 10 dimensions. An alternative is to use Gibbs sampling on the adjacency matrix
+[MKTG06]. In our experience, this gets “stuck” even more
+easily, although this can be ameliorated somewhat by using
+multiple restarts, as we will see below.
+A different approach, first proposed in [FK03], is to sample
+in the space of node orderings using MH, with a proposal
+that randomly swaps the ordering of nodes. For example,
+(1, 2, 3, 4, 5, 6) → (1, 5, 3, 4, 2, 6)
+where we swapped 2 and 5. This is a smaller space (“only”
+O(d!)), and is “smoother”, allowing chains to mix more
+
+easily. [FK03] provides experimental evidence that this approach gives much better results than MH in the space of
+DAGs with the standard add/ delete/ reverse proposal. Unfortunately, in order to use this method, one is forced to
+use a modular prior, which has various undesirable consequences that we discuss below (see Section 3). Ellis and
+Wong [EW06] realised this, and suggested using an importance sampling correction. However, computing the exact correction term is #P-hard, and we will see below that
+their approximate correction yields inferior results to our
+method.
+An alternative to sampling orders is to analytically integrate them out using dynamic programming (DP) [KS04,
+Koi06]. We do not have space to explain the DP algorithm in detail, but the key idea is the following: when
+considering different variable orderings — say (3, 2, 1) and
+(2, 3, 1) — the contribution to the marginal likelihood for
+some nodes can be re-used. For example, p(X1 |X2 , X3 ) is
+the same as p(X1 |X3 , X2 ), since the order of the parents
+does not matter. By appropriately caching terms, one can
+devise an O(d!2d ) algorithm to exactly compute the marginal likelihood and marginal posterior features.
+To compute the posterior predictive density, p(x|D), the
+standard approach is to use a plug-in estimate p(x|D) ≈
+p(x|Ĝ(D)). Here Ĝ may be an approximate MAP estimate computed using local search [HGC95], or the MAPoptimal DAG which can be found by the recent algorithm
+of [SM06] (which unfortunately takes O(d!2d ) time.) Alternatively, Ĝ could be a tree; this is a popular choice for
+density estimation since one can compute the optimal tree
+structure in O(d2 log d) time [CL68, MJ00].
+It can be proven that averaging over the uncertainty in
+G will, on average, produce higher test-set predictive
+likelihoods [MGR95]. The DP algorithm can compute
+the marginal likelihood of the data, p(D) (marginalizing over all DAGs), and hence can compute p(x|D) =
+p(x, D)/p(D) by calling the algorithm twice. (We only
+need the “forwards pass” of [KS04], using the feature
+f = 1; we do not need the backwards pass of [Koi06].)
+However, this is very expensive, since we need to compute
+the local marginal likelihoods for every possible family on
+the expanded data set for every test case x. Below we will
+show that our method gives comparable predictive performance at a much lower cost, by averaging over a sample of
+graphs.
+
+3 Modular priors
+Some of the best current methods for Bayesian structure
+learning operate in the space of node orders rather than the
+space of DAGs, either using MCMC [FK03, EW06, HZ05]
+or dynamic programming [KS04, Koi06]. Rather than being able to define an arbitrary prior on graph structures
+p(G), methods that work with orderings define a joint prior
+
+EATON & MURPHY
+over graphs G and orders ≺ as follows:
+p(≺, G) =
+
+d
+1 Y
+qi (Ui≺ )ρi (Gi ) × I(consistent(≺, G))
+Z i=1
+
+103
+x 10
+
+From the joint prior,
+P we can infer the marginal prior over
+graphs, p(G) = ≺ p(≺, G). Unfortunately, this prior favors graphs that are consistent with more orderings. For
+example, the fully disconnected graph is the most probable under a modular prior, and trees are more probable than
+chains, even if they are Markov equivalent (e.g., 1←2→3 is
+more probable than 1→2→3). This can cause problems for
+structural discovery. To see this, suppose the sample size is
+very large, so the posterior concentrates its mass on a single Markov equivalence class. Unfortunately, the effects of
+the prior are not “washed out”, since all graphs with the
+equivalence class have the same likelihood. Thus we may
+end up predicting that certain edges are present due to artefacts of our prior, which was merely chosen for technical
+convenience.
+In the absence of prior knowledge, one may want to use
+a uniform prior over DAGs3 . However, this cannot be encoded as a modular prior. To see this, let us use a uniform prior over orderings, qi (Ui ) = 1, so p(≺) = 1/(d!).
+This is reasonable since typically we do not have prior
+knowledge on the order. For the parent factors, let us use
+ρi (Gi ) = 1; we call this a “modular flat” prior. However, this combination is not uniform over DAGs after we
+sum over orderings: see Figure 1. A more popular alternative (used in [KS04, Koi06, FK03, EW06]) is to take
+¡ ¢−1
+ρi (Gi ) ∝ d−1
+; we call this the “Koivisto” prior. This
+|Gi |
+prior says that different cardinalities of parents are considered to be equally likely a priori. However, the resulting
+p(G) is even further from uniform: see Figure 1.
+Ellis and Wong [EW06] recognized this
+Q problem, and tried
+to fix it as follows. Let p∗ (G) = Z1 i ρ∗i (G) be the desired prior, and let p(G) be the actual modular prior implied by using ρ∗i and qi = 1. We can correct for the bias
+
+Koivisto: KL from uniform = 2.82
+
+0
+x 10
+
+where Ui is the set of predecessors (possible parents) for
+node i in ≺, and Gi is the set of actual parents for node i.
+We say that a graph structure G = (G1 , . . . , Gd ) is consistent with an order (U1 , . . . , Ud ) if Gi ⊆ Ui for all i.
+(In addition we require that G be acyclic, so that ≺ exists.)
+Note that Ui and Gi are not independent. Thus the qi and ρi
+terms can be thought of as factors or constraints, which define the joint prior p(≺, G). This is called a modular prior,
+since it decomposes into a product of local terms. It is important for computational reasons that ρi (Gi ) only give the
+prior weight to sets of parents, and not to their relative order, which is determined by qi (Ui ).
+
+−3
+
+8
+
+−3
+
+Ellis: KL from uniform = 1.03
+
+−4
+
+Modular-Flat: KL from uniform = 0.56
+
+4
+
+0
+6
+
+x 10
+
+0
+1
+
+DAG Index
+
+29,281
+
+Figure 1: Some priors on all 29,281 DAGs on 5 nodes.
+¡ ¢−1
+Koivisto prior means using ρi (Gi ) ∝ d−1
+. Ellis prior
+|Gi |
+means the same ρi , but dividing by the number of consistent orderings for each graph (computed exactly). Modular
+flat means using ρi (Gi ) ∝ 1. This is the closest to uniform
+in terms of KL distance, but will still introduce artifacts. If
+we use ρi (Gi ) ∝ 1 and divide by the number of consistent
+orders. we will get a uniform distribution, but computing
+the number of consistent orderings is #P-hard.
+by using an importance sampling weight given by
+Q ∗
+1
+p∗ (G)
+i ρi (Gi )
+Z
+=P 1Q ∗
+w(G) =
+p(G)
+i ρi (Gi )I(consistent(≺, G))
+≺ Z
+If we set ρ∗i = 1 (the modular flat prior), then this becomes
+w(G)
+
+=
+
+1
+I(consistent(≺,
+G)
+≺
+
+P
+
+Thus this weighting term compensates for overcounting
+certain graphs, and induces a globally uniform prior,
+p(G) ∝ 1. However, computing the denominator (the
+number of orders consistent with a graph) is #P-complete
+[BW91]. Ellis and Wong approximated this sum using
+1
+.
+the sampled orders, w(G) ≈ PS I(consistent
+(≺s ,G))
+s=1
+s
+However, these samples ≺ are drawn from the posterior
+p(≺ |D), rather than the space of all orders, so this is not
+¡ ¢−1
+,
+an unbiased estimate. Also, they used ρi (Gi ) ∝ d−1
+|Gi |
+rather than ρi = 1, which still results in a highly non uniform prior, even after exact reweighting (see Figure 1). In
+contrast, our method can cheaply generate samples from an
+arbitrary prior.
+
+4 Our method
+
+3
+
+One could argue that we should use a uniform over PDAGs,
+but we will often be concerned with learning causal models from
+interventional data, in which case we have to use DAGs.
+
+As mentioned above, our method is to use the MetropolisHastings algorithm with a proposal distribution that is a
+
+EATON & MURPHY
+
+mixture of the standard local proposal, that adds, deletes
+or reverses an edge at random, and a more global proposal
+that uses the output of the DP algorithm:
+½
+qlocal (G0 |G) w.p. β
+0
+q(G |G) =
+qglobal (G0 )
+w.p. 1 − β
+
+Cancer
+Edge Marginal SAD
+
+104
+
+3
+Gibbs
+Local
+Global
+Hybrid
+Order
+Raw DP
+
+2
+
+1
+
+0
+
+qlocal (G0 |G) =
+
+1
+I(G0 ∈ nbd(G))
+|nbd(G)|
+
+0
+
+20
+
+40
+
+60
+
+80
+
+100
+
+120
+
+140
+
+1
+Local
+Global
+Hybrid
+Order
+Raw DP
+
+0.8
+
+Edge Marginal SAD
+
+The local proposal chooses uniformly at random from all
+legal single edge additions, deletions and reversals. Denote the set of acyclic neighbors generated in this way by
+nbd(G). We have
+
+0.6
+
+0.4
+
+0.2
+
+The global proposal includes an edge between i and j with
+probability pij +pji ≤ 1, where pij = p(Gij |D) are the exact marginal posteriors computed using DP (using a modular prior). If this edge is included, it is oriented as i→j w.p.
+qij = pij /(pij + pji ), otherwise it is oriented as i←j. After sampling each edge pair, we check if the resulting graph
+is acyclic. (The acyclicity check can be done in amortized
+constant time using the ancestor matrix trick [GC03].) This
+leads to
+
+
+YY
+0
+0
+qglobal (G0 ) = 
+(pij + pji )I(Gij +Gji >0) 
+i j>i
+
+
+
+Y I(G0 =1)
+×  qij ij  I(acyclic(G0 ))
+ij
+
+We can then accept the proposed move with probability
+¶
+µ
+p(D|G0 )p(G0 ) q(G|G0 )
+α = min 1,
+p(D|G)p(G) q(G0 |G)
+If we set β = 1, we get the standard local proposal. If
+we set β = 0, we get a purely global proposal. Note
+that qglobal (G0 ) is independent of G, so this is an independence sampler. We tried various other settings of β (including adapting it according to a fixed schedule), which
+results in performance somewhere in between purely local
+and purely global.
+For β > 0 the chain is aperiodic and irreducible, since the
+local proposal has both properties [RC04, MY95]. However, if β = 0, the chain is not necessarily aperiodic and irreducibile, since the global proposal may set pij = pji = 0.
+This problem is easily solved by truncating edge marginals
+which are too close to 0 or 1, and making the appropriate
+changes to qglobal (G0 ). Specifically, any pij < C is set to
+C, while pij > 1 − C are set to 1 − C. We used C = 1e − 4
+in our experiments.
+In this paper, we assume all the conditional probability
+distributions (CPDs) are multinomials (tables), p(Xi =
+k|XGi = j, θ) = θijk . We make the usual assumptions of parameter independence and modularity [HGC95],
+
+0
+0
+
+20
+
+40
+
+60
+
+80
+
+100
+
+120
+
+140
+
+Time (seconds)
+
+Figure 2: SAD error vs running time on the 5 node Cancer
+network. The Gibbs sampler performs poorly, therefore we
+replot the graph with it removed (bottom figure). Note that
+140 seconds corresponds to about 130,000 samples from
+the hybrid sampler. The error bars (representing one standard deviation across 25 chains starting in different conditions) are initially large, because the chains have not burned
+in. This figure is best viewed in colour.
+and we use uniform conjugate Dirichlet priors θij ∼
+Dir(αi , . . . , αi ), where we set αi = 1/(qi ri ), where qi
+is the number of states for node Xi and ri is the number
+of states for the parents XGi . The resulting marginal likelihood,
+Y
+p(D|G) =
+p(Xi |XGi )
+i
+
+=
+
+YZ Y
+[ p(Xn,i |Xn,Gi , θi )]p(θi |Gi )dθi
+i
+
+n
+
+can be computed in closed form, and is called the BDeu
+(Bayesian Dirichlet likelihood equivalent uniform) score
+[HGC95]. We use AD trees [ML98] to compute these terms
+efficiently. Note that our technique can easily be extended
+to other CPDs, provided p(Xi |XGi ) can be computed or
+approximated (e.g., using BIC).
+
+5 Experimental results
+5.1 Speed of convergence to the exact posterior
+marginals
+In this section we compare the accuracy of different algorithms in estimating p(Gij = 1|D) as a function of
+their running time, where we use a uniform graph prior
+p(G) ∝ 1. (Obviously we could use any other prior or
+feature of interest in order to assess convergence speed, but
+
+EATON & MURPHY
+Coronary
+3.5
+Gibbs
+Local
+Global
+Order
+Hybrid
+Raw DP
+
+Edge Marginal SAD
+
+3
+2.5
+2
+1.5
+1
+0.5
+0
+0
+
+50
+
+100
+
+150
+
+200
+
+Time (seconds)
+
+Figure 3: Similar to Figure 2, but on the 6 node CHD
+dataset.
+
+AUC
+
+0.85
+
+0.7
+Order
+
+Global
+
+qt (Gij |D) is the approximation based on samples up to
+time t. We compare 5 MCMC methods: Gibbs sampling
+on elements of the adjacency matrix, purely local moves
+through DAG space (β = 1), purely global moves through
+DAG space using the DP proposal (β = 0, which is an independence sampler), a mixture of local and global (probability of local move is β = 0.1), and an MCMC order sampler
+[FK03] with Ellis’ importance weighting term.4 (In the figures, these are called as follows: β = 1 is “Local”, β = 0
+is “Global”, β = 0.1 is “Hybrid”.) In our implementation
+of the order sampler, we took care to implement the various caching schemes described in [FK03], to ensure a fair
+comparison. However, we did not use the sparse candidate
+algorithm or any other form of pruning.
+For our first experiment, we sampled data from the 5 node
+“cancer network” of [FMR98] and then ran the different
+methods. In Figure 2, we see that the DP+MCMC samplers
+outperform the other samplers. We also consider the wellstudied coronary heart disease (CHD) dataset [Edw00].
+This consists of about 200 cases of 6 binary variables,
+encoding such things as “is your blood pressure high?”,
+“do you smoke?”, etc. In Figure 3, we see again that our
+DP+MCMC method is the fastest and the most accurate.
+
+Edge Features
+1
+
+Local
+
+105
+
+Hybrid
+
+5.2 Structural discovery
+Figure 4: Area under the ROC curve (averaged over 10
+MCMC runs) for detecting edge presence for different
+methods on the d = 20 node child network with n = 10k
+samples using 200 seconds of compute time. The AUC of
+the exact DP algorithm is indistinguishable from the global
+method and hence is not shown.
+Path Features
+1
+
+AUC
+
+0.9
+
+0.8
+
+0.7
+Local
+
+Order
+
+Global
+
+Hybrid
+
+Figure 5: Area under the ROC curve (averaged over 10
+MCMC runs) for detecting path presence for different
+methods on the d = 20 node child network with n = 10k
+samples using 200 seconds of compute time.
+this seemed like a natural choice, and enables us to compare to the raw output of DP.) Specifically, we
+Pcompute the
+sum of absolute differences (SAD), St =
+ij |p(Gij =
+1|D) − qt (Gij = 1|D)|, versus running time t, where
+p(Gij = 1|D) are the exact posterior edge marginals (computed using brute force enumeration over all DAGs) and
+
+In order to assess the scalability of our algorithm, we next
+looked at data generated from the 20 node “child” network
+used in [TBA06]. We sampled n = 10, 000 records using
+random multinomial CPDs sampled from a Dirichlet, with
+hyper-parameters chosen by the method of [CM02] (which
+ensures strong dependencies between the nodes). We then
+compute the posterior over two kinds of features: edge features, fij = 1 if there is an edge between i and j (in either orientation), and path features, fij = 1 if there is a
+directed path from i to j. (Note that the latter cannot be
+computed by DP; to compute it using the order sampler
+of [FK03] requires sampling DAGs given an order.) We
+can no longer compare the estimated posteriors to the exact
+posteriors (since d = 20), but we can compare them to the
+ground truth values from the generating network. Following [Hus03, Koi06], we threshold these posterior features
+at different levels, to trade off sensitivity and specifity. We
+summarize the resulting ROC curves in a single number,
+namely area under the curve (AUC).
+The results for edge features are shown in Figure 4. We
+see that the DP+MCMC methods do very well at recovering the true undirected skeleton of the graph, obtaining
+an AUC of 1.0 (same as the exact DP method). We see that
+our DP+MCMC samplers are significantly better (at the 5%
+level) than the DAG sampler and the order sampler. The or4
+
+Without the reweighting term, the MCMC order sampler
+[FK03] would give the same results (as measured by SAD) as
+the DP method [KS04, Koi06], only much, much slower.
+
+106
+
+EATON & MURPHY
+Synthetic−15
+0
+−0.05
+
+Adult (US Census)
+
+−0.15
+
+0
+
+Gibbs
+Local
+Global
+Hybrid
+Order
+Optimal Tree
+Optimal Dag
+Raw DP
+
+−0.2
+−0.25
+−0.3
+
+−0.02
+
+−0.35
+0
+x 10
+
+50
+
+100
+
+150
+
+200
+
+−3
+
+Log(pred. lik)
+
+−5
+
+Log(pred. lik.)
+
+Log(pred. lik)
+
+−0.1
+
+−6
+
+−0.04
+
+−0.06
+Gibbs
+Local
+Global
+Hybrid
+Order
+Optimal Dag
+Raw DP
+
+−0.08
+
+−0.1
+
+−7
+Global
+Hybrid
+Order
+Optimal Dag
+Raw DP
+
+−8
+−9
+
+−0.12
+0
+
+50
+
+100
+
+150
+
+200
+
+Time (seconds)
+
+−10
+0
+
+50
+
+100
+
+150
+
+200
+
+Time (seconds)
+
+Figure 6: Test set likelihood vs training time on the synthetic d = 15, N = 1500 dataset. The bottom figure
+presents the “good” algorithms in higher detail by removing the poor performers. Results for the factored model
+are an order of magnitude worse and therefore not plotted.
+Note that the DP algorithm actually took over two hours to
+compute.
+
+Figure 7: Test set log likelihood vs training time for the
+d = 14,N = 49k “Adult” dataset. DP algorithm actually took over 350 hours to compute. The factored and
+maximum likelihood tree results are omitted since they are
+many orders of magnitude worse and ruin the graph’s vertical scale.
+
+der sampler does not do as well as the others, for the same
+amount of run time, since each sample is more expensive
+to generate.
+Sachs (T−cell signalling pathway)
+0
+−0.1
+−0.2
+
+Log(pred. lik.)
+
+The results for path features are shown in Figure 5. Again
+we see that the DP+MCMC method (using either β = 0
+or β = 0.1) yields statistically significant improvement (at
+the 5% level) in the AUC score over other MCMC methods
+on this much harder problem.
+5.3 Accuracy of predictive density
+
+where m is the size of the test set and D is the training set.
+This is the ultimate objective test of any density estimation
+technique, and can be applied to any dataset, even if the
+“ground truth” structure is not known. The hypothesis that
+we wish to test is that methods which estimate the posterior
+p(G|D) more accurately will also perform better in terms
+of prediction. We test this hypothesis on three datasets:
+synthetic data from a 15-node network, the “adult” US census dataset from the UC Irvine repository and a biological dataset related to the human T-cell signalling pathway
+[SPP+ 05].
+In addition to DP and the MCMC methods mentioned
+
+−0.5
+
+−0.7
+0
+
+50
+
+100
+
+150
+
+200
+
+100
+
+150
+
+200
+
+Global
+Hybrid
+Order
+Raw DP
+
+−0.24
+
+Log(pred. lik.)
+
+m
+
+1 X
+log p(xi |D)
+m i=1
+
+Gibbs
+Local
+Global
+Hybrid
+Order
+Optimal Dag
+Raw DP
+
+−0.4
+
+−0.6
+
+In this section, we compare the different methods in terms
+of the log loss on a test set:
+` = E log p(x|D) ≈
+
+−0.3
+
+−0.25
+
+−0.26
+
+−0.27
+0
+
+50
+
+Time (seconds)
+
+Figure 8: Test set log likelihood vs training time on the
+d = 11,N = 5400 T-cell data. DP algorithm actually took
+over 90 hours to compute. The factored model and optimal
+tree plugins are again omitted for clarity. The bottom part
+of the figure is a zoom in of the best methods.
+
+EATON & MURPHY
+above, we also measured the performance of plug-in estimators consisting of: a fully factorized model (the disconnected graph), the maximum likelihood tree [CL68], and
+finally the MAP-optimal DAG gotten from the algorithm
+of [SM06]. We measure the likelihood of the test data as
+a function of training time, `(t). That is, to compute each
+P St
+p(xi |Gs ), where St
+term in ` we use p(xi |D) = S1t s=1
+is the number of samples that can be computed in t seconds.
+Thus a method that mixes faster should produce better estimates. Note that, in the Dirichlet-multinomial case, we
+can quickly compute p(x|Gs ) by plugging in the posterior
+mean parameters:
+Y I(xi =j,xG =k)
+i
+θijks
+p(x|Gs ) =
+ijk
+
+where θijks = E[θijk |D, Gs ]. If we have missing data, we
+can use standard Bayes net inference algorithms to compute p(x|Gs , θ).
+In contrast, for DP, the “training” cost is computing the
+normalizing constant p(D), and the test time cost involves
+computing p(xi |D) = p(xi , D)/p(D) for each test case xi
+separately. Hence we must run the DP algorithm m times to
+compute ` (each time computing the marginal likelihoods
+for all families on the augmented data set xi , D). DP is
+thus similar to a non-parametric method in that it must keep
+around all the training data, and is expensive to apply at
+run-time. This method becomes even slower if x is missing
+components: suppose k binary features are missing, then
+we have to call the algorithm 2k times to compute p(x|D).
+For the first experiment, we generated several random networks, sampling the nodes’ arities u.a.r. from between
+2-4 and the parameters from a Dirichlet. Next, we sampled 100d records (where d is the number of nodes) and
+performed 10-fold cross-validation. Here, we just show
+results for a 15-node network, which is representative of
+the other synthetic cases. Figure 6 plots the mean predictive likelihood across cross-validation folds and 5 independent sampler runs against training time. On the zoomed
+plot at the bottom, we can see that the hybrid and global
+MCMC methods are significantly better than order sampling. Furthermore, they seem to be better than exact DP,
+which is perhaps being hurt by its modular prior. All
+of these Bayes model averaging (BMA) methods (except
+Gibbs) significantly beat the plugin estimators, including
+the MAP-optimal structure.
+In the next experiment we used the “adult” US census
+dataset, which consists of 49,000 records with 14 attributes,
+such as “education”, “age”, etc. We use the discretized version of this data as previously used in [MW03]. The average arity of the variables is 7.7. The results are shown in
+Figure 7. The most accurate method is DP, since it does exact BMA (although using the modular prior), but it is also
+the slowest. Our DP+MCMC method (with β = 0.1) provides a good approximation to this at a fraction of the cost
+
+107
+Adult - Training set likelihood trajectories
+
+−3.7
+
+x 10
+
+5
+
+Gibbs
+−3.7
+
+−3.8
+−3.9
+−3.7
+
+−3.7
+
+0
+x 10
+
+50
+5
+
+100
+Local
+
+150
+
+200
+
+−3.9
+−3.7
+
+Order
+
+0
+x 10
+
+50
+
+150
+
+200
+
+50
+100
+150
+Order & Global
+
+200
+
+5
+
+100
+Global
+
+−3.8
+
+0
+x 10
+
+50
+5
+
+100
+Hybrid
+
+150
+
+200
+
+−3.9
+−3.72
+
+−3.8
+−3.9
+
+5
+
+−3.8
+
+−3.8
+−3.9
+
+x 10
+
+0
+x 10
+
+5
+
+−3.725
+
+0
+
+50
+
+100
+
+150
+
+200
+
+−3.73
+
+0
+
+5
+
+10
+
+15
+
+20
+
+25
+
+Figure 9: 4 traceplots of training set likelihood for each
+sampler on the adult dataset, starting from different values.
+The bottom-right figure combines runs from the order and
+global samplers and shows the behaviour of the chains in
+the first 25 seconds.
+(it took over 350 hours to compute the predictive likelihood using the DP algorithm). The other MH methods also
+do well, while Gibbs sampling does less well. The plugin DAG is not as good as BMA, and the plug-in Chow-Liu
+tree and plug-in factored model do so poorly on this dataset
+that their results are not shown (lest they distort the scale).
+(These results are averaged over 10 MCMC runs and over
+10 cross validation folds.)
+Finally, we applied the method to a biological data set
+[SPP+ 05] which consists of 11 protein concentration levels
+measured (using flow cytometry) under 6 different interventions, plus 3 unperturbed measurements. 600 measurements are taken in each condition yielding a total dataset of
+N = 5400 records. Sachs et al. discretized the data into
+3 states, and we used this version of the data. We modified the marginal likelihood computations to take into account the interventional nature of the data as in [CY99].
+The results are shown in Figure 8. Here we see that DP
+gives the best result, but takes 90 hours. The global, hybrid
+and order samplers all do almost at well at a fraction of the
+cost. The local proposal and Gibbs sampling perform about
+equally. All methods that perform BMA beat the optimal
+plugin.
+5.4 Convergence diagonstics
+In Figure 9 we show a traceplot of the training set marginal likelihood of the different methods on the Adult dataset.
+(Other datasets give similar results.) We see that Gibbs is
+“sticky”, that the local proposal explores a lot of poor configurations, but that both the global and order sampler do
+well. In the bottom right we zoom in on the plots to illustrate that the global sampler is lower variance and higher
+quality than the order sampler. Although the difference
+
+108
+
+EATON & MURPHY
+
+does not seem that large, the other results in this paper
+suggest that the DP proposal does in fact outperform the
+order sampler.
+
+6 Summary and future work
+We have proposed a simple method for improving the convergence speed of MCMC samplers in the space of DAG
+models. Alternatively, our method may be seen as a way of
+overcoming some of the limitations of the DP algorithm of
+Koivisto and Sood [KS04, Koi06].
+The logical next step is to attempt to scale the method beyond its current limit of 22 nodes, imposed by the exponential time and space complexity of the underlying DP
+algorithm. One way forward might be to sample partitions
+(layers) of the variables in a similar fashion to [MKTG06],
+but using our DP-based sampler rather than Gibbs sampling
+to explore the resulting partitioned spaces. Not only has the
+DP-based sampler been demonstrated to outperform Gibbs,
+but it is able to exploit layering very efficiently. In particular, if there are d nodes, but the largest layer only has size
+m, then the DP algorithm only takes O(d2m ) time. Using
+this trick, [KS04] was able to use DP to compute exact edge
+feature posteriors for d = 100 nodes (using a manual partition). In future work, we will try to simultaneously sample
+partitions and graphs given partitions.
+
+References
+[BW91]G. Brightwell and P. Winkler. Computing linear extensions is #P-complete. In STOC, 1991.
+[CL68]C. K. Chow and C. N. Liu. Approximating
+discrete probability distributions with dependence
+trees. IEEE Trans. on Info. Theory, 14:462–67,
+1968.
+[CM02]D. Chickering and C. Meek. Finding Optimal
+Bayesian Networks. In UAI, 2002.
+[CY99]G. Cooper and C. Yoo. Causal discovery from
+a mixture of experimental and observational data.
+In UAI, 1999.
+[DC04]D. Dash and G. Cooper. Model Averaging for
+Prediction with Discrete Bayesian Networks. J. of
+Machine Learning Research, 5:1177–1203, 2004.
+[dFHSJR01]N. de Freitas, P. Hjen-Srensen, M. I. Jordan, and S. Russell. Variational MCMC. In UAI,
+2001.
+[Edw00]D. Edwards. Introduction to graphical modelling. Springer, 2000. 2nd edition.
+[EW06]B. Ellis and W. Wong. Sampling Bayesian
+Networks quickly. In Interface, 2006.
+[FK03]N. Friedman and D. Koller. Being Bayesian
+about Network Structure: A Bayesian Approach to
+Structure Discovery in Bayesian Networks. Machine Learning, 50:95–126, 2003.
+[FMR98]N. Friedman, K. Murphy, and S. Russell.
+Learning the structure of dynamic probabilistic networks. In UAI, 1998.
+[GC03]P. Giudici and R. Castelo. Improving Markov
+chain Monte Carlo model search for data mining.
+
+Machine Learning, 50(1–2):127 – 158, January
+2003.
+[HGC95]D. Heckerman, D. Geiger, and M. Chickering. Learning Bayesian networks: the combination
+of knowledge and statistical data. Machine Learning, 20(3):197–243, 1995.
+[Hus03]D. Husmeier. Sensitivity and specificity of
+inferring genetic regulatory interactions from microarray experiments with dynamic Bayesian networks. Bioinformatics, 19:2271–2282, 2003.
+[HZ05]K.-B. Hwang and B.-T. Zhang. Bayesian
+model averaging of Bayesian network classifiers
+over multiple node-orders: application to sparse
+datasets. IEEE Trans. on Systems, Man and Cybernetics, 35(6):1302–1310, 2005.
+[Koi06]M. Koivisto. Advances in exact Bayesian
+structure discovery in Bayesian networks. In UAI,
+2006.
+[KS04]M. Koivisto and K. Sood. Exact Bayesian
+structure discovery in Bayesian networks. J. of Machine Learning Research, 5:549–573, 2004.
+[MGR95]D. Madigan, J. Gavrin, and A. Raftery. Enhancing the predictive performance of Bayesian
+graphical models. Communications in Statistics Theory and Methods, 24:2271–2292, 1995.
+[MJ00]M. Meila and M. I. Jordan. Learning with mixtures of trees. J. of Machine Learning Research,
+1:1–48, 2000.
+[MJ06]M. Meila and T. Jaakkola. Tractable Bayesian
+learning of tree belief networks. Statistics and
+Computing, 16:77–92, 2006.
+[MKTG06]V. Mansinghka, C. Kemp, J. Tenenbaum,
+and T. Griffiths. Structured priors for structure
+learning. In UAI, 2006.
+[ML98]Andrew W. Moore and Mary S. Lee. Cached
+sufficient statistics for efficient machine learning
+with large datasets. J. of AI Research, 8:67–91,
+1998.
+[MR94]D. Madigan and A. Raftery. Model selection
+and accounting for model uncertainty in graphical
+models using Occam’s window. J. of the Am. Stat.
+Assoc., 89:1535–1546, 1994.
+[MW03]Andrew Moore and Weng-Keen Wong. Optimal reinsertion: A new search operator for accelerated and more accurate bayesian network structure
+learning. In Intl. Conf. on Machine Learning, pages
+552–559, 2003.
+[MY95]D. Madigan and J. York. Bayesian graphical
+models for discrete data. Intl. Statistical Review,
+63:215–232, 1995.
+[RC04]C. Robert and G. Casella. Monte Carlo Statisical Methods. Springer, 2004. 2nd edition.
+[Rob73]R. W. Robinson. Counting labeled acyclic digraphs. In F. Harary, editor, New Directions in the
+Theory of Graphs, pages 239–273. Academic Press,
+1973.
+[SM06]T. Silander and P. Myllmaki. A simple approach for finding the globally optimal Bayesian
+network structure. In UAI, 2006.
+[SPP+ 05]K. Sachs, O. Perez, D. Pe’er, D. Lauffenburger, and G. Nolan. Causal protein-signaling networks derived from multiparameter single-cell data.
+Science, 308, 2005.
+[TBA06]I. Tsamardinos, L. Brown, and C. Aliferis.
+The max-min hill-climbing bayesian network structure learning algorithm. Machine learning, 2006.
+
+

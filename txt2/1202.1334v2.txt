@@ -1,0 +1,1185 @@
+2012 by the authors.
+
+natural application is the design of clinical trials in the medical domain. In this case, the actions are the treatment options being compared, the context is the patient’s medical
+record and reward is based on whether the recommended
+treatment is a success or not.
+Our goal in this setting is to compete with a particular set
+of policies, which are deterministic rules specifying which
+action to choose in each context. We note that this setting includes as special cases the classical K-armed bandit problem (Lai and Robbins, 1985) and associative reinforcement learning with linear reward functions (Auer,
+2003; Chu et al., 2011).
+The performance of algorithms in this setting is typically
+measured by the regret, which is the difference between the
+cumulative reward of the best policy and the algorithm. For
+the setting with an arbitrary
+set of policies, the achieved rep
+gret guarantee is O( KT ln(N/δ)) where K is the number of actions, T is the number of rounds, N is the number of policies and δ is the probability of failing to achieve
+the regret (Beygelzimer et al., 2010; Dudı́k et al., 2011).
+While this bound has a desirably small dependence on the
+parameters T, N , the scaling with respect to K is often too
+big to be meaningful. For instance, the number of ads under consideration can be huge, and a rapid scaling with the
+number of alternatives in a clinical trial is clearly undesirable. Unfortunately, the dependence on K is unavoidable
+as proved by existing lower bounds (Auer et al., 2003).
+Large literature on “linear bandits” manages to avoid this
+dependence on K by making additional assumptions. For
+example, Auer (2003) and Chu et al. (2011) consider the
+setting where the context x consists of feature vectors xa ∈
+Rd describing each action, and the expected reward function (given a context x and action a) has the form wT xa
+for some fixed vector w ∈ Rd . Dani et al. (2008) consider
+a continuous action space with a ∈ Rd , without contexts,
+with a linear expected reward wT a, which is generalized
+by Filippi et al. (2010) to σ(wT a) with a known Lipschitzcontinuous link function σ. A striking aspect of the linear and generalized linear setting is that while the regret
+
+Contextual Bandit Learning with Predictable Rewards
+
+grows rapidly with the dimension d, it grows either only
+gently with the number of actions K (poly-logarithmic
+for Auer, 2003), or is independent of K (Dani et al., 2008;
+Filippi et al., 2010). In this paper, we investigate whether
+a weaker dependence on the number of actions is possible
+in more general settings. Specifically, we omit the linearity
+assumption while keeping the “realizability”—i.e., we still
+assume that the expected reward can be perfectly modeled,
+but do not require this to be a linear or a generalized linear
+model.
+We consider an arbitrary class F of functions f : (X , A) →
+[0, 1] that map a context and an action to a real number. We
+interpret f (x, a) as a predicted expected reward of the action a on context x and refer to functions in F as regressors. For example, in display advertising, the context is
+a vector of features derived from the text and metadata of
+the webpage and information about the user. The action
+corresponds to the ad, also described by a set of features.
+Additional features might be used to model interaction between the ad and the context. A typical regressor for this
+problem is a generalized linear model with a logistic link,
+modeling the probability of a click.
+The set of regressors F induces a natural set of policies
+ΠF containing maps πf : X → A defined as πf (x) =
+argmaxa f (x, a). We make the assumption that the expected reward for a context x and action a equals f ∗ (x, a)
+for some unknown function f ∗ ∈ F . The question we address in this paper is: Does this realizability assumption
+allow us to learn faster?
+We show that for an arbitrary function
+√ class, the answer
+to the above question is “no”. The K dependence in regret is in general unavoidable even with the realizability
+assumption. Thus, the structure of linearity or controlled
+non-linearity was quite important in the past works.
+Given this answer, a natural question is whether it is at least
+possible to do better in various special cases. To answer
+this, we create a new natural algorithm, Regressor Elimination (RE), which takes advantage of realizability. Structurally, the algorithm is similar to Policy Elimination (PE)
+of Dudı́k et al. (2011), designed for the agnostic case (i.e,
+the general case without realizability assumption). While
+PE proceeds by eliminating poorly performing policies,
+RE proceeds by eliminating poorly predicting regressors.
+However, realizability assumption allows much more aggressive elimination strategy, different from the strategy
+used in PE. The analysis of this elimination strategy is the
+key technical contribution of this paper.
+Thepgeneral regret guarantee for Regressor Elimination is
+O( KT ln(N T /δ)), similar to the agnostic case. However, we also show that for all sets of policies Π there exists
+a set of regressors F such that Π = ΠF and the regret of
+Regressor Elimination is O(ln(N/δ)), i.e., independent of
+the number of rounds and actions. At the first sight, this
+
+seems to contradict our worst-case lower bound. This apparent paradox is due to the fact that the same set of policies
+can be generated by two very different sets of regressors.
+Some regressor sets allow better discrimination of the true
+reward function, whereas some regressor sets will lead to
+the worst-case guarantee.
+The remainder of the paper is organized as follows. In
+the next section we formalize our setting and assumptions.
+Section 3 provides our algorithm which is analyzed in Section 4. In Section 5 we present the worst-case lower bound,
+and in Section 6, we show an improved dependence on
+K in favorable cases. Our algorithm assumes the exact
+knowledge of the distribution over contexts (but not over
+rewards). In Section 7 we sketch how this assumption can
+be removed. Another major assumption is the finiteness of
+the set of regressors F . This assumption is more difficult
+to remove, as we discuss in Section 8.
+
+2 Problem Setup
+We assume that the interaction between the learner and nature happens over T rounds. At each round t, nature picks
+a context xt ∈ X and a reward function rt : A → [0, 1]
+sampled i.i.d. in each round, according to a fixed distribution D(x, r). We assume that D(x) is known (this assumption is removed in Section 7), but D(r|x) is unknown. The
+learner observes xt , picks an action at ∈ A, and observes
+the reward for the action rt (at ). We are given a function
+class F : X × A → [0, 1] with |F | = N , where |F | is
+the cardinality of F . We assume that F contains a perfect
+predictor of the expected reward:
+Assumption 1 (Realizability). There exists a function f ∗ ∈
+F such that Er|x [r(a)] = f ∗ (x, a) for all x ∈ X , a ∈ A.
+We recall as before that the regressor class F induces the
+policy class ΠF containing maps πf : X → A defined by
+f ∈ F as πf (x) = argmaxa f (x, a). The performance of
+an algorithm is measured by its expected regret relative to
+the best fixed policy:
+regretT = sup
+
+T h
+i
+X
+
+f ∗ xt , πf (xt ) − f ∗ (xt , at ) .
+
+πf ∈ΠF t=1
+
+By definition of πf , this is equivalent to
+regretT =
+
+T h
+i
+X
+
+f ∗ xt , πf ∗ (xt ) − f ∗ (xt , at ) .
+t=1
+
+3 Algorithm
+Our algorithm, Regressor Elimination, maintains a set of
+regressors that accurately predict the observed rewards. In
+each round, it chooses an action that sufficiently explores
+
+Agarwal, Dudı́k, Kale, Langford and Schapire
+
+among the actions represented in the current set of regressors (Steps 1–2). After observing the reward (Step 3), the
+inaccurate regressors are eliminated (Step 4).
+Sufficient exploration is achieved by solving the convex optimization problem in Step 1. We construct a distribution
+Pt over current regressors, and then act by first sampling
+a regressor f ∼ Pt and then choosing an action according to πf . Similarly to the Policy Elimination algorithm
+of Dudı́k et al. (2011), we seek a distribution Pt such that
+the inverse probability of choosing an action that agrees
+with any policy in the current set is in expectation bounded
+from above. Informally, this guarantees that actions of any
+of the current policies are chosen with sufficient probabilities. Using this construction we relate the accuracy of regressors to the regret of the algorithm (Lemma 4.3).
+A priori, it is not clear whether the constraint (3.1) is even
+feasible. We prove feasibility by a similar argument as
+in Dudı́k et al. (2011) (see Lemma A.1 in Appendix A).
+Compared with Dudı́k et al. (2011) we are able to obtain
+tighter constraints by doing a more careful analysis.
+Our elimination step (Step 4) is significantly tighter than a
+similar step in Dudı́k et al. (2011): we eliminate regressors
+according to a very strict O(1/t) bound on the suboptimality of the least squares error. Under the realizability assumption, this stringent constraint will not discard the optimal regressor accidentally, as we show in the next section.
+This is the key novel technical contribution of this work.
+Replacing D(x) in the Regressor Elimination algorithm
+with the empirical distribution over observed contexts is
+straightforward, as was done in Dudı́k et al. (2011), and is
+discussed further in Section 7.
+
+Algorithm 1 Regressor Elimination
+Input:
+a set of reward predictors F = {f : (X , A) → [0, 1]}
+distribution D over contexts, confidence parameter δ.
+Notation:
+πf (x) := argmaxa′ f (x, a′ ).
+Pt
+R̂t (f ) := 1t t′ =1 (f (xt′ , at′ ) − rt′ (at′ ))2 .
+For F ′ ⊆ F , define
+A(F ′ , x) := {a ∈ A : πf (x) = a for some f ∈ F ′ }
+√
+µ := min{1/2K, 1/ T }.
+For a distribution P on F ′ ⊆ F , define conditional distribution P ′ (·|x) on A as:
+w.p. (1 − µ), sample f ∼ P and return πf (x), and
+w.p. µ, return a uniform random a ∈ A(F ′ , x).
+δt = δ/2N t3 log2 (t), for t = 1, 2, . . . , T .
+Algorithm:
+F0 ← F
+For t = 1, 2, . . . , T :
+1. Find distribution Pt on Ft−1 such that
+
+
+
+
+1
+∀f ∈ Ft−1 : E ′
+≤ E |A(Ft−1 , x)| (3.1)
+x Pt (πf (x)|x)
+x
+2. Observe xt and sample action at from Pt′ (·|xt ).
+3. Observe rt (at ).
+4. Set
+
+
+18 ln(1/δt )
+Ft = f ∈ Ft−1 : R̂t (f ) < ′min R̂t (f ′ ) +
+f ∈Ft−1
+t
+
+4 Regret Analysis
+Here we prove an upper bound on the regret of Regressor
+Elimination. The proved bound is no better than the one for
+existing agnostic algorithms. This is necessary, as we will
+see in Section 5, where we prove a matching lower bound.
+Theorem 4.1. For all sets of regressors F with |F | = N
+and all distributions D(x, r), with probability
+1 − δ, the
+p
+regret of Regressor Elimination is O( KT ln(N T /δ)).
+
+Proof. By Lemma 4.1 (proved below), in round t if we
+sample an action by sampling f frompPt and choosing
+πf (xt ), then the expected regret is O( K ln(N T /δ)/t)
+with probability at least 1 − δ/2t2 . The excess regret for sampling a uniform random action is at most
+Summing up over all the
+µ ≤ √1T per round.
+T rounds and taking
+a
+union
+bound,
+the total exp
+
+pected regret is O KT ln(N T /δ) with probability
+at least 1 − δ. Further, the net regret is a martingale; hence the Azuma-Hoeffding inequality with range
+[0, 1] applies. So with probability at least 1 − δ we
+
+p
+p
+
+have a regret of O KT ln(N T /δ) + T ln(1/δ) =
+p
+
+O KT ln(N T /δ) .
+
+Lemma 4.1. With probability at least 1 − δt N t log2 (t) ≥
+1 − δ/2t2 , we have:
+1. f ∗ ∈ Ft .
+2. For any f ∈ Ft ,
+E [r(πf (x)) − r(πf ∗ (x))] ≤
+
+x,r
+
+r
+
+200K ln(1/δt )
+.
+t
+
+Proof. Fix an arbitrary function f ∈ F . For every round t,
+define the random variable
+Yt = (f (xt , at ) − rt (at ))2 − (f ∗ (xt , at ) − rt (at ))2 .
+Here, xt is drawn from the unknown data distribution D,
+rt is drawn from the reward distribution conditioned on xt ,
+and at is drawn from Pt′ (which is defined conditioned on
+
+Contextual Bandit Learning with Predictable Rewards
+
+the choice of xt and is independent of rt ). Note that this
+random variable is well-defined for all functions f ∈ F ,
+not just the ones in Ft .
+Let Et [·] and Vart [·] denote the expectation and variance
+conditioned on all the randomness up to round t. Using
+a form of Freedman’s inequality from Bartlett et al. (2008)
+(see Lemma B.1) and noting that Yt ≤ 1, we get that with
+probability at least 1 − δt log2 (t), we have
+t
+X
+
+t′ =1
+
+Et′ [Yt′ ] −
+
+t
+X
+
+Summing up over all t′ ≤ t, and using (4.1) along with
+Jensen’s inequality we get that
+r
+200K ln(1/δt )
+.
+E [r(πf (x)) − r(πf ∗ (x))] ≤
+t
+x,r
+Lemma 4.2. Fix a function f ∈ F . Suppose we sample
+x, r from the data distribution D, and an action a from an
+arbitrary distribution such that r and a are conditionally
+independent given x. Define the random variable
+Y = (f (x, a) − r(a))2 − (f ∗ (x, a) − r(a))2 .
+
+Yt′
+
+t′ =1
+
+Then we have
+
+v
+u t
+uX
+≤ 4t
+Vart′ [Yt′ ] ln(1/δt ) + 2 ln(1/δt ).
+
+
+
+∗
+2
+E [Y ] = E (f (x, a) − f (x, a))
+
+From Lemma 4.2, we see that Vart′ [Yt′ ] ≤ 4 Et′ [Yt′ ] so
+t
+X
+
+t′ =1
+
+Et′ [Yt′ ] −
+
+t
+X
+
+Yt′
+
+Var[Y ] ≤ 4 E [Y ].
+x,r,a
+
+∗
+∗
+− 2ra ) .
+Y = (fxa − fxa
+)(fxa + fxa
+
+∗
+∗
+E [Y ] = E [(fxa − fxa )(fxa + fxa − 2ra )]
+
+x,r,a
+
+qP
+t
+
+x,a
+
+X 2 − Z ≤ 8CX + 2C 2 ⇔ (X − 4C)2 − Z ≤ 18C 2 .
+This gives −Z ≤ 18C 2 . Since Z = t(R̂t (f ) − R̂t (f ∗ )),
+we get that
+
+Furthermore, suppose f is also not eliminated and survives
+in Ft . Then we must have R̂t (f ) − R̂t (f ∗ ) ≤ 18C 2 /t, or
+in other words, Z ≤ 18C 2 . Thus, (X − 4C)2 ≤ 36C 2 ,
+which implies that X 2 ≤ 100C 2 , and hence:
+(4.1)
+
+By Lemma 4.3 and since Pt is measurable with respect to
+the past sigma field up to time t − 1, for all t′ ≤ t we have
+2
+E [r(πf (x)) − r(πf ∗ (x))] ≤ 2K
+
+
+
+,
+
+proving the first part of the lemma. From (4.2), noting that
+∗
+fxa , fxa
+, ra are between 0 and 1, we obtain
+∗ 2
+≤ 4(fxa − fxa
+) ,
+
+yielding the second part of the lemma:
+
+
+∗ 2
+Var[Y ] ≤ E [Y 2 ] ≤ 4 E (fxa − fxa
+)
+x,r,a
+
+and so f ∗ is not eliminated in any elimination step and remains in Ft .
+
+x,r
+
+x,a
+
+∗ 2
+fxa
+)
+
+∗ 2
+∗
+Y 2 ≤ (fxa − fxa
+) (fxa + fxa
+− 2ra )2
+
+18 ln(1/δt )
+t′
+
+Et′ [Yt′ ] ≤ 100 ln(1/δt ).
+
+r|x
+
+
+
+= E (fxa −
+
+18C 2
+.
+t
+
+By a union bound, with probability at least 1 −
+δt N t log2 (t), for all f ∈ F and all rounds t′ ≤ t, we have
+
+t′ =1
+
+x,r,a
+
+∗
+∗
+)(fxa + fxa
+− 2ra )]
+= E E [(fxa − fxa
+x,a r|x
+
+
+
+∗
+∗
+= E (fxa − fxa ) fxa + fxa − 2 E [ra ]
+
+For notational convenience, define X =
+t′ =1 Et′ [Yt′ ],
+p
+Pt
+Z = t′ =1 Yt′ , and C = ln(1/δt ). The above inequality is equivalent to:
+
+t
+X
+
+(4.2)
+
+Hence, we have
+
+t′ =1
+
+R̂t′ (f ∗ ) ≤ R̂t′ (f ) +
+
+x,r,a
+
+Proof. Using shorthands fxa for f (x, a) and ra for r(a),
+we can rearrange the definition of Y as
+
+t′ =1
+
+v
+u t
+uX
+Et′ [Yt′ ] ln(1/δt ) + 2 ln(1/δt ).
+≤ 8t
+
+R̂t (f ∗ ) ≤ R̂t (f ) +
+
+x,a
+
+x,r,a
+
+t′ =1
+
+Et′ [Yt′ ].
+xt′ ,rt′ ,at′
+
+x,r,a
+
+x,r,a
+
+= 4 E [Y ] .
+x,r,a
+
+Next we show how the random variable Y defined in
+Lemma 4.2 relates to the regret in a single round:
+Lemma 4.3. In the setup of Lemma 4.2, assume further
+that the action a is sampled from a conditional distribution
+p(·|x) which satisfies the following constraint, for f ′ = f
+and f ′ = f ∗ :
+
+
+1
+≤ K.
+(4.3)
+E
+x p(πf ′ (x)|x)
+Then we have
+h
+
+i2
+≤ 2K E [Y ].
+E r πf ∗ (x) − r πf (x)
+x,r
+
+x,r,a
+
+Agarwal, Dudı́k, Kale, Langford and Schapire
+
+This lemma is essentially a refined form of theorem 6.1
+in Beygelzimer and Langford (2009) which analyzes the
+regression approach to learning in contextual bandit settings.
+Proof. Throughout, we continue using the shorthand fxa
+for f (x, a). Given a context x, let ã = πf (x) and a∗ =
+πf ∗ (x). Define the random variable
+h
+
+i
+∗
+∗
+∆x = E r πf ∗ (x) − r πf (x) = fxa
+∗ − fxã .
+r|x
+
+Note that ∆x ≥ 0 because f ∗ prefers a∗ over ã for context x. Also we have fxã ≥ fxa∗ since f prefers ã over a∗
+for context x. Thus,
+∗
+∗
+fxã − fxã
++ fxa
+∗ − fxa∗ ≥ ∆x .
+
+(4.4)
+
+As in proof of Lemma 4.2,
+
+
+∗ 2
+E [Y ] = E (fxa − fxa )
+a|x
+
+r,a|x
+
+∗ 2
+∗
+2
+≥ p(ã|x)(fxã −fxã
+) +p(a∗ |x)(fxa
+∗ −fxa∗ )
+
+≥
+
+p(ã|x)p(a∗ |x)
+∆2 .
+p(ã|x) + p(a∗ |x) x
+
+(4.5)
+
+The last inequality follows by first applying the chain
+ax2 + by 2 =
+
+ab(x + y)2 + (ax − by)2
+ab
+≥
+(x + y)2
+a+b
+a+b
+
+(valid for a, b > 0), and then applying inequality (4.4).
+For convenience, define
+Qx =
+
+p(ã|x)p(a∗ |x)
+1
+1
+1
+=
+, i.e.,
++
+.
+p(ã|x) + p(a∗ |x)
+Qx
+p(ã|x) p(a∗ |x)
+
+Now, since p satisfies the constraint (4.3) for f ′ = f and
+f ′ = f ∗ , we conclude that
+
+
+
+
+
+1
+1
+1
++
+≤ 2K . (4.6)
+=
+E
+E
+E
+x p(a∗ |x)
+x p(ã|x)
+x Qx
+
+
+We now have
+
+
+p
+1
+· Qx ∆x
+E[∆x ] = E √
+x
+x
+Qx
+
+
+
+
+1
+2
+≤E
+E Qx ∆x
+x Qx
+x
+2
+
+2
+
+≤ 2K E [Y ] ,
+x,r,a
+
+where the first inequality follows from the CauchySchwarz inequality and the second from the inequalities
+(4.5) and (4.6).
+
+5 Lower bound
+Here we prove a lower bound showing that the realizability
+assumption is not enough in general to eliminate a dependence on the number of actions K. The structure of this
+proof is similar to an earlier lower bound (Auer et al., 2003)
+differing in two ways: it applies to regressors of the sort we
+consider, and we work N , the number of regressors, into
+the lower bound. Since for every policy there exists a regressor with argmax on that regressor realizing the policy,
+this lower bound also applies to policy based algorithms.
+Theorem 5.1. For every N and K such that ln N/ ln K ≤
+T , and every algorithm A, there exists a function class F of
+cardinality at most N and a distribution D(x, r) for which
+the realizability
+assumption holds, but the expected regret
+p
+of A is Ω( KT ln N/ ln K).
+Proof. Instead of directly selecting
+F and D for which the
+p
+expected regret of A is Ω( KT ln N/ ln K), we create a
+distribution over instances
+p (F, D) and show that the expected regret of A is Ω( KT ln N/ ln K) when the expectation is taken also over our choice of the instance. This
+will immediately yield a statement of the theorem, since
+the algorithm must suffer at least this amount of regret on
+one of the instances.
+
+The proof proceeds via a reduction to the construction
+used in the lower bound of Theorem 5.1 of Auer et al.
+(2003). We will use M different contexts for a suitable
+number M . To define the regressor class F , we begin with
+the policy class G consisting of all the K M mappings of
+the form g : X → A, where X = {1, 2, . . . , M } and
+A = {1, 2, . . . , K}. We require M to be the largest integer such that K M ≤ N , i.e., M = ⌊ln N/ ln K⌋. Each
+mapping g ∈ G defines a regressor fg ∈ F as follows:
+(
+1/2 + ǫ if a = g(x)
+fg (x, a) =
+1/2
+otherwise.
+The rewards are generated by picking a function f ∈ F
+uniformly at random at the beginning. Equivalently, we
+choose a mapping g that independently maps each context
+x ∈ X to a random action a ∈ A, and set f = fg . In each
+round t, a context xt is picked uniformly from X . For any
+action a, a reward rt (a) is generated as a {0, 1} Bernoulli
+trial with probability of 1 being equal to f (x, a).
+Now fix a context x ∈ X . We condition on all of the randomness of the algorithm A, the choices of the contexts xt
+for t = 1, 2, . . . , T , and the values of g(x′ ) for x′ 6= x.
+Thus the only randomness left is in the choice of g(x) and
+the realization of the rewards in each round. Let P′ denote
+the reward distribution where the rewards of any action a
+for context x are chosen to be {0, 1} uniformly at random
+(the rewards for other contexts x′ 6= x are still chosen according to f (x′ , a), however), and let E′ denote the expectation under P′ .
+
+Contextual Bandit Learning with Predictable Rewards
+
+Let Tx be the rounds t where the context xt is x. Now fix
+an action a ∈ A and let Sa be a random variable denoting
+the number of rounds t ∈ Tx when A chooses at = a.
+Note that conditioned on g(x) = a, the random variable
+Sa counts the number of rounds in Tx that A chooses the
+optimal action a.
+
+for t = 1, 2, . . . , T by taking an expectation, we get the
+following lower bound on the expected regret of A:
+!
+X
+ǫ2
+3/2
+Ω
+ǫ E[|Tx |] − √ E[|Tx | ]
+.
+K
+x∈X
+
+We use a corollary of Lemma A.1 in Auer et al. (2003):
+
+Note
+ that
+ |Tx | is distributed as Binomial(T, 1/M ). Thus,
+E |Tx | = T /M . Furthermore, by Jensen’s inequality
+
+Corollary 5.1 (Auer et al., 2003). Conditioned on the
+choices of the contexts xt for t = 1, 2, . . . , T , and the values of g(x′ ) for x′ 6= x, we have
+p
+′
+E[Sa |g(x) = a] ≤ E [Sa ] + |Tx | 2ǫ2 E′ [Sa ].
+
+The proof uses the fact that when g(x) = a, rewards chosen
+using P′ are identical to those from the true distribution
+except for the rounds when A chooses the action a.
+Thus, if Nx is a random variable that counts the number
+the rounds in Tx that A chooses the optimal action for x
+(without conditioning on g(x)), we have
+E[Nx ] = E [E[Sg(x) ]]
+g(x)
+q
+h
+i
+≤ E E′ [Sg(x) ] + |Tx | 2ǫ2 E′ [Sg(x) ]
+g(x)
+
+r
+i
+h
+
+
+≤ E E′ [Sg(x) ] + |Tx | 2ǫ2 E E′ [Sg(x) ] ,
+g(x)
+
+g(x)
+
+by Jensen’s inequality. Now note that
+" "
+##
+h
+i
+X
+′
+′
+1{at = g(x)}
+E E [Sg(x) ] = E E
+g(x)
+
+g(x)
+
+=
+
+t∈Tx
+
+X
+
+E [ E [1{at = g(x)}]]
+
+X
+
+E
+
+′
+
+g(x)
+
+t∈Tx
+
+=
+
+t∈Tx
+
+′
+
+
+
+1
+K
+
+
+
+=
+
+|Tx |
+.
+K
+
+The third equality follows because g(x) is independent of
+the choices of the contexts xt for t = 1, 2, . . . , T , and g(x′ )
+for x′ 6= x, and its distribution is uniform on A. Thus
+r
+|Tx |
+|Tx |
++ |Tx | 2ǫ2
+.
+E[Nx ] ≤
+K
+K
+Since in the rounds in Tx \ Nx , the algorithm A suffers an
+expected regret of ǫ, the expected
+regret of A over all the
+
+2
+rounds in Tx is at least Ω ǫ|Tx | − √ǫK |Tx |3/2 . Note that
+
+this lower bound is independent of the choice of g(x′ ) for
+x′ 6= x. Thus, we can remove the conditioning on g(x′ ) for
+x′ 6= x and conclude that only conditioned on the choices
+of the contexts xt for t = 1, 2, . . . , T , the expected regret
+over
+ of the algorithm
+ all the rounds in Tx is at least
+2
+Ω ǫ|Tx | − √ǫK |Tx |3/2 . Summing up over all x, and removing the conditioning on the choices of the contexts xt
+
+q 
+
+
+
+3/2
+≤
+E |Tx |
+E |Tx |3
+1/2
+
+3T (T − 1) T (T − 1)(T − 2)
+T
++
++
+=
+M
+M2
+M3
+√ 3/2
+5T
+,
+≤
+M 3/2
+
+as long as M ≤ T . Plugging these bounds in, the lower
+bound on the expected regret becomes
+
+
+ǫ2
+3/2
+√
+.
+Ω ǫT −
+T
+KM
+p
+
+Choosing ǫ = Θ KM/T , we get that the expected regret of A is lower bounded by
+p
+√
+Ω( KM T ) = Ω( KT ln N/ ln K) .
+
+6 Analysis of nontriviality
+Since the worst-case regret bound of our new algorithm is
+the same as for agnostic algorithms, a skeptic could conclude that there is no power in the realizability assumption.
+Here, we show that in some cases, realizability assumption
+can be very powerful in reducing regret.
+Theorem 6.1. For any algorithm A working with a set of
+policies (rather than regressors), there exists a set of regressors F and a distribution D satisfying the realizability
+assumption
+such that the regret of A using the set ΠF is
+√
+Ω̃( T K ln N ), but the expected regret of Regressor Elimination using F is at most O ln(N/δ) .
+
+Proof. Let F ′ be the set of functions and D the data distribution that achieve the lower bound of Theorem 5.1 for
+the algorithm A. Using Lemma 6.1 (see below), there exists a set of functions F such that ΠF = ΠF ′ and the expected regret
+ of Regressor Elimination using F is at most
+O ln(N/δ) . This set of functions F and distribution D
+satisfy the requirements of the theorem.
+
+Lemma 6.1. For any distribution D and a set of policies Π
+containing the optimal policy, there exists a set of functions
+F satisfying the realizability assumption, such that Π =
+ΠF and the regret
+ of regressor elimination using F is at
+most O ln(N/δ) .
+
+Agarwal, Dudı́k, Kale, Langford and Schapire
+
+Proof. The idea is to build a set of functions F such that
+Π = ΠF , and for the optimal policy π ∗ the corresponding function f ∗ exactly gives the expected rewards for each
+context x and a, but for any other policy π the corresponding function f gives a terrible estimate, allowing regressor
+elimination to eliminate them quickly.
+The construction is as follows. For π ∗ , we define the function f ∗ as f ∗ (x, a) = Ex,r [r(a)]. By optimality of π ∗ ,
+πf ∗ = π ∗ . For every other policy π we construct an f
+such that π = πf but for which f (x, a) is a very bad
+estimate of Ex,r [r(a)] for all actions a. Fix x and consider two cases: the first is that Er|x [r(π(x))] > 0.75
+and the other is that Er|x [r(π(x))] ≤ 0.75. In the first
+case, we let f (x, π(x)) = 0.51. In the second case we let
+f (x, π(x)) = 1.0. Now consider each other action a′ in
+turn. If Er|x [r(a′ )] > 0.25 then we let f (x, a′ ) = 0, and if
+Er|x [r(a′ )] ≤ 0.25 we let f (x, a′ ) = 0.5.
+The regressor elimination algorithm eliminates regressor
+with a too-large squared loss regret. Now fix any policy
+π 6= π ∗ , and the corresponding f , define, as in the proof of
+Lemma 4.1, the random variable
+Yt = (f (xt , at ) − rt (at ))2 − (f ∗ (xt , at ) − rt (at ))2 .
+Note that
+1
+,
+Et [Yt ] = E [(f (xt , at ) − f (xt , at )) ] ≥
+20
+xt ,at
+∗
+
+2
+
+(6.1)
+
+1
+since for all (x, a), (f (x, a)−f ∗ (x, a))2 ≥ 20
+by construction. This shows that the expected regret is significant.
+
+Now suppose f is not eliminated and remains in Ft . Then
+by equation 4.1 we get:
+t
+X
+t
+≤
+Et′ [Yt′ ] ≤ 100 ln(1/δt ).
+20
+′
+t =1
+
+The above bound holds with probability 1 − δt N t log2 (t)
+uniformly for all f ∈ Ft . Using the choice of δt =
+δ/2N t3 log2 (t), we note that the bound fails to hold when
+t > 106 ln(N/δ). Thus, within 106 ln(N/δ) rounds all
+suboptimal regressors are eliminated, and the algorithm
+suffers no regret thereafter. Since the rewards are bounded
+in [0, 1], the total regret in the first 106 ln(N/δ) rounds can
+be at most 106 ln(N/δ), giving us the desired bound.
+
+7 Removing the dependence on D
+While Algorithm 1 is conceptually simple and enjoys nice
+theoretical guarantees, it has a serious drawback that it depends on the distribution D from which the contexts xt ’s
+are drawn in order to specify the constraint (3.1). A similar
+issue was faced in the earlier work of Dudı́k et al. (2011),
+where they replace the expectation under D with a sample
+
+average over the contexts observed. We now discuss a similar modification for Algorithm 1 and give a sketch of the
+regret analysis.
+The key change in Algorithm 1 is to replace the constraint (3.1) with the sample version.
+Let Ht =
+{x1 , x2 , . . . , xt−1 }, and denote by x ∼ Ht the act of selecting a context x from Ht uniformly at random. Now we
+pick a distribution Pt on Ft−1 such that
+∀f ∈ Ft−1 : E
+
+x∼Ht
+
+
+
+
+
+
+1
+≤ E |A(Ft−1 , x)|
+′
+Pt (πf (x)|x)
+x∼Ht
+(7.1)
+
+Since Lemma A.1 applies to any distribution on the contexts, in particular, the uniform distribution on Ht , this
+constraint is still feasible. To justify this sample based
+approximation, we appeal to Theorem 6 of Dudı́k et al.
+(2011) which shows that for any ǫ ∈ (0, 1) and t ≥
+16K ln(8KN/δ), with probability at least 1 − δ
+
+
+1
+E
+′
+x∼D Pt (πf (x)|x)
+
+
+7500
+1
++ 3 K.
+≤ (1 + ǫ) E
+′
+ǫ
+x∼Ht Pt (πf (x)|x)
+Using Equation (7.1), since |A(Ft−1 , xt′ )| ≤ K, we get
+
+
+1
+≤ 7525K,
+E
+′
+x∼D Pt (πf (x)|x)
+using ǫ = 0.999. The remaining analysis of the algorithm remains the same as before, except we now apply
+Lemma 4.3 with a worse constant in the condition (4.3).
+
+8 Conclusion
+The included results gives us a basic understanding of the
+realizable assumption setting: it can, but does not necessarily, improve our ability to learn.
+We did not address computational complexity in this paper. There are some reasons to be hopeful however. Due
+to the structure of the realizability assumption, an eliminated regressor continues to have an increasingly poor regret over time, implying that it may be possible to avoid the
+elimination step and simply restrict the set of regressors we
+care about when constructing a distribution. A basic question then is: can we make the formation of this distribution
+computationally tractable?
+Another question for future research is the extension to infinite function classes. One would expect that this just involves replacing the log cardinality with something like a
+metric entropy or Rademacher complexity of F . This is not
+completely immediate since we are dealing with martingales, and direct application of covering arguments seems
+
+Contextual Bandit Learning with Predictable Rewards
+
+√
+to yield a suboptimal O(1/ t) rate in Lemma 4.1. Extending the variance based bound coming from Freedman’s
+inequality from a single martingale to a supremum over
+function classes would need a Talagrand-style concentration inequality for martingales which is not available in the
+literature to the best of our knowledge. Understanding this
+issue better is an interesting topic for future work.
+
+Proof. Let ∆t−1 refer to the space of all distributions on
+Ft−1 . We observe that ∆t−1 is a convex, compact set. For
+a distribution Q ∈ ∆t−1 , define the conditional distribution
+Q̃(·|x) on A as sample f ∼ Q, and return πf (x). Note
+that Q′ (a|x) = (1 − µ)Q̃(a|x) + µ/Kx, where Kx :=
+|A(Ft−1 , x)| for notational convenience.
+
+Acknowledgements This research was done while AA,
+SK and RES were visiting Yahoo!.
+
+The feasibility of constraint (3.1) can be written as
+
+
+1
+min max E
+≤ E [|A(Ft−1 , x)|] .
+Pt ∈∆t−1 f ∈Ft−1 x Pt′ (πf (x)|x)
+x
+
+References
+
+The LHS is equal to
+
+P. Auer, N. Cesa-Bianchi, Y. Freund, and R. E. Schapire.
+The nonstochastic multiarmed bandit problem. SIAM J.
+Comput., 32(1):48–77, 2003.
+Peter Auer. Using confidence bounds for exploitationexploration trade-offs. J. Mach. Learn. Res., 3:397–422,
+March 2003.
+P. L. Bartlett, V. Dani, T. P. Hayes, S. Kakade, A. Rakhlin,
+and A. Tewari. High-probability regret bounds for bandit
+online linear optimization. In COLT, 2008.
+A. Beygelzimer and J. Langford. The offset tree for learning with partial labels. In KDD, 2009.
+A. Beygelzimer, J. Langford, L. Li, L. Reyzin, and R.E.
+Schapire. An optimal high probability algorithm for
+the contextual bandit problem. CoRR, 2010. URL
+http://arxiv.org/abs/1002.4058.
+W. Chu, L. Li, L. Reyzin, and R. Schapire. Contextual
+bandits with linear payoff functions. In AISTATS, 2011.
+V. Dani, T. P. Hayes, and S. M. Kakade. Stochastic linear
+optimization under bandit feedback. In Proceedings of
+the 21st Annual Conference on Learning Theory, 2008.
+M. Dudı́k, D. Hsu, S. Kale, N. Karampatziakis, J. Langford, L. Reyzin, and T. Zhang. Efficient optimal learning
+for contextual bandits. In UAI, 2011.
+S. Filippi, O. Cappé, A. Garivier, and Cs. Szepesvári. Parametric bandits: The generalized linear case. In NIPS,
+2010.
+T. L. Lai and Herbert Robbins. Asymptotically efficient
+adaptive allocation rules. Advances in Applied Mathematics, 6:4–22, 1985.
+Maurice Sion. On general minimax theorems. Pacific J.
+Math., 8(1):171–176, 1958.
+
+A
+
+Feasibility
+
+Lemma A.1. There exists a distribution Pt on Ft−1 satisfying the constraint (3.1).
+
+min
+
+"
+
+max E
+
+Pt ∈∆t−1 Q∈∆t−1 x
+
+X
+
+f ∈Ft−1
+
+#
+Q(f )
+,
+Pt′ (πf (x)|x)
+
+where we recall that Pt′ is the distribution induced on A by
+Pt as before. The function
+"
+#
+X
+Q(f )
+E
+x
+Pt′ (πf (x)|x)
+f ∈Ft−1
+
+is linear (and hence concave) in Q and convex in Pt . Applying Sion’s Minimax Theorem (stated below as Theorem A.1), we see that the LHS is equal to
+"
+#
+X
+Q(f )
+max
+min E
+Q∈∆t−1 Pt ∈∆t−1 x
+P ′ (πf (x)|x)
+f ∈Ft−1 t
+#
+"
+X
+Q(f )
+≤ max E
+Q∈∆t−1 x
+Q′ (πf (x)|x)
+f ∈Ft−1
+"
+#
+X
+X
+Q(f )
+= max E
+Q∈∆t−1 x
+Q′ (a|x)
+a∈A(Ft−1 ,x) f ∈Ft−1 :πf (x)=a
+"
+#
+X
+Q̃(a|x)
+= max E
+Q∈∆t−1 x
+Q′ (a|x)
+a∈A(Ft−1 ,x)
+"
+"
+##
+X
+1
+µ
+1−
+= max E
+·
+Q∈∆t−1 x 1 − µ
+Kx Q′ (a|x)
+a∈A(Ft−1 ,x)
+ 
+≤ max E Kx .
+Q∈∆t−1 x
+
+The last inequality uses
+PKthe fact that for any distribution
+P on {1, 2, . . . , K}, i=1 [1/P (i)] is minimized when all
+P (i) equal 1/K. Hence the constraint is always feasible.
+Theorem A.1 (see Theorem 3.4 of Sion, 1958). Let U and
+V be compact and convex sets, and φ : U × V → R a
+function which for all v ∈ V is convex and continuous in u
+and for all u ∈ U is concave and continuous in v. Then
+min max φ(u, v) = max min φ(u, v) .
+u∈U v∈V
+
+v∈V u∈U
+
+Agarwal, Dudı́k, Kale, Langford and Schapire
+
+B Freedman-style Inequality
+Lemma B.1 (see Bartlett et al., 2008). Suppose
+X1 , X2 , . . . , XT is a martingalePdifference sequence
+T
+with |Xt | ≤ b for all t. Let V = t=1 Vart [Xt ] be the
+sum of conditional variances. Then for any δ < 1/e2 , with
+probability at least 1 − log2 (T )δ we have
+T
+X
+t=1
+
+p
+Xt ≤ 4 V ln(1/δ) + 2b ln(1/δ).
+
+

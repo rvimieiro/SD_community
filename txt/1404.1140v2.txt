@@ -1,0 +1,1912 @@
+arXiv:1404.1140v2 [cs.AI] 20 Dec 2014
+
+Scalable Planning and Learning for Multiagent POMDPs:
+Extended Version
+Christopher Amato
+CSAIL, MIT
+Cambridge, MA 02139
+camato@csail.mit.edu
+
+Frans A. Oliehoek
+Informatics Institute, University of Amsterdam
+Dept. of CS, University of Liverpool
+frans.oliehoek@liverpool.ac.uk
+Abstract
+
+Online, sample-based planning algorithms for POMDPs have shown great promise in scaling to problems
+with large state spaces, but they become intractable for large action and observation spaces. This is particularly problematic in multiagent POMDPs where the action and observation space grows exponentially with
+the number of agents. To combat this intractability, we propose a novel scalable approach based on samplebased planning and factored value functions that exploits structure present in many multiagent settings. This
+approach applies not only in the planning case, but also in the Bayesian reinforcement learning setting. Experimental results show that we are able to provide high quality solutions to large multiagent planning and
+learning problems.
+
+1
+
+Introduction
+
+Online planning methods for POMDPs have demonstrated impressive performance (Ross et al., 2008) on large
+problems by interleaving planning with action selection. The leading such method, partially observable Monte
+Carlo planning (POMCP) (Silver and Veness, 2010), achieves performance gains by extending sample-based
+methods based on Monte Carlo tree search (MCTS) to solve POMDPs.
+While online, sample-based methods show promise in solving POMDPs with large state spaces, they become intractable as the number of actions or observations grow. This is particularly problematic in the case
+of multiagent systems. Specifically, we consider multiagent partially observable Markov decision processes
+(MPOMDPs), which assume all agents share the same partially observable view of the world and can coordinate their actions. Because the MPOMDP model is centralized, POMDP methods apply, but the fact that the
+number of joint actions and observations scales exponentially in the number of agents renders current POMDP
+methods intractable.
+To combat this intractability, we provide a novel sample-based online planning algorithm that exploits multiagent structure. Our method, called factored-value partially observable Monte Carlo planning (FV-POMCP),
+is based on POMCP and is the first MCTS method that exploits locality of interaction: in many MASs, agents
+interact directly with a subset of other agents. This structure enables a decomposition of the value function into
+a set of overlapping factors, which can be used to produce high quality solutions (Guestrin, Koller, and Parr,
+2001; Nair et al., 2005; Kok and Vlassis, 2006). But unlike these previous approaches, we will not assume a
+factored model, but only that the value function can be approximately factored. We present two variants of FVPOMCP that use different amounts of factorization of the value function to scale to large action and observation
+spaces.
+Not only is our FV-POMCP approach applicable to large MPOMDPs, but it is potentially even more important for Bayesian learning where the agents have uncertainty about the underlying model as modeled by
+Bayes-Adaptive POMDPs (BA-POMDPs) (Ross et al., 2011). These models translate the learning problem
+to a planning problem, but since the resulting planning problems have an infinite number of states, scalable
+sample-based planning approaches are critical to their solution.
+
+1
+
+We show experimentally that our approach allows both planning and learning to be significantly more
+efficient in multiagent POMDPs. This evaluation shows that our approach significantly outperforms regular
+(non-factored) POMCP, indicating that FV-POMCP is able to effectively exploit locality of interaction in both
+settings.
+
+2
+
+Background
+
+We first discuss multiagent POMDPs and previous work on Monte Carlo tree search and Bayesian reinforcement
+learning (BRL) for POMDPs.
+
+2.1
+
+Multiagent POMDPs
+
+An MPOMDP (Messias, Spaan, and Lima, 2011) is a multiagent planning model that unfolds over a number
+of steps. At every stage, agents take individual actions and receive individual observations. However, in an
+MPOMDP, all individual observations are shared via communication, allowing the team of agents to act in a
+‘centralized manner’. We will restrict ourselves to the setting where such communication is free of noise, costs
+and delays.
+An MPOMDP is a tuple hI, S, {Ai }, T, R, {Zi }, O, hi with: I, a set of agents; S, a set of states with
+designated initial state distribution b0 ; A = ×i Ai , the set of joint actions, using action sets for each agent, i;
+0
+T , a set of state transition probabilities: T s~as = Pr(s0 |s, ~a), the probability of transitioning from state s to s0
+when actions ~a are taken by the agents; R, a reward function: R(s, ~a), the immediate reward for being in state s
+and taking actions ~a; Z = ×i Zi , the set of joint observations, using observation sets for each agent, i; O, a set
+0
+of observation probabilities: O~as ~z = Pr(~z|~a,s0 ), the probability of seeing observations ~o given actions ~a were
+taken and resulting state s0 ; h, the horizon.
+An MPOMDP can be reduced to a POMDP with a single centralized controller that takes joint actions and
+receives joint observations (Pynadath and Tambe, 2002). Therefore, MPOMDPs can be solved with POMDP
+solution methods, some of which will be described in the remainder of this section. However, such approaches
+do not exploit the particular structure inherent to many MASs. In Sec. 4, we present a first online planning
+method that overcomes this deficiency.
+
+2.2
+
+Monte Carlo Tree Search for (M)POMDPs
+
+Most research for (mutliagent) POMDPs has focused on planning: given a full specification of the model,
+determine an optimal policy, π, mapping past observation histories (which can be summarized by distributions
+b(s) over states
+policy can be extracted from an optimal Q-value function,
+P called beliefs)
+P to actions. An optimal
+0 0
+0
+Q(b,a) =
+s R(s,a) +
+z P (z|b,a) maxa Q(b ,a ), by acting greedily. Computing Q(b,a), however, is
+complicated by the fact that the space of beliefs is continuous.
+POMCP (Silver and Veness, 2010), is a scalable method which extends Monte Carlo tree search (MCTS) to
+solve POMDPs. At every stage, the algorithm performs online planning, given the current belief, by incrementally building a lookahead tree that contains (statistics that represent) Q(b,a). The algorithm, however, avoids
+expensive belief updates by creating nodes not for each belief, but simply for each action-observation history
+h. In particular, it samples hidden states s only at the root node (called ‘root sampling’) and uses that state to
+sample a trajectory that first traverses the lookahead tree and then performs a (random) rollout. The return of
+this trajectory is used to update the statistics for all visited nodes. Because this search tree can be enormous,
+the search is directed topthe relevant parts by selecting actions to maximize the ‘upper confidence bounds’:
+U (h,a) = Q(h, a) + c log(N + 1)/n. Here, N is the number of times the history has been reached and n
+is the number of times that action a has been taken in that history. POMCP can be shown to converge to an
+-optimal value function. Moreover, the method has demonstrated good performance in large domains with a
+limited number of simulations.
+
+2
+
+2.3
+
+Bayesian RL for (M)POMDPs
+
+Reinforcement learning (RL) considers the more realistic case where the model is not (perfectly) known in
+advance. Unfortunately, effective RL in POMDPs is very difficult. Ross et al. (2011) introduced a framework,
+called the Bayes-Adaptive POMDP (BA-POMDP), that reduces the learning problem to a planning problem,
+thus enabling advances in planning methods to be used in the learning problem.
+In particular, the BA-POMDP utilizes Dirichlet distributions to model uncertainty over transitions and observations. Intuitively, if the agent could observe states and observations, it could maintain vectors φ and ψ
+of counts for transitions and observations respectively. Let φass0 be the transition count of the number times
+state s0 resulted from taking action a in state s and ψsa0 z be the observation count representing the number of
+times observation z was seen after taking action a and transitioning to state s0 . These counts induce a probability distribution over the possible transition and observation models. Even though the agent cannot observe
+the states and has uncertainty about the actual count vectors, this uncertainty can be represented using the
+POMDP formalism — by including the count vectors as part of the hidden state of a special POMDP, called a
+BA-POMDP.
+The BA-POMDP can be extended to the multiagent setting (Amato and Oliehoek, 2013), yielding the BayesAdaptive multiagent POMDP (BA-MPOMDP) framework. BA-MPOMDPs are POMDPs, but with an infinite
+state space since there can be infinitely many count vectors. While a quality-bounded reduction to a finite state
+space is possible (Ross et al., 2011), the problem is still intractable; sample-based planning is needed to provide
+solutions. Unfortunately, current methods, such as POMCP, do not scale well to multiple agents.
+
+3
+
+Exploiting Graphical Structure
+
+POMCP is not directly suitable for multiagent problems (in either the planning or learning setting) due to the
+fact that the number of joint actions and observations are exponential in the number of agents. We first elaborate
+on these problems, and then sketch an approach to mitigate them by exploiting locality between agents.
+
+3.1
+
+POMCP for MPOMDPs: Bottlenecks
+
+The large number of joint observations is problematic since it leads to a lookahead tree with very high branching
+factor. Even though this is theoretically not a problem in MDPs (Kearns, Mansour, and Ng, 2002), in partially
+observable settings that use particle filters it leads to severe problems. In particular, in order to have a good
+particle representation at the next time step, the actual joint observation received must be sampled often enough
+during planning for the previous stage. If the actual joint observation had not been sampled frequently enough
+(or not at all), the particle filter will be a bad approximation (or collapse). This results in sampling starting from
+the initial belief again, or alternatively, to fall back to acting using a separate (history independent) policy such
+as a random one.
+The issue of large numbers of joint actions is also problematic: the standard POMCP algorithm will, at each
+node, maintain separate statistics, and thus separate upper confidence bounds, for each of the exponentially
+many joint actions. Each of the exponentially many joint actions will have to be selected at least a few times
+to reduce their confidence bounds (i.e., exploration bonus). This is a principled problem: in cases where each
+combination of individual actions may lead to completely different effects, it may be necessary to try all of
+them at least a few times. In many cases, however, the effect of a joint action is factorizable as the effects of
+the action of individual agents or small groups of agents. For instance, consider a team of agents that is fighting
+fires at a number of burning houses, as illustrated in Fig. 1(a). The rewards depend only on the amount of water
+deposited on each house rather than the exact joint action taken (Oliehoek et al., 2008). While this problem
+lends itself to a natural factorization, other problems may also be factorized to permit approximation.
+
+3.2
+
+Coordination Graphs
+
+In certain multiagent settings, coordination (hyper) graphs (CGs) (Guestrin, Koller, and Parr, 2001; Nair et al.,
+2005) have been used to compactly represents interactions between subsets of agents. In this paper we extend
+3
+
+(a)
+
+(b)
+
+(c)
+
+Figure 1: (a) Illustration of ‘fire fighting’ (b) Coordination graph with 4 houses and 3 agents (c) Illustration of
+a sensor network problem on a grid that is used in the experiments.
+this approach to MPOMDPs. We first introduce the framework of CGs in the single shot setting.
+A CG specifies a set of payoff components E = {Qe }, and each component e is associated with a subset
+of agents. These subsets (which we also denote using e) can be interpreted as (hyper)-edges in a graph where
+the nodes are agents. P
+The goal in a CG is to select a joint action that maximizes the sum of the local payoff
+components Q(~a) = e Qe (~ae ).1 A CG for the fire fighting problem is shown in Fig. 1(b). We follow the
+cited literature in assuming that a suitable factorization is easily identifiable by the designer, but it may also
+be learnable. Even if a payoff function Q(~a) does not factor exactly, it can be approximated by a CG. For
+the moment assuming a stateless problem (we will consider the case where histories are included in the next
+section), an action-value function can be approximated by
+X
+Q(~a) ≈
+Qe (~ae ),
+(1)
+e
+
+We refer to this as the linear approximation of Q, since one can show that this corresponds to an instance of
+linear regression (See Sec. 5).
+P
+Using a factored representation, the maximization max~a e Qe (~ae ) can be performed efficiently via variable elimination (VE) (Guestrin, Koller, and Parr, 2001), or max-sum (Kok and Vlassis, 2006). These algorithms are not exponential in the number of agents, and therefore enable significant speed-ups for larger number
+of agents. The VE algorithm (which we use in the experiments) is exponential in the induced width w of the
+coordination graph.
+
+3.3
+
+Mixture of Experts Optimization
+
+VE can be applied if the CG is given in advance. When we try to exploit these techniques in the context of
+POMCP, however, this is not
+Pthe case. As such, the task we consider here is to find the maximum of an estimated
+factored function Q̂(~a) = e Q̂e (~ae ). Note that we do not necessarily require the best approximation to the
+entire Q, as in (1). Instead, we seek an estimation Q̂ for which the maximizing joint action ~aM is close to the
+maximum of the actual (but unknown) Q-value: Q(~aM ) ≈ Q(~a∗ ).
+For this purpose, we introduce a technique called mixture of experts optimization. In contrast to methods
+based on linear approximation (1), we do not try to learn a best-fit factored Q function, but directly try to estimate
+the maximizing joint action. The main idea is that for each local action ~ae we introduce an expert that predicts
+the total value Q̂(~ae ) = E[Q(~a) | ~ae ]. For a joint action, these responses—one of each payoff component
+e—
+P
+are put in a mixture with weights αe and used to predict the maximization joint action: arg max~a e αe Q̂(~ae ).
+This equation is the sum of restricted-scope functions, which is identical to the case of linear approximation (1),
+so VE can be used to perform this maximization effectively. In the remainder of this paper, we will integrate
+the weights and simply write Q̂e (~ae ) = αe Q̂(~ae ).
+1 Since we focus on the one-shot setting here, the Q-values in the remainder of this section should be interpreted as those for one specific
+joint history h, i.e.: Q(~a) ≡ Q(h,~a).
+
+4
+
+~a 1
+
+~a 2
+
+~o 1
+
+~o 1
+
+~o 2
+
+~a 2
+~o 1
+
+Figure 2: Factored Statistics: joint histories are maintained (for specific joint actions and observations specified
+by ~a j and ~o k ), but action statistics are factored at each node.
+The experts themselves are implemented as maximum-likelihood estimators of the total value. That is, each
+expert (associated with a particular ~ae ) keeps track of the mean payoff received when ~ae was performed, which
+can be done very efficiently. An additional benefit of this approach is that it allows for efficient estimation of
+upper confidence bounds by also keeping track of how often this local action was performed, which in turns
+facilitates easy integration in POMCP, as we describe next.
+
+4
+
+Factored-Value POMCP
+
+This section presents our main algorithmic contribution: Factored-Value POMCP, which is an online planning
+method for POMDPs that can exploit approximate structure in the value function by applying mixture of experts optimization in the POMCP lookahead search tree. We introduce two variants of FV-POMCP. The first
+technique, factored statistics, only addresses the complexity introduced by joint actions. The second technique,
+factored trees, additionally addresses the problem of many joint observations. FV-POMCP is the first MCTS
+method to exploit structure in MASs, achieving better sample complexity by using factorization to generalize
+the value function over joint actions and histories. While this method was developed to scale POMCP to larger
+MPOMDPs in terms of number of agents, the techniques may be beneficial in other multiagent models and
+other factored POMDPs.
+
+4.1
+
+Factored Statistics
+
+We first introduce Factored Statistics which directly applies mixture of experts optimization to each node in the
+POMCP search tree. As shown in Fig. 2, the tree of joint histories remains the same, but the statistics retained
+at for each history is now different. That is, rather than maintaining one set of statistics in each node (i.e, joint
+history ~h) for the expected value of each joint action Q(~h, ~a), we maintain a set of statistic for each component
+e that estimates the values Qe (~h, ~ae ) and corresponding upper confidence bounds.
+Joint actions are selected according to the maximum (factored) upper confidence bound:
+X
+max
+Ue (~h, ~ae ),
+~
+a
+
+e
+
+p
+Where Ue (~h, ~ae ) , Qe (~h, ~ae ) + c log(N~h + 1)/n~ae using the Q-value and the exploration bonus added for
+that factor. For implementation, at each node for a joint history ~h, we store the count for the full history N~h as
+well as the Q-values, Qe , and the counts for actions, n~ae , separately for each component e.
+Since this method retains fewer statistics and performs joint action selection more efficiently via VE, we
+expect that it will be more efficient than plain application of POMCP to the BA-MPOMDP. However, the
+complexity due to joint observations is not directly addressed: because joint histories are used, reuse of nodes
+
+5
+
+...
+~a 11
+~o 11
+
+e
+
+...
+~a 1|E|
+
+~a 21
+~o 11
+
+~o 1|E|
+
+~o 21
+
+~a 2|E|
+
+~o 1|E|
+
+~a 21
+
+~a 2|E|
+
+~o 11
+
+~o 1|E|
+
+~o 2|E|
+
+Figure 3: Factored Trees: local histories for are maintained for each factor (resulting in factored history and
+action statistics). Actions and observations for component i are represented as ~a ji and ~o ki )
+and creation of new nodes for all possible histories (including the one that will be realized) may be limited if
+the number of joint observations is large.
+
+4.2
+
+Factored Trees
+
+The second technique, called Factored Trees, additionally tries to overcome the large number of joint observations. It further decomposes the local Qe ’s by splitting joint histories into local histories and distributing them
+over the factors. That is, in this case, we introduce an expert for each local ~he , ~ae pair. During simulations, the
+agents know ~h and action selection is conducted by maximizing over the sum of the upper confidence bounds:
+X
+max
+Ue (~he , ~ae ),
+~
+a
+
+e
+
+q
+where Ue (~he , ~ae ) = Qe (~he , ~ae ) + c log(N~he + 1)/n~ae . We assume that the set of agents with relevant actions
+and histories for component Qe are the same, but this can be generalized. This approach further reduces the
+number of statistics maintained and increases the reuse of nodes in MCTS and the chance that nodes in the trees
+will exist for observations that are seen during execution. As such, it can increase performance by increasing
+generalization as well as producing more robust particle filters.
+This type of factorization has a major effect on the implementation: rather than constructing a single tree,
+we now construct a number of trees in parallel, one for each factor e as shown in Fig. 3. A node of the tree for
+component e now stores the required statistics: N~he , the count for the local history, n~ae , the counts for actions
+taken in the local tree and Qe for the tree. Finally, we point out that this decentralization of statistics has the
+potential to reduce communication since the components statistics in a decentralized fashion could be updated
+without knowledge of all observation histories.
+
+5
+
+Theoretical Analysis
+
+Here, we investigate the approximation quality induced by our factorization techniques.2 The most desirable
+quality bounds would express the performance relative to ‘optimal’, i.e., relative to flat POMCP, which converges in probability an -optimal value function. Even for the one-shot case, this is extremely difficult for
+any method employing factorization based on linear approximation of Q, because Equation (1) corresponds to
+aPspecial case of
+P linear regression. In this case, we can write (1) in terms of basis functions and weights as:
+Q
+(~
+a
+)
+=
+a), where the he,~ae are the basis functions: he,~ae (~a) = 1 iff ~a specifies ~ae for
+ae he,~
+ae (~
+e e e
+e,~
+ae we,~
+component e (and 0 otherwise). As such, providing guarantees with respect to the optimal Q(~a)-value would
+2 Proofs
+
+can be found in Appendix B.
+
+6
+
+require developing a priori bounds for the approximation quality of (a particular type of) basis functions. This
+is a very difficult problem for which there is no good solution, even though these methods are widely studied in
+machine learning.
+However, we do not expect our methods to perform well on arbitrary Q. Instead, we expect them to perform
+well when Q is nearly factored, such that (1) approximately holds, since then the local actions contain enough
+information to make good predictions. As such, we analyze the behavior of our methods when the samples of
+Q come from a factored function (i.e., as in (1) ) contaminated with zero-mean noise. In such cases, we can
+show the following.
+Theorem 1. The estimate Q̂ of Q made by a mixture of experts converges in probability to the true value plus
+p
+a sample policy dependent bias term: Q̂(~a) → Q(~a) + B~π (~a). The bias is given by a sum of biases induced by
+pairs e,e0 :
+XX X
+~π (~ae0 \e |~ae )Qe0 (~ae0 \e ,~ae0 ∩e ).
+B~π (~a) ,
+e e0 6=e ~
+a
+
+e0 \e
+
+Here, ~ae0 ∩e is the action of the agents that participate both in e and e0 (specified by ~a) and ~ae0 \e are the actions
+of agents in e0 that are not in e.
+Because we observe the global reward for a given set of actions, the bias is caused by correlations in the
+sampling policy and the fact that we are overcounting value from other components. When there is no overlap,
+and the sampling policy we use is ‘component-wise’: ~π (~ae0 \e |~ae ) = ~π (~ae0 \e |~a0e ) = ~π (~ae0 \e ), this over counting
+is the same for all local actions ~ae :
+Theorem 2. When value components do not overlap and a component-wise sampling policy is used, mixture of
+experts optimization recovers the maximizing joint action.
+Similar reasoning can be used to establish bounds on the performance in the case of overlapping components, subject to assumptions about properties of the true value function. Let N (e) denote the neighborhood of
+component e: the set of other components e0 which have an overlap with e (those that have at least one agent
+participating in them that also participates in e).
+Theorem 3. If for all overlapping components e,e0 , and any two ‘intersection action profiles’ ~ae0 ∩e ,~a0e0 ∩e for
+their intersection, the true value function satisfies
+∀~ae0 \e
+
+Qe0 (~ae0 \e ,~ae0 ∩e ) − Qe0 (~ae0 \e ,~a0e0 ∩e ) ≤
+
+
+,
+~ e0 \e | · ~π (~ae0 \e )
+|E| · |N (e)| · |A
+
+(2)
+
+~ e0 \e | the number of intersection action profiles, then mixture of experts optimization, in the limit, will
+with |A
+return a joint action whose value lies within  of the optimal solution.
+The analysis shows that a sufficiently local Q-function can be effectively optimized when using a sufficiently
+local sampling policy. Under the same assumptions, we can also derive guarantees for the sequential case. It is
+not directly possible to derive bounds for FV-POMCP itself (since it is not possible to demonstrate that the UCB
+exploration policy is component-wise), but it seems likely that UCB exploration leads to an effective policy that
+nearly satisfies this property. Moreover, since bias is introduced by the interaction between action correlations
+and differences in ‘non-local’ components, even when using a policy with correlations, the bias may be limited
+if the Q-function is sufficiently structured.
+In the factored tree case, we can introduce a strong result. Because histories for other agents outside the
+factor are not included and we do not assume independence between factors, the approximation quality may
+suffer: where ~h is Markov, this is not the case for the local history ~he . As such, the expected return for such a
+local history depends on the future policy as well as the past one (via the distribution over histories of agents
+not included in e). This implies that convergence is no longer guaranteed:
+Proposition 1. Factored-Trees FV-POMCP may diverge.
+
+7
+
+Proof. FT-FV-POMCP (with c = 0) corresponds to a general case of Monte Carlo control (i.e., SARSA(1))
+with linear function approximation that is greedy w.r.t. the current value function. Such settings may result in
+divergence (Fairbank and Alonso, 2012).
+Even though this is a negative result, and there is no guarantee of convergence for FT-FV-POMCP, in practice
+this need not be a problem; many reinforcement learning techniques that can diverge (e.g., neural networks) can
+produce high-quality results in practice, e.g., (Tesauro, 1995; Stone and Sutton, 2001). Therefore, we expect
+that if the problem exhibits enough locality, the factored trees approximation may allow good quality policies
+to be found very quickly.
+Finally, we analyze the computational complexity. FV-POMCP is implemented by modifying POMCP’s
+S IMULATE function (as described in Appendix A). The maximization is performed by variable elimination,
+which has complexity O(n|Amax |w ) with w the induced width and |Amax | the size of the largest action set.
+In addition, the algorithm updates each of the |E| components, bringing the total complexity of one call of
+simulate to O(|E| + n|Amax |w ).
+
+6
+
+Experimental Results
+
+Here, we empirically investigate the effectiveness of our factorization methods by comparing them to nonfactored methods in the planning and learning settings.
+Experimental Setup. We test our methods on versions of the firefighting problem from Section 4 and on
+sensor network problems. In the firefighting problems, fires are suppressed more quickly if a larger number of
+agents choose that particular house. Fires also spread to neighbor’s houses and can start at any house with a
+small probability. In the sensor network problems (as shown by Fig. 1(c)), sensors were aligned along discrete
+intervals on two axes with rewards for tracking a target that moves in a grid. Two types of sensing could be
+employed by each agent (one more powerful than the other, but using more energy) or the agent could do
+nothing. A higher reward was given for two agents correctly sensing a target at the same time. The firefighting
+problems were broken up into n − 1 overlapping factors with 2 agents in each (representing the agents on the
+two sides of a house) and the sensor grid problems were broken into n/2 factors with n/2 + 1 agents in each
+(representing all agents along the y axis and one agent along the x axis). For the firefighting problem with 4
+agents, |S| = 243, |A| = 81 and |Z| = 16 and with 10 agents, |S| = 177147, |A| = 59049 and |Z| = 1024. For the
+sensor network problems with 4 agents, |S| = 4, |A| = 81 and |Z| = 16 and with 8 agents, |S| = 16, |A| = 6561
+and |Z| = 256.
+Each experiment was run for a given number of simulations, the number of samples used at each step to
+choose an action, and averaged over a number of episodes. We report undiscounted return with the standard
+error. Experiments were run on a single core of a 2.5 GHz machine with 8GB of memory. In both cases, we
+compare our factored representations to the flat version using POMCP. This comparison uses the same code
+base so it directly shows the difference when using factorization. POMCP and similar sample-based planning
+methods have already been shown to be state-of-the-art methods in both POMDP planning (Silver and Veness,
+2010) and learning (Ross et al., 2011).
+MPOMDPs. We start by comparing the factored statistics (FS) and factored tree (FT) versions of FV-POMCP
+in multiagent planning problems. Here, the agents are given the true MPOMDP model (in the form of a simulator) and use it to plan. For this setting, we compare to two baseline methods: POMCP: regular POMCP applied
+to the MPOMDP, and random: uniform random action selection. Note that while POMCP will converge to an
+-optional solution, the solution quality may be poor when using small number of simulations.
+The results for 4-agent and 10-agent firefighting problems with horizon 10 are shown in Figure 4(a). For the
+4-agent problem, POMCP performs poorly with a few simulations, but as the number of simulations increases
+it outperforms the other methods (presumably converging to an optimal solution). FT provides a high-quality
+solution with a very small number of simulations, but the resulting value plateaus due to approximation error.
+FS also provides a high-quality solution with a very small number of simulations, but is then able to converge
+to a solution that is near POMCP. In the 10-agent problem, POMCP is only able to generate a solution that is
+slightly better than random while the FV-POMCP methods are able to perform much better. In fact, FT performs
+
+8
+
+500 -93
+
+1
+
+100
+
+1000
+
+5000
+
+10000
+
+50000
+
+POMCP (true)
+
+-85.97
+
+-77.74
+
+-42.53
+
+-28.48
+
+-21.16
+
+-21.26
+
+-20.6
+
+FS (true)
+
+-85.97
+
+-37.44
+
+-27.14
+
+-26.66
+
+-24.67
+
+-24.65
+
+FT (true)
+
+-85.97
+
+-37.14
+
+-37.7229
+
+Random
+
+-85.97
+
+-100
+
+0
+
+10000
+-37.3
+
+20000
+-37.6
+FS (true)
+
+Firefighting: 4 Agents
+
+FT (true)
+
+-23.36
+
+-1749
+
+50
+
+-1765.95
+FS
+(true)
+
+'1767.68 FT (true) '1765.91
+
+5752.47
+'3181.92
+1.25479
+
+10.6662
+1.28973
+
+1
+
+'599.286
+
+10.6662
+
+1
+
+'682.32
+
+4997.73
+
+10.8695
+
+1
+
+No learning
+
+'1775.16 Random '1783.55
+
+-5772.08
+'1779.22
+
+-5772.08
+'1610.55
+
+-5772.08
+'804.615
+
+-5772.08
+4667
+
+10.8695
+
+1
+
+Random
+
+'1767.68
+
+'1767.68
+
+'1767.68
+
+'1767.68
+
+5600
+
+-60
+
+-86
+
+3700
+
+-75
+
+-93
+
+'611.47
+0.948415
+
+'1767.68
+
+POMCP1100001
+err
+sims
+7403.65
+
+13.4053
+
+Sensor Grid: 8 agents
+
+4500
+
+Sensor Grid:
+Horizon 100
+3000
+
+Value
+
+Value
+
+Value
+
+Value
+
+1127.31
+'5785.9
+1.42464
+
+'1746.04
+-5772.08
+0.948415
+
+POMCP (true)
+
+1500
+0
+-1500
+-3000
+
+1800
+-4500
+
+Random
+
+Random
+-100
+
+100000
+
+100
+
+-100
+10000
+
+1000
+
+Number of Simulations
+POMCP (true)
+FS (true)
+-2000
+
+FT (true)
+
+Random
+-6000
+
+100000
+
+100
+
+1000
+
+1000
+
+FS
+
+2000
+
+FT
+
+3000
+
+4000
+
+Number of Simulations
+BA-POMCP
+
+0
+
+POMCP (true)
+
+-26
+
+Sensor Grid: Horizon 100
+7500
+
+POMCP (true)
+
+POMCP (true)
+5600
+
+Value
+
+-125
+
+Value
+
+FT (true)
+
+5000
+
+No learning
+
+Firefighting: Horizon 50
+
+Firefighting: Horizon 10
+
+10000
+
+Random
+Number
+of Simulations
+POMCP (true)
+FS (true)
+
+FT (true)
+
+0
+
+(a) MPOMDP results
+
+Value
+
+36.3051
+1.00768
+
+'593.521
+
+-79
+
+-250
+
+-58
+
+3700
+
+1800
+
+-375
+
+-74
+-90
+
+3907.14
+1.25182
+
+4247.21
+'3220.85
+1.24872
+
+-45
+
+-42
+
+2715.05
+'4460.1
+1.20706
+
+'603.59
+
+7500
+
+-10
+
+'5814.7
+2.01417
+
+'1609.37
+
+-72
+
+Number of Simulations
+POMCP (true)
+FS (true)
+
+5000
+0
+0.79721
+
+-1664.6
+-5772.08
+0.948415
+
+'1775.73
+
+Firefighting: 10 Agents
+
+10000
+
+5000
+'5488.18
+1.99687
+
+'1783.55
+
+-30
+
+1000
+
+1000
+500
+
+1000
+'5823.9
+2.35085
+
+'1692.69
+
+Random
+BA-POMCP
+
+-65
+
+100
+
+100
+100
+
+500
+'5796.7
+1.14661
+
+'1775.16
+
+50000
+-37.44
+
+FT
+
+-15
+
+-90
+
+10000 errors
+1000
+
+0
+0
+100
+-5772.08
+0.948415
+
+'1767.68
+
+30000 -36.91 FS40000
+
+Number of Simulations
+POMCP (true)
+
+POMCP (true)
+
+75000
+0 POMCP (true)
+
+-100
+
+Random
+
+Random
+-500
+
+0
+
+125
+
+FS
+
+250
+
+375
+
+Number of Simulations
+
+FT
+
+BA-POMCP
+
+500
+
+0
+
+50
+
+FS
+
+100
+
+150
+
+200
+
+Number of Simulations
+
+FT
+
+BA-POMCP
+
+Random
+
+250
+
+-2000
+
+0
+
+200
+
+FS
+
+400
+
+600
+
+800
+
+1000
+
+Number of Simulations
+FT
+
+BA-POMCP
+
+(b) BA-MPOMDP results
+
+Figure 4: Results for (a) the planning (MPOMDP) case (log scale x-axis) and (b) the learning (BA-MPOMDP)
+case for the firefighting and sensor grid problems.
+very well with a small number of samples and FS continues to improve until it reaches solution that is similar
+to FT.
+Similar results are seen in the sensor grid problem. POMCP outperforms a random policy as the number
+of simulations grows, but FS and FT produce much higher values with 3the available simulations. FT seems
+to converge to a low quality solution
+(in both planning and learning) due to the loss of information about the
+9
+target’s previous position that is no longer known to local factors. In this problem, POMCP requires over 10
+minutes for an episode of 10000 simulations, making reducing the number of simulations crucial in problems
+of this size. These results clearly illustrate the benefit of FV-POMCP by exploiting structure for planning in
+MASs.
+BA-MPOMDPs. We also investigate the learning setting (i.e., when the agents are only given the BA-POMDP
+model). Here, at the end of each episode, both the state and count vectors are reset to their initial values.
+Learning in partially observable environments is extremely hard, and there may be many equivalence classes of
+transition and observation models that are indistinguishable when learning. Therefore, we assume a reasonably
+good model of the transitions (e.g., because the designer may have a good idea of the dynamics), but only a
+poor estimate of the observation model (because the sensors may be harder to model).
+For the BRL setting, we compare to the following baseline methods: POMCP: regular POMCP applied to
+the true model using 100,000 simulations (this is the best proxy for, and we expect this to be very close to, the
+optimal value), and BA-POMCP: regular POMCP applied to the BA-POMDP.
+Results for a four agent instance of the fire fighting problem are shown in Fig. 4(b), for h = 10, 50. In both
+cases, the FS and FT variants approach the POMCP value. For a small number of simulations FT learns very
+quickly, providing significantly better values than the flat methods and better than FS for the increased horizon.
+FS learns more slowly, but the value is better as the number of simulations increases (as seen in the horizon 10
+case) due to the use of the full history. After more simulations in the horizon 10 problem, the performance of
+the flat model (BA-MPOMDP) improves, but the factored methods still outperform it and this increase is less
+9
+
+1
+
+1
+
+visible for the longer horizon problem.
+Similar results are again seen in the four agent sensor grid problem. FT performs the best with a small
+number of simulations, but as the number increases, FS outperforms other methods. Again, for these problems,
+BA-POMCP requires over 10 minutes for each episode for the largest number of simulations, showing the need
+for more efficient methods. These experiments show that even in challenging multiagent settings with state
+uncertainty, BRL methods can learn by effectively exploiting structure.
+
+7
+
+Related Work
+
+MCTS methods have become very popular in games, a type of multiagent setting, but no action factorization
+has been exploited so far (Browne et al., 2012). Progressive widening (Coulom, 2007) and double progressive
+widening (Couëtoux et al., 2011) have had some success in games with large (or continuous) action spaces.
+The progressive widening methods do not use the structure of the coordination graph in order to generalize
+value over actions, but instead must find the correct joint action out of the exponentially many that are available
+(which may require many trajectories). They are also designed for fully observable scenarios, so they do not
+address the large observation space in MPOMDPs.
+The factorization of the history in FTs is not unlike the use of linear function approximation for the state
+components in TD-Search (Silver, Sutton, and Müller, 2012). However, in contrast to that method, due to our
+particular factorization, we can still apply UCT to aggressively search down the most promising branches of the
+tree. While other methods based on Q-learning (Guestrin, Lagoudakis, and Parr, 2002; Kok and Vlassis, 2006)
+exploit action factorization, they assume agents observe individual rewards (rather than the global reward that
+we consider) and it is not clear how these could be incorporated in a UCT-style algorithm.
+Locality of interaction has also been considered previously in decentralized POMDP methods (Oliehoek,
+2012; Amato et al., 2013) in the form of factored Dec-POMDPs (Oliehoek, Whiteson, and Spaan, 2013; Pajarinen and Peltonen, 2011) and networked distributed POMDPs (ND-POMDPs) (Nair et al., 2005; Kumar and
+Zilberstein, 2009; Dibangoye et al., 2014). These models make strict assumptions about the information that
+the agents can use to choose actions (only the past history of individual actions and observations), thereby
+significantly lowering the resulting value (Oliehoek, Spaan, and Vlassis, 2008). ND-POMDPs also impose additional assumptions on the model (transition and observation independence and a factored reward function).
+The MPOMDP model, in contrast, does not impose these restrictions. Instead, in MPOMDPs, each agent
+knows the joint action-observation history, so there are not different perspectives by different agents. Therefore,
+1) factored Dec-POMDP and ND-POMDP methods do not apply to MPOMDPs; they specify mappings from
+individual histories to actions (rather than joint histories to joint actions), 2) ND-POMDP methods assume that
+the value function is exactly factored as the sum of local values (‘perfect locality of interaction’) while in an
+MPOMDP, the value is only approximately factored (since different components can correlate due to conditioning the actions on central information). While perfect locality of interaction allows a natural factorization of the
+MPOMDP value function, but our method can be applied to any MPOMDP (i.e., given any factorization of the
+value function). Furthermore, current factored Dec-POMDP and ND-POMDP models generate solutions given
+the model in an offline fashion, while we consider online methods using a simulator in this paper.
+Our approach builds upon coordination-graphs (Guestrin, Koller, and Parr, 2001), to perform the joint action
+optimization efficiently, but factorization in one-shot problems has been considered in other settings too. Amin
+et al. (Amin, Kearns, and Syed, 2011) present a method to optimize graphical bandits, which relates to our optimization approach. Since their approach replaced the UCB functionality, it is not obvious how their approach
+could be integrated in POMCP. Moreover, their work, focuses on minimizing regret (which is not an issue in
+our case), and does not apply when the factorization does not hold. Oliehoek et al. (Oliehoek, Whiteson, and
+Spaan, 2012) present an factored-payoff approach that extends coordination graphs to imperfect information
+settings where each agent has its own knowledge. This is not relevant for our current algorithm, which assumes
+that joint observations will be received by a centralized decision maker, but could potentially be useful to relax
+this assumption.
+
+10
+
+8
+
+Conclusions
+
+We presented the first method to exploit multiagent structure to produce a scalable method for Monte Carlo tree
+search for POMDPs. This approach formalizes a team of agents as a multiagent POMDP, allowing planning
+and BRL techniques from the POMDP literature to be applied. However, since the number of joint actions and
+observations grows exponentially with the number of agents, naı̈ve extensions of single agent methods will not
+scale well. To combat this problem, we introduced FV-POMCP, an online planner based on POMCP (Silver and
+Veness, 2010) that exploits multiagent structure using two novel techniques—factored statistics and factored
+trees— to reduce 1) the number of joint actions and 2) the number of joint histories considered. Our empirical
+results demonstrate that FV-POMCP greatly increases scalability of online planning for MPOMDPs, solving
+problems with 10 agents. Further investigation also shows scalability to the much more complex learning
+problem with four agents. Our methods could also be used to solve POMDPs and BA-POMDPs with large
+action and observation spaces as well the recent Bayes-Adaptive extension (Ng et al., 2012) of the self interested
+I-POMDP model (Gmytrasiewicz and Doshi, 2005).
+
+Acknowledgments
+F.O. is funded by NWO Innovational Research Incentives Scheme Veni #639.021.336. C.A was supported by
+AFOSR MURI project #FA9550-09-1-0538 and ONR MURI project #N000141110688.
+
+References
+Amato, C., and Oliehoek, F. A. 2013. Bayesian reinforcement learning for multiagent systems with state
+uncertainty. In Workshop on Multi-Agent Sequential Decision Making in Uncertain Domains, 76–83.
+Amato, C.; Chowdhary, G.; Geramifard, A.; Ure, N. K.; and Kochenderfer, M. J. 2013. Decentralized control
+of partially observable Markov decision processes. In CDC, 2398–2405.
+Amin, K.; Kearns, M.; and Syed, U. 2011. Graphical models for bandit problems. In UAI, 1–10.
+Browne, C.; Powley, E. J.; Whitehouse, D.; Lucas, S. M.; Cowling, P. I.; Rohlfshagen, P.; Tavener, S.; Perez, D.;
+Samothrakis, S.; and Colton, S. 2012. A survey of Monte Carlo tree search methods. IEEE Trans. Comput.
+Intellig. and AI in Games 4(1):1–43.
+Couëtoux, A.; Hoock, J.-B.; Sokolovska, N.; Teytaud, O.; and Bonnard, N. 2011. Continuous upper confidence
+trees. In Learning and Intelligent Optimization. 433–445.
+Coulom, R. 2007. Computing elo ratings of move patterns in the game of go. International Computer Games
+Association (ICGA) Journal 30(4):198–208.
+Dibangoye, J. S.; Amato, C.; Buffet, O.; and Charpillet, F. 2014. Exploiting separability in multi-agent planning
+with continuous-state MDPs. In AAMAS.
+Fairbank, M., and Alonso, E. 2012. The divergence of reinforcement learning algorithms with value-iteration
+and function approximation. In International Joint Conference on Neural Networks, 1–8. IEEE.
+Gmytrasiewicz, P. J., and Doshi, P. 2005. A framework for sequential planning in multi-agent settings. JAIR
+24.
+Guestrin, C.; Koller, D.; and Parr, R. 2001. Multiagent planning with factored MDPs. In NIPS, 15.
+Guestrin, C.; Lagoudakis, M.; and Parr, R. 2002. Coordinated reinforcement learning. In ICML, 227–234.
+Kearns, M.; Mansour, Y.; and Ng, A. Y. 2002. A sparse sampling algorithm for near-optimal planning in large
+Markov decision processes. MLJ 49(2-3).
+11
+
+Kok, J. R., and Vlassis, N. 2006. Collaborative multiagent reinforcement learning by payoff propagation. JMLR
+7.
+Kumar, A., and Zilberstein, S. 2009. Constraint-based dynamic programming for decentralized POMDPs with
+structured interactions. In AAMAS.
+Messias, J. V.; Spaan, M.; and Lima, P. U. 2011. Efficient offline communication policies for factored multiagent
+POMDPs. In NIPS 24.
+Nair, R.; Varakantham, P.; Tambe, M.; and Yokoo, M. 2005. Networked distributed POMDPs: a synthesis of
+distributed constraint optimization and POMDPs. In AAAI.
+Ng, B.; Boakye, K.; Meyers, C.; and Wang, A. 2012. Bayes-adaptive interactive POMDPs. In AAAI.
+Oliehoek, F. A.; Spaan, M. T. J.; Whiteson, S.; and Vlassis, N. 2008. Exploiting locality of interaction in
+factored Dec-POMDPs. In AAMAS.
+Oliehoek, F. A.; Spaan, M. T. J.; and Vlassis, N. 2008. Optimal and approximate Q-value functions for
+decentralized POMDPs. JAIR 32:289–353.
+Oliehoek, F. A.; Whiteson, S.; and Spaan, M. T. J. 2012. Exploiting structure in cooperative Bayesian games.
+In UAI, 654–664.
+Oliehoek, F. A.; Whiteson, S.; and Spaan, M. T. J. 2013. Approximate solutions for factored Dec-POMDPs
+with many agents. In AAMAS, 563–570.
+Oliehoek, F. A. 2012. Decentralized POMDPs. In Wiering, M., and van Otterlo, M., eds., Reinforcement
+Learning: State of the Art. Springer.
+Pajarinen, J., and Peltonen, J. 2011. Efficient planning for factored infinite-horizon DEC-POMDPs. In IJCAI,
+325–331.
+Pynadath, D. V., and Tambe, M. 2002. The communicative multiagent team decision problem: Analyzing
+teamwork theories and models. JAIR 16.
+Ross, S.; Pineau, J.; Paquet, S.; and Chaib-draa, B. 2008. Online planning algorithms for POMDPs. JAIR 32(1).
+Ross, S.; Pineau, J.; Chaib-draa, B.; and Kreitmann, P. 2011. A Bayesian approach for learning and planning
+in partially observable Markov decision processes. JAIR 12.
+Silver, D., and Veness, J. 2010. Monte-carlo planning in large POMDPs. In NIPS 23.
+Silver, D.; Sutton, R. S.; and Müller, M. 2012. Temporal-difference search in computer Go. MLJ 87(2):183–
+219.
+Stone, P., and Sutton, R. S. 2001. Scaling reinforcement learning toward RoboCup soccer. In ICML, 537–544.
+Tesauro, G. 1995. Temporal difference learning and TD-Gammon. Commun. ACM 38(3):58–68.
+
+A
+
+FV-POMCP Pseudo code
+
+Here we describe in more detail the algorithms for the proposed FV-POMCP variants. Both methods can be
+described as a modification of POMCP’s S IMULATE procedure, which is shown in Algorithm 1. Each simulation
+is started by calling this procedure on the root node (corresponding to the empty history, or ‘now’) with a state
+sampled from the current belief. The comments in Algorithm 1 should make the code self-explanatory, but for
+a further explanation we refer to (Silver and Veness, 2010).
+
+12
+
+Algorithm 1 POMCP
+1: procedure S IMULATE (s,h,depth)
+2:
+if γ depth <  then
+3:
+return 0
+4:
+end if
+5:
+if h 6∈ T then
+6:
+for all a ∈ A do
+7:
+T (h,a) ← (Ninit (h,a),Vinit (h,a),∅)
+8:
+end for
+9:
+return Rollout(s,h,depth)
+10:
+end if
+q
+(h)
+11:
+a ← arg max0a Q(h,a0 ) + c logN
+N (h,a0 )
+12:
+(s0 ,o,r) ∼ G(s,a)
+13:
+R ← r + γSimulate(s0 ,(hao),depth + 1)
+14:
+B(h) ← B(h) ∪ {s}
+15:
+N (h) ← N (h) + 1
+16:
+N (h,a) ← N (h,a) + 1
+17:
+Q(h,a) ← Q(h,a) + R−Q(h,a)
+N (h,a)
+18:
+return R
+19: end procedure
+
+. Stop when desired precision reached
+. if we did not visit this h yet
+. initialize counts for all a, and particle filter
+. do a random rollout from this node
+. max via enumeration
+. sample a transition, observation and reward
+. Recurse and receive the return R
+. Add s to the particle filter maintained for h
+. Update the number of times h is visited. . .
+. . . . and how often we selected action a here
+. Incremental update of mean return
+
+Algorithm 2 Factored Statistics
+1: procedure S IMULATE (s,~
+h,depth)
+2:
+if γ depth <  then
+3:
+return 0
+4:
+end if
+5:
+if ~h 6∈ T then
+6:
+for all e ∈ E do
+~ e do
+7:
+for all ~ae ∈ A
+~
+8:
+T (h, ~ae ) ← (Ninit (~h, ~ae ),Vinit (~h, ~ae ),∅)
+9:
+end for
+10:
+end for
+11:
+return Rollout(s,~h,depth)
+12:
+end if
+r
+i
+P h
+~
+13:
+~a ← arg max~a0 e Qe (~h, ~a0e ) + c logNn(h+1)
+0
+~
+ae
+
+14:
+15:
+16:
+17:
+18:
+19:
+20:
+21:
+22:
+23:
+
+(s0 ,~o,r) ∼ G(s,~a)
+R ← r + γSimulate(s0 ,(~h~a~o),depth + 1)
+B(~h) ← B(~h) ∪ {s}
+N (~h) ← N (~h) + 1
+for all ~e ∈ E do
+n~ae ← n~ae + 1
+~
+Qe (~h, ~ae ) ← Qe (~h, ~ae ) + R−Qe (h,~ae )
+
+. initialize statistics for component e
+. only loop over local joint actions
+
+. via variable elimination
+
+. update the statistics for each component
+. update the estimation of the expert for ~ae
+
+n~ae
+
+end for
+return R
+end procedure
+
+13
+
+The pseudo code for the factored statistics case (FS-FV-POMCP) is shown in Algorithm 2. The comments
+highlight the important changes: there is no need to loop over the joint actions for initialization, or for selecting
+the maximizing action. Also, the same return R is used to update the active expert in each component e.
+Finally, Algorithm 3 shows the pseudo code for the factored trees variant of FV-POMCP. Like FSs, FT-FVPOMCP performs the simulations in lockstep. However, as we now maintain statistics and particle filters for
+each component e in separate trees, the initialization and updating of these statistics is slightly different. As
+such, the algorithm makes clear that there is no computational advantage to factored trees (when compared to
+FSs), but that the big difference is in the additional generalization it performs.
+The actual planning could take place in a number of ways: one agent could be designated the planner, which
+would require this agent to broadcast the computed joint action. Alternatively, each agent can in parallel perform
+an identical planning process (by, in the case of randomized planning, syncing the random number generators).
+Then each agent will compute the same joint action and execute its component. An interesting direction of
+future work is whether the planning itself can be done more effectively by distributing the task over the agents.
+Algorithm 3 Factored Trees
+1:
+2:
+3:
+4:
+5:
+6:
+7:
+8:
+9:
+10:
+11:
+12:
+13:
+
+procedure S IMULATE(s,~h,depth)
+if γ depth <  then
+return 0
+end if
+for all e ∈ E do
+. check all components e
+if ~he 6∈ Te then
+. if there is no node for ~he in the tree for component e yet
+~ e do
+for all ~ae ∈ A
+. only loop over local joint actions
+~
+Te (he , ~ae ) ← (Ninit (~he , ~ae ),Vinit (~he , ~ae ),∅)
+end for
+end if
+end for
+return Rollout(s,~h,depth)
+r
+i
+P h
+~
+~a ← arg max~a0 e Qe (~he , ~a0e ) + c logNn(h0e +1)
+. via variable elimination
+~
+ae
+
+14:
+15:
+16:
+17:
+18:
+19:
+20:
+21:
+22:
+23:
+
+B
+
+0
+
+(s ,~o,r) ∼ G(s,~a)
+R ← r + γSimulate(s0 ,(~h~a~o),depth + 1)
+for all ~e ∈ E do
+. update the statisitics for each component
+B(~he ) ← B(~he ) ∪ {s}
+. update the particle filter of each tree e with the same s
+N (~he ) ← N (~he ) + 1
+n~ae ← n~ae + 1
+~
+Qe (~he , ~ae ) ← Qe (~he , ~ae ) + R−Qe (he ,~ae )
+. update expert for ~he , ~ae
+n~ae
+
+end for
+return R
+end procedure
+
+Analysis of Mixture of Experts Optimization
+
+Here we analyze the behavior of our mixtures of experts under sample policy ~π . In performing this analysis we
+compare to the case where the true value function Q(~a) is factored in E components
+Q(~a) =
+
+E
+X
+
+Qe (~ae )
+
+e=1
+
+and corrupted by zero-mean noise ν. As such we establish the performance in cases where the actual value
+function is ‘close’ to factored. In the below, we will write N (e) for the neighborhood of component e. That
+14
+
+is the set of other components e0 which have an overlap with e: those that have at least one agent participating
+in them that also participates in e). In this analysis, we will assume that all experts are weighted uniformly
+(αe = E1 ), and ignore this constant which is not relevant for determining the maximizing action.
+Theorem 4. The estimate Q̂ of Q made by a mixture of experts converges in probability to the true value plus
+a sample policy dependent bias term:
+p
+
+Q̂(~a) → Q(~a) + B~π (~a).
+The bias is given by a sum of biases induced by pairs e,e0 of overlapping value components:
+XX X
+~π (~ae0 \e |~ae )Qe0 (~ae0 \e ,~ae0 ∩e ).
+B~π (~a) ,
+e e0 6=e ~
+a
+
+e0 \e
+
+Here ~ae0 ∩e is the action of the agents that participate both in e and e0 (specified by ~a) and ~ae0 \e are the actions
+of agents in e0 that are not in e (these are summed over as emphasised by the overlining).
+Proof. Suppose that we have drawn a set of samples r1 , . . . ,rK according to ~π . For each component e and ~ae ,
+we have an expert that estimates Q̂(~ae ). Let R(~ae ) be the subset of samples received where we took local joint
+action ~ae . The corresponding expert will estimate
+Q̂(~ae ) :=
+
+1
+R(~ae )
+
+X
+
+r~ae
+
+r~ae ∈R(~
+ae )
+
+Now, the expected sample that this expert receives is
+
+
+X
+
+E [r~ae |~π ] = Eν
+~π (~a−e |~ae )Q(~a) + ν
+
+
+~
+a−e
+"
+#
+X
+X
+=
+~π (~a−e |~ae )
+Qe0 (~ae0 ) + Eν ν
+e0
+
+~
+a−e
+
+= Qe (~ae ) +
+
+X
+
+~π (~a−e |~ae )
+
+Qe0 (~ae0 ) + 0
+
+e0 6=e
+
+~
+a−e
+
+= Qe (~ae ) +
+
+X
+
+X X
+e0 6=e ~
+a
+
+~π (~ae0 \e |~ae )Qe0 (~ae0 \e ,~ae0 ∩e )
+
+e0 \e
+
+which means that the estimate of an expert converges in probability to a biased estimate
+X X
+p
+~π (~ae0 \e |~ae )Qe0 (~ae0 \e ,~ae0 ∩e ).
+Q̂(~ae ) → Qe (~ae ) +
+e0 6=e ~
+ae0 \e
+
+This, in turn means that the mixture of experts
+
+
+
+Q̂(~a) =
+
+X
+
+p
+
+Q̂e (~ae ) →
+
+e
+
+X
+X X
+
+~π (~ae0 \e |~ae )Qe0 (~ae0 \e ,~ae0 ∩e )
+Qe (~ae ) +
+e0 6=e ~
+a
+
+e
+
+=
+
+X
+e
+
+=
+
+X
+
+Qe (~ae ) +
+
+e0 \e
+
+XX X
+e e0 6=e ~
+a
+
+Qe (~ae ) + B~π (~a),
+
+e
+
+as claimed.
+15
+
+e0 \e
+
+~π (~ae0 \e |~ae )Qe0 (~ae0 \e ,~ae0 ∩e )
+
+As is clear from the definition of the bias term, it is caused by correlations in the sample policy and the fact
+that we are over counting value from other components. When there is no overlap in the payoff components,
+and we use a sample policy we use is ‘component-wise’, i.e., ~π (~ae0 \e |~ae ) = ~π (~ae0 \e |~a0e ) = ~π (~ae0 \e ), the effect
+of this bias can be disregarded: in such a case, even though all components e0 6= e contribute to the bias of
+expert e this bias is constant for those components e0 6∈ N (e). Since we care only about the relative values of
+joint actions ~a, only overlapping components actually contribute to introducing error. This is clearly illustrated
+for the case where there are no overlapping components.
+Theorem 5. In the case that the value components do not overlap, mixture of experts optimization recovers the
+maximizing joint action.
+Proof. In this case,
+p
+
+Q̂e (~ae ) → Qe (~ae ) +
+
+XX
+
+~πe0 (~ae0 )Qe0 (~ae0 )
+
+e0 6=e ~
+a e0
+
+and the bias does not depend on ~ae , such that
+p
+
+arg max Q̂e (~ae ) → arg max Qe (~ae ) + C = arg max Qe (~ae ).
+~
+ae
+
+~
+ae
+
+~
+ae
+
+And for the joint optimization:
+
+Q̂(~a) =
+
+X
+
+p
+
+Q̂e (~ae ) →
+
+e
+
+X
+
+
+
+Qe (~ae ) +
+
+e0 6=e
+
+e
+
+=
+
+X
+
+Qe (~ae ) +
+
+X
+
+=
+
+X
+
+~πe0 (~ae0 )Qe0 (~ae0 )
+
+~
+a e0
+
+XXX
+
+~πe0 (~ae0 )Qe0 (~ae0 )
+
+e e0 6=e ~
+a e0
+
+e
+
+=
+
+XX
+
+Qe (~ae ) + (E − 1)
+
+e
+
+XX
+e
+
+~πe (~a0e )Qe (~a0e )
+
+~
+a0e
+
+(Qe (~ae ) + (E − 1)SA(e,~π ))
+
+e
+
+P
+where SA(e,~π ) = ~a0e ~πe (~a0e )Qe (~a0e ) is the sampled average payoff of component e which affects our value
+estimates, but which does not affect the maximizing joint action:
+"
+#
+X
+X
+arg max
+(Qe (~ae ) + (E − 1)SA(e,~π )) = arg max
+Qe (~ae )
+~
+a
+
+~
+a
+
+e
+
+e
+
+Similar reasoning can be used to establish bounds on the performance of mixture of expert optimization in
+cases with overlap, as is shown by the next theorem.
+Theorem 6. If for all overlapping components e,e0 , and any two ‘intersection action profiles’ ~ae0 ∩e ,~a0e0 ∩e for
+their intersection, the true value function satisfies that
+∀~ae0 \e
+
+Qe0 (~ae0 \e ,~ae0 ∩e ) − Qe0 (~ae0 \e ,~a0e0 ∩e ) ≤
+
+
+,
+~ e0 \e · ~π (~ae0 \e )
+E · |N (e)| · A
+
+~ e0 \e the number of intersection action profiles, then mixture of experts optimization, in the limit will
+with A
+return a joint action whose value solution that lies within  of the optimal solution.
+
+16
+
+Proof. Bias by itself is no problem, but different bias for different joint actions is, because that may cause us to
+select the wrong action. As such, we set out to bound
+|B~π (~a) − B~π (~a0 )| ≤ .
+
+∀~a,~a0
+
+As explained, only terms where the bias is different for two actions ~a,~a0 matter. As such we will omit terms that
+cancel out. In particular, we have that if two components e,e0 do not overlap, the expression
+X
+X
+~π (~ae0 \e |~ae )Qe0 (~ae0 \e ,~ae0 ∩e ) −
+~π (~ae0 \e |~a0e )Qe0 (~ae0 \e ,~a0e0 ∩e )
+~
+ae0 \e
+
+~
+ae0 \e
+
+reduces to ~a 0 ~π (~ae0 |~ae )Qe0 (~ae0 ) − ~a 0 ~π (~ae0 |~a0e )Qe0 (~ae0 ) and hence vanishes under a componentwise pole
+e
+icy. We use this insight to define the bias in terms of neighborhood bias. Let us write N (e) for the set of
+edges {e0 } that have overlap with e, and let’s write ~aN (e) for the joint action that specifies actions for that entire
+overlap, then we can write this as:
+P
+
+P
+
+B~π (~a) ,
+
+E
+X
+
+B~πe (~aN (e) )
+
+e=1
+
+with
+
+0
+
+X
+
+B~πe (~aN (e) ) =
+
+B~πe ∩e (~ae0 ∩e )
+
+e0 ∈N (e)
+
+component e’s ‘neighborhood bias’, with
+0
+
+B~πe →e (~ae ) ,
+
+X
+
+~π (~ae0 \e |~ae )Qe0 (~ae0 \e ,~ae0 ∩e )
+
+~
+ae0 \e
+
+the ‘intersection bias’: the bias introduced on e via the overlap between e0 and e.
+Now, we show how we can guarantee that the bias is small, by guaranteeing that the intersection biases are
+small. This gives a conservative bound, since different biases may very well cancel out. Artbitrarily select two
+actions, W.l.o.g. we select ~a to be the larger-biased joint action. We need to guarantee that
+B~π (~a) − B~π (~a0 ) ≤ 
+↔
+
+E
+X
+X
+
+0
+B~πe →e (~ae )
+
+−
+
+e=1 e0 ∈N (e)
+
+↔
+
+E
+X
+
+←
+
+e=1 e0 ∈N (e)
+
+
+X
+
+
+
+0
+
+0
+
+X
+
+B~πe →e (~ae ) −
+
+e0 ∈N (e)
+
+X
+
+B~πe →e (~ae ) −
+
+e0 ∈N (e)
+
+↔
+
+0
+
+B~πe →e (~a0e ) ≤ 
+
+
+
+e=1
+
+←
+
+E
+X
+X
+
+0
+
+B~πe →e (~a0e ) ≤ 
+
+e0 ∈N (e)
+
+X
+e0 ∈N (e)
+
+0
+
+B~πe →e (~a0e ) ≤
+
+
+E
+
+∀e
+
+i
+0
+0
+
+B~πe →e (~ae ) − B~πe →e (~a0e ) ≤
+∀e
+E
+e0 ∈N (e)
+h 0
+i
+0
+
+B~πe →e (~ae ) − B~πe →e (~a0e ) ≤
+∀e,e0
+E × |N (e)|
+X h
+
+17
+
+let 0 ,
+
+
+E×|N (e)| ,
+
+we want
+h 0
+i
+0
+B~πe →e (~ae ) − B~πe →e (~a0e ) ≤ 0
+X
+X
+~π (~ae0 \e |~ae )Qe0 (~ae0 \e ,~ae0 ∩e ) −
+~π (~ae0 \e |~a0e )Qe0 (~ae0 \e ,~a0e0 ∩e ) ≤ 0
+
+~
+ae0 \e
+
+↔
+
+~
+ae0 \e
+
+X
+
+~π (~ae0 \e |~ae )Qe0 (~ae0 \e ,~ae0 ∩e ) − ~π (~ae0 \e |~a0e )Qe0 (~ae0 \e ,~a0e0 ∩e ) ≤ 0
+~
+ae0 \e
+
+←
+
+~π (~ae0 \e |~ae )Qe0 (~ae0 \e ,~ae0 ∩e ) − ~π (~ae0 \e |~a0e )Qe0 (~ae0 \e ,~a0e0 ∩e ) ≤
+
+0
+
+∀~a
+
+~ e0 \e
+A
+
+e0 \e
+
+Under a component-wise policy ~π (~ae0 \e |~ae ) = ~π (~ae0 \e |~a0e ) = ~π (~ae0 \e ) and thus
+
+
+~π (~ae0 \e ) Qe0 (~ae0 \e ,~ae0 ∩e ) − Qe0 (~ae0 \e ,~a0e0 ∩e ) ≤
+↔
+
+Qe0 (~ae0 \e ,~ae0 ∩e ) − Qe0 (~ae0 \e ,~a0e0 ∩e ) ≤
+
+0
+
+∀~a
+
+~ e0 \e
+A
+
+0
+~ e0 \e ~π (~ae0 \e )
+A
+
+∀~a
+
+e0 \e
+
+e0 \e
+
+Putting it all together, if the factorized Q function satisfies that, for all the component intersections, the following
+holds:
+∀~ae0 \e ,~ae0 ∩e ,~a0e0 ∩e
+
+Qe0 (~ae0 \e ,~ae0 ∩e ) − Qe0 (~ae0 \e ,~a0e0 ∩e ) ≤
+
+we are guaranteed to find an -(absolute-error)-approximate solution.
+
+18
+
+
+~ e0 \e ~π (~ae0 \e )
+E |N (e)| A
+
+

@@ -1,0 +1,1242 @@
+efficiency of sampling from lower-dimensional spaces is
+hindered by the overhead of computing the sampling
+distributions. The latter is equivalent to performing
+exact inference which is exponential in the induced
+
+While both cutset schemes, one based on Gibbs sampling and one based on likelihood weighting, exploit
+the network structure to manage the complexity of exact inference, they compute different sampling distributions. Gibbs sampler draws a new value of variable
+Xi from distribution P (Xi |x\xi ). Likelihood weighting samples a new value from P (Xi |x1 , ..., xi−1 ). Furthermore, while both schemes benefit from reducing
+the size of the sampling space, it is hard to predict
+which of the two schemes is superior. The convergence speed of Gibbs sampling depends on the maximum correlation between the sampled variables. The
+convergence of likelihood weighting is affected by the
+distance between the sampling and the target distributions and, thus, depends also on the nature of evidence. Finally, Gibbs estimates converge only when
+all Markov Chain transition probabilities are positive.
+The advantages of cutset-based importance sampling,
+also known as Rao-Blackwellised importance sampling,
+were demonstrated previously in a few special cases
+[9, 8, 1]. Our scheme automates the cutset selection
+process based on the Bayesian network structure. We
+demonstrate empirically that LWLC is efficient timewise and has a lower rejection rate in networks with
+determinism. We achieve additional improvements by
+caching the probabilities of the generated samples.
+
+Our scheme can be generalized to other importance
+sampling schemes.
+
+2
+
+Background
+
+Definition 2.1 (belief networks)
+Let X={X1 , ..., Xn } be a set of random variables over
+multi-valued domains D(X1 ), ..., D(Xn ). A belief network is a pair <G, P> where G is a directed acyclic
+graph on X and P={P (Xi |pai )|Xi ∈ X} is the set
+of conditional probability tables (CPTs), conditioned
+on parents pai of Xi . An evidence e is an instantiated subset of variables E. A network is singlyconnected (also called a poly-tree), if its underlying undirected graph has no cycles. Otherwise, it is
+multiply-connected.
+Definition 2.2 (loop-cutset) A loop in G is a
+subgraph of G whose underlying graph is a cycle. A
+vertex v is a sink with respect to a loop L if the two
+edges adjacent to v in L are directed into v. Every
+loop contains at least one vertex that is not a sink with
+respect to that loop. Each vertex that is not a sink with
+respect to a loop L is called an allowed vertex with respect to L. A loop-cutset of a directed graph G is a
+set of vertices that contains at least one allowed vertex
+with respect to each loop in G.
+The queries over a singly-connected network can be
+processed in time linear in the size of the network [18].
+In general, the complexity of queries can be reduced
+by restricting G to a relevant subnetwork.
+Definition 2.3 (Relevant Subnetwork) A
+variable Xi in DAG G over X is irrelevant (barren)
+w.r.t. a subset Z⊂X if Xi ∈Z
+/ and Xi only has irrelevant descendants (if any). The relevant subnetwork of
+G w.r.t. a subset Z is the subgraph of G obtained by
+removing all variables that are irrelevant w.r.t Z.
+2.1
+
+Likelihood Weighting
+
+Likelihood weighting [11, 21] belongs to a family of
+importance sampling schemes that draw independent
+samples from a trial distribution Q(X). The trial
+distribution is different from the target distribution
+P (X). Generally, Q(X) is selected so that it is easy
+to compute. A typical query in Bayesian networks is
+to estimate the posterior marginals P (xi |e) which can
+be obtained from the sampling estimates of P (e) and
+P (xi , e). Let Y = X\E. Then:
+
+Consequently, the sampling estimate P̂ (e) of P (e),
+based on T samples from Q(X), is obtained by:
+P̂ (e) =
+
+T
+T
+1 X (t)
+1 X P (y (t) , e)
+=
+w
+T t=1 Q(y (t) )
+T t=1
+
+(1)
+
+(t)
+
+(y ,e)
+(t)
+. In a
+where w(t) = PQ(y
+(t) ) is the weight of sample y
+similar manner, but counting only those samples where
+Xi = xi , we can obtain an expression for the sampling
+estimate P̂ (xi , e) of P (xi , e) for Xi ∈ X\E by:
+PT
+P̂ (xi , e) = T1 t=1 w(t) δ(xi , x(t) )
+(2)
+(t)
+
+where δ(xi , x(t) )=1 iff xi =xi and δ(xi , x(t) )=0 otheri ,e)
+wise. Since P (xi |e) = PP(x(e)
+, we get:
+PT
+
+T
+X
+w(t) δ(xi , x(t) )
+w(t) δ(xi , x(t) )
+=α
+PT
+(t)
+w
+t=1
+t=1
+(3)
+where α is a normalization constant. These sampling
+estimates are guaranteed to converge to their target
+values as T increases as long as the support for Q(X)
+includes all support for P (X). Namely, the condition
+∀x ∈ X, P (x) 6= 0 ⇒ Q(x) 6= 0 must hold. Eq. (3)
+yields a biased estimate of P̂ (xi |e). However, when the
+sample size is large enough, bias can be ignored [10].
+
+P̂ (xi |e) =
+
+t=1
+
+Likelihood weighting draws samples from a distribution Q(X) that is close to the prior distribution. It
+begins with a network without evidence and assigns
+values to nodes in topological order. First, root nodes
+are sampled from their prior distributions. Then, the
+values of all other nodes Xi ∈X\E are sampled from
+the distribution P (Xi |pai ). Evidence variables Ei ∈E
+are assigned their observed value. Thus, the sampling
+distribution of likelihood weighting can be described
+as follows:
+Q
+Q(X) = Xi ∈X\E P (Xi |pai ) |E=e
+(4)
+We therefore compute the weight w(t) of sample t by:
+Q
+(t)
+(t)
+P (x(t) )
+Xi ∈X P (xi |pai )
+(t)
+(5)
+=
+w =
+Q
+(t)
+(t)
+Q(x(t) )
+P (x |pa )
+Xi ∈X\E
+
+i
+
+i
+
+All factors in the numerator and denominator of the
+fraction cancel out except for P (ei |pai ), leaving:
+w(t) =
+
+Q
+
+(t)
+
+Ei ∈E
+
+P (ei |pai )
+
+(6)
+
+Thus, during sampling, we compute the weight w(t)
+of sample t by initializing w(t) ←1 and updating
+(t)
+w(t) ←w(t) · P (ei |pa ) whenever we encounter an eviX
+X P (y, e)
+P (y, e) dence E = e . Thei posterior marginals estimates are
+i
+i
+Q(y) = EQ [
+]
+EP [P (e)] =
+P (y, e) =
+Q(y)
+Q(y) obtained by plugging the sample weights in Eq.(3).
+y
+y
+
+The convergence of importance sampling schemes can
+be slow when Q(X) is very different from P (X). Consequently, many importance sampling schemes focus
+on finding an improved sampling distribution by either
+changing the variable sampling order [12] or updating
+the sampling distribution based on previously generated samples [21, 5, 22]. We can also improve convergence by reducing the dimensionality of the sampling
+space as implied by Rao-Blackwell theorem.
+
+3
+
+Rao-Blackwellised Likelihood
+Weighting
+
+Give a Bayesian network over a set of variables X with
+evidence E⊂X, E=e,
+S let C⊂X\E be a subset of variables in X, Z=C E, and m=|Z|. Let o={Z1 , ..., Zm }
+be a topological ordering of the variables. We can
+define likelihood weighting over Z as follows. Processing variables in order o, we sample value z1 from distribution P (Z1 ), z2 from P (Z2 |z1 ), and so on. For
+each Zi ∈C, we sample a value zi from the distribution
+P (Zi |z1 , ..., zi−1 ). If Zi ∈E, we assign Zi its observed
+value. The sampling distribution Q(C) is:
+Y
+Q(C) =
+P (Zi |z1 , ..., zi−1 ) |E=e
+(7)
+Zi ∈C
+
+The weight w(t) of sample t is given by:
+Q
+(t) (t)
+(t)
+P (z (t) )
+Zi ∈Z P (zi |z1 , ..., zi−1 )
+(t)
+(8)
+=Q
+w =
+(t) (t)
+(t)
+Q(z (t) )
+P (z |z1 , ..., z )
+Zi ∈Z\E
+
+i
+
+i−1
+
+After cancelling out the common factors in denominator and numerator, we get:
+Q
+(t)
+(t)
+(9)
+w(t) = Zi ∈E P (ei |z1 , ..., zi−1 )
+During sampling, the weight (initialized to 1) is updated every time we encounter an evidence variable
+Zi ∈ E with observed value ei using:
+w(t) ← w(t) · P (ei |z1 , ..., zi−1 )
+
+Theorem 3.1 Given Bayesian network over X, evidence E ⊂ X, and cutset C ⊂ X\E, let Z = C ∪ E
+be a loop-cutset. If Z is topologically ordered, then
+∀Zj ∈ Z the relevant subnetwork of Z1 , ..., Zj is singlyconnected when Z1 , ..., Zj are observed.
+Proof. Proof by contradiction. Assume that the relevant subnetwork of Z1 , ..., Zj contains a loop L with
+sink S. Then, either S = Zq or S has a descendant
+Zq , 1≤q≤j, (otherwise S is irrelevant). By definition
+of loop-cutset, ∃Cm ∈L s.t. Cm 6=S and Cm ∈ C ⊂ Z.
+Threfore, Cm is an ancestor of Zq . Since variables are
+topologically ordered and all loop-cutset nodes preceding Zq are observed, Cm must be observed, thus,
+breaking the loop, yielding a contradiction. 2
+Conclusion: if C is a loop-cutset, we can compute the
+distributions P (Zi |z1 , ..., zi−1 ) for every Zi ∈Z over the
+relevant subnetwork of Zi in linear time and space.
+Therefore, the complexity of computing a new sample
+is proportional to the number of variables in Z and the
+size of the input N . In summary:
+Theorem 3.2 (Complexity) Given a Bayesian network over X, evidence E, and a loop-cutset C⊂X\E,
+the complexity of generating one sample using likelihood weighting over a cutset C is O(|Z| · N ) where
+Z = C ∪ E and N is the size of the input network.
+Once a sample c(t) is generated, we apply belief propagation algorithm one more time to obtain the posterior
+marginals, P (Xi |c(t) , e), for each remaining variable.
+Once T samples are generated, we obtain the posterior marginals estimates, similar to Eq. (3), by:
+P̂ (ci |e)
+
+= α
+
+T
+X
+t=1
+
+P̂ (xi |e)
+
+= α
+
+T
+X
+
+Consider the special case when C ∪ E is a loopcutset. In this case, we can compute the probability
+P (z)=P (c, e) in linear time and space using Pearl’s
+belief propagation algorithm. We can show that we
+can also compute P (Zi |z1 , ..., zi−1 ) efficiently if we order the variables in Z topologically and restrict our
+attention to the relevant subnetwork of Z1 , ..., Zi .
+
+w(t) P (xi |c(t) , e), ∀Xi ∈ X\C, E
+
+t=1
+
+(10)
+
+The main difference between likelihood weighting over
+cutset C and sampling over all variables X is in
+computing the sampling distributions. In the latter
+case, the distribution P (Xi |x1 , ..., xi−1 ) = P (Xi |pai )
+is readily available in the conditional probability
+table of Xi . However, the sampling distribution
+P (Zi |z1 , ..., zi−1 ) for LWLC needs to be computed.
+
+w(t) δ(ci , c(t) ), ∀Ci ∈ C
+
+3.1
+
+Convergence
+
+Likelihood weighting on a loop-cutset (LWLC) has
+a higher overhead in computing the distributions
+P (Zi |z1 , ..., zi−1 ) for ∀Zi ∈ Z, compared with sampling on a full variable set. However, as mentioned
+earlier, it converges faster. In general, importance
+sampling convergence rate is affected by the sampling
+variance and the distance between the sampling and
+the target distributions. The estimates obtained by
+sampling from a lower-dimensional space have lower
+variance due to Rao-Blackwell theorem. That is:
+V ar{
+
+P (C)
+P (Y, C)
+} ≥ V ar{
+}
+Q(Y, C)
+Q(C)
+
+P
+P
+where P (C) = y P (Y, C) and Q(C) = y Q(Y, C)
+[9, 16] A proof can be found in [9] and [16]. Consequently, fewer LWLC samples are needed to achieve
+the same accuracy as LW.
+The information distance between target distribution
+P (C|e) and sampling distribution Q(C) in LWLC is
+smaller than the distance between P (X|e) and sampling distribution Q(X). We can show this for the
+KL-distance [15]:
+KL(P (X), Q(X)) =
+
+X
+x
+
+P (x) log
+
+P (x)
+Q(x)
+
+(11)
+
+Theorem 3.3 (Reduced Information Distance)
+Given a Bayesian network expressing probability distribution P (X), evidence E=e, and a cutset C ⊂ X\E,
+let Q(X) and Q(C, E) denote the likelihood weighting
+sampling distribution over X and over C, E respectively. Then:
+KL(P (C|e), Q(C, E)) ≤ KL(P (X|e), Q(X))
+We outline the proof in the Appendix. The details are
+available in [4].
+3.2
+
+Caching Sampling on a Cutset
+
+Often, we can reduce the computation time of a sampling scheme by caching the generated samples and
+their probabilities. Caching LW values is of limited benefit since it uses probabilities stored in CPTs.
+However, in the case of LWLC, caching may compensate in part for the computation overhead. A suitable
+data structure for caching is a search-tree over the cutset C with a root node C1 . As new variable values
+are sampled and a partial assignment to the variables
+C1 , ..., Ci is generated, LWLC traverses the search tree
+along the path c1 , ..., ci . Whenever a new value of Ci
+is sampled, the corresponding tree branch is expanded
+and the current sample weight and the sampling distribution P (Ci |z1 , ..., zi−1 ) are saved in the node Ci .
+In the future, when generating the same partial assignment c1 , ..., ci , LWLC saves on computation by
+reading saved distributions from the tree. We will use
+LWLC-BUF to denote LWLC sampling scheme that
+uses a memory buffer to cache previously computed
+probabilities. LWLC-BUF can also update the sampling distributions P (Ci |z1 , ..., zi−1 ) when dead-ends
+are discovered. Namely, if the algorithm finds that
+a partial instantiation z1 , ..., zi , cannot be extended
+to a full tuple with non-zero probability, then we set
+P (Ci |z1 , ..., zi−1 ) = 0 and normalize the updated distribution.
+
+4
+4.1
+
+Experiments
+Methodology
+
+In this section, we compare empirically the performance of full likelihood weighting (LW), sampling over
+all the variables, against likelihood weighting on a
+loop-cutset (LWLC) and buffered likelihood weighting
+on a loop-cutset (LWLC-BUF). In networks with positive distributions, we compare likelihood weighting
+side by side with Gibbs sampling (Gibbs) and Gibbsbased loop-cutset sampling (LCS) [2]. For reference,
+we also compare with the estimates obtained by Iterative Belief Propagation (IBP). Belief propagation
+computes the exact posterior marginals in poly-trees
+[18]. When applied to networks with loops, it computes approximate marginals when it converges. IBP
+is fast and often produces good estimates [17, 20].
+The quality of the approximate posterior marginals is
+measured by the Mean Square Error (MSE):
+P
+P
+2
+Xi ∈X\E
+D(Xi ) [P (xi |e) − P̂ (xi |e)]
+P
+M SE =
+Xi ∈X\E |D(Xi )|
+The exact posterior marginals P (Xi |e) are obtained
+by bucket-tree elimination [7, 6]. We also measure the
+rejection rate R of each sampling scheme.
+Table 1: Benchmarks’ characteristics: N -number of
+nodes, w∗ -induced width, |LC|-loop-cutset size, P (e)average probability of evidence (over 30 instances),
+TBE -exact computation time by bucket elimination.
+N w∗ |LC|
+P(e)
+TBE
+cpcs360b
+360
+21
+26
+5E-8
+20 min
+cpcs422b
+422
+22
+47 1.5E-6
+50 min
+Pathfinder1 109
+6
+9
+0.07
+1 sec
+Pathfinder2 135
+4
+4
+0.06 0.01 sec
+Link
+724
+15
+142
+0.07 325 sec
+Our benchmarks are taken from Bayesian network
+repository. They include two subsets of Pathfinder
+network, Pathfinder1 and Pathfinder2, Link, and
+two CPCS networks, cpcs360b and cpcs422b. The
+benchmarks’ properties are summarized in Table 1.
+Pathfinder is an expert system for identifying disorders from lymph node tissue sections [13]. Link is a
+model for the linkage between two genes [14]. The exact posterior marginals for those networks were easy
+to compute by bucket elimination. However, they are
+hard for sampling because of the large number of deterministic relationships. cpcs360b and cpcs422b are
+derived from the Computer-Based Patient Care Simulation system [19]. They are more challenging for
+exact inference because of their large induced widths.
+All experiments were performed on a 1.8 GHz CPU.
+
+4.2
+4.2.1
+
+Results
+Sampling Speed
+
+We generated 30 instances of each network with different random observations among the leaf nodes. In
+Table 2, we report the speed of generating samples using LW, LWLC, and LWLC-BUF sampling schemes.
+As expected, LWLC generates far fewer samples than
+LW. Notably, the relative speed of LW and LWLC remains the same in the two Pathfinder networks and
+in Link network. By the time LW generates 100, 000
+samples, LWLC generates 1200 samples. Table 2 also
+shows an order of magnitude improvement in the speed
+of generating samples by LWLC-BUF in cpcs360b,
+Pathfinder1, and Pathfinder2, a factor of 2 improvement in cpcs422b, and no change in the Link network.
+The improvement depends on the ratio of unique samples. The number of unique tuples in Pathfinder networks is only ≈1% of the total number of samples and,
+thus, 99% of the computation is redundant. However,
+in Link network, nearly all samples are unique. Hence,
+buffering was not beneficial.
+Table 2: Average # of samples generated by LWLC
+and LWLC-BUF by the time LW generates 100, 000
+samples.
+LW LWLC LWLC-BUF
+cpcs360b
+100000
+2400
+24000
+cpcs422b
+100000
+25
+50
+Pathfinder1 100000
+1200
+12000
+Pathfinder2 100000
+1200
+12000
+Link
+100000
+1200
+1200
+
+the rejection rate R to denote the percentage of samples of weight 0. When the evidence is rare, we may
+need to generate a very large number of samples before we find a single sample of non-zero weight. When
+all samples are rejected, we will say that the rejection
+rate is 100% and call the network instance unresolved.
+The rejection rates of the three likelihood weighting
+schemes over Pathfinder1, Pathfinder2, and Link are
+summarized in Table 3. For each benchmark, we report the number of instances k (out of 30), where the
+rejection rate <100%. As we can see, LW resolved all
+30 instances of Pathfinder1 but only 28 instances of
+Pathfinder2 and only 17 instances of Link. LWLC and
+LWLC-BUF resolved all network instances.
+Table 3 also reports the rejection rate R averaged over
+those instances where all three algorithms generated
+some samples with non-zero probabilities. As we can
+see, LW has high rejection rates in all benchmarks.
+The corresponding LWLC rejection rates are a factor
+of 3 or more smaller. Although lower rejection rate
+alone does not guarantee faster convergence, it helps
+compensate for generating fewer samples. The rejection rate of LWLC-BUF is two orders of magnitude
+lower than LWLC in Pathfinder networks but it is the
+same as LWLC in Link network (also because most of
+the samples are unique).
+The rejection rate of LW and LWLC does not change
+with time. However, as LWLC-BUF learns zeros of
+the target distribution, its rejection rate may decrease
+as the number of samples increases. Figure 1 demonstrates this on the example of Pathfinder networks.
+LWLC-BUF Rejection Rates
+
+Rejection Rates
+
+Table 3: Average rejection rates for different benchmarks: k -# instances, out of 30, where rejection rate
+<100%, R - average rejection rate.
+LW
+LWLC
+LW-BUF
+k R(%)
+k R(%)
+k R(%)
+PF1
+30
+47 30
+6 30
+0.01
+PF2
+28
+77 30
+26 30
+0.05
+Link 17
+67 30
+16 30
+16
+When target distribution P (X) has many zeros where
+sampling distribution Q(X) remains positive, many
+samples with weight 0 may be generated which do not
+contribute to the sampling estimates. Hence, we call
+them “rejected.” This is not an issue in cpcs360b and
+cpcs422b where all probabilities are positive. However, in deterministic networks, many samples may be
+rejected, contributing to slow convergence. We will use
+
+Rejection Rate
+
+4.2.2
+
+Pathfinder1
+
+0.3
+
+Pathfinder2
+
+0.25
+0.2
+0.15
+0.1
+0.05
+0
+0
+
+5000
+
+10000
+
+15000
+
+20000
+
+25000
+
+30000
+
+35000
+
+40000
+
+# samples
+
+Figure 1: LWLC-BUF average rejection rate over 30
+network instances in Pathfinder1 and Pahfinder2 as a
+function of the number of samples.
+4.2.3
+
+Accuracy of the Estimates
+
+The MSE results for PathFinder1, Pathfinder2, and
+Link are shown in Figure 2 as a function of time.
+The comparative behavior of LW, LWLC, and LWLCBUF sampling schemes is similar in all three networks.
+LWLC consistenly converges faster than LW and out-
+
+LW
+
+LW
+
+PathFinder 1, N=109, w*=6, |LC|=9, |E|=11
+
+cpcs360b, N=360, |E|=18, |LC|=26, w*=21
+
+LWLC
+
+0.002
+
+LWLC
+Gibbs
+
+LWLC-BUF
+1.E-03
+
+IBP
+
+0.0016
+
+LCS
+
+MSE
+
+MSE
+
+IBP
+
+0.0012
+0.0008
+
+1.E-04
+
+0.0004
+0
+0
+
+2
+
+4
+
+6
+
+8
+
+10
+
+12
+
+1.E-05
+0
+
+Time (sec)
+
+5
+
+10
+
+15
+
+20
+
+25
+
+30
+
+35
+
+Time (sec)
+LW
+
+PathFinder2, N=135, |LC|=4, |E|=17
+
+LW
+LWLC
+Gibbs
+LCS
+IBP
+
+cpcs422b, N=422, |LC|=47, |E|=30
+
+LWLC
+
+0.002
+
+1.E-02
+
+LWLC-BUF
+
+1.E-03
+0.001
+
+MSE
+
+MSE
+
+IBP
+
+1.E-04
+
+0.000
+0
+
+2
+
+4
+
+6
+
+8
+
+1.E-05
+
+10
+
+0
+
+10
+
+20
+
+30
+
+Time (sec)
+
+40
+
+50
+
+60
+
+70
+
+80
+
+Time (sec)
+LW
+
+Link, N=724, w*=15, |LC|=142, |E|=10
+
+LWLC
+
+0.003
+
+IBP
+
+MSE
+
+0.002
+
+Figure 3: MSE as a function of time for full Gibbs
+sampling (Gibbs), Gibbs loop-cutset sampling (LCS),
+LW, LWLC, and IBP in cpcs360b and cpcs422b.
+
+0.001
+
+0
+
+2
+
+4
+
+6
+
+8
+
+10
+
+12
+
+Time (sec)
+
+Figure 2: MSE as a function of time for LW, LWLC,
+LWLC-BUF, and IBP over 30 network instances of
+Pathfinder1 (top), 28 instances of Pathfinder2 (middle), and 17 instances of Link (bottom).
+performs IBP within 2 seconds. LW outperforms IBP
+within 2 seconds in Pathfinder1 and within 8 seconds
+in Pathfinder2. However, LW is considerably worse
+than IBP in Link network. LWLC-BUF converges
+faster than LWLC in Pathfinder1 and Pathfinder2 because it generates more samples and has a lower rejection rate. In Link network, their performance is the
+same and, thus, we only show the LWLC curve.
+The PathFinder2 network was also used as a benchmark in the evaluation of AIS-BN algorithm [5], an
+adaptive importance sampling scheme. Although we
+experimented with different network instances, we can
+make a rough comparison. Within 60 seconds, AIS-BN
+computes MSE ≈ 0.0005. Adjusting for the difference
+in processor speed, the corresponding MSEs of LWLC
+and LWLC-BUF are ≈0.004 and ≈0.00008, obtained
+in 6 seconds. Hence, AIS-BN and LWLC-BUF produce comparable results.
+
+The accuracy of LW and LWLC for cpcs360b and
+cpcs422b networks is shown in Figure 3. Overall, results are similar. The LWLC outperforms LW by a
+wide margin in both benchmarks. Since all probabilities are positive, we also show the results for two Gibbs
+sampling schemes. Gibbs outperforms full likelihood
+weighting. Gibbs-based loop-cutset sampling (LCS)
+outperforms LWLC. Figure 4 focuses on the buffered
+cutset sampling schemes. Both LWLC-BUF and LCSBUF improve substantially over the plain LWLC and
+LCS. And again, the Gibbs-based LCS-BUF is better
+than LWLC-BUF.
+
+cpcs360b, N=360, |E|=18, |LC|=26, w*=21
+1.E-03
+
+LWLC
+LWLC-BUF
+LCS
+LCS-BUF
+
+1.E-04
+
+MSE
+
+0.000
+
+1.E-05
+
+1.E-06
+0
+
+5
+
+10
+
+15
+
+20
+
+25
+
+30
+
+35
+
+Time (sec)
+
+Figure 4: MSE in cpcs360b as a function of time for
+LCS and LWLC vs. buffered LCS and LWLC-BUF.
+
+Although Gibbs sampling schemes outperformed likelihood weighting methods in cpcs360b and cpsc422b,
+where evidence was selected among leaf nodes, the two
+methods are likely to switch places when fewer leaf
+nodes are observed. In particular, likelihood weighting
+outperforms Gibbs sampling in cpcs360b and cpcs422b
+without evidence [4].
+
+5
+
+Related Work and Conclusions
+
+In this paper we presented a cutset-based likelihood
+weighting. By reducing the dimensionality of the sampling space, we achieve reduction in th esampling variance and also reduce the information distance (KLdistance) between the sampling and the target distributions. Therefore, the cutset sampling scheme requires fewer samples to converge.
+In the past, Rao-Blackwellised importance sampling
+was made efficient by exploiting the properties of the
+conditional probability distributions, e.g., when the
+distributions for the marginalised variables could be
+computed analytically using a Kalman filter [9, 8, 1]
+or when the marginalised variables in a factored
+HMM became conditionally independent (when sampled variables are observed) due to the numerical
+structure of the CPTs [8]. In contrast, our method
+bounds the complexity of computing the sampling distributions by exploiting the structure of the network.
+We demonstrated empirically that cutset-based likelihood weighting is time-wise effective. Namely, it computes more accurate estimates than likelihood weighting as a function of time. We improve the convergence
+of cutset-based likelihood weighting by caching previously computed samples. The buffered scheme reduces
+the average sample computation time since it does not
+re-compute the probabilities of previously generated
+tuples and since it allows modifying the cached distributions dynamically.
+In this paper, we only updated the saved distributions when a partially-instantiated cutset tuple could
+not be extended to a full cutset tuple with non-zero
+probability. However, we can additionally update
+cached distributions based on the weight of previously
+generated samples as adaptive importance sampling
+techniques do. The proposed cutset-based likelihood
+weighting can be generalized to other importance sampling schemes.
+
+References
+[1] C. Andrieu, N. de Freitas, and A. Doucet. RaoBlackwellised particle filtering via data augmentation. In Advances in Neural Information Processing Systems. MIT Press, 2002.
+
+[2] B. Bidyuk and R. Dechter. Cycle-cutset sampling
+for Bayesian networks. In 16th Canadian Conference on AI, pages 297–312, 2003.
+[3] B. Bidyuk and R. Dechter. Empirical study of wcutset sampling for Bayesian networks. In UAI,
+pages 37–46, 2003.
+[4] B. Bidyuk and R. Dechter. Rao-Blackwellised
+likelihood weighting. Technical report, UCI,
+www.ics.uci.edu/˜bbidyuk/lwlc.html, 2005.
+[5] J. Cheng and M. Druzdzel. AIS-BN: An adaptive importance sampling algorithm for evidenctial reasoning in large baysian networks. J. of AI
+Research, 13:155–188, 2000.
+[6] R. Dechter. Bucket elimination: A unifying
+framework for reasoning. Artificial Intelligence,
+113:41–85, 1999.
+[7] R. Dechter. Constraint Processing. Morgan Kaufmann, 2003.
+[8] A. Doucet, N. de Freitas, K. Murphy, and S. Russell. Rao-Blackwellised particle filtering for dynamic Bayesian networks. In Uncertainty in AI,
+pages 176–183, 2000.
+[9] A. Doucet, N. Gordon, and V. Krishnamurthy.
+Particle filters for state estimation of jump
+markov linear systems. Technical report, Cambridge University Engineering Department, 1999.
+[10] G. S. Fishman. Monte Carlo: concepts, algorithms, and applications. Springer-Verlag, 1995.
+[11] R. Fung and K.-C. Chang. Weighing and integrating evidence for stochastic simulation in Bayesian
+networks. In Uncertainty in AI, pages 209–219,
+1989.
+[12] R. Fung and B. del Favero. Backward simulation
+in Bayesian networks. In Uncertainty in AI, pages
+227–234. Morgan Kaufmann Publishers, 1994.
+[13] D. Heckerman, E. Horvitz, and B. Nathawani.
+Towards normative expert systems: Part i. the
+pathfinder project. Methods of Information in
+Medicine, 31(2):90–105, 1992.
+[14] C.S. Jensen and A. Kong. Blocking Gibbs sampling for linkage analysis in large pedigrees with
+many loops. Research Report R-96-2048, Aalborg
+University, Denmark, 1996.
+[15] S. Kullback. Information Theory and Statistics.
+Wiley, New York, 1959.
+
+[16] S. MacEachern, M. Clyde, and J. Liu. Sequential importance sampling for nonparametric bayes
+models: The next generation. The Canadian
+Journal of Statistics, 27:251–267, 1998.
+
+We apply similar transformations to KLx and obtain:
+
+[17] K. P. Murphy, Y. Weiss, and M. I. Jordan. Loopy
+belief propagation for approximate inference: An
+empirical study. In Uncertainty in AI, pages 467–
+475, 1999.
+
+To simplify the analysis, we denote:
+
+[20] I. Rish, K. Kask, and R. Dechter. Empirical evaluation of approximation algorithms for probabilistic decoding. In Uncertainty in AI, 1998.
+[21] R. D. Shachter and M. A. Peot. Simulation approaches to general probabilistic inference on belief networks. In Uncertainty in AI, pages 221—
+231, 1989.
+[22] C. Yuan and M. Druzdzel.
+An importance
+sampling algorithm based on evidence prepropagation. In Uncertainty in AI, pages 624–
+631, 2003.
+
+P (y, c|e) lg
+
+y,c
+
+KL′c
+
+X
+
+=
+
+P (c|e) lg
+
+KL′x
+
+X
+
+=
+
+Here, we outline the proof for Theorem 3.3. To simplify notation, we let KLx = KL(P (Y, C|e), Q(Y, C))
+and KLc = KL(P (C|e), Q(C)). By definition:
+=
+
+KLc
+
+X
+
+y,c
+
+c
+
+=
+
+KLx
+
+X
+
+P (c|e)
+Q(c)
+
+(12)
+
+KL′c
+
+X
+
+=
+
+P (c|e) lg
+
+y,c
+
+P (y, c|e)
+Q(y, c)
+
+(13)
+
+The proof consists of several transformation steps.
+First, for KLc , we replace the conditional probability
+P (c|e) in the numerator of the fraction with PP(c,e)
+(e) .
+P (c,e)
+Then, we replace lg Q(c)Q(e)
+with lg
+and open parenthesis, yielding:
+
+KLc =
+
+X
+
+P (c|e) lg
+
+c
+
+P (c,e)
+Q(c)
+
+− lg P (e)
+
+P (c, e) X
+P (c|e) lg P (e)
+−
+Q(c)
+
+KL′x
+
+KLc =
+
+X
+c
+
+P (c, e)
+− lg P (e)
+P (c|e) lg
+Q(c)
+
+(15)
+
+(18)
+
+X
+
+=
+
+P (ei |c1:ki , e)
+
+(19)
+
+P (y, c|e) lg
+
+Y
+
+P (ei |pai )
+
+(20)
+
+Ei
+
+Since log of a product equals the sum of logs, we
+obtain:
+X
+X
+lg P (ei |c1:ki , e) (21)
+KL′c =
+P (c|e)
+c
+
+KL′x
+
+X
+
+=
+
+Ei
+
+P (y, c|e)
+
+X
+
+lg P (ei |pai )
+
+(22)
+
+Ei
+
+Next, we sum out variables that do not appear under
+the log function:
+XX
+′
+=
+
+KLc
+
+P (c1:ki |e) lg P (ei |c1:ki , e)
+
+KL′x
+
+XXX
+
+=
+
+i
+
+P (c1:ki |e)P (pai |c1:ki , e) lg P (ei |pai )
+
+pai
+
+i
+
+Using Jensen’s inequality, we get a lower bound on
+KL′x :
+X
+XX
+′
+P (ei |pai )P (pai |c1:ki , e)
+
+P (c1:ki |e) lg
+
+KLx ≥
+
+Ei c1:k
+
+pai
+
+i
+
+Then, we evaluate the difference ∆ = KL′x − KL′c
+between the two KL-distances:
+P
+P P
+≥
+
+c1:k
+
+Ei
+
+−
+
+c
+
+PFactoring out lg P (e) from the sum, we sum out
+c P (c|e)=1 and get:
+
+P (y, c, e)
+Q(y, c)
+
+Ei
+
+y,c
+
+∆
+(14)
+
+Y
+
+c
+
+Ei c1:k
+
+P (y, c|e) lg
+
+(17)
+
+Since KLx -KLc =KL′x -KL′c , we continue analysis of
+KL′x and KL′c only. Using c1:ki and e1:i−1 to denote
+respectively the subsets of cutset variables and evidence variables that precede variable Ei ∈E in samQ
+(y,c,e)
+= Ei P (ei |pai ) and
+pling order, we replace PQ(y,c)
+Q
+P (c,e)
+Ei P (ei |c1:ki , e), yielding:
+Q(c) =
+
+Ei c1:k
+
+P (c|e) lg
+
+P (c, e)
+Q(c)
+
+P (y, c|e) lg
+
+y,c
+
+Appendix
+
+P (y, c, e)
+− lg P (e) (16)
+Q(y, c)
+
+c
+
+[18] J. Pearl. Probabilistic Reasoning in Intelligent
+Systems. Morgan Kaufmann, 1988.
+[19] M. Pradhan, G. Provan, B. Middleton, and
+M. Henrion. Knowledge engineering for large belief networks. In Uncertainty in AI, pages 484–
+490, 1994.
+
+X
+
+=
+
+KLx
+
+=
+
+P
+
+Ei
+
+P (c1:ki |e) lg
+
+Pi P
+Ei
+
+P
+
+c1:k
+
+i
+
+c1:k
+
+i
+
+pai
+
+P (ei |pai )P (pai |c1:ki , e)
+
+P (c1:ki |e) lg P (ei |c1:ki , e)
+
+P (c1:ki |e) lg
+
+P
+
+pai
+
+P (ei |pai )P (pai |c1:k ,e)
+i
+
+P (ei |c1:k ,e)
+i
+
+Finally, we show that the value of the expression under the log is ≥1 and, thus, the log value is positive.
+Consequently, KLx − KLc = KL′x − KL′c ≥ 0.
+
+

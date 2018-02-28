@@ -1,0 +1,3653 @@
+Simple Regret Optimization in Online Planning
+for Markov Decision Processes
+Zohar Feldman
+Carmel Domshlak
+
+zoharf@tx.technion.ac.il
+dcarmel@ie.technion.ac.il
+
+arXiv:1206.3382v2 [cs.AI] 19 Dec 2012
+
+Faculty of Industrial Engineering & Management,
+Technion - Israel Institute of Technology,
+Haifa, Israel
+
+Abstract
+We consider online planning in Markov decision processes (MDPs). In online planning,
+the agent focuses on its current state only, deliberates about the set of possible policies from
+that state onwards and, when interrupted, uses the outcome of that exploratory deliberation
+to choose what action to perform next. The performance of algorithms for online planning
+is assessed in terms of simple regret, which is the agent’s expected performance loss when
+the chosen action, rather than an optimal one, is followed.
+To date, state-of-the-art algorithms for online planning in general MDPs are either
+best effort, or guarantee only polynomial-rate reduction of simple regret over time. Here
+we introduce a new Monte-Carlo tree search algorithm, BRUE, that guarantees exponentialrate reduction of simple regret and error probability. This algorithm is based on a simple
+yet non-standard state-space sampling scheme, MCTS2e, in which different parts of each
+sample are dedicated to different exploratory objectives. Our empirical evaluation shows
+that BRUE not only provides superior performance guarantees, but is also very effective in
+practice and favorably compares to state-of-the-art. We then extend BRUE with a variant
+of “learning by forgetting.” The resulting set of algorithms, BRUE(α), generalizes BRUE,
+improves the exponential factor in the upper bound on its reduction rate, and exhibits even
+more attractive empirical performance.
+
+1. Introduction
+Markov decision processes (MDPs) are a standard model for planning under uncertainty (Puterman, 1994). An MDP hS, A, T r, Ri is defined by a set of possible agent states S, a set of
+agent actions A, a stochastic transition function T r : S × A × S → [0, 1], and a reward function R : S ×A×S → R. Depending on the problem domain and the representation language,
+the description of the MDP can be either declarative or generative (or mixed). In any case,
+the description of the MDP is assumed to be concise. While declarative models provide
+the agents with greater algorithmic flexibility, generative models are more expressive, and
+both types of models allow for simulated execution of all feasible action sequences, from
+any state of the MDP. The current state of the agent is fully observable, and the objective
+of the agent is to act so to maximize its accumulated reward. In the finite horizon setting
+that will be used for most of the paper, the reward is accumulated over some predefined
+number of steps H.
+The desire to handle MDPs with state spaces of size exponential in the size of the model
+description has led researchers to consider online planning in MDPs. In online planning,
+1
+
+the agent, rather than computing a quality policy for the entire MDP before taking any
+action, focuses only on what action to perform next. The decision process consists of a
+deliberation phase, aka planning, terminated either according to a predefined schedule or
+due to an external interrupt, and followed by a recommended action for the current state.
+Once that action is applied in the real environment, the decision process is repeated from
+the obtained state to select the next action and so on.
+The quality of the action a, recommended for state s with H steps-to-go, is assessed in
+terms of the probability that a is sub-optimal, and in terms of the (closely related) measure
+of simple regret ∆H [s, a]. The latter captures the performance loss that results from taking
+a and then following an optimal policy π ∗ for the remaining H −1 steps, instead of following
+π ∗ from the beginning (Bubeck & Munos, 2010). That is,
+∆H [s, a] = QH (s, π ∗ (s, H)) − QH (s, a),
+where
+
+
+QH (s, a) = Es0 R(s, a, s0 ) + QH−1 (s0 , π ∗ (s0 , H − 1)) .
+With a few recent exceptions developed for declarative MDPs (Bonet & Geffner, 2012;
+Kolobov, Mausam, & Weld, 2012; Busoniu & Munos, 2012), most algorithms for online
+MDP planning constitute variants of what is called Monte-Carlo tree search (MCTS). One
+of the earliest and best-known MCTS algorithms for MDPs is the sparse sampling algorithm
+by Kearns, Mansour, and Ng (Kearns, Mansour, & Ng, 1999). Sparse sampling offers a nearoptimal action selection in discounted MDPs by constructing a sampled lookahead tree in
+time exponential in discount factor and suboptimality bound, but independent of the state
+space size. However, if terminated before an action has proved to be near-optimal, sparse
+sampling offers no quality guarantees on its action selection. Thus it does not really fit
+the setup of online planning. Several later works introduced interruptible, anytime MCTS
+algorithms for MDPs, with UCT (Kocsis & Szepesvári, 2006) probably being the most
+widely used such algorithm these days. Anytime MCTS algorithms are designed to provide
+convergence to the best action if enough time is given for deliberation, as well as a gradual
+reduction of performance loss over the deliberation time (Sutton & Barto, 1998; Péret &
+Garcia, 2004; Kocsis & Szepesvári, 2006; Coquelin & Munos, 2007; Cazenave, 2009; Rosin,
+2011; Tolpin & Shimony, 2012). While UCT and its successors have been devised specifically
+for MDPs, some of these algorithms are also successfully used in partially observable and
+adversarial settings (Gelly & Silver, 2011; Sturtevant, 2008; Bjarnason, Fern, & Tadepalli,
+2009; Balla & Fern, 2009; Eyerich, Keller, & Helmert, 2010).
+In general, the relative empirical attractiveness of the various MCTS planning algorithms
+depends on the specifics of the problem at hand and cannot usually be predicted ahead of
+time. When it comes to formal guarantees on the expected performance improvement over
+the planning time, very few of these algorithms provide such guarantees for general MDPs,
+and none breaks the barrier of the worst-case only polynomial-rate reduction of simple regret
+and choice-error probability over time.
+This is precisely our contribution here. We introduce a new Monte-Carlo tree search
+algorithm, BRUE, that guarantees exponential-rate reduction of both simple regret and
+choice-error probability over time, for general MDPs over finite state spaces. The algorithm
+is based on a simple and efficiently implementable sampling scheme, MCTS2e, in which
+2
+
+MCTS: [input: hS, A, T r, Ri; s0 ∈ S]
+search tree T ← root node s0
+while time permits:
+ρ ← sample(s0 , T )
+T ← expand-tree(T , ρ)
+update-statistics(T , ρ)
+return recommend-action(s0 , T )
+Figure 1: High-level scheme for regular Monte-Carlo tree sampling.
+different parts of each sample are dedicated to different competing exploratory objectives.
+The motivation for this objective decoupling came from a recently growing understanding
+that the current MCTS algorithms for MDPs do not optimize the reduction of simple regret
+directly, but only via optimizing what is called cumulative regret, a performance measure
+suitable for the (very different) setting of reinforcement learning (Bubeck & Munos, 2010;
+Busoniu & Munos, 2012; Tolpin & Shimony, 2012; Feldman & Domshlak, 2012). Our
+empirical evaluation on some standard MDP benchmarks for comparison between MCTS
+planning algorithms shows that BRUE not only provides superior performance guarantees,
+but is also very effective in practice and favorably compares to state of the art. We then
+extend BRUE with a variant of “learning by forgetting.” The resulting family of algorithms,
+BRUE(α), generalizes BRUE, improves the exponential factor in the upper bound on its
+reduction rate, and exhibits even more attractive empirical performance.
+
+2. Monte-Carlo Planning
+MCTS, a high-level scheme for Monte-Carlo tree search that gives rise to various specific
+algorithms for online MDP planning, is depicted in Figure 1. Starting with the current state
+s0 , MCTS performs an iterative construction of a tree T rooted at s0 . At each iteration,
+MCTS issues a state-space sample from s0 , expands the tree T using the outcome of that
+sample, and updates information stored at the nodes of T . Once the simulation phase is
+over, MCTS uses the information collected at the nodes of T to recommend an action to
+perform in s0 . For compatibility of the notation with prior literature, in what follows we
+refer to the tree nodes via the states associated with these nodes. Note that, due to the
+Markovian nature of MDPs, it is unreasonable to distinguish between nodes associated with
+the same state at the same depth. Hence, the actual graph constructed by most instances
+of MCTS forms a DAG over nodes (s, h) ∈ S × {0, 1, . . . , H}. By A(s) ⊆ A in what follows,
+we refer to the subset of actions applicable in state s.
+Numerous concrete instances of MCTS have been proposed, with UCT (Kocsis & Szepesvári,
+2006) probably being the most popular such algorithm these days (Gelly & Silver, 2011;
+Sturtevant, 2008; Bjarnason et al., 2009; Balla & Fern, 2009; Eyerich et al., 2010; Keller
+& Eyerich, 2012a). To give a concrete sense of MCTS’s components, as well as to ground
+some intuitions discussed later on, below we describe the specific setting of MCTS corresponding to the core UCT algorithm, and Figure 2 illustrates the UCT tree construction,
+with n denoting the number of state-space samples.
+3
+
+• sample: The samples ρ = hs0 , a1 , s1 , . . . , ak , sk i are all issued from the root node s0 .
+The sample ends either when a sink state is reached, that is, A(sk ) = ∅, or when
+k = H. Each node/action pair (s, a) is associated with a counter n(s, a) and a value
+b a). Both n(s, a) and Q(s,
+b a) are initialized to 0, and then updated
+accumulator Q(s,
+by the update-statistics procedure. Given si , the next-on-the-sample action ai+1 is
+selected according to the deterministic UCB1 policy (Auer, Cesa-Bianchi, & Fischer,
+2002a), originally proposed for optimal cumulative regret minimization in stochastic
+multi-armed bandit (MAB) problems (Robbins, 1952): If n(si , a) > 0 for all a ∈ A(si ),
+then
+s
+"
+#
+log
+n(s
+)
+i
+b i , a) + c
+ai+1 = argmax Q(s
+,
+(1)
+n(si , a)
+a
+P
+where n(s) = a n(s, a). Otherwise, ai+1 is selected uniformly at random from the
+still unexplored actions {a ∈ A(si ) | n(si , a) = 0}. In both cases, si+1 is then sampled according to the conditional probability P(S|si , ai+1 ), induced by the transition
+function T r.
+• expand-tree: Each state-space sample ρ = hs0 , a1 , s1 , . . . , ak , sk i induces a state trace
+hs0 , s1 , . . . , si i inside T , as well as a state trace hsi+1 , . . . , sk i outside of T . In principle,
+T can be expanded with any prefix of hsi+1 , . . . , sk i; a popular choice in prior work
+appears to be expanding T with only the upper-most node si+1 . (If T is constructed
+as a DAG, it is expanded with the first node along ρ that leaves T .)
+• update-statistics: For each node si along ρ that is now part of the expanded tree T ,
+the counter n(si , ai+1 ) is incremented and the estimated Q-value is updated as
+b
+b i , ai+1 ) ← Q(s
+b i , ai+1 ) + Ri − Q(si , ai+1 ) ,
+Q(s
+n(si , ai+1 )
+where Ri =
+
+Pk−1
+j=i
+
+(2)
+
+R(sj , aj+1 , sj+1 ).
+
+• recommend-action: Interestingly, the action recommendation protocol of UCT was
+never properly specified, and different applications of UCT adopt different decision
+rules, including maximization of the estimated Q-value, of the augmented estimated
+Q-value as in Eq. 1, of the number of times the action was selected during the simulation, as well as randomized protocols based on the information collected at the
+root.
+The key property of UCT is that its exploration of the search space is obtained by
+considering a hierarchy of forecasters, each minimizing its own cumulative regret, that is,
+the loss of the total reward incurred by exploring the environment (Auer et al., 2002a).
+Each such pseudo-agent forecaster corresponds to a state/steps-to-go pair (s, h). In that
+respect, according to Theorem 6 of Kocsis and Szepesvári (2006), UCT asymptotically
+achieves the best possible (logarithmic) cumulative regret. However, as recently pointed out
+in numerous works (Bubeck & Munos, 2010; Busoniu & Munos, 2012; Tolpin & Shimony,
+2012; Feldman & Domshlak, 2012), cumulative regret does not seem to be the right objective
+for online MDP planning, and this is because the rewards “collected” at the simulation
+4
+
+n=1
+
+
+
+
+n=4
+
+n=3
+
+n=2
+
+
+Qˆ  8
+
+Qˆ  8
+
+
+
+Qˆ  3
+
+Qˆ  8
+
+Qˆ  3
+
+n=5
+
+Qˆ  12
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Qˆ  3
+
+Qˆ  10
+
+
+
+
+
+Qˆ  7
+
+
+
+
+
+
+
+
+
+
+Qˆ  8
+
+
+
+
+
+…
+
+…
+
+…
+
+…
+
+…
+
+
+
+
+
+Qˆ  8
+
+n=3
+
+n=2
+
+n=1
+Qˆ ! 8
+
+
+
+
+
+
+
+Qˆ ! 3
+
+Qˆ  8
+
+n=5
+
+n=4
+
+Qˆ  3
+
+Qˆ  8
+
+Qˆ  12
+
+Qˆ  3
+
+Qˆ ! 8
+
+Qˆ  10
+
+Qˆ  7
+
+!"#$"
+
+Qˆ ! 3
+
+Qˆ ! 10
+
+Qˆ ! 7
+
+n=50
+Qˆ  3
+
+Qˆ  9
+
+Qˆ  7
+
+Qˆ  6
+
+Qˆ  6
+
+Qˆ  5
+
+Qˆ  4
+
+Qˆ  7
+
+Qˆ  2
+
+Qˆ  6
+
+Qˆ  5
+
+Qˆ  0
+
+Qˆ  9
+
+Qˆ  1
+
+
+Qˆ  7
+
+Qˆ  2
+
+Qˆ  3
+
+Qˆ  3
+
+
+
+Figure 2: Illustration of the UCT dynamics
+
+phase are fictitious. Furthermore, the work of Bubeck, Munos, and Stoltz (2011) on multiarmed bandits shows that minimizing cumulative regret and minimizing simple regret are
+somewhat competing objectives. Indeed, the same Theorem 6 of Kocsis and Szepesvári
+(2006) claims only a polynomial-rate reduction of the probability of choosing a non-optimal
+action, and the results of Bubeck et al. (2011) on simple regret minimization in MABs with
+stochastic rewards imply that UCT achieves only polynomial-rate reduction of the simple
+regret over time. Some attempts have recently been made to adapt UCT, and MCTS-based
+planning in general, to optimizing simple regret in online MDP planning directly, and some
+of these attempts were empirically rather successful (Tolpin & Shimony, 2012; Hay, Shimony,
+Tolpin, & Russell, 2012). However, to the best of our knowledge, none of them breaks UCT’s
+barrier of the worst-case polynomial-rate reduction of simple regret over time.
+
+3. Simple Regret Minimization in MDPs
+We now show that exponential-rate reduction of simple regret in online MDP planning is
+achievable. To do so, we first motivate and introduce a family of MCTS algorithms with a
+two-phase scheme for generating state space samples, and then describe a concrete algorithm
+from this family, BRUE, that (1) guarantees that the probability of recommending a non5
+
+optimal action asymptotically convergences to zero at an exponential rate, and (2) achieves
+exponential-rate reduction of simple regret over time.
+3.1 Exploratory concerns in online MDP planning
+The work of Bubeck et al. (2011) on pure exploration in multi-armed bandit (MAB) problems was probably the first to stress that the minimal simple regret can increase as the
+bound on the cumulative regret is decreases. At a high level, Bubeck et al. (2011) show
+that efficient schemes for simple regret minimization in MAB should be as exploratory as
+possible, thus improving the expected quality of the recommendation issued at the end of
+the learning process. In particular, they showed that the simple round-robin sampling of
+MAB actions, followed by recommending the action with the highest empirical mean, yields
+exponential-rate reduction of simple regret, while the UCB1 strategy that balances between
+exploration and exploitation yields only polynomial-rate reduction of that measure. In that
+respect, the situation with MDPs is seemingly no different, and thus Monte-Carlo MDP
+planning should focus on exploration only. However, the answer to the question of what it
+means to be “as exploratory as possible” with MDPs is less straightforward than it is in
+the special case of MABs.
+For an intuition as to why the “pure exploration dilemma” in MDPs is somewhat complicated, consider the state/steps-to-go pairs (s, h) as pseudo-agents, all acting on behalf of
+the root pseudo-agent (s0 , H) that aims at minimizing its own simple regret in a stochastic
+MAB induced by the applicable actions A(s0 ). Clearly, if an oracle would provide (s0 , H)
+with an optimal action π ∗ (s0 , H), then no further deliberation would be needed until after
+the execution of π ∗ (s0 , H). However, the task characteristics of (s0 , H) are an exception
+rather than a rule. Suppose that an oracle provides us with optimal actions for all pseudoagents (s, h) but (s0 , H). Despite the richness of this information, (s0 , H) in some sense
+remains as clueless as it was before: To choose between the actions in A(s0 ), (s0 , H) needs,
+at the very least, some ordinal information about the expected value of these alternatives.
+Hence, when sampling the futures, each non-root pseudo-agent (s, h) should be devoted to
+two objectives:
+(1) identifying an optimal action π ∗ (s, h), and
+(2) estimating the actual value of that action, because this information is needed by the
+predecessor(s) of (s, h) in T .
+Note that both these objectives are exploratory, yet the problem is that they are somewhat competing. In that respect, the choices made by UCT actually make sense: Each
+sample ρ issued by UCT at (s, h) is a priori devoted both to increasing the confidence in that
+some current candidate a† for π ∗ (s, h) is indeed π ∗ (s, h), as well as to improving the estimate
+of Qh (s, a† ), while as if assuming that π ∗ (s, h) = a† . However, while such an overloading of
+the samples is unavoidable in the “learning while acting” setup of reinforcement learning,
+this should not necessarily be the case in online planning. Moreover, this sample overloading in UCT comes with a high price: As it was shown by Coquelin and Munos (2007), the
+number of samples after which the bounds of UCT on both simple and cumulative regret
+become meaningful might be as high as hyper-exponential in H.
+6
+
+3.2 Separation of Concerns at the Extreme
+Separating the two aforementioned exploratory concerns is at the focus of our investigation
+here. Let s0 be a state of an MDP hS, A, T r, Ri with rewards in [0, 1], K applicable actions
+at each state, B possible outcome states for each action, and finite horizon H. First, to
+get a sense of what separation of exploratory concerns in online planning can buy us, we
+begin with a MAB perspective on MDPs, with each arm in the MAB corresponding to a
+“flat” policy of acting for H steps starting from the current state s0 . A “flat” policy π is a
+minimal partial mapping from state/steps-to-go pairs to actions that fully specifies an acting
+strategy in the MDP for H steps, starting at s0 . Sampling such an arm π is straightforward
+as π prescribes precisely which action should be applied at every state that can possibly
+be encountered along the execution of π. The reward of such an arm π isPstochastic, with
+H−1 i
+H
+support [0, H], and the number of arms in this schematic MAB is K 0 = K i=0 B ≈ K B .
+Now, consider a simple algorithm, NaiveUniform, which systematically samples each
+”flat” policy in a loop, and updates the estimation of the corresponding arm with the
+obtained reward. If stopped at iteration n, the algorithm recommends π(s0 ), where π is
+the arm/policy with best empirical value µ̂π,n . By the iteration n of this algorithm, each
+arm will be sampled at least b Bn H c times. Therefore, using the Hoeffding’s inequality, the
+K
+probability that the chosen arm π is sub-optimal in our MAB is bounded by
+
+P {µ̂π,n > µ̂π∗ ,n } = P {µ̂π,n − µ̂π∗ ,n − (−∆π ) ≥ ∆π } ≤ exp −
+
+b
+
+n
+K BH
+
+c∆2π
+
+2H 2
+
+!
+,
+
+(3)
+
+where ∆π = µπ∗ − µπ , and thus the expected simple regret can be bounded as
+Ern ≤ HK
+
+BH
+
+exp −
+
+b
+
+n
+K BH
+
+cd2
+
+2H 2
+
+!
+.
+
+(4)
+
+Note that NaiveUniform uses each sample ρ = (s0 , a0 , s1 , a1 , . . . , aH−1 , sH ) to update the
+estimation of only a single policy π. However, recalling that arms in our MAB problem
+are actually compound policies, the same sample can in principle be used to update the
+estimates of all policies π 0 that are consistent with ρ in the sense that, for 0 ≤ i ≤ H − 1,
+π 0 (si , H − i) is defined and it is defined as π 0 (si , H − i) = ai . The resulting algorithm,
+CraftyUniform, generates samples by choosing the actions along them uniformly at random,
+and uses the outcome of each sample to update all the policies consistent with it. Note
+that sampling the arms in CraftyUniform cannot be done systematically as in NaiveUniform
+because the set of policies updated at each iteration is stochastic.
+Since the sampling is uniform, the probability of any policy to be updated by the sample
+issued at any iteration of CraftyUniform is K1H . For an arm π 0 , let Nπ0 ,n denote the number
+of samples issued at the n iterations of CraftyUniform that are consistent with the policy π 0 .
+The probability that π, the best empirical arm after n iterations, is sub-optimal is bounded
+by
+
+
+
+
+∆π
+∆π
+P {µ̂π,n > µ̂π∗,n } ≤ P µ̂π,n − µπ ≥
++ P µ̂π∗,n − µπ∗ ≥
+.
+(5)
+2
+2
+7
+
+Each of the two terms on the right-hand side can be bounded as:
+
+
+
+
+n
+∆π
+n o
+n
+∆π
+P µ̂π,n − µπ ≥
+≤ P Nπ,n ≤
++ P Nπ,n >
+, µ̂π,n − µπ ≥
+2
+2K H
+2K H
+2
+
+
+n
+X
+(†)
+∆π
+− n2H
+≤ e 2K +
+Nπ,n = i
+P {Nπ,n = i} P µ̂π,n − µπ ≥
+2
+n
+i=
+
+≤e
+
+≤e
+(‡)
+
+−
+
+−
+
+n
+2K 2H
+
+n
+2K 2H
+
+−
+
+≤e
+
+n
+2K 2H
+
+−
+
+≤ 2e
+
+2K H
+
++1
+
+
+
+∆π
++ P µ̂π,n − µπ ≥
+2
+
+∆π
++ P µ̂π,n − µπ ≥
+2
+−
+
++e
+
+n∆2
+π
+4K 2H H 2
+
+Nπ,n
+
+n
++1
+=
+2K H
+
+
+
+n
++1
+2K H
+
+
+
+Nπ,n =
+
+n
+X
+i= nH
+2K
+
+P {Nπ,n = i}
++1
+
+n∆2
+π
+4K H H 2
+
+,
+(6)
+
+where (†) and (‡) are by the Hoeffding inequality. In turn, similarly to Eq. 4, the simple
+regret for CraftyUniform is bounded by
+H
+
+Ern ≤ 4HK B e
+
+−
+
+nd2
+4K 2H H 2
+
+.
+
+(7)
+
+Since H isa trivial upper-bound
+on Ern , the bound in Eq. 7 becomes effective only when
+
+H
+nd2
+B
+4K
+exp − 4K 2H H 2 < 1, that is, for
+2
+
+n> K B
+
+H
+
+
+·4
+
+H
+d
+
+2
+log K.
+
+(8)
+
+Note that this transition period length is still much better than that of UCT, which is
+hyper-exponential in H. Moreover, unlike in UCT, the rate of the simple regret reduction
+is then exponential in the number of iterations.
+3.3 Two-phase sampling and BRUE
+While both the simple regret convergence rate, as well as the length of the transition period
+of CraftyUniform, are more attractive than those of UCT, this in itself is not much of a
+H
+help: CraftyUniform requires explicit reasoning about K B arms, and thus it cannot be
+efficiently implemented. However, it does show the promise of separation of concerns in
+online planning. We now introduce an MCTS family of algorithms, referred to as MCTS2e,
+that allows utilizing this promise to a large extent.
+The instances of the MCTS2e family vary along four parameters: switching point function σ : N → {1, . . . , H}, exploration policy, estimation policy, and update policy. With
+respect to these four parameters, the MCTS components in MCTS2e are as follows.
+• Similarly to UCT, each node/action pair (s, a) is associated with variables n(s, a)
+b a). However, while counters n(s, a) are initialized to 0, value accumulators
+and Q(s,
+b a) are schematically initialized to −∞.
+Q(s,
+8
+
+• sample: Each iteration of BRUE corresponds to a single state-space sample of the
+MDP, and these samples ρ = hs0 , a1 , s1 , . . . , ak , sk i are all issued from the root node
+s0 . The sample ends either when a sink state is reached, that is, A(sk ) = ∅, or when
+k = H. The generation of ρ is done in two phases: At iteration n, the actions at states
+s0 , . . . , sσ(n)−1 are selected according to the exploration policy of the algorithm, while
+the actions at states sσ(n) , . . . , sk−1 are selected according to its estimation policy.
+• expand-tree: T is expanded with the suffix of state sequence s1 , . . . , sσ(n)−1 that is
+new to T .
+• update-statistics: For each state si ∈ {s0 , . . . , sσ(n)−1 }, the update policy of the algorithm prescribes whether it should be updated. If si should be updated, then the
+counter n(si , ai+1 ) is incremented and the estimated Q-value is updated according to
+Eq. 2 (p. 4).
+• recommend-action: The recommended action is chosen uniformly at random among
+b 0 , a).
+the actions a maximizing Q(s
+In what follows, for n > 0, the n-th iteration of BRUE will be called H-iteration if σ(n) = H.
+At a high level, the two phases of sample generation respectively target the two exploratory
+objectives of online MDP planning: While the sample prefixes aim at exploring the options,
+the sample suffixes aim at improving the value estimates for the current candidates for π ∗ .
+In particular, this separation allows us to introduce a specific MCTS2e instance, BRUE,1
+that is tailored to simple regret minimization. The BRUE setting of MCTS2e is described
+below, and Figure 3 illustrates its dynamics.
+• The switching point function σ : N → {1, . . . , H} is
+σ(n) = H − ((n − 1) mod H),
+
+(9)
+
+that is, the depth of exploration is chosen by a round-robin on {1, . . . , H}, in reverse
+order.
+• At state s, the exploration policy samples an action uniformly at random, while the
+estimation policy samples an action uniformly at random, but only among the actions
+b a).
+a ∈ A(s) that maximize Q(s,
+• For a sample ρ issued at iteration n, only the state/action pair (sσ(n)−1 , aσ(n) ) immediately preceding the switching state sσ(n) along ρ is updated. That is, the information
+obtained by the second phase of ρ is used only for improving the estimate at state
+sσ(n)−1 , and is not pushed further up the sample. While that may appear wasteful
+and even counterintuitive, this locality of update is required to satisfy the formal
+guarantees of BRUE discussed below.
+Before we proceed with the formal analysis of BRUE, a few comments on it, as well as
+on the MCTS2e sampling scheme in general, are in place. First, the template of MCTS2e is
+1. Short for Best Recommendation with Uniform Exploration; the name is carried on from our first
+presentation of the algorithm in (Feldman & Domshlak, 2012), where “estimation” was referred to as
+“recommendation.”
+
+9
+
+n=2
+
+n=1
+
+Uniform
+
+n=3
+a1,r1
+
+a1,r1
+
+a2,r2
+
+a3,r3
+
+a3,r3
+
+a4,r4
+
+a4,r4
+
+a5,r5
+
+a5,r5
+
+…
+
+Switching
+point
+
+Switching
+point
+
+Empirical
+
+aH,rH
+
+Best
+
+a3,r3
+
+Uniform
+
+a4,r4
+
+…
+
+a6,r6
+
+a2,r2
+
+Uniform
+
+…
+
+a2,r2
+
+a1,r1
+
+Switching
+point
+
+Empirical
+
+a5,r5
+
+Best
+a6,r6
+
+Qˆ = 1
+
+a6,r6
+
+Empirical
+Best
+
+aH,rH
+
+Qˆ = 1.5
+Qˆ = 1
+
+aH,rH
+
+n=2
+
+n=1
+
+n=3
+
+Switching
+point
+
+Switching
+point
+
+Switching
+point
+
+Qˆ = 1
+
+Qˆ = 1
+Qˆ = 1.5
+
+Qˆ = 1.5
+
+Qˆ = 1
+
+Qˆ = 1
+
+···
+n=50
+
+n=20
+
+n=10
+
+Qˆ = 5
+
+Qˆ = 7
+Qˆ = 5
+
+Qˆ = 5
+
+Qˆ = 6
+
+Qˆ = 4
+
+Qˆ = 5
+Qˆ = 2
+
+Qˆ = 3
+Qˆ = 0
+
+Qˆ = 5
+
+Qˆ = 5
+
+Qˆ = 2
+
+Qˆ = 4
+
+Qˆ = 5
+
+Qˆ = 0
+
+Qˆ = 7
+
+Qˆ = 5
+Qˆ = 5
+
+Qˆ = 2
+
+Qˆ = 5
+
+Qˆ = 7
+
+Qˆ = 6
+
+Qˆ = 6
+
+Qˆ = 5
+
+Qˆ = 2
+
+Qˆ = 0
+
+Qˆ = 1
+
+Qˆ = 7
+Qˆ = 5
+Qˆ = 2
+
+Qˆ = 7
+Qˆ = 5
+
+Qˆ = 5
+
+Qˆ = 6
+Qˆ = 5
+
+Qˆ = 8
+
+Qˆ = 5
+
+Qˆ = 3
+Qˆ = 1
+
+Qˆ = 7
+
+Qˆ = 2
+
+Qˆ = 2
+
+Qˆ = 4
+
+Qˆ = 3
+
+Qˆ = 6
+
+Qˆ = 2
+
+Qˆ = 6
+Qˆ = 2 Qˆ = 3
+
+Qˆ = 7 Qˆ = 3
+
+Qˆ = 2
+Qˆ = 7
+
+Qˆ = 7
+
+Qˆ = 1
+Qˆ = 1.5
+
+Qˆ = 7
+
+Qˆ = 1
+
+Qˆ = 5
+
+Qˆ = 2
+
+Qˆ = 1.5
+
+Qˆ = 0
+
+Qˆ = 7
+
+Qˆ = 1.5
+Qˆ = 5
+
+Qˆ = 5
+
+Qˆ = 1
+
+Qˆ = 3
+
+Qˆ = 1
+
+Qˆ = 1
+
+Qˆ = 2
+
+Qˆ = 0
+
+Qˆ = 1
+
+Figure 3: Illustration of the BRUE dynamics
+
+rather general, and some of its parametrizations will not even guarantee convergence to the
+optimal action. This, for instance, will be the case with a (seemingly minor) modification
+of BRUE to purely uniform estimation policy. In short, MCTS2e should be parametrized
+with care. Second, while in what follows we focus on BRUE, other instances of MCTS2e
+may appear to be empirically effective as well with respect to the reduction of simple regret
+over time. Some of them, similarly to BRUE, may also guarantee exponential-rate reduction
+of simple regret over time. Hence, we clearly cannot, and do not, claim any uniqueness of
+BRUE in that respect. Finally, some other families of MCTS algorithms, more sophisticated
+that MCTS2e, can give rise to even more (formally and/or empirically) efficient optimizers of
+simple regret. The BRUE(α) set of algorithms that we discuss later on is one such example.
+10
+
+4. Upper Bounds on Simple Regret Reduction Rate with BRUE
+For the sake of simplicity, in our formal analysis of BRUE we assume uniqueness of the
+optimal policy π ∗ ; that is, at each state s and each number h of steps-to-go, there is a
+single optimal action, and it is π ∗ (s, h). Let Tn be the graph obtained by BRUE after n
+b h (s, a) denote the accumulated value Q(s,
+b a) for s at depth H − h. For
+iterations, and let Q
+B
+all state/steps-to-go pairs (s, h) ∈ Tn , πn (s, h) is a randomized strategy, uniformly choosing
+b h (s, a). We also use some additional auxiliary notation.
+among actions a maximizing Q
+K = maxs∈S |A(s)|, i.e., the maximal number of actions per state.
+p = mins,a,s0 :T r(s,a,s0 )>0 T r(s, a, s0 ), i.e., the likelihood of the least likely (but still possible) outcome of an action in our problem.
+d = mins,a ∆1 [s, a], i.e., the smallest difference between the value of the optimal and a
+second-best action at a state with just one step-to-go.
+Our key result on the BRUE algorithm is Theorem 1 below. The proof of Theorem 1, as
+well as of several required auxiliary claims, is given in Appendix A. Here we outline only
+the key issues addressed by the proof, and provide a high-level flow of the proof in terms of
+a few central auxiliary claims.
+Theorem 1 Let BRUE be called on a state s0 of an MDP hS, A, T r, Ri with rewards in
+[0, 1] and finite horizon H. There exist pairs of parameters c, c0 > 0, dependent only on
+{p, d, K, H}, such that, after n > H iterations of BRUE, we have simple regret bounded as
+0
+
+E∆H [s, πnB (s0 , H)] ≤ Hc · e−c n ,
+and choice-error probability bounded as
+
+0
+P πnB (s0 , H) 6= π ∗ (s0 , H) ≤ c · e−c n .
+
+(10)
+
+(11)
+
+In particular, these bounds hold for
+c=
+
+4K 3H
+
+2 −2H
+
+Q
+4 H−1 16(H−1)2
+(H!)3 H−1
+h=1 (h!) 24
+,
+d2H 2 −4H+2 p3H 2 −3H
+
+and
+c0 =
+
+3d2H−2 p2H−1
+.
+2H16H−1 (H!)2 K 2H
+
+(12)
+
+(13)
+
+Before we proceed any further, some discussion of the statements in Theorem 1 are in
+place. First, the parameters c and c0 in the bounds established by Theorem 1 are problemdependent: in addition to the dependance on the horizon H and the choice branching factor
+K (which is unavoidable), the parameters c and c0 also depend on the distribution parameters p and d. While it is possible that this dependence can be partly alleviated, Bubeck
+et al. (2011) showed that distribution-free exponential bounds on the simple regret reduction rate cannot be achieved even in MABs, that is, even in single-step-to-go MDPs (see
+Remark 2 of Bubeck et al. (2011), which is based on a lower bound on the cumulative
+11
+
+regret established by Auer, Cesa-Bianchi, Freund, & Schapire, 2002b). Second, the specific
+parameters c and c0 provided by Eqs. 12 and 13 are worst-case for MDPs with parameters
+d, p, and K, and the bound in Eq. 10 becomes effective after
+"
+ 2#
+ln(c)
+KH εH
+n> 0 =O
+c
+pd
+iterations, for some small constant ε > 1. While there is still some gap with this transition
+period length and the transition period length of the theoretical CraftyUniform algorithm
+(see Eq. 8), this gap is not that large.2
+The proof of Lemma 2 below constitutes the crux of the proof of Theorem 1. Once
+we have proven this lemma, the proof of Theorem 1 stems from it in a more-or-less direct
+manner.
+Lemma 2 Let BRUE be called on a state s0 of an MDP hS, A, T r, Ri with rewards in [0, 1]
+and finite horizon H. For each h ∈ JHK, there exist parameters ch , c0h > 0, dependent only
+on {p, d, K, H}, such that, for each state s reachable from s0 in H − h steps and any t > 0,
+it holds that
+
+
+b h (s, a) − Qh (s, a) ≥ d nh (s, a) = t ≤ ch e−c0h t ,
+P Q
+2
+
+
+(14)
+d
+−c0h t
+b
+P Qh (s, a) − Qh (s, a) ≤ −
+nh (s, a) = t ≤ ch e
+.
+2
+In particular, these bounds hold for
+Q
+4 h−1 16(h−1)2
+(h!)3 h−1
+i=1 (i!) 24
+,
+d2(h−1)2 · p2Hh+h2 −2H−h
+
+2 −2H−1
+
+ch =
+
+K 2Hh+h
+
+and
+c0h =
+
+3d2(h−1) pH+h−1
+.
+16h−1 (h!)2 K H+h−1
+
+(15)
+
+(16)
+
+The proof for Lemma 2 is by induction on h. Starting with the induction basis for h = 1,
+it is easy to verify that, by the Chernoff-Hoeffding inequality,
+
+
+d2
+d
+b
+P Q1 (s, a) − Q1 (s, a) ≥
+n (s, a) = t ≤ 2e− 2 t ,
+(17)
+2
+2
+
+that is, the assertion is satisfied with c1 = 1 and c01 = d2 . Now, assuming the claim holds
+for h ≥ 1, below we outline the proof for h + 1, relegating the actual proof in full detail to
+Appendix A.
+In the proof for h > 1, it is crucial to note the invalidity of applying the ChernoffHoeffding bound directly, as was done in Eq. 17. There are two reasons for this.
+2. Some of this gap can probably be eliminated by more accurate bounding in the numerous bounding steps
+towards the proof of Theorem 1. However, all such improvements we tried made the already lengthy
+proof of Theorem 1 even more involved.
+
+12
+
+b is an unbiased estimator of Q, that is, EQ
+b = Q. In contrast, the
+(F1) For h = 1, Q
+b
+estimates inside the tree (at nodes with h > 1) are biased. This bias stems from Q
+possibly being based on numerous sub-optimal choices in the sub-tree rooted in (s, h).
+b are independent. This is not so for h > 1,
+(F2) For h = 1, the summands accumulated by Q
+where the accumulated reward depends on the selection of actions in subsequent nodes,
+which in turn depends on previous rewards.
+However, we show that these deficiencies of h > 1 can still be overcome through a novel
+modification of the seminal Hoeffding-Azuma inequality.
+Lemma 3 (Modified Hoeffding-Azuma inequality) Let {Xi }∞
+i=1 be a sequence of random variables with support [0, h] and µi , EXi . If limi→∞ µi = µ, and
+P {E [Xi | X1 , . . . , Xi−1 ] 6= µ} ≤ cp e−ce i ,
+
+(18)
+
+for some 0 < cp and 0 < ce ≤ 1, then, for all 0 < δ ≤ h2 , it holds that
+( t
+X
+
+)
+
+
+3δ 2 ce
+2h2
+≤ 1 + cp 2 2 · e− 2h2 t ,
+P
+Xi ≥ µt + tδ
+δ ce
+i=1
+( t
+)
+
+
+X
+3δ 2 ce
+2h2
+P
+≤ 1 + cp 2 2 · e− 2h2 t .
+Xi ≤ µt − tδ
+δ ce
+
+
+(19)
+
+(20)
+
+i=1
+
+Together with Lemma 4 below, the inequalities provided by Lemma 3 allow us to prove
+the induction hypothesis in the proof of the central Lemma 2. Note that the specific bound
+in Lemma 3 is selected so to maximize the exponent coefficient. For any 0 ≤ β ≤ 1, the
+probabilities of interest in Eqs. 19-20 can also be bounded by
+
+
+c (1−β)
+3δ 2 ce β
+cp
+− e 2
+2h
+e− 2h2 t ;
+1+
+e
+ce (1 − β)
+for further details, we refer the reader to Discussion 14 in Appendix A.
+Definition 1 Let hS, A, T r, Ri be an MDP with rewards in [0, 1], planned for initial state
+s0 ∈ S and finite horizon H. Let s be a state reachable from s0 with h steps still to go, let
+a be an action applicable in s, and let πtB be a policy induced by running BRUE on s0 until
+exactly t > 0 samples have finished their exploration phase with applying action a at s with
+h − 1 steps still to go. Given that,
+• Xt,h (s, a) is a random variable, corresponding to the reward obtained by taking a at
+s, and then following πtB for the remaining h − 1 steps.
+• Et,h (s, a) is the event in which Xt,h (s, a) is sampled along the optimal actions at each
+of the h − 1 choice points delegated to πtB .
+• δt,h (s, a) = Qh (s, a) − E [Xt,h (s, a)] .
+13
+
+Lemma 4 Let hS, A, T r, Ri be an MDP with rewards in [0, 1], planned for initial state
+s0 ∈ S and finite horizon H. Let s be a state reachable from s0 with h + 1 steps still
+to go, and a be an action applicable in s. Considering Et,h+1 (s, a) and δt,h+1 (s, a) as in
+Definition 1, for any t > 0, if Lemma 2 holds for horizon h, then
+pc0h
+
+P {¬Et,h+1 (s, a)} ≤ 2Kh (2 + ch ) e− 6K t ,
+pc0
+− 6Kh t
+
+δt,h+1 (s, a) ≤ 2Kh2 (2 + ch ) e
+
+(21)
+.
+
+(22)
+
+Together with a modified version of the Hoeffding-Azuma bound in Lemma 3, the bounds
+b h+1 around Qh+1 as
+established in Lemma 4 allow us to derive concentration bounds for Q
+in Lemma 5 below, which serves the key building block for proving the induction hypothesis
+in the proof of Lemma 2.
+Lemma 5 Let BRUE be called on a state s0 of an MDP hS, A, T r, Ri with rewards in [0, 1]
+and finite horizon H. For each state s reachable s0 with h + 1 steps still to go, each action
+a applicable, and any t > 0, it holds that
+
+P
+
+ 
+
+d2 pc0h
+3 (h + 1)3 c
+K
+d
+−
+h
+b h+1 (s, a) − Qh+1 (s, a) ≥
+16(h+1)2 K .
+nh+1 (s, a) = t ≤ 3456 ·
+Q
+e
+2
+d2 p2 c02
+h
+(23)
+
+5. Learning With Forgetting and BRUE(α)
+When we consider the evolution of action value estimates in BRUE over time (as well
+as in all other Monte-Carlo algorithms for online MDP planning), we can see that, in
+internal nodes these estimates are based on biased samples that stem from the selection
+of non-optimal actions at descendant nodes. This bias tends to shrink as more samples
+are accumulated down the tree. Consequently, the estimates become more accurate, the
+probability of selecting an optimal action increases accordingly, and the bias of ancestor
+nodes shrinks in turn. An interesting question in this context is: shouldn’t we weigh
+differently samples obtained at different stages of the sampling process? Intuition tells
+us that biased samples still provide us with valuable information, especially when they
+are all we have, but the value of this information decreases as we obtain more and more
+accurate samples. Hence, in principle, putting more weight on samples with smaller bias
+could increase the accuracy of our estimates. The key question, of course, is which of all
+possible weighting schemes are both reasonable to employ and preserve the exponential-rate
+reduction of expected simple regret.
+Here we describe BRUE (α), an algorithm that generalizes BRUE ≡ BRUE(1) by basing
+the estimates only on the α fraction of most recent samples. We discuss the value of this
+addition both from the perspective of the formal guarantees, as well as from the perspective
+of empirical prospects. BRUE(α) differs from BRUE in two points:
+b a), each node/action pair (s, a) in BRUE(α)
+• In addition to the variables n(s, a) and Q(s,
+is associated with a list L(s, a) of rewards, collected at each of the n(s, a) samples that
+b a).
+are responsible for the current estimate Q(s,
+14
+
+• When a sample ρ = hs0 , a1 , s1 , . . . , ak , sk i is issued at iteration n, and update-statistics
+updates the variables at x = (sσ(n)−1 , aσ(n) ), that update is done not according to
+Eq. 2 as in BRUE, but according to:
+n(x) ← n(x) + 1,
+L(x)[n(x)] ←
+
+k−1
+X
+
+R(si , ai+1 , si+1 ),
+(24)
+
+i=σ(n)−1
+
+b
+Q(x)
+←
+
+1
+dα · n(x)e
+
+n(x)
+
+X
+
+L(x)[i].
+
+i=n(x)−dα·n(x)e
+
+Theorem 6 Let BRUE (α) be called on a state s0 of an MDP hS, A, T r, Ri with rewards
+in [0, 1] and finite horizon H. There exist pairs of parameters c, c0 > 0, dependent only on
+{α, p, d, K, H}, such that, after n > H iterations of BRUE, we have simple regret bounded
+as
+0
+E∆H [s, πnB (s0 , H)] ≤ Hc · e−c n ,
+(25)
+and choice-error probability bounded as
+
+0
+P πnB (s0 , H) 6= π ∗ (s0 , H) ≤ c · e−c n .
+
+(26)
+
+The proof for Theorem 6 follows from Lemma 7 below similarly to the way Theorem 1
+follows from Lemma 2. Note that in Theorem 6 we do not provide explicit expressions for
+the constants c and c0 as we did in Theorem 1 (for α = 1). This is because the expressions
+that can be extracted from the recursive formulas in this case do not bring much insight.
+However, we discuss the potential benefits of choosing α < 1 in the context of our proof of
+Theorem 6.
+Lemma 7 Let BRUE(α) be called on a state s0 of an MDP hS, A, T r, Ri with rewards in
+[0, 1] and finite horizon H. For each h ∈ JHK, there exist parameters ch , c0h > 0, dependent
+only on {α, p, d, K, H}, such that, for each state s reachable from s0 in H − h steps and any
+t > 0, it holds that
+
+
+d
+0
+b
+P Qh (s, a) − Qh (s, a) ≥
+nh (s, a) = t ≤ ch e−ch t ,
+2
+
+
+(27)
+d
+−c0h t
+b
+P Qh (s, a) − Qh (s, a) ≤ −
+nh (s, a) = t ≤ ch e
+.
+2
+The proof for Lemma 7 is by induction, following the same line of the proof for Lemma 2.
+In fact, it deviates from the latter only in the application of the modified Hoeffding-Azuma
+inequality, which has to be further modified to capture the partial sums as in BRUE(α).
+Lemma 8 (Modified Hoeffding-Azuma inequality for partial sums) Let {Xi }∞
+i=1 be
+a sequence of random variables with support [0, h] and µi , EXi . If limi→∞ µi = µ, and
+P {E [Xi | X1 , . . . , Xi−1 ] 6= µ} ≤ cp e−ce i ,
+15
+
+(28)
+
+for some 0 < cp and 0 < ce ≤ 1, then, for all 0 < δ ≤ h2 , it holds that
+
+P
+
+P
+
+
+t
+ X
+
+i=t−dαte
+
+t
+ X
+
+Xi ≥ µt + tδ
+
+Xi ≤ µt − tδ
+
+
+
+i=t−dαte
+
+
+
+
+
+
+
+
+
+≤
+
+≤
+
+
+3δ 2 ce
+cp
+−ce (1−α)2 t
+1+
+e− 2h2 αt ,
+e
+ce (1 − α)
+
+(29)
+
+
+3δ 2 ce
+cp
+−ce (1−α)2 t
+1+
+e− 2h2 αt .
+e
+ce (1 − α)
+
+(30)
+
+Considering the benefits of “sample forgetting” as in BRUE(α), let us compare the bound
+in Lemma 8 to the bound
+
+
+2
+c (1−β)
+cp
+− 3δ c2e β t
+− e 2
+e 2h
+1+
+e 2h
+,
+ce (1 − β)
+provided by Lemma 3 for BRUE, that is, when all accumulated samples are averaged. While
+both bounds are very similar, the exponent of the second exponential term is multiplied for
+BRUE(α < 1) by (1 − α) t. This poses a tradeoff: Decreasing α reduces the sampling bias,
+c
+and thus decreases the term cpe , but increases the other exponential term with no leading
+constant. Obviously, since there is no bias at leaf nodes, it makes no sense to set α < 1
+c
+there. However, as we go further up the tree, the bias tends to grow ( cpe >> 1), but we also
+expect to have more samples (t is larger). Thus, from the perspective of formal guarantees,
+it seems appealing to choose smaller values of α. Nevertheless, we do not try to optimize
+here the value of α: First, optimizing bounds doesn’t necessarily lead to optimized empirical
+accuracy. Second, the underlying optimization would have to be specific to each horizon h
+and each sample size t (which is obviously out of the question), and thus anyway we would
+have to consider only some rough approximations to this optimization problem. Finally,
+biased samples in practice might be more valuable than what the theory suggests, as long
+as all actions at the same state/steps-to-go decision point experience a similar bias.
+
+6. Experimental Evaluation
+We have evaluated BRUE empirically on the MDP sailing domain (Péret & Garcia, 2004)
+that was used in previous works for evaluating MC planning algorithms (Péret & Garcia,
+2004; Kocsis & Szepesvári, 2006; Tolpin & Shimony, 2012), as well as on random game trees
+used in the original empirical evaluation of UCT (Kocsis & Szepesvári, 2006).
+In the sailing domain, a sailboat navigates to a destination on an 8-connected grid
+representing a marine environment, under fluctuating wind conditions. The goal is to reach
+the destination as quickly as possible, by choosing at each grid location a neighbor location
+to move to. The duration of each
+√ such move depends on the direction of the move (ceteris
+paribus, diagonal moves take 2 more time than straight moves), the direction of the wind
+relative to the sailing direction (the sailboat cannot sail against the wind and moves fastest
+with a tail wind), and the tack. The direction of the wind changes over time, but its strength
+is assumed to be fixed. This sailing problem can be formulated as a goal-driven MDP over
+finite state space and a finite set of actions, with each state capturing the position of the
+sailboat, wind direction, and tack.
+16
+
+0.8
+
+0.35
+
+0.3
+
+brue
+brueper(0.9)
+
+0.7
+
+uct
+gct
+
+0.6
+
+brue
+brueper(0.9)
+uct
+gct
+
+Average Error
+
+Average Error
+
+0.25
+
+0.2
+
+0.15
+
+0.5
+0.4
+0.3
+
+0.1
+
+0.2
+0.05
+
+0
+
+0.1
+
+1
+
+2
+
+3
+
+4
+
+5
+6
+7
+Running Time (sec)
+
+8
+
+9
+
+0
+
+10
+
+0
+
+5
+
+10
+
+15
+
+5×5
+
+35
+
+40
+
+45
+
+50
+
+10 × 10
+3
+
+1.6
+
+brue
+brueper(0.9)
+
+brue
+brueper(0.9)
+
+1.4
+
+uct
+gct
+
+uct
+gct
+
+2.5
+
+Average Error
+
+1.2
+
+Average Error
+
+20
+25
+30
+Running Time (sec)
+
+1
+0.8
+
+2
+
+1.5
+
+0.6
+0.4
+
+1
+
+0.2
+0
+
+0.5
+0
+
+10
+
+20
+
+30
+
+40
+50
+60
+Running Time (sec)
+
+70
+
+80
+
+90
+
+100
+
+20 × 20
+
+0
+
+50
+
+100
+
+150
+
+200
+250
+300
+Running Time (sec)
+
+350
+
+400
+
+450
+
+500
+
+40 × 40
+
+Figure 4: Empirical performance of BRUE, BRUE(0.9), UCT, and -greedy + UCT (denoted
+as GCT, for short) in terms of the average error on sailing domain problems on
+n × n grids with n ∈ {5, 10, 20, 40}.
+
+In a goal-driven MDP, the lengths of the paths to a terminal state are not necessarily
+bounded, and thus it is not entirely clear to what depth BRUE shall construct its tree.
+In the sailing domain, we chose H to be 4 × n, where n is the grid-size of the problem
+instance, as it is unlikely that the optimal path between any two locations on the grid will
+be larger than a complete encircling of the considered area. We note, however, that the
+recommendation-oriented samples ρ̄ always end at a terminal state, similar to the rollouts
+issued by UCT and -greedy + UCT.
+Snapshots of the results for different grid sizes are shown in Figure 4. We compared
+BRUE with two MCTS-based algorithms: the UCT algorithm, and a recent modification of
+UCT, -greedy + UCT, obtained from the former by replacing the UCB1 policy at the root
+node with the -greedy policy (Tolpin & Shimony, 2012). The motivation behind the design
+of -greedy + UCT was to improve the empirical simple regret of UCT, and the results for
+-greedy + UCT reported by (Tolpin & Shimony, 2012) (and confirmed by our experiments
+17
+
+3.5
+
+0.4
+
+brue
+brueper(0.9)
+
+0.35
+
+uct
+gct
+
+uct
+gct
+
+0.3
+
+2.5
+
+0.25
+
+Average Error
+
+Average Error
+
+brue
+brueper(0.9)
+
+3
+
+0.2
+0.15
+
+2
+
+1.5
+
+1
+
+0.1
+
+0.5
+
+0.05
+
+10
+
+20
+
+30
+40
+Running Time (sec)
+
+50
+
+0
+0
+
+60
+
+B = 6/D = 6
+
+10
+
+20
+
+30
+40
+Running Time (sec)
+
+50
+
+60
+
+B = 2/D = 16
+
+Figure 5: Empirical performance of BRUE, UCT, and -greedy + UCT (denoted as GCT) in
+terms of the average error on the random game trees with branching factor B
+and tree depth D.
+
+here) are very impressive. We also show the results for BRUEper (0.9), a slight modification
+of BRUE(0.9) with a more permissive update scheme: Instead of updating only the stateaction node at the level of the switching point, we also update any ancestor for which either
+not all applicable actions have been sampled or the chosen action was identical to the best
+empirical one.
+All four algorithms were implemented within a single software infrastructure. As suggested by more recent works on UCT, the exploration coefficient for UCT and -greedy + UCT
+(parameter c in Eq. 1) was set to the empirical best value of an action at the decision
+point (Keller & Eyerich, 2012b). (This setting of the exploration coefficient resulted in better performance of both UCT and -greedy + UCT than with the settings reported on the
+sailing domain in the respective original publications.) The  parameter in -greedy + UCT
+was set to 0.5 as in the experiments of Tolpin & Shimony, 2012. Each algorithm was run
+on 1000 randomly chosen initial states s0 , and the performance of the algorithm was assessed in terms of the average error Q(s0 , a) − V (s0 ), that is, the difference between the
+true values of the action a chosen by the algorithm and that of the optimal action π ∗ (s0 ).
+Consistently with the results reported by Tolpin and Shimony (2012), on the smaller tasks
+-greedy + UCT outperformed UCT by a very large margin, with the latter exhibiting very
+little improvement over time even on the smallest, 5 × 5, grids. The difference between
+-greedy + UCT and UCT on the larger tasks was less notable. In turn, BRUE substantially
+outperformed -greedy + UCT, with the improvement being consistent except for relatively
+short planning deadlines, and BRUEper (0.9) performed even better than BRUE.
+The above allows us to conclude that BRUE is not only attractive in terms of the
+formal performance guarantees, but can also be very effective in practice for online planning.
+Likewise, the “learning with forgetting” extension of BRUE(α) also has its practical merits.
+Under the same parameter setting of UCT and -greedy + UCT, we have also evaluated the
+18
+
+three algorithms in a domain of random game trees whose goal is a simple modeling of
+two-person zero-sum games such as Go, Amazons and Globber. In such games, the winner
+is decided by a global evaluation of the end board, with the evaluation employing this or
+another feature counting procedure; the rewards thus are associated only with the terminal
+states. The rewards are calculated by first assigning values to moves, and then summing up
+these values along the paths to the terminal states. Note that the move values are used for
+the tree construction only and are not made available to the players. The values are chosen
+uniformly from [0, 127] for the moves of MAX, and from [−127, 0] for the moves of MIN.
+The players act so to (depending on the role) maximize/minimize their individual payoff:
+the aim of MAX is to reach terminal s with as high R(s) as possible, and the objective of
+MIN is similar, mutatis mutandis. This simple game tree model is similar in spirit to many
+other game tree models used in previous work (Kocsis & Szepesvári, 2006; Smith & Nau,
+1994), except that the success/failure of the players in measured not on a ternary scale of
+win/lose/draw, but via the actual payoffs they receive. We ran some experiments with two
+different settings of the branching factor (B) and tree depths (D). As in the sailing domain,
+we compared the convergence rate obtained by BRUE, UCT and -greedy + UCT. Figure 5
+plots the average error rate for two configurations, B = 6, D = 6 and B = 2, D = 16, with
+the average in each setting obtained over 500 trees. The results here appear encouraging as
+well, with BRUE overtaking the other two algorithms more quickly on the deeper trees.
+
+7. SUMMARY
+We have introduced BRUE, a simple Monte-Carlo algorithm for online planning in MDPs
+that guarantees exponential-rate reduction of the performance measures of interest, namely
+the simple regret and the probability of erroneous action choice. This improves over previous
+algorithms such as UCT, which guarantee only polynomial-rate reduction of these measures.
+The algorithm has been formalized for finite horizon MDPs, and it was analyzed as such.
+However, our empirical evaluation shows that it also performs well on goal-driven MDPs
+and two-person games.
+A few questions remain for future work. In the setting of γ-discounted MDPs with
+infinite horizons, a straightforward way to employ BRUE is to fix a horizon H, use the
+algorithm as is, and derive guarantees on the aforementioned measures of interest by simply accounting for the additive gap of γ H Rmax /(1 − γ) between the state/action values
+under horizon H and those under an infinite horizon. However, this is not necessarily the
+best way to plan online for infinite-horizon MDPs, and thus this setting requires further
+inspection. Second, it is not unlikely that the state-space independent factors ch , and c0h
+in the guarantees of BRUE can be improved by employing more sophisticated combinations
+of exploration and estimation samples. Another important point to consider is the speed
+of convergence to the optimal action, as opposed to the speed of convergence to “good”
+actions. BRUE is geared towards identifying the optimal action, although in many large
+MDPs, “good” is often the best one can hope for. To identify the optimal solution, BRUE
+devotes samples equally to all depths. However, focusing on nodes closer to the root node
+may improve the quality of the recommendation if the planning time is severely limited.
+Finally, the core tree sampling scheme employed by BRUE differs from the more standard
+scheme employed in previous work. While this difference plays a critical role in establishing
+19
+
+the formal guarantees of BRUE, it is still unclear whether that difference is necessary for
+establishing exponential-over-time reduction of the performance measures.
+Acknowledgements
+This work is partially supported by and carried out at the Technion-Microsoft Electronic
+Commerce Research Center, as well as partially supported by the Air Force Office of Scientific Research, USAF, under grant number FA8655-12-1-2096.
+
+References
+Auer, P., Cesa-Bianchi, N., & Fischer, P. (2002a). Finite-time analysis of the multiarmed
+bandit problem. Machine Learning, 47 (2-3), 235–256.
+Auer, P., Cesa-Bianchi, N., Freund, Y., & Schapire, R. E. (2002b). The nonstochastic
+multiarmed bandit problem. SIAM Journal of Computing, 32 (1), 48–77.
+Balla, R., & Fern, A. (2009). UCT for tactical assault planning in real-time strategy games.
+In Proceedings of the 21st International Joint Conference on Artificial Intelligence
+(IJCAI), pp. 40–45.
+Bjarnason, R., Fern, A., & Tadepalli, P. (2009). Lower bounding Klondike Solitaire with
+Monte-Carlo planning. In Proceedings of the 19th International Conference on Automated Planning and Scheduling (ICAPS).
+Bonet, B., & Geffner, H. (2012). Action selection for MDPs: Anytime ao∗ vs. uct. In
+Proceedings of the 26th AAAI Conference on Artificial Intelligence (AAAI).
+Bubeck, S., & Munos, R. (2010). Open loop optimistic planning. In Proceedings of the 23rd
+Annual Conference on Learning Theory (COLT), pp. 477–489.
+Bubeck, S., Munos, R., & Stoltz, G. (2011). Pure exploration in finitely-armed and
+continuous-armed bandits. Theoretical Computer Science, 412 (19), 1832–1852.
+Busoniu, L., & Munos, R. (2012). Optimistic planning for Markov decision processes. In
+Proceedings of the Fifteenth International Conference on Artificial Intelligence and
+Statistics (AISTATS), No. 22 in Journal of Machine Learning Research - Proceedings
+Track, pp. 182–189.
+Cazenave, T. (2009). Nested Monte-Carlo search. In Proceedings of the 21st International
+Joint Conference on Artificial Intelligence (IJCAI), pp. 456–461, Pasadena, California.
+Coquelin, P.-A., & Munos, R. (2007). Bandit algorithms for tree search. In Proceedings
+of the 23rd Conference on Uncertainty in Artificial Intelligence (UAI), pp. 67–74,
+Vancouver, BC, Canada.
+Eyerich, P., Keller, T., & Helmert, M. (2010). High-quality policies for the Canadian Traveler’s problem. In Proceedings of the 24th AAAI Conference on Artificial Intelligence
+(AAAI).
+Feldman, Z., & Domshlak, C. (2012). Online planning in mdps: Rationality and optimization. CoRR, arXiv:1206.3382v1 [cs.AI].
+20
+
+Gelly, S., & Silver, D. (2011). Monte-Carlo tree search and rapid action value estimation in
+computer Go. Artificial Intelligence, 175 (11), 1856–1875.
+Hay, N., Shimony, S. E., Tolpin, D., & Russell, S. (2012). Selecting computations: Theory
+and applications. In Proceedings of the Annual Conference on Uncertainty in Artificial
+Intelligence (UAI).
+Kearns, M. J., Mansour, Y., & Ng, A. Y. (1999). A sparse sampling algorithm for nearoptimal planning in large Markov decision processes. In Proceedings of the 16th International Joint Conference on Artificial Intelligence (IJCAI), pp. 1324–1231, Stockholm, Sweden.
+Keller, T., & Eyerich, P. (2012a). Probabilistic planning based on UCT. In Proceedings of
+the 22nd International Conference on Automated Planning and Scheduling (ICAPS).
+Keller, T., & Eyerich, P. (2012b). PROST: Probabilistic planning based on UCT. In Proceedings of the 22nd International Conference on Automated Planning and Scheduling
+(ICAPS), pp. 119–127.
+Kocsis, L., & Szepesvári, C. (2006). Bandit based Monte-Carlo planning. In Proceedings
+of the 17th European Conference on Machine Learning (ECML), pp. 282–293, Berlin,
+Germany.
+Kolobov, A., Mausam, & Weld, D. (2012). LRTDP vs. UCT for online probabilistic planning. In Proceedings of the 26th AAAI Conference on Artificial Intelligence (AAAI).
+Péret, L., & Garcia, F. (2004). On-line search for solving Markov decision processes via
+heuristic sampling. In Proceedings of the 16th Eureopean Conference on Artificial
+Intelligence (ECAI), pp. 530–534, Valencia, Spain.
+Puterman, M. (1994). Markov Decision Processes. Wiley, New-York.
+Robbins, H. (1952). Some aspects of the sequential design of experiments. Bulletin of the
+American Mathematical Society, 58 (5), 527535.
+Rosin, C. D. (2011). Nested rollout policy adaptation for Monte Carlo tree search. In Proceedings of the 22nd International Joint Conference on Artificial Intelligence (IJCAI),
+pp. 649–654, Barcelona, Catalonia, Spain.
+Smith, S. J., & Nau, D. S. (1994). An analysis of forward pruning. In Proceedings of the
+AAAI Conference on Artificial Intelligence (AAAI), pp. 1386–1391.
+Sturtevant, N. (2008). An analysis of UCT in multi-player games. In Proceedings of the 6th
+International Conference on Computers and Games (CCG), p. 3749.
+Sutton, R. S., & Barto, A. G. (1998). Reinforcement Learning: An Introduction. MIT Press.
+Tolpin, D., & Shimony, S. E. (2012). MCTS based on simple regret. In Proceedings of the
+26th AAAI Conference on Artificial Intelligence (AAAI).
+
+21
+
+Appendices
+Appendix A. Proof of Theorem 1
+The proof of Theorem 1 relies on the inductive assumption with respect to the correctness
+of Lemma 2, as well as on several auxiliary claims that we prove in what follows. The
+dependence diagram below depicts the overall flow of the proof, with the more central
+claims being depicted with rectangular nodes.
+
+Fact 10
+
+Lemma 3
+
+Lemma 2 (I.A.)
+
+Prop. 6
+
+Prop. 7
+
+Lemma 5
+
+Lemma 2
+
+Theorem 1
+
+Lemma 4
+
+Prop. 8
+
+Prop. 9
+
+Proposition 9 (Concentration inequality for negative-binomial distributions) Let
+NB (t, p) be a random variable with negative-binomial distribution.
+
+
+tp
+3t
+P NB (t, p) ≤
+≤ e− 6
+(31)
+4p
+Proof: It is well known that the event in which the number of Bernoulli trials required to
+obtain the t-th success is smaller than some positive integer b is equivalent to the event that
+the number of successes in b Bernoulli trials is at least t. Therefore, for any 0 < δ < 1,
+
+
+
+
+
+
+t
+t
+P NB (t, p) ≤ δ
+= P Bin δ , p ≥ t
+p
+p
+
+
+
+
+t
+= P Bin δ , p ≥ tδ + (t − tδ)
+(32)
+p
+≤ e−
+
+2t2 (1−δ)2 p
+tδ
+
+by the Hoeffding inequality,
+and choosing δ =
+
+3
+4
+
+yields the result.
+
+Proposition 10 (Number of Child Samples Bound) Let BRUE be called on a state
+s0 of an MDP hS, A, T r, Ri with rewards in [0, 1] and finite horizon H. Let (s, h) be a node
+reachable from (s0 , H), and in turn, (s0 , h0 ) be a node reachable from (s, h) via an action
+sequence that starts with applying action a at s. Then, for any a0 ∈ A (s0 ), we have
+
+
+2
+p 0 (s0 ,a0 )
+ ph0 (s0 , a0 )
+−t h6p (s,a)
+0 0
+h
+P nh0 s , a ≤
+t nh (s, a) = t ≤ 2e
+,
+(33)
+4ph (s, a)
+where ph (s, a) is the probability that an (H − h)-iteration of BRUE will issue a sample,
+whose exploration phase ends with applying action a at state s with h steps still to go.
+22
+
+Proof: By the choice of the switching point function of BRUE as in Eq. 9, the number
+of samples of action a0 in the descendant node (s0 , h0 ) between two consecutive samples of
+action a in node (s, h) is distributed according to
+1+γ
+X
+
+βi ,
+
+(34)
+
+i=1
+
+where γ ∼ Geo (ph (s, a)) and βi ∼ Ber (ph0 (s0 , a0 )) are all independent random variables.
+Indeed, for every pair of consecutive iterations n < n0 with σ(n) = σ(n0 ) = H − h,
+(i) there is exactly one iteration n < n00 < n0 with σ(n00 ) = H − h0 , and
+(ii) the number of (H −h)-iterations between two consecutive (H −h)-iterations that finish
+their exploration phase with applying action a at s is geometric.
+Putting (i) and (ii) together, the number of (H −h0 )-iterations between a pair of consecutive
+(H − h)-iterations that finish their exploration phase with applying action a at s is also
+geometric. In turn, the probability that an (H − h0 )-iteration will finish its exploration
+phase with applying a0 at s0 is ph0 (s0 , a0 ), and thus the number of (H − h0 )-iterations that
+finish their exploration phase with applying a0 at s0 between a pair of consecutive (H − h)iterations that finish their exploration phase with applying action a at s is distributed as
+in Eq. 34.
+Similarly, it can be shown that the (conditioned) random variable
+
+nh0 s0 , a0 | nh (s, a) = t
+is distributed according to
+t+γ
+Xt
+
+βi ,
+i=1
+(s0 , a0 )),
+
+(35)
+
+where γt ∼ NB (t, ph (s, a)), βi ∼ Ber (ph0
+and all γt and βi are independent.
+Therefore, denoting ph (s, a) and ph0 (s0 , a0 ) by ph and ph0 , respectively, for short, we have
+
+
+t
+P nh0 (s, a) ≤
+ph0 nh0 (s, a) = t
+4ph
+(t+γt
+)
+X
+t
+Eq.35
+= P
+βi ≤
+ph0
+4ph
+i=1
+( t+x
+)
+
+
+∞
+X
+X
+3t
+t
++
+P
+βi ≤
+ph0 P {γt = x}
+≤ P γt ≤
+4ph
+4ph
+3t
+i=1
+x= 4p +1
+(36)
+h
+
+
+
+
+∞
+X
+t
+3t
+= P γt ≤
++
+P Bin ((t + x) , ph0 ) ≤
+ph0 P {γt = x}
+4ph
+4ph
+3t
+x= 4p +1
+h
+
+since βi are all independent Bernoulli variables with common parameter ph0
+
+
+∞
+X
+
+= P γt ≤
+
+3t
+4ph
+
+P {Bin ((t + x) , ph0 ) ≤ (t + x) ph0 − δx } P {γt = x} ,
+
++
+
+3t
+x= 4p
++1
+h
+
+23
+
+h)
+where δx = 4xph −t(1−4p
+ph0 .
+4ph
+3t
+Given that, for all x ≥ 4p
+, we have
+h
+2δ 2
+
+x
+− (t+x)
+
+P {Bin ((t + x) , ph0 ) ≤ (t + x) ph0 − δx } ≤ e
+
+by the Hoeffding inequality, applicable here since δx =
+
+
+−t 2+ 2p1 p2h0
+
+≤e
+
+since
+
+(37)
+
+h
+
+tp2 0
+δx2
+≥t+ h
+t+x
+4ph
+
+− 2pt p2h0
+
+≤e
+
+t(2 + 4ph )
+4xph − t(1 − 4ph )
+p h0 ≥
+ph0 ≥ 0
+4ph
+4ph
+
+h
+
+.
+
+Plugging Eq. 37 into Eq. 36, we obtain
+
+
+t
+ph0 ng (s, a) = t
+P ng (s, a) ≤
+4ph
+
+
+∞
+p2 0 t
+X
+h
+3t
+− 2p
++
+e h P {γt = x}
+≤ P γt ≤
+4ph
+3t
+x= 4p +1
+h
+
+Prop.9
+
+−
+
+≤ e
+
+tph
+6
+
++
+
+∞
+X
+
+p2 0 t
+
+h
+− 2p
+
+e
+
+h
+
+(38)
+
+P {γt = x}
+
+3t
+x= 4p
++1
+h
+
+≤ e−
+≤ 2e
+
+tph
+6
+
+tp2 0
+− 2ph
+h
+
++e
+
+tp2 0
+− 6ph
+h
+
+.
+
+Proposition 11 Let BRUE be called on a state s0 of an MDP hS, A, T r, Ri with rewards
+in [0, 1] and finite horizon H. Let (s, h + 1) be a node reachable from (s0 , H), and in turn,
+(s0 , h0 ) be a node reachable from (s, h + 1). If Lemma 2 holds for horizon h, then, for any
+a ∈ A(s), a0 ∈ A(s0 ), and t ≥ 1,
+
+h+1−h0
+d
+−tc0h0 p h+1−h0
+0 0
+0 0
+b
+6K
+nh+1 (s, a) = t ≤ (2 + ch0 ) e
+,
+P Qh0 (s , a ) − Qh0 (s , a ) ≥
+2
+
+
+(39)
+
+and
+
+
+b h0 (s , a ) − Qh0 (s , a ) ≤ − d nh+1 (s, a) = t
+P Q
+2
+0
+
+0
+
+0
+
+0
+
+
+≤ (2 + ch0 ) e
+
+−tc0h0
+
+0
+ph+1−h
+0
+6K h+1−h
+
+.
+
+(40)
+
+Proof: The proof for the two pairs of equations is identical, and thus we explicitly prove
+here only Eq. 39. In what follows, we use ph (s, a) and ph0 (s0 , a0 ) as defined in Proposition 10,
+b h0 ,
+and here as well denote them by ph and ph0 , respectively, for short. Similarly, by Qh0 , Q
+0
+0
+0
+0
+b h0 (s , a ), nh0 (s , a ), and nh+1 (s, a), respectively, for short.
+nh0 , and nh+1 we refer to Qh0 , Q
+24
+
+
+
+d
+b h0 − Qh0 ≥
+P Q
+nh+1 = t
+2
+
+
+
+
+tph0
+tph0
+d
+b
+≤ P nh0 ≤
+nh+1 = t + P Qh0 − Qh0 ≥ , nh0 >
+nh+1 = t
+4ph+1
+2
+4ph+1
+
+
+∞
+p2 0 t
+X
+Prop.10
+d
+− 6ph
+b h0 − Qh0 ≥
+P Q
+≤ 2e h+1 +
+nh0 = τ P {nh0 = τ | nh+1 = t}
+2
+tp 0
+h
+h+1
+
+τ = 4p
+
+I.A./Eq.14
+
+≤
+
+2e
+
+tp2 0
+h
+h+1
+
+− 6p
+
+∞
+X
+
++
+
+(41)
+
+0
+
+ch0 e−τ ch0 P {nh0 = τ | nh+1 = t}
+
+tph0
+
+τ = 4p
+
+h+1
+
+≤ 2e
+
+tp2 0
+− 6p h
+h+1
+
+tp 0
+−c0h0 4p h
+h+1
+
++ ch0 e
+
+Consider the fraction
+implies that
+
+p h0
+ph+1 ,
+
+.
+
+and recall that (s0 , h0 ) is a descendant of (s, h). The latter
+ph0 ≥ ph+1
+
+and thus
+
+p h0
+ph+1
+
+≥
+c0h0
+
+ p h+1−h0
+,
+K
+
+0
+
+p h+1−h
+K
+
+. Continuing now Eq. 41, by Eq. 16,
+
+0
+0
+ p H+h0 −1  p H−h0
+3d2(h −1) pH+h −1
+= h0 −1 0 2 H+h0 −1 <
+≤
+≤ ph0 ,
+K
+K
+32
+((h )!) K
+
+and Eq. 41 under c0h0 < ph0 implies
+2e
+
+tp2 0
+h
+h+1
+
+− 6p
+
++ ch0 e
+
+tph0
+h+1
+
+−c0h0 4p
+
+p 0
+
+−tc0h0 6p h
+
+≤ (2 + ch0 ) e
+
+−tc0h0
+
+≤ (2 + ch0 ) e
+
+h+1
+
+0
+ph+1−h
+0
+6K h+1−h
+
+(42)
+.
+
+Proposition 12 (Expected accumulated rewards) Let hS, A, T r, Ri be an MDP, and
+let X be the accumulated reward of a sample
+ρ = hs, a, s1 , a1 , sh , ah , sh+1 i,
+started with taking action a ∈ A in state s ∈ S, and continued with additional h steps, in
+which actions are chosen according to some arbitrary (possibly randomized) policy π. Let
+• Eπ,h+1 (s, a) denote the event in which, after a, ρ is sampled along the optimal actions,
+∗
+that is, for i ∈ JhK, ai = πh+1−i
+(si ), and
+• δπ,h+1 (s, a) = Qh+1 (s, a) − E [X].
+25
+
+Then,
+
+h
+X
+
+∗
+P {¬Eπ,h+1 (s, a)} ≤
+P πh+1−i (si ) 6= πh+1−i
+(si ) ,
+
+δπ,h+1 (s, a) =
+
+i=1
+h
+X
+
+E [∆h+1−i [si , πh+1−i (si )]] .
+
+(43)
+
+(44)
+
+i=1
+
+Proof: The proof of Eq. 43 is straightforward by the union bound. To prove Eq. 44, we
+note that for any state/steps-to-go pair (s, h) ∈ S × JHK, we have
+
+
+
+
+Eπ,s0 R s, πh (s), s0 = Eπ [Qh (s, πh (s))] − Eπ,s0 Qh−1 (s0 , π ∗ (s0 , h − 1)) .
+
+Using that, we obtain a telescopic series that yields
+
+"
+E [X] = Eπ,s1 :sh R (s, a, s1 ) +
+
+h
+X
+
+#
+R (si , πh+1−i (si ), si+1 )
+
+i=1
+
+= Qh+1 (s, a) − Es1 [Qh (s1 , π ∗ (s1 , h))] +
+h
+X
+
+
+Eπ,s1 :si [Qh+1−i (si , πh+1−i (si ))] − Eπ,s1 :si+1 [Qh−i (si+1 , π ∗ (si+1 , h − i))]
+
+i=1
+
+= Qh+1 (s, a) −
+
+h
+X
+
+Eπ,s1 :si [∆h+1−i [si , πh−i+1 (si )]] .
+
+i=1
+
+Proof of Lemma 4:
+By Definition 1, the event Et,h+1 (s, a) corresponds to a sample
+
+ρ = hs, a, s1 , a1 , sh , ah , sh+1 i,
+
+obtained by taking action a at state s, reachable from s0 with h + 1 steps still to go, and
+then following the policy πtB , induced by running BRUE on s0 until exactly t > 0 samples
+finish their exploration phase with applying action a at s with h steps still to go. From
+26
+
+4
+
+Proposition 12, denoting ı̂ = h + 1 − i, we have
+P {¬Et,h+1 (s, a)} ≤
+≤
+
+h
+X
+
+P {πı̂ (si ) 6= πı̂∗ (si ) | nh+1 (s, a) = t}
+
+i=1
+h
+X
+
+X
+
+o
+n
+
+b ı̂ si , a0 > Q
+b ı̂ (si , π ∗ (si )) nh+1 (s, a) = t
+P Q
+ı̂
+
+i=1 a0 6=πı̂∗ (si )
+h
+X
+
+ 
+
+
+d
+0
+b ı̂ si , a − Qı̂ (si , a) ≥
+≤
+P Q
+nh+1 (s, a) = t +
+2
+∗
+0
+i=1 a 6=πı̂ (si )
+
+
+d
+∗
+∗
+b
+nh+1 (s, a) = t
+P Qi (si , πı̂ (si )) − Qi (si , πı̂ (si )) ≤ −
+2
+Prop.11
+
+≤
+
+X
+
+h
+X
+
+−tc0i
+
+2K (2 + ci ) e
+
+pı̂
+6K ı̂
+
+i=1
+(∗)
+
+p
+
+0
+
+≤ 2Kh (2 + ch ) e−tch 6K .
+(45)
+
+The last inequality (∗) in Eq. 45 holds because, by assuming Lemma 2 for horizon h,
+for i ∈ JhK, it can be straightforwardly derived from Eqs. 15 and 16 that ci > ci−1 and
+c0i < Kp c0i−1 .
+Similarly,
+δt,h+1 (s, a) ≤
+
+h
+X
+
+E∆ı̂ [si , πtB (si )]
+
+i=1
+
+≤
+
+h
+X
+
+
+i
+
+≤
+
+
+h
+
+≤
+
+X
+
+
+o
+n
+
+b i si , a0 > Q
+b i (si , π ∗ (si )) nh+1 (s, a) = t 
+P Q
+ı̂
+
+(46)
+
+a0 6=πı̂∗ (si )
+
+i=1
+Prop.11
+
+
+o
+n
+
+b i si , a0 > Q
+b i (si , π ∗ (si )) nh+1 (s, a) = t 
+P Q
+ı̂
+
+a0 6=πı̂∗ (si )
+
+i=1
+h
+X
+
+X
+
+h
+X
+i=1
+2
+
+−tc0i
+
+2Kh (2 + ci ) e
+0
+
+pı̂
+6K ı̂
+
+p
+
+≤ 2Kh (2 + ch ) e−tch 6K .
+
+Fact 13 Let Z be a random variable with support [a, b] and E [Z] = 0. Then, for any
+λ ∈ R+ ,
+(b − a)2 λ2
+E [exp(λZ)] ≤ exp(
+).
+8
+This result is well known due to Hoeffding.
+27
+
+Proof of Lemma 3 (Modified Hoeffding-Azuma inequality):
+Let Et be the event that E [Xt | X1 , . . . , Xt−1 ] = µ, and let
+Yt , Xt − µ | X1 (ω) , . . . , Xt−1 (ω) .
+The random variable Yt is bounded by h − µ ≥ Yt ≥ −µ, and furthermore, for ω ∈ Et ,
+EYt = 0. Therefore, using Fact 13, for all ω ∈ Et and λ ∈ R+ , it holds that
+h
+i
+λ2 h2
+E eλY ≤ e 8 .
+
+(47)
+
+Moreover,
+h
+
+E e
+
+λ
+
+Pt
+
+i=1 (µ−Xi )
+
+i
+
+i
+i
+h Pt
+h Pt
+= EEt eλ i=1 (µ−Xi ) + E¬Et eλ i=1 (µ−Xi )
+h h Pt
+ii
+h Pt
+i
+= EEt E eλ i=1 (µ−Xi ) X1 , . . . , Xt−1 + E¬Et eλ i=1 (µ−Xi )
+i
+h Pt−1
+h
+ii
+h Pt
+= E eλ i=1 (µ−Xi ) · E eλ(µ−Xt ) X1 , . . . , Xt−1 + E¬Et eλ i=1 (µ−Xi )
+h Pt−1
+i
+λ2 h2
+λ i=1 (µ−Xi )
+8
+E e
++ P {¬Et } eλth
+≤e
+i
+Eq.18 λ2 h2 h Pt−1
+≤ e 8 E eλ i=1 (µ−Xi ) + cp et(λh−ce )
+(∗)
+
+≤e
+
+λ2 h2
+t
+8
+
++
+
+t
+X
+
+e
+
+λ2 h2
+(t−τ )
+8
+
+(48)
+
+· cp eτ (λh−ce )
+
+τ =1
+
+by the auxiliary step in Eqs. 49-51 below
+
+≤e
+
+λ2 h2 t
+8
+
+"
+1 + cp
+
+∞
+X
+
+e
+
+2 2τ
+−λ h
+8
+
+#
+eτ (λh−ce ) .
+
+τ =1
+
+Considering the recursion
+f (t) = θf (t − 1) + g (t) ,
+
+(49)
+
+it is easy to verify that, for all 0 ≤ c < t,
+f (t) = θt−c f (c) +
+
+t
+X
+
+θt−τ g (τ ) .
+
+(50)
+
+τ =c+1
+
+Given that, the bound (∗) in Eq. 48 is obtained by setting
+θ=e
+
+λ2 h2
+8
+
+,
+i
+h Pt
+f (t) = E eλ i=1 (µ−Xi ) ,
+g (t) = cp et(λh−ce ) .
+28
+
+(51)
+
+Now, by Markov inequality, for any λ > 0,
+(
+P µt −
+
+t
+X
+
+)
+Xi ≥ tδ
+
+i=1
+
+h Pt
+i
+≤ e−λtδ E eλ i=1 (µ−Xi )
+"
+#
+∞
+X
+Eq.48
+λ2 h2 t
+λ2 h2 τ
+≤ e−λtδ e 8
+e− 8 eτ (λh−ce )
+1 + cp
+=e
+
+2
+− 2δ 2ce t
+h
+
+e
+
+δ 2 c2
+et
+2h2
+
+"
+
+τ =1
+∞
+X
+
+e
+
+−
+
+2h2 − δ2 c22e
+e 2h
+δ 2 c2e
+
+
+
+1 + cp
+
+δ 2 c2
+eτ
+2h2
+
+e
+
+e −c
+τ ( 2δc
+e)
+h
+
+#
+(52)
+
+τ =1
+
+by setting λ =
+
+≤ e−
+
+3δ 2 ce
+t
+2h2
+
+since δ <
+
+≤e
+
+2δce
+h2
+
+
+1 + cp
+
+h
+2
+
+2c
+et
+2h2
+
+− 3δ
+
+
+
+
+2h2
+1 + cp 2 2 .
+δ ce
+
+The second bound can be proven in much the same way.
+Discussion 14 Note that the above bound was obtained for a particular choice of λ that
+maximizes the coefficient term in the exponent. Other choices of λ may result in a smaller
+coefficient in the exponent, but also a decreased leading constant. In particular, setting
+eβ
+λ = 2δc
+, for any 0 < β < 1, yields the following bound
+h2
+(
+P µt −
+
+t
+X
+
+)
+Xi ≥ tδ
+
+i=1
+− 2δ
+
+≤e
+
+2c β
+e t
+h2
+
+e
+
+2
+δ 2 c2
+eβ t
+2h2
+
+"
+1 + cp
+
+∞
+X
+
+e
+
+−
+
+2
+δ 2 c2
+eβ τ
+2h2
+
+e
+
+τ ( 2δche β −ce )
+
+#
+(53)
+
+τ =1
+2
+− 3δ c2e β t
+2h
+
+≤e
+
+
+
+
+c (1−β)
+cp
+− e 2
+2h
+1+
+e
+.
+ce (1 − β)
+
+Proof of Lemma 5:
+Lemma 4 implies that, with probability approaching 1 exponentially fast, the state-space
+samples issued at a level with h + 1 steps-to-go are optimal. That is, their expectation
+equals the actual Q-value. Therefore, by Lemma 4, we have
+P {E [Xt,h+1 (s, a) | X1,h+1 (s, a), . . . , Xt−1,h+1 (s, a)] 6= Q (s, a)} ≤ cp e−ce t ,
+pc0
+
+(54)
+
+where cp = 2Kh(2 + ch ) and ce = 6Kh . It is also easy to see that 0 ≤ Xi ≤ h + 1, and thus
+the conditions of Lemma 3 are satisfied. In turn, from Lemma 3 for δ = d2 and random
+29
+
+variables with support [0, h + 1],
+
+
+b h+1 (s, a) − Qh+1 (s, a) ≥ d nh+1 (s, a) = t
+P Q
+2
+#
+"
+d 2c
+3
+( ) e
+2(h + 1)2
+− 2 2t
+2(h+1)
+·
+e
+≤ 1 + cp
+
+d 2 2
+ce
+2
+
+
+2
+0
+d pch
+K 3 (h + 1)3 (2 + ch )
+−
+2K t
+16(h+1)
+1152 ·
+,
+≤e
+d2 p2 c02
+h
+
+
+
+(55)
+
+and, similarly,
+
+
+b h+1 (s, a) − Qh+1 (s, a) ≤ − d nh+1 (s, a) = t
+P Q
+2
+
+
+2
+0
+d pch
+K 3 (h + 1)3 (2 + ch )
+−
+2K t
+16(h+1)
+1152 ·
+≤e
+d2 p2 c02
+h
+
+
+2
+0
+d pch
+3
+3
+K (h + 1) ch
+−
+2K t
+16(h+1)
+≤e
+3456 ·
+d2 p2 c02
+h
+
+(56)
+
+since 2 + ch ≤ 3ch .
+
+Proof of Lemma 2, induction step:
+Note that the proof of Lemma 5 is basically the proof of the induction step for the key part
+of Lemma 2, that is, Eq. 14. The only thing that remains to be finalized is the correctness
+of Eqs. 15 and 16 for h + 1, and these can be verified by substitution of ch and c0h in Eq. 56
+by the respective expressions (for h) from Eqs. 15 and 16.
+Proof of Theorem 1:
+The proof for our main results follows by using the same techniques as above. Note that,
+by the Hoeffding inequality, after n > 0 iterations of BRUE, for each action a ∈ A(s0 ), it
+holds that
+n
+1
+n o
+P nH (s0 , a) ≤
+≤ e− 2K 2 H n .
+(57)
+2KH
+Given that,
+
+P πnB (s0 , H) 6= π ∗ (s0 , H)
+ 
+
+X
+d
+b
+≤
+P QH (s0 , a) ≥ QH (s0 , a) +
++
+2
+a6=π ∗ (s0 ,H)
+
+
+d
+∗
+∗
+b
+P QH (s0 , π (s0 , H)) ≤ QH (s0 , π (s0 , H)) −
+.
+2
+30
+
+(58)
+
+For a sub-optimal action a,
+
+
+b H (s0 , a) ≥ QH (s0 , a) + d
+P Q
+2
+n
+
+
+H
+X
+d
+b
+=
+P QH (s0 , a) ≥ QH (s0 , a) +
+nH (s0 , a) = t P {nH (s0 , a) = t}
+2
+t=1
+n
+n o
+≤ P nH (s0 , a) ≤
+2KH
+n
+
+
+H
+X
+d
+b
+nH (s0 , a) = t P {nH (s0 , a) = t}
+P QH (s0 , a) ≥ QH (s0 , a) +
++
+2
+n
+t=1+ 2KH
+
+n
+
+Lemma 2
+
+≤
+
+− 12 n
+2K H
+
+e
+
+H
+X
+
++
+
+0
+
+cH e−cH t · P {nH (s0 , a) = t}
+
+n
+t=1+ 2KH
+1
+
+≤ e− 2K 2 H n + cH e
+
+c0H
+− 2KH
+n
+
+c0H
+
+≤ 2cH e− 2KH n .
+(59)
+Using exactly the same line of bounding, we obtain
+
+
+c0H
+d
+∗
+∗
+b H (s0 , π (s0 , H)) ≤ QH (s0 , π (s0 , H)) −
+P Q
+≤ 2cH e− 2KH n ,
+2
+and thus
+
+c0H
+
+P πnB (s0 , H) 6= π ∗ (s0 , H) ≤ 4KcH e− 2KH n .
+
+(60)
+
+(61)
+
+Eqs. 11, 12, and 13 of Theorem 1 are then obtained by substitution of cH and c0H in Eq. 61
+with the respective expressions from Eqs. 15 and 16. In turn, Eq. 10 of Theorem 1 stems
+from Eqs. 11, horizon H, and per-step rewards being in [0, 1].
+
+31
+
+Appendix B. Proof of Theorem 6
+We first prove the modified Hoeffding-Azuma inequality for partial sums.
+Proof of Lemma 8 (Modified Hoeffding-Azuma inequality for partial sums):
+Let Et be the event that E [Xt | X1 , . . . , Xt−1 ] = µ, and let
+Yt , Xt − µ | X1 (ω) , . . . , Xt−1 (ω) .
+The random variable Yt is bounded by h − µ ≥ Yt ≥ −µ, and furthermore, for ω ∈ Et ,
+EYt = 0. Therefore, using Fact 13, for all ω ∈ Et and λ ∈ R+ , it holds that
+h
+i
+λ2 h2
+E eλY ≤ e 8 .
+Moreover,
+h Pt
+i
+E eλ i=t−dαte (µ−Xi )
+h Pt
+i
+h Pt
+i
+= EEt eλ i=t−dαte (µ−Xi ) + E¬Et eλ i=t−dαte (µ−Xi )
+h h Pt
+ii
+h Pt
+i
+= EEt E eλ i=t−dαte (µ−Xi ) X1 , . . . , Xt−1 + E¬Et eλ i=t−dαte (µ−Xi )
+h
+ii
+h Pt
+i
+h Pt−1
+(µ−Xi )
+λ
+· E eλ(µ−Xt ) X1 , . . . , Xt−1 + E¬Et eλ i=t−dαte (µ−Xi )
+= E e i=t−dαte
+i
+h Pt−1
+λ2 h2
+(µ−Xi )
+λ
++ P {¬Et } eλhdαte
+≤ e 8 E e i=t−dαte
+i
+Eq.18 λ2 h2 h λ Pt−1
+(µ−Xi )
+≤ e 8 E e i=t−dαte
++ cp eλhdαte−ce t
+(∗)
+
+≤e
+
+λ2 h2
+dαte
+8
+
++
+
+t
+X
+
+e
+
+λ2 h2
+(t−τ )
+8
+
+(62)
+
+(63)
+
+· cp eλhdατ e−ce τ
+
+τ =t−dαte
+
+by the auxiliary step in Eqs. 49-66 below.
+
+Considering the recursion
+f (t) = θf (t − 1) + g (t) ,
+
+(64)
+
+it is easy to verify that, for all 0 ≤ c < t,
+f (t) = θ
+
+t−c
+
+f (c) +
+
+t
+X
+
+θt−τ g (τ ) .
+
+(65)
+
+τ =c+1
+
+Given that, the bound (∗) in Eq. 48 is obtained by setting
+θ=e
+
+λ2 h2
+8
+
+,
+i
+h Pt
+f (t) = E eλ i=1 (µ−Xi ) ,
+g (t) = cp et(λh−ce ) .
+32
+
+(66)
+
+Now, by Markov inequality, for any λ > 0,
+
+
+P µdαte −
+
+≤e
+
+t
+X
+
+Xi ≥ dαteδ
+
+
+
+
+
+i=t−dαte
+h Pt
+i
+λ i=t−dαte (µ−Xi )
+−λδdαte
+
+E e
+
+
+Eq.48
+
+≤ e−λδdαte e
+
+λ2 h2
+dαte
+8
+
+
+
+t
+X
+
++
+
+e
+
+λ2 h2
+(t−τ )
+8
+
+· cp eλhdατ e−ce τ 
+
+τ =t−dαte
+
+=e
+
+2
+− 2δ 2ce dαte
+h
+
+
+e
+
+δ 2 c2
+e dαte
+2h2
+
+t
+X
+
++
+
+e
+
+δ 2 c2
+e (t−τ )
+2h2
+
+
+2δce
+dατ e−ce τ
+h
+
+· cp e
+
+
+
+τ =t−dαte
+
+2δce
+by setting λ = 2
+h
+
+
+≤e
+
+2
+− 2δ 2ce dαte
+h
+
+e
+
+δ 2 c2
+e dαte
+2h2
+
++e
+
+t
+X
+
+δ 2 c2
+e dαte
+2h2
+
+
+cp e
+
+2δce
+dατ e−ce τ
+h
+
+
+
+(67)
+
+τ =t−dαte
+
+≤e
+
+2
+− 2δ 2ce dαte
+h
+
+e
+
+δ 2 c2
+e dαte
+2h2
+
+
+
+t
+X
+
+1 + cp
+
+
+ece dατ e−ce τ 
+
+τ =t−dαte
+
+since δ <
+
+h
+2
+
+≤e
+
+2
+− 2δ 2ce dαte
+h
+
+≤e
+
+2
+− 2δ 2ce dαte
+h
+
+e
+
+δ 2 c2
+e dαte
+2h2
+
+
+
+t
+X
+
+1 + cp
+
+
+e−ce (1−α)τ 
+
+τ =t−dαte
+δ 2 c2
+e dαte
+2h2
+
+e
+
+2
+− 3δ 2ce αt
+≤ e 2h
+1+
+
+
+1+
+
+cp
+ce (1 − α)
+
+cp
+2
+e−ce (1−α) t
+ce (1 − α)
+
+−ce (1−α)2 t
+e
+.
+
+
+
+Obviously, at leaf nodes there is no point in choosing α < 1 since there is no bias.
+H
+Therefore, for h = 1 we can use the same constants c1 = 1 and c01 = Kp H . Since c0h is
+H−h
+
+decreasing with h, we have c0h ≤ Kp H−h for all 1 ≤ h ≤ H, and thus Lemma 4 is valid.
+Lemma 5 relies on the modified Hoeffding-Azuma inequality, which is no longer valid in
+the context of BRUE (α). Instead, we apply its modification, Lemma 8 for partial sums, to
+prove the induction step
+
+
+b h+1 (s, a) − Qh+1 (s, a) ≥ d nh+1 (s, a) = t
+P Q
+2
+
+
+2
+3d2 pc0h
+12K h(2 + ch ) − pc0h (1−α)2 t
+−
+αt
+2
+6K
+≤ e 48Kh
+1+
+e
+pc0h (1 − α)
+33
+
+
+(68)
+
+and, similarly,
+
+
+b h+1 (s, a) − Qh+1 (s, a) ≤ − d nh+1 (s, a) = t
+P Q
+2
+
+
+(69)
+2
+0
+2
+3d pch
+pc0h (1−α)2
+12K
+h(2
++
+c
+)
+h
+αt
+−
+−
+t
+6K
+1+
+e
+.
+≤ e 48Kh2
+pc0h (1 − α)
+n 2 0
+o
+3d pc α pc0 (1−α)2
+The induction step is satisfied, e.g., with c0h+1 = min 48Khh2 , h 6K
+and ch+1 = 1 +
+12K 2 h(2+ch )
+.
+pc0h (1−α)
+
+2
+
+h(2+ch )
+also increases
+Since ch is increasing in h and c0h is decreasing in h, the term 12K
+pc0h (1−α)
+in h. The larger the constant grows, the more beneficial it might be to increase the exponent
+coefficient that multiplies that constant by decreasing α at the expense of decreasing the
+exponent coefficient that multiplies 1. Clearly, the tradeoff depends also on t, the number
+of samples of action a in node (s, h). Therefore, as h increases, smaller values of α would
+be more appealing.
+
+34
+
+

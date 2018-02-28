@@ -1,0 +1,1158 @@
+granularity, at a high computational cost. This problem
+is even more acute in a learning setting, when little prior
+knowledge might exist about the rate of evolution of different variables in the system.
+Another approach is to model such systems as evolving
+over continuous time. For discrete state systems, such
+representations include event history analysis (Blossfeld
+et al., 1988; Blossfeld & Rohwer, 1995) and Markov process models (Duffie et al., 1996; Lando, 1998). Nodelman
+et al. (2002) extend these representations with ideas from
+the framework of Bayesian networks, to define continuous
+time Bayesian networks (CTBNs) — a structured representation for complex systems evolving over continuous time.
+An important task for any model is constructing it. One
+approach for acquiring models that fit the domain is by
+learning them from data samples. Nodelman et al. (2003)
+present an algorithm for learning a CTBN — both structure and parameters — from fully observed data. However,
+in many real-world applications, we obtain only partial observations of the trajectory. This issue is likely to be even
+more acute when learning continuous time models where
+it is difficult to observe everything all the time. Therefore,
+learning networks from partially observed data is an important problem with real-world significance.
+In this paper, we provide an algorithm, based on the Expectation Maximization (EM) algorithm (Dempster et al.,
+1977), for learning CTBN parameters from partially observable data. We also provide an extension, based on
+structural EM (Friedman 1997; 1998), for learning the network structure from such data. Our algorithm also provides
+us with a solution to one of the major limitations of both
+CTBN and DBN models — their use of a transition model
+which evolves exponentially (or geometrically) with time.
+In particular, we build on the rich class of phase distributions (Neuts 1975; 1981), showing how to integrate them
+into a CTBN model, and how to use our EM algorithm to
+learn them from data. We present results of our learning algorithm on real world data related to people’s life histories,
+
+and show that our learned CTBN model with phase distribution transitions is a better model of the data than both
+learned DBN and learned CTBN models.
+
+2 EM for Markov Processes
+We begin by reviewing the process of EM for homogeneous Markov processes, on which our algorithm for
+CTBNs is strongly based. Variants of this problem have
+been addressed by various authors, including Sundberg
+(1974; 1976), Dembo and Zeitouni (1986), Asmussen et al.
+(1996), and Holmes and Rubin (2002). Our presentation is
+based on the formulation of Asmussen et al. (1996).
+2.1 Homogeneous Markov Processes
+A finite state, continuous time, homogeneous Markov process Xt with state space Val(X) = {x1 , . . . , xn } is de0
+scribed by an initial distribution PX
+and an n × n matrix of
+transition intensities:
+
+
+−qx1 qx1 x2 · · · qx1 xn
+ qx2 x1 −qx2 · · · qx2 xn 
+
+
+QX = 
+ ,
+..
+..
+..
+..
+
+
+.
+.
+.
+.
+qxn x1
+
+qxn x2
+
+···
+
+−qxn
+
+of transitioning from state xi
+where qxi xj is the intensity
+P
+to state xj and qxi = j6=i qxi xj . The intensity qxi gives
+the “instantaneous probability” of leaving state xi and the
+intensity qxi xj gives the ‘instantaneous probability’ of transitioning from xi to xj . More formally, as ∆t → 0,
+Pr{X(t + ∆t) = xj | X(t) = xi } ≈ qxi xj ∆t, for i 6= j
+Pr{X(t + ∆t) = xi | X(t) = xi } ≈ 1 − qxi ∆t .
+
+The transient behavior of Xt is as follows. Variable X
+stays in state x for time T exponentially distributed with
+parameter qx . The probability density function f for Xt
+remaining at x is f (qx , t) = qx exp(−qx t) for t ≥ 0,and
+the expected time of transition is 1/qx . Upon transitioning,
+X shifts to state x′ with probability qxx′ /qx .
+The distribution over transitions of X factors into two
+pieces — exponential for when the next transition occurs
+and multinomial for where the state transitions, i.e., the
+next state. The natural parameters are qx for the exponential distribution and θxx′ = qxx′ /qx , x′ 6= x for the multinomial distribution.
+The distribution over the state of the process X at some
+future time t, PX (t), can be computed directly from QX .
+0
+is the distribution over X at time 0, then
+If PX
+0
+PX (t) = PX
+exp(QX t) ,
+
+where exp is matrix exponentiation.
+2.2 Incomplete Data
+For a Markov process X, our data are a set of partially
+observed trajectories D = {σ[1], . . . , σ[w]} that describe
+
+the behavior of X. A complete trajectory can be specified
+as a sequence of states xi of X, each with an associated
+duration. This means we observe every transition of the
+system from one state to the next and the time at which it
+occurs. In contrast, a partially observed trajectory σ ∈ D
+can be specified as a sequence of subsystems Si of X, each
+with an associated duration. A subsystem is simply a nonempty subset of states of X, in which we know the system
+stayed fur the duration of the observation. Some transitions
+are partially observed — we know only that they take us
+from one subsystem to another. Transitions from one state
+to another within the subsystem are wholly unobserved —
+hence we do not know how many there are nor when they
+occur.
+Note that momentary observation of the state of the system, or point evidence can also described in this framework. In particular, in the sequence of observed subsystems, durations can zero.
+For each trajectory σ[i] we can consider a space H[i] of
+possible completions of that trajectory. Each completion
+h[i] ∈ H[i] specifies, for each transition of σ[i], which
+underlying transition of X occurred and also specifies all
+the entirely unobserved transitions of X. Combining σ[i]
+and h[i] gives us a complete trajectory σ + [i] over X. Note
+that, in a partially observed trajectory, the number of possible unobserved transitions is unknown. Moreover, there
+are uncountably many times at which each transition can
+take place. Thus, the set of possible completions of a partial trajectory σ is, in general, the union of a countably infinite number of spaces, which are real-valued spaces of
+unbounded dimension. Nevertheless, the notion of all possible completions is well-defined. We can define the set
+D+ = {σ + [1], . . . , σ + [w]} of completions of all of the
+partial trajectories in D.
+
+Example 2.1 Suppose we have a process X whose state
+space is Val(X) = {y1 , y2 } × {z1 , z2 }. Consider the following example σ + of a fully observed trajectory over the
+time interval [0, 2): X starts in hy1 , z2 i at time 0; at time
+0.5 it transitions to hy2 , z2 i; at time 1.7 it transitions to
+hy2 , z1 i.
+Note we can write h·, zi i for the subsystem consisting of
+the states hy1 , zi i and hy2 , zi i. An example partially observed trajectory σ over the interval [0, 2) is: X starts in
+h·, z1 i; at time 1.7 it transitions to h·, z2 i. Note that σ +
+is a completion of σ. Another possible completion of σ is:
+X starts in hy2 , z1 i at time 0; at time 1.0 it transitions to
+hy1 , z1 i; at time 1.7 it transitions to hy1 , z2 i.
+We can describe a partially observed trajectory σ ′ with
+point evidence at time 0.7 and 1.8: X starts in h·, ·i; at time
+0.7 we observe h·, z2 i; from time 0.7 to 1.8 we observe X in
+h·, ·i; at time 1.8 we observe X in h·, z1 i; from time 1.8 on,
+we observe X in h·, ·i. Note that σ + is also a completion
+of σ ′ .
+
+2.3 Expected Sufficient Statistics and Likelihood
++
+
+The sufficient statistics of a set of complete trajectories D
+for a Markov process are T [x] — the total amount of time
+that X = x, and M [x, x′ ] — the number
+P of times X transitions from x to x′ . If we let M [x] = x′ M [x, x′ ] we can
+write the log-likelihood for X (Nodelman et al., 2003):
+ℓX (q, θ : D+ ) = ℓX (q : D+ ) + ℓX (θ : D+ )
+X
+X
+
+M [x] ln(qx ) − qxT [x]+
+=
+M [x, x′ ] ln(θxx′ ) .
+x
+
+x′ 6=x
+
+Let r be a probability density over each completion H[i]
+which, in turn, yields a density over possible completions
+of the data D+ . We can write the expectations of the
+sufficient statistics with respect to the probability density
+over possible completions of the data: T̄ [x], M̄ [x, x′ ], and
+M̄ [x]. These expected sufficient statistics allow us to write
+the expected log-likelihood for X as
+Er [ℓX (q, θ : D+ )] = Er [ℓX (q : D+ )] + Er [ℓX (θ : D+ )]
+X
+X
+
+=
+M̄ [x] ln(qx ) − qxT̄ [x]+
+M̄ [x, x′ ] ln(θxx′ ) .
+x
+
+x′ 6=x
+
+2.4 The EM Algorithm
+We use the expectation maximization (EM) algorithm
+(Dempster et al., 1977) to find maximum likelihood parameters q, θ of X. The EM algorithm begins with an arbitrary
+initial parameter assignment, q 0 , θ0 . It then repeats the two
+steps below, updating the parameter set, until convergence.
+After the kth iteration we start with parameters q k , θk :
+Expectation Step. Using the current set of parameters,
+we define for each σ[i] ∈ D, the probability density
+rk (h[i]) = p(h[i] | σ[i], q k , θk )
+
+(1)
+
+We then compute expected sufficient statistics T̄ [x],
+M̄ [x, x′ ], and M̄ [x] according to this posterior density
+over completions of the data given the data and the model.
+Maximization Step. Using the expected sufficient statistics we just computed as if they came from a complete data
+set, we set q k+1 , θk+1 to be the new maximum likelihood
+parameters for our model as follows
+qxk+1 =
+
+M̄ [x]
+;
+T̄ [x]
+
+k+1
+θxx
+′ =
+
+M̄ [x,x′ ]
+M̄[x]
+
+.
+
+(2)
+
+The difficult part in this algorithm is the Expectation Step.
+As we discussed, the space over which we are integrating
+is highly complex, and it is not clear how we can compute
+the expected sufficient statistics in a tractable way. This
+problem is the focus of the next section.
+
+3 Computing Expected Sufficient Statistics
+Given an n-state homogeneous Markov process Xt with
+intensity matrix QX , our task is to compute the expected
+
+sufficient statistics with respect to the posterior probability
+density over completions of the data given the observations
+and the current model. For simplicity, we omit the explicit
+dependence on the parameters q k , θk . Our analysis follows
+the work of Asmussen et al. (1996), who utilize numerical
+integration via the Runge-Kutta method. Holmes and Rubin (2002) provide an alternative approach using the eigenvalue decomposition of the intensity matrix.
+3.1 Notation
+In order to compute the expected sufficient statistics over
+D, we compute them for each partially observed trajectory
+σ ∈ D separately and then combine the results.
+A partially observed trajectory σ is given as a sequence
+of N subsystems so that the state is restricted to subsystem
+Si during interval [ti , ti+1 ) for 0 ≤ i ≤ (N − 1). Without
+loss of generality, we assume that σ begins at time 0 and
+ends at time τ so t0 = 0 and tN = τ .
+For subsystem S, let QS be the n × n intensity matrix
+QX with all intensities zeroed out except those corresponding to transitions within the subsystem S (and associated
+diagonal elements). For subsystems S1 , S2 , let QS1 S2 be
+the n × n intensity matrix QX with all intensities zeroed
+out except those corresponding to transitions from S1 to
+S2 . Note that this means all the intensities corresponding
+to transitions within S1 and within S2 are also zeroed out.
+Sometimes it is convenient to refer to evidence by providing an arbitrary time interval. Let σt1 :t2 denote the evidence provided by σ over the interval [t1 , t2 ). (So, σ0:τ is
+the evidence provided by all of σ.) Let σt1 :t+ denote the
+2
+evidence over the interval [t1 , t2 ], and σt− :t2 the evidence
+1
+over the interval (t1 , t2 ).
+Let e be a (column) n-vector of ones. Let ej be an nvector of zeros with a one in position j. Let ∆j,k be an
+n × n matrix of zeros with a one in position j, k. (So
+∆j,k = ej e′k .) Note that all multiplications below are standard vector and matrix multiplications as opposed to factor
+multiplications.
++
+Define the vectors α−
+t and β t component-wise as
+α−
+t [i] = p(Xt− = i, σ0:t )
+β+
+t [i] = p(σt+ :τ | Xt+ = i),
+where, if X transitions at t, Xt− is the value of X just prior
+to the transition, and Xt+ the value just afterward. (If there
+is no transition, Xt− = Xt+ .) Moreover, recall that σ0:t
+represents the evidence over interval [0, t) not including t
+and σt+ :τ represents evidence over interval (t, τ ) not including t. Thus, neither of these vectors include evidence
+of a transition at time t. We also define the vectors
+αt [i] = p(Xt = i, σ0:t+ )
+βt [i] = p(σt:τ | Xt = i)
+both of which include evidence of any transition at time t.
+
+3.2 Expected Amount of Time
+The sufficient statistic T [j] is the amount of time that X
+spends in state j over the course of trajectory σ. We can
+write the expectation of T [j] according to the posterior
+probability density given the evidence as
+Z τ
+E[T [j]] =
+p(Xt | σ0:τ )ej dt
+=
+
+0
+N
+−1 Z ti+1
+X
+i=0
+
+=
+
+p(Xt | σ0:τ )ej dt
+
+ti
+
+N
+−1 Z ti+1
+X
+1
+p(Xt , σ0:τ )ej dt .
+p(σ0:τ ) i=0 ti
+
+The constant fraction at the beginning of the last line serves
+to make the total expected time over all j sum to τ .
+We must show how to compute the above integrals over
+intervals of constant evidence. Let [v, w) be such an interval, and let S be the subsystem to which the state is restricted on this interval. Then we have
+Z w
+p(Xt , σ0:τ )ej dt
+(3)
+v
+Z w
+p(Xt , σ0:t )∆j,j p(σt:τ | Xt )dt
+=
+Zv w
+=
+αv p(Xt , σv:t | Xv )∆j,j p(Xw , σt:w | Xt )βw dt
+Zv w
+=
+αv exp(QS (t − v))∆j,j exp(QS (w − t))β w dt .
+v
+
+The code accompanying Asmussen et al. (1996) is easily extendable to this more general case and can compute
+the above integral via the Runge-Kutta method of fourth
+order. This method traverses the interval in small discrete
+steps each of which has a constant number of matrix multiplications. Thus, the main factor in the complexity of this
+algorithm is the number of steps which is a function of the
+step size. Importantly, the integration uses a step size that
+is adaptive and not fixed. The intensities of the QS matrix
+represent rates of evolution for the variables in the cluster,
+so larger intensities mean a faster rate of change which usually requires a smaller step size. We begin with a step size
+proportional to the inverse of the largest intensity in QS .
+The step size thus varies across different subsystems and
+is sensitive to the current evidence. Also, following Press
+et al. (1992), we use a standard adaptive procedure that allows larger steps to be taken when possible based on error
+estimates.
+We can calculate the total expected time, E[T [j]], by
+summing the above expression over all intervals of constant
+evidence.
+3.3 Expected Number of Transitions
+The sufficient statistic M [j, k] (j 6= k) is the number of
+times X transitions from state j to state k over the course
+
+of trajectory σ. Following the derivation in Asmussen
+et al. (1996), we consider discrete time approximations of
+M [j, k] and take the limit as the size of our discretization
+goes to zero, yielding an exact equation. For ǫ > 0, let
+τ /ǫ−1
+
+Mǫ [j, k] =
+
+X
+
+1{Xtǫ = j, X(t+1)ǫ = k} .
+
+t=0
+
+Note that our discrete approximation is dominated by the
+actual value, i.e., |Mǫ [j, k]| ≤ M [j, k], and also that as ǫ ↓
+0, Mǫ [j, k] → M [j, k]. Hence, by dominated convergence
+for conditional expectations, we have
+E[M [j, k]] = lim E[Mǫ [j, k]] .
+ǫ↓0
+
+This last expectation can be broken down as
+τ /ǫ−1
+
+E[Mǫ [j, k]] =
+
+X p(Xtǫ = j, X(t+1)ǫ = k, σ0:τ )
+.
+p(σ0:τ )
+t=0
+
+Note that, for ǫ small enough, we observe at most one transition per interval. Thus, each of the intervals in the sum
+falls into one of two categories: either the interval contains
+a (partially observed) transition, or the evidence is constant
+over the interval. We treat each of these cases separately.
+Let [tǫ, (t + 1)ǫ) be an interval containing a partially observed transition at time ti . We observe only that we are
+transitioning from one of the states of Si to one of the states
+of Si+1 . We can calculate the contribution of this interval
+to the expected sufficient statistics (ignoring the constant
+1/p(σ0:τ )) as
+p(Xtǫ = j, X(t+1)ǫ = k, σ0:τ )
+= p(Xtǫ = j, σ0:tǫ )p(X(t+1)ǫ = k, σtǫ:(t+1)ǫ | Xtǫ = j)
+p(σ(t+1)ǫ:τ | X(t+1)ǫ = k) .
+As ǫ ↓ 0, we have the probability of the state and the evidence up to, but not including, time ti , times the instantaneous probability of transitioning from state j to state k,
+times the probability of the evidence given the state just
+after ti . Thus, at the limit, this transition’s contribution is
++
+−
+′ +
+α−
+ti ej qjk ek β ti = qjk αti ∆j,k β ti .
+
+(4)
+
+Now consider the case when we are within an interval
+[v, w) = [ti , ti+1 ) of constant evidence — i.e., it does not
+contain a partially observed transition and will generally
+be of length much larger than ǫ. Let ∆t = w − v and let
+S be the subsystem to which the state is restricted on this
+interval. As ǫ grows small, the contribution of this interval
+
+to the sum (again, ignoring 1/p(σ0:τ )) is
+X∆t/ǫ−1
+
+Eating
+
+p(Xv+tǫ = j, Xv+(t+1)ǫ = k, σ0:τ )
+
+t=0
+∆t/ǫ−1
+
+X
+
+=
+
+Hungry
+
+X
+
+t=0
+
+Uptake
+
+Full
+stomach
+
+Barometer
+
+Concentration
+
+p(Xv , σ0:v )p(Xv+tǫ = j, σv:v+tǫ | Xv )
+
+Xv ,Xw
+
+p(Xv+(t+1)ǫ = k, σv+tǫ:v+(t+1)ǫ | Xv+tǫ = j)
+p(Xw , σv+(t+1)ǫ:w | Xv+(t+1)ǫ = k)p(σw:τ | Xw )
+X∆t/ǫ−1
+αv exp(QS tǫ)ej
+=
+
+Joint
+pain
+
+t=0
+
+e′j p(Xv+(t+1)ǫ , σv+tǫ:v+(t+1)ǫ | Xv+tǫ )ek
+
+Figure 1: Drug effect network
+
+e′k exp(QS (w − (v + (t + 1)ǫ)))β w .
+As in the case with observed transitions, as ǫ ↓ 0, the middle term becomes qjk dt, the instantaneous probability of
+transitioning. Since exp(QS t) is continuous, we can express the limit as a sum of integrals of the form
+Z w
+qjk αv exp(QS (t − v))∆j,k exp(QS (w − t)βw dt (5)
+v
+
+We have one such term for each interval of constant evidence. Essentially we are integrating the instantaneous
+probability of transitioning from state j to k over the interval given the evidence. Note that this is very similar to
+the form of Eq. (3) — the only difference is the matrix ∆j,k
+and the term qjk .
+To obtain the overall sufficient statistics, we have a sum
+with two types of terms: a term as in Eq. (4) for each observed transition, and an integral as in Eq. (5) for each interval of constant evidence. The overall expression is
+"N −1
+X
+qjk
+α− ∆j,k β +
+ti
+p(σ0:τ ) i=1 ti
+ #
+N
+−1 Z w
+X
+αv exp(QS (t − v))∆j,k
+dt .
++
+× exp(QS (w − t))β w
+v
+
+question is not a transition time), one can simply remove
+the subsystem transition intensity matrix (QSi Si+1 ) from
+the calculation. For example, as time 0 and τ are not transition times, we have
+ατ = αtN −1 exp(QSN −1 (τ − tN −1 ))
+β0 = exp(QS0 (t1 − 0))β t1 .
+We can also compute
+α−
+ti+1 = αti exp(QSi (ti+1 − ti ))
+β+
+ti = exp(QSi (ti+1 − ti ))β ti+1 .
+We can then write the distribution over the state of the system at time t given all the evidence as
+P (Xt = j | σ0:τ ) =
+
+1
+α− ∆j,j β t .
+p(σ0:τ ) t
+
+4 CTBNs
+We can now extend the EM algorithm to continuous time
+Bayesian networks which are a factored representation for
+homogeneous Markov processes.
+
+i=0
+
+3.4 Computing αt and βt
+One method of computing αt and βt is via a forwardbackward style algorithm (Rabiner & Juang, 1986) over the
+entire trajectory to incorporate evidence and get distributions over the state of the system at every time ti .
+We have already defined the forward and backward probability vectors, αt and β t . To initialize the vectors, we
+simply let α0 be the initial distribution over the state and
+β τ = e, a vector of ones. To update the vectors from their
+previously computed values, we calculate
+αti+1 = αti exp(QSi (ti+1 − ti ))QSi Si+1
+β ti = QSi−1 Si exp(QSi (ti+1 − ti ))β ti+1
+To exclude incorporation of the evidence of the transition
+from either forward or backward vector (or if the time in
+
+4.1 Continuous Time Bayesian Networks
+We briefly review continuous time Bayesian networks as
+presented in Nodelman et al. (2003). A CTBN represents a stochastic process over a structured state space,
+consisting of assignments to some set of local variables
+X = {X1 , X2 , . . . , Xk }.
+We model the joint dynamics of these local variables by
+allowing the transition model of each local variable to be a
+Markov process whose parameterization depends on some
+subset of other variables U. The key building block is a
+conditional Markov process:
+Definition 4.1 A conditional Markov process X is an
+inhomogeneous Markov process whose intensity matrix
+varies with time, but only as a function of the current values of a set of discrete conditioning variables U. Its intensity matrix, called a conditional intensity matrix (CIM), is
+
+written QX|U and can be viewed as a set of homogeneous
+intensity matrices QX|u — one for each instantiation of
+values u to U.
+The parameters of QX|U are q X|u = {qx|u : x ∈ Val(X)}
+and θX|u = {θxx′ |u : x, x′ ∈ Val(X), x 6= x′ }.
+We can now combine a set of conditional Markov processes to form a CTBN:
+Definition 4.2 A continuous time Bayesian network N
+over X consists of two components: an initial distribution
+P 0X , specified as a Bayesian network B over X, and a
+continuous transition model, specified as
+• A directed (possibly cyclic) graph G whose nodes are
+X1 , . . . , Xk ; PaG (Xi ), often abbreviated Ui , denotes
+the parents of Xi in G.
+• A conditional intensity matrix, QXi |Ui , for each variable Xi ∈ X.
+Example 4.3 Figure 1 shows the graph structure for
+a modified version of the drug effect CTBN network
+from Nodelman et al. (2002) modelling the effect of a drug
+a person might take to alleviate pain in their joints. There
+are nodes for the uptake of the drug and for the resulting
+concentration of the drug in the bloodstream. The concentration is affected by how full the patient’s stomach is. The
+pain may be aggravated by changing pressure. The model
+contains a cycle, indicating that whether a person is hungry depends on how full their stomach is, which depends
+on whether or not they are eating, which in turn depends
+on whether they are hungry.
+4.2 Expected Log-likelihood
+Extending the EM algorithm to CTBNs involves making
+it sensitive to a factored state space. Our incomplete data,
+D, are now partially observed trajectories describing the
+behavior of a dynamic system factored into a set of state
+variables X.
+As shown by Nodelman et al. (2003), the log-likelihood
+decomposes as a sum of local log-likelihoods for each variable. Specifically, given variable X, let U be its parent set
+in N . Then the sufficient statistics of D+ for our model are
+T [x|u], the total amount of time that X = x while U = u,
+and M [x, x′ |u], the number of times X transitions
+from x
+P
+to x′ while U = u. If we let M [x|u] = x′ M [x, x′ |u]
+the likelihood for each variable X further decomposes as
+ℓX (q, θ : D+ ) = ℓX (q : D+ ) + ℓX (θ : D+ )
+"
+#
+XX
+=
+M [x|u] ln(qx|u ) − qx|u · T [x|u]
+x
+
+u
+
+
+
+XX X
++
+M [x, x′ |u] ln(θxx′ |u ) . (6)
+u
+
+x x′ 6=x
+
+By linearity of expectation, the expected log-likelihood
+function also decomposes in the say way, and we can
+
+write the expected log-likelihood Er [ℓ(q, θ : D+ )] as a
+sum of terms (one for each variable X) in the same form
+asEq. (6), except using the expected sufficient statistics
+T̄ [x|u], M̄ [x, x′ |u], and M̄ [x|u].
+4.3 EM for CTBNs
+The EM algorithm for CTBNs is essentially the same as
+for homogeneous Markov processes. We need only specify how evidence in the CTBN induces evidence on the induced Markov process, and how expected sufficient statistics in the Markov process give us the necessary sufficient
+statistics for the CTBN.
+A CTBN is a homogeneous Markov process over the joint
+state space of its constituent variables. Any assignment of
+values to a subset of the variables forms a subsystem of
+the CTBN — it restricts us to a subset of the joint state
+space (as shown with binary “variables” Y and Z in Example 2.1). Just as before, our evidence can be described
+as a sequence of subsystems Si , each with an associated
+duration.
+Recall that, in a CTBN, the expected sufficient statistics
+have the form T̄ [x|u] and M̄ [x, x′ |u]. We can thus replace
+Eq. (2) in the maximization step of EM with:
+k+1
+qx|u
+=
+
+M̄[x|u]
+;
+T̄ [x|u]
+
+k+1
+θxx
+′ |u =
+
+M̄ [x,x′ |u]
+M̄ [x|u]
+
+.
+
+(7)
+
+The expectation step of EM can, in principle, be done by
+flattening the CTBN into a single homogeneous Markov
+process with a state space exponential in the number of
+variables and following the method described above. In
+this case, we can compute T̄ [x|u] by summing up all of the
+expected sufficient statistics T̄ [j] for any state j consistent
+with X = x, U = u. Similarly, M̄ [x|u] can be computed
+by summing up all of M̄ [j, k] for state j consistent with
+X = x, U = u and k consistent with X = x′ , U = u.
+However, as the number of variables in the CTBN grows,
+that process becomes intractable, so we are forced to use
+approximate inference. The approximate inference algorithm must be able to compute approximate versions of
+the forward and backward messages αt , β w . It must also
+be able to extract the relevant sufficient statistics — themselves a sum over an exponentially large space — from the
+approximate messages efficiently.
+A companion paper (Nodelman et al., 2005) provides a
+cluster graph inference algorithm which can be used to perform this type of approximate inference. For each segment
+[ti , ti+1 ) of continuous fixed evidence, we construct a cluster graph data structure, whose nodes correspond to clusters of variables Ck , each encoding a distribution over the
+trajectories of the variables Ck for the duration [ti , ti+1 ).
+A message-passing process calibrates the clusters. We can
+then extract from the cluster Ck both beliefs about the momentary state of the variables Ck at time ti and ti+1 , as well
+as a distribution over the trajectories of Ck during the interval. The former provide a factored representation of our
+
+1
+
+Prob. of Leaving State 1
+
+forward message αti+1 and backward message βti , and are
+incorporated into the cluster graphs for the adjoining cluster in a forward-backward message passing process. The
+cluster distributions are represented as local intensity matrices, from which we can compute the expected sufficient
+statistics over families Xi , Ui , as above. This, this algorithm allows us to perform the steps required for the E-step,
+and the M-step can be performed easily as described above.
+
+Exponential
+Erlang
+Mixture
+Loop
+
+0.8
+
+0.6
+
+0.4
+
+0.2
+
+0
+0
+
+(a)
+
+0.5
+
+1
+Time
+
+1.5
+
+(b)
+
+4.4 Structural EM for CTBNs
+We can also learn structure from incomplete data by applying the structural EM (SEM) algorithm of Friedman (1997)
+to our setting. We start with some initial graph structure
+G 0 , initial parameters q 0 , θ 0 , and dataset D.
+At each iteration, as with SEM for Bayesian networks, we
+choose between taking a step to update the parameters and
+taking a step to modify the structure.
+Parameter Update Step. Run the EM algorithm, computing new expected sufficient statistics and updating the
+parameters as in Eq. (7).
+Structure Modification Step. Using the current parameterization and expected sufficient statistics, choose a structure modification that increases the score. SEM is used
+with a variety of scores, most commonly the BIC score or
+the Bayesian score with expected sufficient statistics as if
+real. In both cases, the score can be written in terms of expected sufficient statistics, allowing SEM to be used with
+our algorithm above.
+SEM leaves unspecified the issue of how many greedy
+search steps one takes before recomputing the expected
+sufficient statistics and parameters. Nodelman et al. (2003)
+showed that, for CTBNs, structure search for a fixed number of parents per node can be done in polynomial time.
+Thus, it is possible, in this setting, to find the globally
+optimal structure given the current parametrization in the
+structure modification step. If one does this, SEM for
+CTBNs becomes an iterated optimization algorithm with
+a full maximization step for both structure and parameters.
+
+5 Complex Duration Distributions
+An important limitation to the expressive power in continuous time Bayesian networks has been the restriction to
+modelling durations in a single state as exponential distributions over time. With the extension of the EM to CTBNs,
+we can now address this limitation.
+5.1 Phase Distributions
+Phase distributions are a rich, semi-parametric class of distributions over durations, that use the exponential distribution as a building blcok. A phase distribution is modeled
+as a set of phases, through which a process evolves. Each
+of these phases is associated with an exponential distribution, which encodes the duration that a process stays in that
+
+Figure 2: (a): Phase transition diagrams for (i) a single exponential phase, (ii) an Erlang (chain), (iii) a mixture, and (iv) a
+loop. (b): The probability density of the first time to leave state 1
+(the phase distribution), for three example binary variable with 3
+phases for both states. All examples have an expected time of 1
+to leave state 1.
+
+phase. That is, we enter a phase k, and then leave in time t
+exponentially distributed with the parameter qk associated
+with that phase. We can view the process as moving over a
+directed, possibly cyclic graph, consisting of these phases.
+Thus, we can create combinations of chains, mixtures, and
+loops of such exponentially distributed phases linked together in a variety of ways. We spend some amount of time
+going from one phase to another, but eventually we leave
+the set of phases altogether. The distribution over when we
+leave such a system of phases is called a phase distribution.
+Example 5.1 Consider a 4-state homogeneous Markov
+process PHt with intensity matrix
+QPH
+
+2
+
+−q1
+6 q
+= 4 21
+q31
+0
+
+q12
+−q2
+q32
+0
+
+q13
+q23
+−q3
+0
+
+3
+q14
+q24 7
+.
+q34 5
+0
+
+If the intensities of states 1, 2, and 3 are non-zero, then regardless of the initial phase, PHt will end up in state 4 and
+remain there. Thus, state 4 is called an absorbing state and
+the others are called transient states. We call the transient
+states phases and the distribution over when PHt reaches
+state 4 is called a phase distribution. In this particular case
+it has 3 phases. If we wanted to encode a chain 1 → 2 → 3,
+we would have all off-diagonal entries equal to 0, except
+q12 , q23 , q34 . If we wanted to encode a loop, we would also
+allow q31 6= 0. Figure 2 shows some simple distribution
+shapes that can be formed with 3 phases. Note that, while
+a chain distribution always begin in phase 1 and ends in
+some final phase p, general phase distributions might start
+and end in any phase (e.g., the mixture distribution shown).
+Definition 5.2 A phase distribution of p phases is defined
+as the distribution over time when a homogeneous Markov
+process with a single absorbing state and p transient
+phases reaches absorption (Neuts 1975; 1981).
+We can specify a p-phase distribution with a p × p matrix,
+QP , by including only the subsystem of transient phases
+without losing any information. The rows of the new intensity matrix will have a (possibly) negative row sum, where
+
+2
+
+the missing intensity corresponds exactly to the intensity
+with which we leave the entire system.
+Phase distributions with a single phase are simply exponential distributions. The general class is highly expressive: any distribution can be approximated with arbitrary
+precision by a phase distribution with some finite number
+of phases (Neuts, 1981). A commonly used subclass of
+phase distributions is the Erlangian-p which can be constructed with a chain-structured subsystem of p phases,
+where all phases have the same exit intensity.
+5.2 CTBN Durations as Phase Distributions
+One can directly model the distribution in state x of variable X in CTBN N as any phase distribution instead of
+an exponential distribution. This idea is first described
+by Nodelman and Horvitz (2003) and subsequently in
+Gopalratnam et al. (2005). The former focuses on Erlang
+distributions and the latter on Erlang-Coxian distributions
+both of which are limited subclasses of general phase distributions. In particular neither allow for the exponential
+phases to be looped. Restriction to subclasses makes learning from data easier; in particular, EM is not required necessary to learn distributions in these classes; however, these
+subclasses have several drawbacks, including reduced expressivity, especially with small numbers of phases (Asmussen et al., 1996). Our method, as it is based on a general
+EM algorithm, allows the use of general phase distributions
+in CTBNs without restriction.
+When using this phase modelling method, the structure
+of the intensity matrix must be altered by adding phases as
+additional rows (and columns). We use the term phases to
+distinguish additional hidden state in the intensity matrix
+from states of the variable. Thus, a subsystem of several
+phases is used to implement a single state of a variable. In
+this context there is no absorption and the “final” transition
+of the phase distribution is the transition of the variable to
+its the next state.
+Example 5.3 To make a binary variable W have the duration in each of its 2 states be Erlangian-3 distributions
+(with distinct parameters), we write its intensity matrix as
+2
+
+6
+6
+QW = 6
+4
+
+−1
+0
+0
+0
+0
+2
+
+1
+−1
+0
+0
+0
+0
+
+0
+1
+−1
+0
+0
+0
+
+0
+0
+1
+−2
+0
+0
+
+0
+0
+0
+2
+−2
+0
+
+0
+0
+0
+0
+2
+−2
+
+3
+
+7
+7
+7 .
+5
+
+The top three rows correspond to state w1 and the bottom
+three to state w2 . Note that when restricted to modelling
+with Erlang distributions for a fixed number of phases, the
+number of free parameters is the same as a regular (exponentially distributed) CTBN.
+Using phase modelling greatly extends the expressive
+power of CTBNs and fits naturally within the existing
+CTBN framework. The basic structure of existing algorithms for CTBNs remains unaltered.
+
+The child of a variable with complex durations sees only
+the state of its parent and so does not, in general, depend on
+the current phase of a parent. There are a number of design
+choices to make in implementing phase distributions for
+durations in CTBNs. Different choices may be appropriate
+for different applications. One can add phases in a uniform
+way to each state of each variable — as in example 5.3
+where each state gets three phases. Alternatively, one might
+allow some states of some variables to be modelled with
+more phases than others.
+When the parent instantiation changes, one might allow
+the child in its current state to stay in the same phase or to
+reset. Care must be taken when allowing the child to stay
+in the same phase — it requires consistency at least in the
+number of phases allowed for each state across all parent
+instantiations. When the phase distribution does not have
+a distinguished start phase, there is also a choice about the
+distribution over phases with which one enters a state. In
+particular, there might be a fixed distribution over phases
+with which one always enters a particular state or that distribution might depend upon the previous state or the current parent instantiation.
+Our observations of a phase-distributed variable are always partial in that we might observe the current state of
+a variable but never its associated phase. We can learn the
+parameters for a CTBN with phase distributions using the
+EM algorithm described above by viewing it as a regular
+partially observed process.
+5.3 Using Hidden Variables
+An alternate method of allowing complex duration distributions for the states of a variable X in CTBN N is to introduce a special hidden variable HX as a parent of X. This
+has the advantage of being a very clean way to add expressive power to CTBNs. Without this technique, the parents
+of X must be other variables that we are modelling in our
+domain which means that the intensities which control the
+evolution of X can only change when a regular modelled
+variable changes. The addition of a hidden parent allows us
+to describe more complex distributions over trajectories of
+X by allowing the intensities which control the evolution
+of X to change more frequently.
+There are different ways to add a hidden variable HX
+as a parent of X. We might force HX to have no parents, or allow it to have parents in addition to X having
+parents. However, while adding an explicit hidden variable with clear semantics might be useful, it is important to
+realize that all complex duration distributions expressible
+through use of hidden variables are expressible by direct
+phase modelling of the state. For example, suppose HX
+has 3 states and X has 2 states. Using direct phases, we
+can rewrite a 6 × 6 intensity matrix for X having 3 phases
+for each of its 2 states corresponding to the hidden state
+of HX . More generally, we can amalgamate a set of hidden parents H X and X into a single cluster node S, whose
+
+−3
+
+−20
+DBN
+CTBN
+CTBN−phase
+
+−4
+Mean Test Log−Likelihood
+
+True Log−Likelihood
+
+−5
+−6
+−7
+−8
+−9
+Optimal
+EM, 1/4 Data Loss
+EM, 1/2 Data Loss
+SEM, 1/4 Data Loss
+SEM, 1/2 Data Loss
+
+−10
+−11
+−12
+
+5
+
+10
+
+15
+20
+Number of Samples
+
+25
+
+30
+
+Smoking
+
+−20.5
+
+−21
+
+Employ
+
+Married
+
+−21.5
+
+−22
+0
+
+Children
+500
+1000
+1500
+Number of Training Trajectories
+
+(a)
+
+(b)
+
+2000
+
+(c)
+
+Figure 3: (a) Learning results for drug effect net. (b) Learning results for British Household Panel Survey. (c) Learned BHPS network
+(200 training points).
+
+parents are the union of X’s parents other than H X and the
+parents of X X . Each state of X now corresponds to a set
+of instantiations to S. We can reinterpret the amalgamated
+CIM for S (given its parents) as a phase distribution for X,
+with |Val(H X )| phases per state of X. Thus, we can show:
+Theorem 5.4 For a fixed number of phases p, a CTBN
+variable X with direct phase modelling for durations, i.e.,
+using |X| · p rows for QX , is strictly more expressive than
+a variable with complex durations modelled by using a hidden parent HX with p states.
+Conversely, many complex duration distributions expressible by direct phase modelling cannot be expressed
+using hidden variables. In particular, the joint behavior of
+HX and X is restricted in that X and HX cannot transition
+simultaneously. This corresponds to the constraint that QS
+must have zeros in locations that correspond to a simultaneous shift in the state of X and HX . No such constraint
+holds in direct phase modelling which means that we have
+more free parameters to describe the distribution.
+
+6 Results
+We implemented the EM and SEM algorithms described
+above. We used exact inference by constructing the flattened state space. While this prevents us from solving large
+problems, it also keeps the analysis of EM separate from
+that of approximate inference. To verify our algorithms’
+correctness, we used the drug effect network from Example 4.3, where all of the variables were binary-valued, for
+tractability. We sampled increasing numbers of trajectories of 5 time lengths. We ran both EM and SEM, giving
+the former the true network structure and hiding the structure from the latter. For each data example, we hid parts
+of the trajectory by selecting time windows of length 0.25
+uniformly at random and hiding the value of one variable
+during the window. We kept dropping data in this fashion
+until all variables had lost either 1/4 or 1/2 of their total trajectory, depending on the experiment. The results of these
+experiments are shown in Figure 3(a). In some cases SEM
+outperforms EM because the true structure with learned pa-
+
+rameters yields a lower log-likelihood given the amount of
+data at those points. Note that the horizontal axis represents
+the amount of data prior to dropping any of it.
+The SEM algorithm worked well in this setting. As noted,
+removing the restriction on acyclicity allows CTBN structure search to decompose. Therefore, at each iteration, we
+performed a full structure search, which provided marked
+improvement over a greedy one-step optimization.
+We also ran SEM on the British Household Panel Survey
+(ESRC Research Centre on Micro-social Change, 2003).
+This data is collectedyearly asking thousands of residents
+of Britain about important events in their lives.We randomly divided this set into 4000 training examples and
+4000 testing examples (each example is a trajectory of a
+different person). Because we are employing exact inference, we had to keep the variable set small and chose 4 variables: employ (ternary: student, employed, unemployed),
+married (binary: not married, married), children (ternary:
+0, 1, 2+), and smoking (binary: non-smoker, smoker). The
+average number of events per person is 5.6.
+We learned structures and parameters for a time-sliced
+DBN with a time-slice width of 1 year, a standard CTBN,
+and a CTBN with 2 phases for every state of every variable. No restrictions were placed on the structure of these
+2 phases (so, in general, they form a loop). In order to
+compare CTBNs to DBNs, we sampled the testing data at
+the same yearly rate and calculated the probability of these
+sampled trajectories.The results are shown in Figure 3(b).
+The DBN and plain CTBN models are comparable, with
+the DBN doing better with more data due to its increased
+flexibility (due to intra-time slice arcs, DBNs have more
+potential parameters). However, the phase distributions increase the performance of the CTBN model; the trajectories are approximately twice as likely as with the other two
+models. Figure 3(c) shows a learned exponential CTBN
+network. The parameters are interesting. For example, the
+rate (intensity) with which a person stops smoking given
+that they have two or more children is three times the rate at
+which a childless person quits smoking. The rate at which
+a person begins smoking given that they have no children
+
+is 300 times the rate of a person with two or more children.
+The rate at which a person becomes unemployed (after having been employed) tends to decrease with more children
+(unless the person does not smoke and is not married). The
+rate of becoming unemployed also tends to be less if one
+smokes (unless one is married and has a child).
+
+7 Discussion
+In this paper, we provided an algorithm for learning both
+structure and parameters of CTBNs from partially observed
+data. Given the scarcity of fully-observed data, particularly
+in the continuous-time setting, we believe that this development is likely to greatly increase the applicability of the
+CTBN framework to real-world problems.
+Our experimental results were limited due to the reliance
+on exact inference. To scale up to larger problems, approximate inference algorithms must be employed. Our companion paper (Nodelman et al., 2005) pursues this topic.
+This paper addresses one of the primary limitations of
+both CTBN and DBN models. Both models essentially assume an exponential (or geometric) model for state transitions. Although reasonable in some cases, an exponential
+model is a poor fit for many real-life domains (such as the
+interval between getting married and having children). Indeed, our experimental results show that CTBNs parameterized with the richer class of phase distributions significantly outperform both CTBNs and DBNs on a real-world
+domain. An important extension is to investigate the applicability of different phase distribution transition models,
+and to construct efficient algorithms for selecting an appropriate transition model automatically.
+More globally, it would be interesting to apply phasedistribution CTBNs in other domains, and see whether this
+rich class of continuous-time models achieves improved
+performance over discrete-time models more broadly. In
+particular, many systems do not have a single natural time
+granularity; for example, in traffic modeling, locations of
+vehicles evolve more rapidly than driver intention, which
+evolves more quickly than the weather. Although one can
+learn discrete-time models that use the finest level of granularity, the geometric duration distribution of such models
+(which is particularly marked in fine-grained time models)
+can be a poor fit to the true duration distribution. Conversely, using an overly coarse granularity can also lead to
+artifacts in the learned model (Nodelman et al., 2003). We
+believe that the modeling flexibility resulting from continuous time models, augmented with the efficient structure
+learning made possible in CTBNs, will allow us to better
+tackle multiple applications, ranging from modeling people’s activity to learning evolutionary models of DNA sequences.
+Acknowledgments. This work was funded by DARPA’s EPCA
+program, under subcontract to SRI International, and by the Boeing Corporation.
+
+References
+Asmussen, S., Nerman, O., & Olsson, M. (1996). Fitting phasetype dist via the EM algorithm. Scand. J. Stat., 23, 419–441.
+Blossfeld, H.-P., Hamerle, A., & Mayer, K. U. (1988). Event
+history analysis. Hillsdale, New Jersey: Lawrence Erlbaum
+Associates.
+Blossfeld, H.-P., & Rohwer, G. (1995). Tech. of event history modeling. Mahwah, New Jersey: Lawrence Erlbaum Associates.
+Dean, T., & Kanazawa, K. (1989). A model for reasoning about
+persistence and causation. Comp. Intelligence, 5, 142–150.
+Dembo, A., & Zeitouni, O. (1986). Parameter estimation of partially observed continuous time stochastic processes via the
+EM algorithm. Stochastic Proc. and their App., 23, 91–113.
+Dempster, A., N.M.Laird, & D.B.Rubin (1977). Maximum likelihood from incomplete data via the EM algorithm. J. Royal
+Stat. Soc., Series B, 39, 1–38.
+Duffie, D., Schroder, M., & Skiadas, C. (1996). Recursive valuation of defaultable sec. Ann. of App. Prob., 6, 1075–1090.
+ESRC Research Centre on Micro-social Change (2003). British
+household panel survey. Computer Data File and Associated
+Documentation. http://iserwww.essex.ac.uk/bhps. Colchester:
+The Data Archive.
+Friedman, N. (1997). Learning belief networks in the presence
+of missing values and hidden variables. Proc. ICML ’97 (pp.
+125–133). Morgan Kaufmann Publishers Inc.
+Friedman, N. (1998). The Bayesian structural EM algorithm.
+Proc. UAI ’98 (pp. 129–138). Morgan Kaufmann.
+Gopalratnam, K., Kautz, H., & Weld, D. S. (2005). Extending
+continuous time Bayesian networks. Proc. AAAI05.
+Holmes, I., & Rubin, G. M. (2002). An EM algorithm for training
+hidden substitution models. J. Mol. Biol., 317, 753–764.
+Lando, D. (1998). On Cox processes and credit risky securities.
+Review of Derivatives Research, 2, 99–120.
+Neuts, M. F. (1975). Probability distributions of phase type. Liber
+Amicorum Prof. Emeritus H. Florin (pp. 173–206).
+Neuts, M. F. (1981). Matrix-geometric solutions in stochastic
+models. Baltimore: John Hopkins University Press.
+Nodelman, U., & Horvitz, E. (2003). CTBNs for inferring users’
+presence and activities with extensions for modeling and evaluation (Tech. Report MSR-TR-2003-97). Microsoft Research.
+Nodelman, U., Koller, D., & Shelton, C. R. (2005). Expectation
+propagation for continuous time Bayesian networks. Proc. UAI
+’05. (in this volume).
+Nodelman, U., Shelton, C. R., & Koller, D. (2002). Continuous
+time Bayesian networks. Proc. UAI ’02. (pp. 378–387).
+Nodelman, U., Shelton, C. R., & Koller, D. (2003). Learning
+continuous time Bayesian networks. Proc. UAI ’03. (pp. 451–
+458).
+Press, W. H., Teukolsky, S. A., Vetterling, W. T., & Flannery,
+B. P. (1992). Numerical recipes in C, chapter 16. Cambridge
+University Press. Second edition.
+Rabiner, L. R., & Juang, B. H. (1986). An introduction to hidden
+Markov models. IEEE ASSP Magazine, 4–16.
+Sundberg, R. (1974). Maximum likelihood theory for incomplete
+data from an exponential family. Scand. J. Statist., 1, 49–58.
+Sundberg, R. (1976). An iterative method for solution of the likelihood equations for incomplete data from exponential families. Commun. Statist. Simulation Computation, B5, 55–64.
+
+

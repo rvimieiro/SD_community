@@ -1,0 +1,1840 @@
+In this paper we show that we can exploit symmetry
+properties of relational models to perform efficient approximate inference. Our basic observation is that symmetry
+in the relational model implies that many of the intermediate results of approximate inference procedures, such as
+loopy belief propagation, are identical. Thus, instead of
+recalculating the same terms over and over, we can perform inference at the template level. We define formally a
+large class of relational models that have these symmetry
+properties, show how we can use them to perform efficient
+approximate inference and compare our results with other
+methods. This is, to the best of our knowledge, the first approximate inference algorithm that works on the template
+level of the model. However, this efficient inference procedure is limited to cases were we have no evidence on the
+model, since such evidence can break the symmetry properties. Nevertheless, we show that in many cases, inference
+with no evidence is useful, especially in learning tasks. Finally, we show a real life application by learning the properties of a model for protein-protein interactions.
+
+2 Symmetric relational models
+Relational probabilistic models [6, 9, 18, 21] provide a language for defining how to construct models from reoccurring sub-components. Depending on the specific instantiation, these sub-components are duplicated to create the actual probabilistic model. We are interested in models that
+can be applied for reasoning about the relations between
+entities. Our motivating example will be reasoning about
+the structure of interaction networks (e.g., social interaction
+networks or protein-protein interaction networks). We now
+define a class of relational models that will be convenient
+for reasoning about these domains. We define a language
+
+192
+
+JAIMOVICH ET AL.
+that is similar to ones previously defined [19], but also a bit
+different, to make our claims in the following section more
+clear.
+As with most relational models in the literature we distinguish the template-level model that describe the types of
+objects and components of the model and how they can be
+applied, from the instantiation-level that describes a particular model which is an instantiation of the template to a
+specific set of entities.
+To define a template-level model we first set up the different types of entities we reason about in the model. We
+distinguish basic entity types that describe atomic entities
+from complex types that describe composite entities.
+Definition 2.1: Given a set Tbasic = (T1 , . . . , Tn ) of basic
+entity types we define two kinds of complex types:
+• If T1 , . . . , Tk are basic types, then T1 × · · · × Tk denotes the type of ordered tuples of entities of these
+types. If e1 , . . . , ek are entities of types T1 , . . . , Tk ,
+respectively, then he1 , . . . , ek i is of type T1 ×· · ·×Tk .
+
+• If T is a basic type, then T k denotes the type of unordered tuples of entities of type T . If e1 , . . . , ek are
+entities of type T , then [e1 , . . . , ek ] is of type T k .
+When considering ordered tuples, permutations of the
+basic elements still refer to the same complex entity.
+Thus, if e1 , e2 are of type T , then both [e1 , e2 ] and
+[e2 , e1 ] refer to the same complex entity of type T 2 .
+
+For example, suppose we want to reason about undirected
+graphs. If we define a type Tv for vertices then an undirected edge is of type Te ≡ Tv2 since an edge is a composite object that consists of two vertices. Note that we use
+unordered tuples since the edge does not have a direction.
+That is, both [v1 , v2 ] and [v2 , v1 ] refer to the same relationship between the two vertices. If we want to model
+directed edges, we need to reason about ordered tuples
+Te ≡ Tv × Tv . Now hv1 , v2 i and hv2 , v1 i refer to two distinct edges. We can also consider social networks, where
+vertices correspond to people. Now we might also add a
+type Tl of physical locations. In order to reason about relationships between vertices (people) and locations we need
+to define pairs of type Tp ≡ Tv × Tl . Note that tuples that
+relate between different types are by definition ordered.
+Once we define the template-level set of types T over
+some set of basic types Tbasic , we can consider particular
+instantiations in terms of entities.
+Definition 2.2: An entity instantiation I for (Tbasic , T )
+consists of a set of basic entities E and a mapping σ : E 7→
+Tbasic that assigns a basic type to each basic entity.
+Based on an instantiation, we create all possible instantiations of each type in T :
+• if T ∈ Tbasic then I(T ) = {e ∈ E : σ(e) = T }
+
+V
+
+1
+
+[
+
+V
+
+1
+
+V 3
+
+]
+
+,
+
+1
+
+V
+
+2
+
+2
+
+V
+
+[
+
+V
+
+2
+
+,
+
+V
+
+3
+
+3
+
+]
+
+Figure 1: An instantiation of the graph scheme over a domain of
+three vertices.
+
+• If T = T1 ×· · ·×Tk then I(T ) = I(T1 )×· · ·×I(Tk ).
+
+• If T = T1k then I(T ) = {[e1 , . . . , ek ] : e1 , . . . ek ∈
+I(T1 ), e1 ≤ · · · ≤ ek } where ≤ is some (arbitrary)
+order over I(T ) 1 .
+
+Once we define a set of basic entities, we assume that all
+possible complex entities of the given type are defined (see
+Figure 1 for an instantiation of the graph example).
+The basic and complex entities define the structure of
+our domain of interest. Our goal, however, is to reason
+about the properties of these entities. We refer to these
+properties as attributes. Again, we start by the definition
+at the template level, and proceed to examine their application to a specific instantiation:
+Definition 2.3: A template attribute A(T ) defines a property of entities of type T . The set of values the attribute can
+take is denoted Val(A(T )).
+A template attribute denotes a specific property we expect each object of the given type to have. In general,
+we can consider attributes of basic objects or attributes of
+complex objects. In our example, we can reason about the
+color of a vertex, by having an attribute Color(Tv ). We can
+also create an attribute Exist(Te ) that denotes whether the
+edge between two vertices exists. We can consider other attributes such as the weight of an edge and so on. All these
+template attribute are defined at the level of the scheme and
+we will denote by A the set of template attributes in our
+model.
+Given a concrete entity instance I we consider all the attributes of each instantiated type. We view the attributes of
+objects as random variables. Thus, each template attribute
+in A defines a set of random variables:
+XI (A(T )) = {XA (e) : e ∈ I(T )}
+We define XI = ∪A(T )∈A XI (A(T )) to be the set of all
+random variables that are defined over the instantiation
+I. For example, if we consider the attributes Color
+over vertices and Exist over unordered pairs of vertices,
+1
+
+For example, considering undirected edges again, we think
+of [v1 , v2 ] and [v2 , v1 ] as two different names of the same entity.
+Our definition ensures that only one of these two objects is in the
+set of entities and we view the other as an alternative reference to
+the same entity.
+
+JAIMOVICH ET AL.
+and suppose that E = {v1 , v2 , v3 } are all of type Tv ,
+then we have three random variables in X (Color(Tv ))
+which are XColor (v1 ), XColor (v2 ), XColor (v3 ), and
+four random variables in X (Exist(Te )) which are
+XExist ([v1 , v2 ]), XExist ([v1 , v3 ]), and so on.
+Given a set of types, their attributes and an instantiation, we defined a universe of discourse, which is the set
+XI of random variables. An attribute instantiation ω (or
+just instantiation) is an assignment of values to all random
+variables in XI . We use both ω(XA (e)) and xA (e) to refer
+to the assigned value to the attribute A of the entity e.
+We now turn to the final component of our relational
+model. To define a log-linear model over the random variables XI , we need to introduce features that capture preferences for specific combinations of values to small groups
+of related random variables. In our graph example, we can
+introduce a univariate feature for edges that describes the
+prior potential for the existence of an edge in the graph. A
+more complex feature can describe preferences over triplets
+of interactions (e.g., prefer triangles over open chains).
+We start by defining template level features as a recipe
+that will be assigned to a large number of specific sets of
+random variables in the instantiated model. Intuitively, a
+template feature defines a function that can be applied to a
+set of attributes of related entities. To do so, we need to provide a mechanism to capture sets of entity attributes with
+particular relationships. For example, to put a feature over
+triangle-like edges, we want a feature over the variables
+XExist ([v1 , v2 ]), XExist ([v1 , v3 ]), and XExist ([v2 , v3 ]) for
+every choice of three vertices v1 , v2 , and v3 . The actual
+definition, thus involves entities that we quantify over (e.g.,
+v1 , v2 , and v3 ), the complex entities over these arguments
+we examine (e.g., [v1 , v2 ], [v1 , v3 ], and [v2 , v3 ]), the attributes of these entities, and the actual feature.
+
+193
+Arguments
+
+Formal
+entities
+
+Attr.
+
+Function
+
+Fe
+
+hξ1 , ξ2 i
+hTv , Tv i
+
+[ξ1 , ξ2 ]
+Te
+
+Exist
+
+fδ (z) = 1 {z = 1}
+
+Ft
+
+hξ1 , ξ2 , ξ3 i
+
+[ξ1 , ξ2 ]
+[ξ1 , ξ3 ]
+[ξ2 , ξ3 ]
+Te , Te , Te
+
+Exist
+Exist
+Exist
+
+f3 (z1 , z2 , z3 ) =
+1 {(z1 = 1) ∧
+(z2 = 1) ∧
+(z3 = 1) }
+
+hTv , Tv , Tv i
+
+Table 1: Example of two template-level features for a graph
+model. The first is a feature over single edges, and the second
+is one over triplets of coincident edges (triangles).
+
+We view a template-level feature as a recipe for generating multiple instance-level features by applying different bindings of objects to the arguments. For example, in our three vertices instantiation, we could create instances of the feature Fe such as fδ (XExist ([v1 , v2 ])) and
+fδ (XExist ([v1 , v3 ])). We now formally define this process.
+Definition 2.5: Let F be a template feature with components as in Definition 2.4, and let I be an entity instantiation. A binding of F is an ordered tuple of k entities
+β = he1 , . . . , ek i such that ei ∈ I(Tiq ). A binding is legal
+if each entity in the binding is unique. We define
+Bindings(F) =
+
+{β ∈ I(T1q ) × · · · × I(Tkq )
+: β is legal for F }
+
+Given a binding β = he1 , . . . , ek i ∈ Bindings(F), we
+define the entity εi |β to be the entity corresponding to εi
+when we assign ei to the argument ξi . Finally, we define
+the ground feature F |β to be the function over ω:
+
+F |β (ω) = f ω(XA1 (ε1 |β )), . . . , ω(XAj (εj |β )
+
+Definition 2.4: Template Feature A template feature F is
+defined by four components:
+• A tuple of arguments hξ1 , . . . , ξk i with a corresponding list of type signature hT1q , . . . , Tkq i, such that ξi
+denotes an entity of basic type Tiq .
+• A list of formal entities ε1 , . . . , εj , with corresponding types T1f , . . . , Tjf such that each formal entity ε is
+either one of the arguments, or a complex entity constructed from the arguments. (For technical reasons,
+we require that formal entities refer to each argument
+at most once.)
+• A list of attributes A1 (T1f ), . . . , Aj (Tjf ).
+• A function f : Val(A1 (T1f )) × · · · × Val(Aj (Tjf )) 7→ IR.
+
+For example, Table 1 shows such a formalization for a
+graph model with two such template level features.
+
+For example, consider the binding hv1 , v2 , v3 i for Ft of Table 1. This binding is legal since all three entities are of the
+proper type and are different from each other. This binding
+defines the ground feature
+Ft |hv1 ,v2 ,v3 i (ω) =
+f3 (xExist ([v1 , v2 ]), xExist ([v1 , v3 ]), xExist ([v2 , v3 ]))
+That is, Ft |hv1 ,v2 ,v3 i (ω) = 1 iff there is a triangle of edges
+between the vertices v1 , v2 , and v3 . Note that each binding defines a ground feature. However, depending on the
+choice of feature function, some of these ground features
+might be equivalent. In our last example, the binding
+hv1 , v3 , v2 i creates the same feature. While this creates a
+redundancy, it does not impact the usefulness of the language. We now have all the components in place.
+Definition 2.6: A Relational MRF scheme S is defined by
+a set of types T , their attributes A and a set of template
+
+194
+
+JAIMOVICH ET AL.
+features FF = {F1 , . . . , Fk }. A model is a scheme combined with a vector of parameters θ = hθi , . . . , θk i ∈ IRk .
+Given an entity instantiation I a scheme uniquely defines
+the universe of discourse XI . Given all this together we
+can define the joint distribution of a full assignment ω as:
+k
+X
+1
+P (ω : S, I, θ) =
+exp
+θi Fi (ω)
+Z(θ, I)
+i=1
+
+(1)
+
+where (with slight abuse of notation)
+X
+Fi (ω) =
+Fi |β (ω)
+β∈Bindings(Fi )
+
+is the total weight of all grounding of the feature Fi , and Z
+is the normalizing constant.
+This definition of a joint distribution is similar to standard log-linear models, except that all groundings of a template feature share the same parameter [4].
+
+3 Compact Approximate Inference
+One broad class of approximate inference procedure are
+variational methods [12]. Roughly speaking, in such methods we approximate the joint distribution by introducing
+additional variational parameters. Depending on the particular method, these additional parameters can be thought
+of as capturing approximation of marginal beliefs about selected subsets of variables. Although the general idea we
+present here can be applied to almost all variational methods, for concreteness and simplicity we focus here on loopy
+belief propagation [16, 23] which is one of the most common approaches in the field.
+To describe loopy belief propagation we consider the
+data structure of a factor graph [14]. A factor graph is a bipartite graph that consists of two layers. In the first layer,
+we have for each random variable in the domain a variable
+node X. In the second layer we have factor nodes. Each
+factor node ω is associated with a set Cω of random variables and a feature πω . If X ∈ Cω , then we connect the
+variable node X to the factor node ω. Graphically we draw
+variable nodes as circles and factor nodes as squares (see
+Figure 2(a)).
+A factor graph is faithful to a log-linear model if each
+feature is assigned to a node whose scope contains the
+scope of the feature. Adding these features multiplied by
+their parameters defines for each potential node ω a potential function πω [cω ] that assigns a real value for each value
+of Cω . There is usually a lot of flexibility in defining the
+set of potential nodes. For simplicity, we focus now on factor graphs where we have a factor node for each ground
+feature.
+For example, let us consider a model over a graph
+where we also depict the colors of the vertices. We create for each vertex vi a variable node XColor (vi ) and for
+
+each pair of vertices [vi , vj ] a variable node XExist ([vi , vj ]).
+We consider two template features - the triangle feature
+we described earlier, and a co-colorization feature that describes a preference of two vertices that are connected by
+an edge to have the same color. To instantiate the triangle feature, we go over all directed tuples of three vertices
+β = hvi , vj , vk i ∈ Bindings(Ft ) and define ωβ with scope
+Cβ = {XExist ([vi , vj ]), XExist ([vi , vk ]), XExist ([vj , vk ])}.
+See Figure 2(a) to see such a factor graph for an instantiation of 4 vertices. This factor graph is faithful since each
+ground feature is assigned to a dedicated feature node.
+Loopy belief propagation over a factor graph is defined
+as repeatedly updating messages of the following form:
+Y
+mX→ω (x) ←
+mω′ →X (x)
+ω ′ :X∈Cω′ ,ω ′ 6=ω
+
+mω→X (x)
+
+←
+
+
+
+X
+
+eπω [cω ]
+
+cω hXi=x
+
+Y
+X6=X ′ ∈Cω
+
+
+mX ′ →ω (x′ )
+
+where cω hXi is the value of X in the assignment of values
+cω to Cω . When these messages converge, we can define
+belief about variables as
+Y
+bω (cω ) ∝ eπω [x]
+mX→ω (cω hX ′ i)
+X ′ ∈C
+
+where the beliefs over Cω are normalized to sum to 1.
+These beliefs are the approximation of the marginal probability over the variables in Cω [23].
+Unfortunately, trying to reason about a network over
+1000 verticeswith the features we described earlier, will
+produce 1000
+variable nodes (one for each edge), 2· 1000
+2
+2
+
+edge feature nodes and 3 · 1000
+triplet feature nodes2 .
+3
+Building such a graph and performing loopy belief propagation with it is a time consuming task. However, our main
+insight is that we can exploit some special properties of this
+model for much efficient representation and inference. The
+basic observation is that the factor graphs for the class of
+models we defined satisfy basic symmetry properties.
+Specifically, consider the structure of the factor graph
+we described earlier. An instantiation of graph vertices defines both the list of random variables and of features that
+will be created. Each feature node represents a ground feature that originates from a legal binding to a template feature. The groundings for an edge feature and for an edge
+random variable span two vertices, while the grounding of
+triplet feature covers three vertices. Since we are considering all legal bindings (i.e., all 2-mers and 3-mers of vertices) while spanning the factor graph, each edge variable
+node will be included in the scope of 2 edge feature nodes
+and (n − 2) · 3 triplet feature nodes. More importantly,
+2
+
+Since we defined the template feature using ordered tuples
+and our edges are defined using unordered tuples, we will have
+two features over each edge and three features over each triplet.
+
+JAIMOVICH ET AL.
+since all the edge variables have the same “local neighborhood”, they will also compute the same messages during
+belief propagation over and over again. We now formalize
+this idea and show we can use it to enable efficient representation and inference.
+
+195
+i
+C
+
+E
+
+1
+
+1
+
+,
+
+2
+
+1
+
+2
+
+C
+
+C
+
+C
+
+|
+
+i
+
+V
+
+|
+
+!
+
+1
+
+C
+
+j
+C
+
+2
+
+E
+
+1
+
+,
+
+C
+
+1
+3
+
+C
+
+C
+
+3
+E
+
+E
+C
+
+1
+
+,
+
+3
+
+C
+
+3
+
+C
+
+C
+
+E
+
+,
+
+i
+
+,
+
+j
+
+V
+
+|
+
+!
+
+E
+
+E
+
+1
+
+,
+
+E
+
+1
+
+,
+
+2
+
+i
+
+,
+
+j
+
+2
+E
+
+j
+
+,
+
+k
+
+2
+C
+
+3
+
+E
+
+Definition 3.1: We say that two nodes in the factor graph
+have the same type if they were instantiated from the same
+template (either template attribute or template feature).
+
+j
+
+4
+
+|
+
+2
+
+4
+
+,
+
+1
+4
+
+E
+
+E
+C
+
+i
+
+,
+
+i
+
+,
+
+k
+
+2
+4
+
+C
+
+4
+
+C
+
+C
+
+4
+
+C
+
+4
+
+2
+
+E
+
+,
+3
+
+3
+
+3
+
+i
+C
+
+i
+C
+
+E
+
+1
+
+,
+4
+E
+
+1
+
+,
+
+2
+
+E
+
+1
+
+,
+
+E
+
+2
+
+,
+
+3
+
+Given this definition, we can present our main claim formally:
+
+3
+
+j
+C
+
+E
+
+E
+
+2
+
+,
+
+E
+
+1
+
+,
+
+2
+
+E
+
+2
+
+,
+
+3
+
+E
+
+2
+
+E
+
+1
+
+,
+
+E
+
+1
+
+,
+
+4
+
+E
+3
+
+,
+3
+
+E
+
+1
+
+We start by proving the local properties of symmetry of the
+model:
+Lemma 3.3: In a model created according to Definition 2.6, if two nodes in the factor graph have the same
+type, then they have the same local neighborhood. That
+is, they have the same number of neighbors of each type.
+The proof of Theorem 3.2 is a direct consequence of
+Lemma 3.3 by induction over the stage of the belief propagation. We now turn to prove Lemma 3.3:
+Proof: If vi and vj are feature nodes, then since they are of
+the same type, they are instantiations of the same template
+feature. From Definition 2.4 and Definition 2.5 we can see
+that this means that they are defined over variables from
+the same type. Since each feature is connected only to the
+variables in its scope, this proves our claim. However, if vi
+and vj are variable nodes, it suffices to show that they take
+part in the same kind of features, and in the same number of
+features of each such kind. Note that Definition 2.6 shows
+that we use all legal binding for each feature. For simplicity, we will assume that vi is instantiated from the attribute
+of some basic type T (the proof in case it is a complex type
+is similar). We need to compute how many ground features
+contain vi in their scope, and do not contain vj . From Definition 2.5 we can see that all the legal bindings that include
+vi and do not include vj are legal also if we replace vi with
+vj .
+After showing that many calculations are done over and
+over again, we now show how we can use a more efficient
+representation to enable much faster inference.
+Definition 3.4: A template factor graph over a template
+log-linear model is a bi-partite graph, with one level corresponding to attributes and the other corresponding to template features. Each template attribute T that corresponds
+to a formal entity in some template feature F is mapped to a
+template attribute node on one side of the graph. And each
+template feature is mapped to a template feature node on
+the other side of the graph. Each template attribute node is
+
+,
+3
+
+E
+4
+
+2
+
+,
+
+E
+3
+
+2
+
+,
+
+j
+
+i
+
+,
+
+j
+
+,
+
+4
+
+4
+
+E
+
+E
+
+,
+
+4
+
+E
+
+Theorem 3.2: In every stage t of synchronous belief propagation that is initiated with uniform messages, if vi , vk are
+from the same type and also vj , vl are from the same type
+then mtvi →vj (x) = mtvk →vl (x).
+
+i
+
+,
+
+4
+
+E
+4
+
+i
+
+,
+
+j
+
+E
+
+j
+
+k
+
+,
+3
+
+4
+
+E
+
+(a) Full factor graph
+
+,
+
+i
+
+,
+
+k
+
+(b) Compact factor graph
+
+Figure 2: Shown are the full (a) and compact (b) factor graphs
+modeling a colored graph. We have basic types for colors and
+vertices, and a complex type for edges. We consider two template
+features - the triangle feature and a co-colorization feature. For
+clarity, XExist ([vi , vj ]) is shown as Ei,j and XColor (vi ) is shown
+as Ci . Orange edges show the edges connected to edge variables
+and green edges are connected to color variables. |V | shows the
+number of vertices in the graph.
+
+connected with an edge to all the template feature nodes
+that contain this feature in their scope. A feature node
+needs to distinguish between its neighbors, since each message refers to a message about different variable. Hence,
+in the template factor graph we term an association to a
+variable inside a template feature node port . If a factor
+contains more than one variable of the same type, the corresponding edge splits to the corresponding ports when arriving to the factor node. In addition, each ground variable
+node takes part in many features that were instantiated by
+the same template feature with different bindings. Hence,
+each edge from a template feature node to a template attribute node in the template factor graph is assigned with
+a number indicating the number of repetitions it has in the
+full factor graph.
+Figure 2(b) shows such a template factor graph for our running example.
+Running loopy belief propagation on this template factor graph is straightforward. The algorithm is similar to the
+standard belief propagation only that when an edge in the
+template-graph represents many edges in the instance-level
+factor graph, we interpret this by multiplying the appropriate message the appropriate number of times. Since Theorem 3.2 shows that at all stages in the standard synchronous
+belief propagation the messages between nodes of the same
+type are similar, running belief propagation on the template
+factor graph is equivalent to running synchronous belief
+propagation on the full factor graph. However, we reduced
+the cost of representation and inference from being proportional to the size of the instantiated model, to be propor-
+
+JAIMOVICH ET AL.
+tional to the size of the domain. Specifically, this representation does not depend on the size of the instantiations and
+can deal with a huge number of variables.
+
+Exact
+
+196
+
+2
+
+2
+
+2
+
+1
+
+1
+
+1
+
+0
+
+0
+
+0
+
+−1
+
+−1
+
+−1
+
+We start by evaluating our method in inference tasks. We
+build a model representing a graph using the univariate and
+triangle features described in the previous section and perform inference with various parameter combinations. In the
+first step we consider instantiations of small graphs where
+we can also perform exact inference. We compared exact inference, MCMC (Gibbs sampling) [8], standard asynchronous belief propagation [23], and compact belief propagation on the template-level model. A simple way to compare inference results is by examining the marginal beliefs. Such a comparison is possible since in all methods
+the computed marginal probabilities for all edge variables
+were equal. Hence, Figure 3 shows a comparison of the
+marginal distributions over edge variables for different parameter settings and different inference methods. We observe that in small graphs the marginal beliefs are very similar for all inference methods. To quantify the similarity we
+calculate the relative deviation from the true marginal. We
+find that on average MCMC deviates by 0.0118 from the
+true marginal (stdev: 0.0159), while both belief propagation methods deviate on average by 0.0143 (stdev: 0.0817)
+and are virtually indistinguishable. However, in the graph
+over 7 vertices we notice that exact inference and MCMC
+are slightly different from the two belief propagation methods in the case where the univariate parameter is small and
+the triplet parameter is large (lower right corner).
+An alternative measurement of inference quality is the
+estimate of the partition function. This is especially important for learning applications, as this quantity serves to
+compute the likelihood function. When performing loopy
+belief propagation, we can approximate the log-partition
+function using the Bethe approximation [23]. As seen in
+Figure 4, the estimate of the log partition function by belief
+propagation closely tracks the exact solution. Moreover, as
+in the marginal belief test, the two variants of belief propagation are almost indistinguishable. It is important to stress
+that running times are substantially different between the
+methods. For example, using exact inference with the 7
+vertices graph (i.e., one pixel in the matrices shown in Figure 3) takes 80 seconds on a 2.4 GHz Dual Core AMD
+based machine. Approximating the marginal probability
+using MCMC takes 0.3 seconds, standard BP takes 12 seconds, and compact BP takes 0.07 seconds.
+On larger graphs, where exact inference and standard
+belief propagation are infeasible, we compare only the
+compact belief propagation and MCMC (see Figure 5).
+While there are some differences in marginal beliefs, we
+
+−1
+
+0
+
+1
+
+2
+
+−2
+−2
+
+−1
+
+0
+
+1
+
+2
+
+−2
+−2
+
+2
+
+2
+
+2
+
+1
+
+1
+
+1
+
+0
+
+0
+
+0
+
+−1
+
+−1
+
+−1
+
+−2
+−2
+
+BP
+
+4.1 Inference
+
+−1
+
+0
+
+1
+
+2
+
+−2
+−2
+
+−1
+
+0
+
+1
+
+2
+
+−2
+−2
+
+2
+
+2
+
+2
+
+1
+
+1
+
+1
+
+0
+
+0
+
+0
+
+−1
+
+−1
+
+−1
+
+−2
+−2
+
+CBP
+
+4 Evaluation
+
+MCMC
+
+−2
+−2
+
+−1
+
+0
+
+1
+
+2
+
+−2
+−2
+
+−1
+
+0
+
+1
+
+2
+
+−2
+−2
+
+2
+
+2
+
+2
+
+1
+
+1
+
+1
+
+0
+
+0
+
+0
+
+−1
+
+−1
+
+−1
+
+−2
+−2
+
+−1
+
+0
+
+1
+
+3 vertices
+
+2
+
+−2
+−2
+
+−1
+
+0
+
+1
+
+5 vertices
+
+2
+
+−2
+−2
+
+−1
+
+0
+
+1
+
+2
+
+−1
+
+0
+
+1
+
+2
+
+−1
+
+0
+
+1
+
+2
+
+−1
+
+0
+
+1
+
+2
+
+7 vertices
+
+Figure 3: Comparison of inference methods via marginal beliefs.
+Each panel visualizes the the probability of an interaction when
+we vary two parameters: the univariate potential for interaction
+(y-axis) and the the potential over closed triplet (x-axis). The
+color indicates probability where blue means probability closer to
+0 and red means probability closer to 1. The first row of panels
+shows exact computation, the second MCMC, the third standard
+asynchronous belief propagation, and the fourth our compact belief propagation.
+
+see again that in general there is good agreement between
+the two inference procedures. As the graph becomes larger
+the gain in run-time increases. Since the mixing time of
+MCMC should depend on the size of the graph (if accuracy
+is to be conserved), running MCMC inference on a 100node graph takes 5 minutes. As expected, compact BP still
+runs for only 0.07 seconds since it depends on the size of
+the scheme which remains the same. For protein-protein
+interaction networks over hundreds of vertices (see below),
+all inference methods become infeasible except for compact belief propagation.
+4.2 Parameter estimation
+Consider the task of learning the parameters Θ =
+hθ1 . . . θk i for each template feature. To learn such parameters from real-life data we can use the Maximum Likelihood (ML) estimation [4]. In this method we look for the
+parameters that best explain the data in the sense that they
+find argmaxθ∈Θ p(D|θ). Since there is no closed form for
+finding the maximum likelihood parameters of a log-linear
+model, a common approach is to resort to greedy search
+methods such as gradient ascent. In such approaches an efficient calculation of the derivative is needed. The partial
+
+2
+
+8
+
+2
+
+40
+
+2
+
+1
+
+6
+
+1
+
+30
+
+1
+
+80
+
+4
+
+0
+
+20
+
+0
+
+60
+
+−1
+
+10
+
+100
+
+0
+−1
+−2
+−2
+
+2
+−1
+
+0
+
+1
+
+−2
+−2
+
+2
+
+−1
+
+0
+
+1
+
+20
+−2
+−2
+
+2
+
+40
+
+−1
+
+−1
+
+0
+
+1
+
+MCMC
+
+Exact
+
+JAIMOVICH ET AL.
+
+2
+
+197
+2
+
+2
+
+2
+
+1
+
+1
+
+1
+
+0
+
+0
+
+0
+
+−1
+
+−1
+
+−1
+
+−2
+−2
+8
+
+2
+
+40
+
+2
+
+−1
+
+0
+
+1
+
+2
+
+−2
+−2
+
+−1
+
+0
+
+1
+
+2
+
+−2
+−2
+
+−1
+
+0
+
+1
+
+2
+
+−1
+
+0
+
+1
+
+2
+
+2
+
+1
+
+6
+
+1
+
+30
+
+1
+
+80
+
+0
+
+4
+
+0
+
+20
+
+0
+
+60
+
+−1
+−2
+−2
+
+2
+−1
+
+0
+
+1
+
+CBP
+
+−2
+−2
+
+2
+
+8
+
+2
+
+−1
+
+10
+−1
+
+0
+
+1
+
+40
+
+2
+
+−1
+
+20
+−2
+−2
+
+2
+
+40
+
+−1
+
+0
+
+1
+
+CBP
+
+BP
+
+100
+
+2
+
+2
+
+2
+
+2
+
+1
+
+1
+
+1
+
+0
+
+0
+
+0
+
+−1
+
+−1
+
+−1
+
+−2
+−2
+2
+
+1
+
+6
+
+1
+
+30
+
+1
+
+80
+
+0
+
+4
+
+0
+
+20
+
+0
+
+60
+
+−1
+
+10
+
+−1
+−2
+−2
+
+2
+−1
+
+0
+
+1
+
+2
+
+3 vertices
+
+−2
+−2
+
+−1
+
+0
+
+1
+
+2
+
+20
+
+5 vertices
+
+0
+
+1
+
+2
+
+−1
+
+0
+
+1
+
+2
+
+7 vertices
+
+Figure 4: Comparison of inference methods for computing the
+log-partition function. Each panel visualizes the log-partition
+function (or its approximation) for different parameter setting (as
+in Figure 3). In the belief propagation methods, the log-partition
+function is approximated using the Bethe free energy approximation. On the first row is the exact computation, the second row
+shows standard asynchronous belief propagation and the third row
+shows our compact belief propagation.
+
+−1
+
+0
+
+1
+
+2
+
+50 vertices
+
+−2
+−2
+
+100 vertices
+
+Figure 5: Comparison of approximate inference methods on
+larger graph instances. As before, we show the probability of an
+interaction as a function of parameter settings. On the first row is
+MCMC and the second row shows our compact belief propagation.
+−10
+
+0.5
+0
+
+−15
+
+−0.5
+−1
+
+(2)
+
+Where Ê [Fj ] is the number of times we actually see the
+feature j in D, and
+X
+E [Fj ] =
+E [Fj |β ]
+
+−15
+
+−0.5
+−1
+
+−20
+
+−1.5
+−2
+
+−20
+
+−1.5
+−2
+
+−25
+−2
+
+derivative of the log likelihood ℓ(D) for a parameter θj that
+corresponds to a template feature Fj can be described as:
+
+−10
+
+0.5
+0
+
+−2.5
+
+∂ℓ(D)
+= Ê [Fj ] − E θ [Fj ]
+∂θj
+
+−2
+−2
+
+40
+
+−1
+−2
+−2
+
+−1
+
+20 vertices
+
+100
+
+−1
+
+(a)
+
+0
+
+−25
+
+−2.5
+−2
+
+−1
+
+0
+
+(b)
+
+Figure 6: Learning trace of the parameters using exact (a) and
+approximate (b) inference on a 7 vertex graph. In both panels
+values of θ111 are shown on the x-axis while values of θ011 are
+shown on the y-axis. The dark line shows the advancement of
+the conjugate gradient learning procedure, and the bright asterix
+in the middle shows the original parameters used for generating
+the samples. Color scale shows the exact and approximate loglikelihood respectively
+
+β∈Bindings(Fj )
+
+is the sum of times we expect to see each grounding of
+the feature j according to Θ (see [4]). The first term is
+relatively easy to compute in cases where we learn from
+fully observed instances, since it is simply the count of each
+feature in D. And the second term can be approximated
+efficiently by our inference algorithm.
+To evaluate this learning procedure we start by generating samples from a model using a Gibbs sampler [8]. We
+then use these samples to estimate the original parameters
+using exact and approximate inference. In this synthetic
+context, we model a graph over seven vertices using only
+triplet (Ft ) and open chain (Fc ) features and try to recover
+the parameter of these features. As can be seen in Figure 6,
+using both approximate and exact inference retrieved parameter values that are close to these we used to generate
+the data. However, we can see that since the approximate
+and exact likelihoods create a different scenery, the trace
+of the exact search is much shorter, and retrieves better parameters.
+We now proceed to learning a real-life model over interactions between proteins. We build on a model described
+
+in [11] for protein-protein interactions. This model is analogous to our running example, where the vertices of the
+graph are proteins and the edges are interactions. We define the basic type Tp for proteins and the complex type
+Ti = [Tp , Tp ] for interactions between proteins. As with
+edges, we consider the template attribute Xe (Ti ) that equals
+one if the two proteins interact and zero otherwise. We reason about an instantiation for a set of 813 proteins related
+to DNA transcription and repair [2]. We collected statistics over interactions between these proteins from various
+experiments [1, 7, 13, 15].
+We adopt an incremental approach considering only the
+simplest template feature at the beginning and adding more
+complex features later on (this approach is somewhat similar to Della Pietra et al. [4]). We start by learning a
+model with only univariate features over interactions. As
+expected, the parameters we learn reflect the probability
+of an interaction in the data. We can now consider more
+complex features to the model by fixing the univariate parameter and adding various features. We start by adding
+two features, Ft and Fc that describe the closed triangle of
+
+198
+
+JAIMOVICH ET AL.
+4
+
+x 10
+
+0.1
+
+5 Discussion
+
+−1
+0
+−0.1
+
+−2
+
+−0.2
+
+−3
+
+−0.3
+
+−4
+
+−0.4
+−5
+−0.5
+−0.6
+−0.3
+
+−6
+−0.2
+
+−0.1
+
+0
+
+0.1
+
+0.2
+
+Figure 7: Exploration of the approximate log-likelihood landscape. In this example, the univariate parameter is fixed, the
+weights of two features over three interactions, triangle and
+chains, are varied. The x-axis shows the triangle parameter (θ111 )
+and the y-axis shows the chain parameter (θ011 ). The dark lines
+show traces of conjugate gradient runs initiated from arbitrary
+starting points. The bright triangles mark the final parameter values returned by the algorithm.
+
+interactions and open chain of interactions respectively.
+Using our efficient inference approximation we can
+reevaluate the likelihood and its derivative for many parameter values and thereby gain an unprecedented view of the
+likelihood landscape of the model. For example, Figure 7
+shows the log-likelihood calculated for a grid of parameter
+values and traces of a conjugate gradient learning procedure initialized from different starting points. We find that
+this view of the likelihood function is highly informative
+as it shows the influence of different parameter values on
+the model behavior. Specifically, the results show that the
+likelihood sensitivity to each parameter is quite different.
+This can be seen as a horizontal ridge in the upper part of
+the region, meaning that changes in θ111 have smaller effect on likelihood value than changes in θ011 . This behavior might reflect the fact that there are 3-times more occurrences of open chains than occurrences of closed triangles
+in the graph. Furthermore, our unique view of the likelihood landscape, and especially the horizontal ridge we see,
+illustrate that there is a strong relation between the parameters. As each of the gradient ascent runs converge to a
+different local maxima, we can use the landscape to determine whether this a consequence of rough landscape of
+the approximate likelihood or is due to redundancies in the
+parametrization that result in an equi-probable region.
+We repeated the same exploration technique for other
+features such as colocalization of proteins [11], star-2 and
+star-3 [10], and quadruplets of interactions (results not
+shown). We find that the overall gain in terms of likelihood is smaller than in the case of triplet features. Again,
+we find that whenever one of the features is more abundant
+in the network, its influence on the approximate marginal
+beliefs and likelihood is much larger. In such cases the interesting region - where likelihood is high - narrows to a
+small range of parameter values of the abundant feature.
+
+We have shown how we exploit symmetry in relational
+MRFs to perform approximate inference at the templatelevel. This results in an extremely efficient approximate
+inference procedure. We have shown that this procedure is equivalent to synchronous belief propagation in the
+ground model. We have also empirically shown that on
+small graphs our inference algorithm approximates the true
+marginal probability very well. Furthermore, other approximation methods, such as MCMC and asynchronous BP
+yield inference results that are similar to ours. Note that
+other works show that synchronous and asynchronous belief propagation are not always equivalent [5].
+Other works attempted to exploit relational structure for
+more efficient inference. For example, Pfeffer et al. [17]
+used the relational structure to cache repeated computations of intermediate terms that are identical in different instances of the same template. Several recent works [3, 18]
+derive rules as to when variable elimination can be performed at the template level rather than the instance level,
+which saves duplicate computations at the instance levels.
+These methods focus on speeding exact inference, and are
+relevant in models where the intermediate calculations of
+exact inference have tractable representations. These approaches cannot be applied to models, such as the ones we
+consider, where the tree-width is large, and thus intermediate results of variable elimination are exponential. In contrast, our method focuses on template level inference for
+approximate inference in such intractable models.
+We stress that the main ideas developed here can be applied in other variational methods such as generalized belief propagation or structured mean field. Furthermore, it
+is clear that the class of relational models we defined is not
+the only one that has symmetry properties that can be exploited by our procedure. In fact, all the relational models
+that obey Lemma 3.3 can be run in template level. For example, it can be shown that a square wrap-around grid also
+obeys such symmetry.
+The key limitation of our procedure is that it relies on
+the lack of evidence. Once we introduce evidence the symmetry is disrupted and our method does not apply. While
+this seems to be a serious limitation, we note that inference
+without evidence is the main computational step in learning such models from data. We showed how this procedure enables us to deal with learning problems in large relational models that were otherwise infeasible. Though the
+search space proves to be very difficult [10], our method
+allows us to perform many iterations of parameter estimation in different settings and thereby get a good overview
+of the likelihood landscape. This brings us one step closer
+towards successful modeling of networks using relational
+probabilistic models.
+
+JAIMOVICH ET AL.
+Acknowledgements
+We thank Chen Yanover, Tal El-Hay, Gal Elidan, and the
+anonymous reviewrs for helpful remarks on previous versions of this manuscript. Part of this research was supported by a grant from the United States-Israel Binational
+Science Foundation (BSF). Ariel Jaimovich is supported by
+the Eshkol fellowship from the Israeli Ministry of Science.
+
+References
+
+199
+
+[14] F. R. Kschischang, B. J. Frey, and H. A. Loeliger.
+Factor graphs and the sum-product algorithm. IEEE
+Transactions on Information Theory, 47(2), 2001.
+[15] HW Mewes, J Hani, F Pfeiffer, and D Frishman.
+MIPS: a database for genomes and protein sequences.
+Nucleic Acids Research, 26:33–37, 1998.
+[16] K. Murphy and Y. Weiss. Loopy belief propagation
+for approximate inference: An empirical study. In
+UAI 1999.
+
+[1] S. R. Collins, et al . Towards a comprehensive atlas
+of the physical interactome of Saccharomyces cerevisiae. Mol Cell Proteomics, 2007.
+
+[17] A. Pfeffer, D. Koller, B. Milch, and K. Takusagawa.
+SPOOK : A system for probabilistic object-oriented
+knowledge representation. In UAI 1999.
+
+[2] S. R. Collins, et al. Functional dissection of protein
+complexes involved in yeast chromosome biology using a genetic interaction map. Nature, 2007.
+
+[18] D. Poole. First-order probabilistic inference. In IJCAI
+2003.
+
+[3] R. de Salvo Braz, E. Amir, and D. Roth. Lifted firstorder probabilistic inference. In IJCAI 2005.
+
+[19] M. Richardson and P. Domingos P. Markov logic networks. Machine Learning, 62:107–136, 2006.
+
+[4] S. Della Pietra, V. Della Pietra, and J. Lafferty. Inducing features of random fields. IEEE Trans. on Pattern Analysis and Machine Intelligence, 19(4):380–
+393, 1997.
+
+[20] E. Segal, M. Shapira, A. Regev, D. Pe’er, D. Botstein, D. Koller, and N. Friedman. Module networks:
+identifying regulatory modules and their conditionspecific regulators from gene expression data. Nat
+Genet, 34(2):166–176, 2003.
+
+[5] G. Elidan, I. McGraw, and D. Koller. Residual belief
+propagation: Informed scheduling for asynchronous
+message passing. In UAI 2006.
+
+[21] B. Taskar, A. Pieter Abbeel, and D. Koller. Discriminative probabilistic models for relational data. In UAI
+2002.
+
+[6] N. Friedman, L. Getoor, D. Koller, and A. Pfeffer.
+Learning probabilistic relational models. In IJCAI
+1999.
+
+[22] B. Taskar, M. F. Wong, P. Abbeel, and D. Koller. Link
+prediction in relational data. In NIPS 2004.
+
+[7] A. C. Gavin, et al.
+Proteome survey reveals
+modularity of the yeast cell machinery. Nature,
+440(7084):631–636, 2006.
+[8] S. Geman and D. Geman. Stochastic relaxation, gibbs
+distributions, and the bayesian restoration of images.
+IEEE Trans. on Pattern Analysis and Machine Intelligence, pages 721–741, 1984.
+[9] L. Getoor, N. Friedman, D. Koller, and B. Taskar.
+Learning probabilistic models of relational structure.
+In ICML 2001.
+[10] M. S. Handcock. Assessing degeneracy in statistical
+models of social networks. Technical Report 39, University of Washington, 2003.
+[11] A. Jaimovich, G. Elidan, H. Margalit, and N. Friedman. Towards an integrated protein-protein interaction network: a relational Markov network approach.
+J. Comut. Biol., 13:145–164, 2006.
+[12] M. I. Jordan, Z. Ghahramani, T. Jaakkola, and L. K.
+Saul. An introduction to variational approximations
+methods for graphical models. In Learning in Graphical Models, 1998.
+[13] N. J. Krogan, et al. Global landscape of protein complexes in the yeast Saccharomyces cerevisiae. Nature,
+440(7084):637–643, 2006.
+
+[23] J. Yedidia, W. Freeman, and Y. Weiss. Constructing free energy approximations and generalized belief
+propagation algorithms. Technical Report TR-200235, Mitsubishi Electric Research Labaratories, 2002.
+
+

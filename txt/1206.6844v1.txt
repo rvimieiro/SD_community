@@ -1,0 +1,1169 @@
+From influence diagrams to multi-operator cluster DAGs
+
+Cédric Pralet
+LAAS-CNRS
+Toulouse, France
+
+Thomas Schiex
+INRA
+Castanet Tolosan, France
+
+Abstract
+There exist several architectures to solve influence diagrams using local computations,
+such as the Shenoy-Shafer, the HUGIN, or
+the Lazy Propagation architectures. They all
+extend usual variable elimination algorithms
+thanks to the use of so-called “potentials”.
+In this paper, we introduce a new architecture, called the Multi-operator Cluster DAG
+architecture, which can produce decompositions with an improved constrained inducedwidth, and therefore induce potentially exponential gains. Its principle is to benefit from
+the composite nature of influence diagrams,
+instead of using uniform potentials, in order
+to better analyze the problem structure.
+
+1
+
+INTRODUCTION
+
+Since the first algorithms based on decision trees or
+arc-reversal operations [Shachter, 1986], several exact
+methods have been proposed to solve influence diagrams using local computations, such as the ones based
+on the Shenoy-Shafer, the HUGIN, or the Lazy Propagation architectures [Shenoy, 1992; Jensen et al., 1994;
+Madsen and Jensen, 1999]. These methods have successfully adapted classical Variable Elimination (VE)
+techniques (which are basically designed to compute
+one type of marginalization on a combination of local
+functions with only one type of combination operator), in order to handle the multiple types of information (probabilities and utilities), the multiple types
+of marginalizations (sum and max), and the multiple
+types of combination (× for probabilities, + for utilities) involved in an influence diagram. The key mechanism used for such an extension consists in using elements known as potentials [Ndilikilikesha, 1994].
+In this paper, we define a new architecture, called the
+Multi-operator Cluster DAG (MCDAG) architecture,
+
+Gérard Verfaillie
+ONERA
+Toulouse, France
+
+which does not use potentials, but still relies on VE.
+Compared to existing schemes, MCDAGs actively exploit the composite nature of influence diagrams. We
+first present the potential-based approach and motivate the need for a new architecture (Section 2). Then,
+MCDAGs are introduced (Section 3) and a VE algorithm is defined (Section 4). Finally, this work is
+compared with existing approaches (Section 5) and extended to other frameworks (Section 6). All proofs are
+available in [Pralet et al., 2006b].
+
+2
+
+MOTIVATIONS
+
+Notations and definitions An influence diagram [Howard and Matheson, 1984] is a composite
+graphical model defined on three sets of variables organized in a Directed Acyclic Graph (DAG) G: (1) a set
+C of chance variables x ∈ C, for each of which a conditional probability distribution Px | pa(x) on x given its
+parents in G is specified; (2) a set D = {D1 , . . . , Dq }
+(indices represent the order in which decisions are
+made) of decision variables x ∈ D, for each of which
+pa(x) is the set of variables observed before decision
+x is made; (3) a set Γ of utility variables u ∈ Γ, each
+of which is associated with a utility function Upa(u) on
+pa(u) (and utility variables are leaves in the DAG).
+We consider influence diagrams where the parents of a
+decision variable are parents of all subsequent decision
+variables (no-forgetting). The set of conditional probability distributions (one for each x ∈ C) is denoted
+P and the set of utility functions (one for each u ∈ Γ)
+is denoted U . Each function φ ∈ P ∪ U holds on a set
+of variables sc(φ) called its scope, and is consequently
+called a scoped function (sc(Px | pa(x) ) = {x} ∪ pa(x)
+and sc(Upa(u) ) = pa(u)). The set of chance variables
+observed before the first decision is denoted I0 , the
+set of chance variables observed between decisions Dk
+and Dk+1 is denoted Ik , and the set of chance variables unobserved before the last decision is denoted
+Iq . We use dom(x) to denote the domain of a vari-
+
+able x ∈ C Q
+∪ D, and by extension, for W ⊂ C ∪ D,
+dom(W ) = x∈W dom(x).
+
+The usual problem associated with an influence diagram is to find decision rules maximizing the expected
+utility (a decision rule for a decision Dk is a function
+associating a value in dom(Dk ) with any assignment
+of the variables observed before making decision Dk )
+As shown in [Jensen et al., 1994], this is equivalent to
+computing optimal decision rules for the quantity
+!
+!!
+Y
+X
+X
+X
+X
+(1)
+Pi ×
+Ui
+max
+max . . .
+I0
+
+2.1
+
+D1
+
+Iq−1
+
+Dq
+
+Iq
+
+Pi ∈P
+
+Ui ∈U
+
+THE “POTENTIAL” APPROACH
+
+With this approach, Equation 1 is reformulated using
+so-called potentials in order to use only one combination and one marginalization operator. A potential on
+a set of variables W is a pair πW = (pW , uW ), where
+pW and uW are respectively a nonnegative real function and a real function, whose scopes are included
+in W . The initial conditional probability distributions
+Pi ∈ P are transformed into potentials (Pi , 0), whereas
+the initial utility functions Ui ∈ U are transformed into
+potentials (1, Ui ). On these potentials, a combination
+operation ⊗ and a marginalization (or elimination)
+operation ↑ are defined:
+• the combination of πW1 = (pW1 , uW1 ) and πW2 =
+(pW2 , uW2 ) is the potential on W1 ∪ W2 given by
+πW1 ⊗ πW2 = (pW1 × pW2 , uW1 + uW2 );
+• the marginalization of πW = (pP
+W , uW ) over
+ W1 ⊂
+P
+↑W1
+W 1 pW u W
+P
+(with
+C equals πW =
+W1 p W ,
+pW
+W1
+
+the convention 0/0 = 0), whereas the marginalization of πW = (pW , uW ) over W1 ⊂ D is given
+↑W1
+by πW
+= (pW , maxW1 uW ).
+
+Solving the problem associated with an influence
+diagram is then equivalent to computing β =
+((· · · ((πC∪D ↑Iq )↑Dq )↑Iq−1 · · · )↑D1 )↑I0 , where πC∪D =
+(⊗Pi ∈P (Pi , 0)) ⊗ (⊗Ui ∈U (1, Ui )) is the combination of
+the initial potentials. As ⊗ and ↑ satisfy the ShenoyShafer axioms defined in [Shenoy, 1990], β can be computed using usual VE algorithms [Jensen et al., 1994].
+This explains why existing architectures like ShenoyShafer, HUGIN, or Lazy Propagation (LP1 ) use potentials to solve influence diagrams.
+2.2
+
+QUANTIFYING THE COMPLEXITY
+
+In the case of influence diagrams, the alternation of
+sum and max marginalizations, which do not gener1
+
+The LP architecture actually uses potentials defined as
+pairs of set of functions (instead of pairs of functions).
+
+ally commute, prevents from eliminating variables in
+any order. The complexity of VE can then be quantified using constrained induced-width [Jensen et al.,
+1994; Park and Darwiche, 2004] (instead of inducedwidth [Dechter and Fattah, 2001]).
+Definition 1. Let G = (VG , HG ) be a hypergraph2
+and let  be a partial order on VG . The constrained
+induced-width of G with constraints on the elimination
+order given by  (“x ≺ y” stands for “y must be eliminated before x”) is a parameter denoted wG (). It is
+defined as wG () = mino∈lin() wG (o), lin() being
+the set of linearizations of  to a total order on VG and
+wG (o) being the induced-width of G for the elimination
+order o (i.e. the size of the largest hyperedge created
+when eliminating variables in the order given by o).
+The constrained induced-width can be used to give an
+upper bound on the complexity of existing potentialbased VE algorithms. Let Gp = (C ∪ D, {sc(φ)|φ ∈
+P ∪ U }) be the hypergraph corresponding to the “untyped” influence diagram. Let p be the partial order
+defined by I0 ≺p D1 , (Ik 6= ∅) → (Dk ≺p Ik ≺p Dk+1 ),
+and Dq ≺p Iq . Finally, let d be the maximum size of
+the variables domains. Then, with classical approaches
+based on potentials and strong junction trees [Jensen
+et al., 1994], which are junction trees with constraints
+on the marginalization order, the theoretical complexity is O(|P ∪ U | · d1+wGp (p ) ) (the number of elements
+of a finite set E is denoted |E|).
+2.3
+
+DECREASING THE CONSTRAINED
+INDUCED-WIDTH
+
+The constrained-induced width is a guideline to show
+how the complexity can be decreased. In this direction, one can work on the two parameters on which it
+depends: the partial order , and the hypergraph G.
+Weakening the partial order 
+Proposition 1. Let G = (VG , HG ) be a hypergraph
+and let 1 , 2 be two partial orders on VG such that
+∀(x, y) ∈ VG × VG , (x 2 y) → (x 1 y) (2 is weaker
+than 1 ). Then, wG (1 ) ≥ wG (2 ).
+Proposition 1 means that if one weakens , i.e. if one
+reveals some extra freedoms in the elimination order
+(e.g. by proving that some marginalizations with sum
+and max can commute), then the theoretical complexity may decrease. Though such a technique is known
+to be useless in contexts like Maximum A Posteriori
+hypothesis [Park and Darwiche, 2004], where there is
+only one alternation of max and sum marginalizations,
+2
+
+This means that VG is the set of variables (or vertices),
+and HG is a set of hyperedges on VG , i.e. a subset of 2VG .
+
+it can lead to an exponential gain as soon as there are
+more than two levels of alternation.
+Indeed, assume
+that one wants
+P to compute
+P
+maxx1 ,...,xn y maxxn+1 Py (Ux1 ,y + 1≤i≤n Uxi ,xn+1 ).
+On one hand, using 1 defined by {x1 , . . . , xn } ≺1
+y ≺1 xn+1 provides us with the constrained inducedwidth wG (1 ) = n, since xn+1 is then necessarily
+eliminated first. On the other hand, the scopes of
+the functions involved enable us to infer that with 2
+defined by x1 ≺2 y, one is guaranteed to compute the
+same value, since y is “linked” only with x1 . The constrained induced-width is then wG (2 ) = 1, e.g. with
+the elimination order x1 ≺ y ≺ xn+1 ≺ xn ≺ . . . ≺ x2 .
+Therefore, the theoretical complexity decreases from
+O((n + 2) · dn+1 ) to O((n + 2) · d2 ), thanks to the
+weakening of the partial order (the (n + 2) factor
+corresponds to the number of scoped functions).
+Working on the hypergraph The second
+possible mechanism is to work on the hypergraph G, either by eliminating
+so-called “barren”
+P
+variables (computing
+x Px | pa(x) is useless because of normalization), or by better decomposing
+the problem.
+To illustrate the latter, P
+assume
+that one wants to compute maxx1 ,...,xn y Py ·
+(Uy,x1 + · · · + Uy,xn ). The basic hypergraph G1 =
+({x1 , . . . , xn , y}, {{y, x1}, . . . , {y, xn }}), together with
+1 defined by {x1 , . . . , xn } ≺1 y, gives a theoretical
+complexity O((n + 1) · dwG1 (1 )+1 ) = O((n + 1) · dn+1 ).
+However, one can write:
+P
+maxx1 ,...,xn y Py · (Uy,x1 + · · · + Uy,xn )
+P
+P
+= (maxx1 y Py · Uy,x1 ) + · · · + (maxxn y Py · Uy,xn )
+Thus, an implicit duplication of y makes the complexity decrease to O((n + 1)d2 ) = O((n + 1)d1+wG2 (2 ) ),
+where G2 is the hypergraph defined by the variables {x1 , . . . , xn , y (1) , . . . , y (n) } and by the hyperedges
+{{x1 , y (1) }, . . . , {xn , y (n) }}, and where 2 is given by
+x1 ≺2 y (1) , . .P
+. , xn ≺2 y (n) . This
+P method,Pwhich uses
+the property S (U1 + U2 ) = ( S U1P
+) +( S U2 ), duplicates variables “quantified” with , so that computations become more local. Proposition 2 shows the
+possible exponential gain obtained by duplication.
+Proposition 2. Let φx,Si be a scoped function of
+scope {x} ∪ Si P
+for any i ∈ [1, m]. The direct
+computation of
+x (φx,S1 + · · · + φx,Sm ) always requires
+more
+sums
+than
+P the direct computation of
+P
+·
+·
+·
++
+(
+( x φx,S1 ) +
+x φx,Sm ). Moreover, the comP
+putation of x (φx,S1 + · · · + φx,Sm ) results in a complexity O(m · d1+|S1 ∪...∪Sm | ), whereas
+P the computation
+of the m quantities in the set { x φx,Si | 1 ≤ i ≤ m}
+results in a complexity O(m · d1+maxi∈[1,m] |Si | ).
+Why not use potentials? Though weakening the
+constraints on the elimination order could be done
+
+with potentials, the duplication mechanism cannot
+be used if potentials are. Indeed, one cannot write
+↑W3
+↑W3
+(πW1 ⊗ πW2 )↑W3 = (πW
+) ⊗ (πW
+) even if W3 ⊂ C.
+1
+2
+The duplication mechanism has actually already been
+proposed in the influence diagram litterature [Dechter,
+2000] where it was applied ”on the fly” during elimination. In this paper, the duplication is exploited in a
+global preliminary analysis which may reveal new degrees of freedom in the elimination order, in synergism
+with the application of other mechanisms. The new architecture we introduce, which does not use potentials
+to solve influence diagrams, is called the Multi-operator
+Cluster DAG (MCDAG) architecture.
+
+3
+3.1
+
+THE MCDAG ARCHITECTURE
+MACROSTRUCTURING AN
+INFLUENCE DIAGRAM
+
+The first step to build the MCDAG architecture is to
+analyze the macrostructure of the influence diagram,
+by detecting the possible reordering freedoms in the
+elimination order, while using the duplication technique and the normalization conditions on conditional
+probability distributions. This macrostructure is represented with a DAG of computation nodes.
+Definition 2. An atomic computation node n is a
+scoped function φ in P ∪ U . In this case, the value of
+n is val(n) = φ, and its scope is sc(n) = sc(φ). A computation node is either an atomic computation node or
+a triple n = (Sov, ~, N ), where Sov is a sequence of
+operator-variables pairs, ~ is an associative and commutative operator with an identity, and where N is a
+set of computation nodes. In the latter, the value of n
+is given by val(n) = Sov (~n0 ∈N val(n0 )), and its scope
+is given by sc(n) = (∪n0 ∈N sc(n0 )) − {x | opx ∈ Sov}.
+Informally, a computation node (Sov, ~, N ) defines a
+sequence of marginalizations on a combination of computation nodes with a specific operator. It can be
+represented as in Figure 1. Given a set of computation nodes N , we define N +x (resp. N −x ) as the
+set of nodes of N whose scope contains x (resp. does
+not contain x): N +x = {n ∈ N | x ∈ sc(n)} (resp.
+N −x = {n ∈ N | x ∈
+/ sc(n)}).
+Sov ~
+n1
+
+n2
+
+φ1 φ2
+
+φk
+nl
+
+Figure 1: A computation node (Sov, ~, N ), where
+{φ1 , . . . , φk } (resp. {n1 , . . . , nl }) is the set of atomic
+(resp. non-atomic) computation nodes in N .
+
+3.1.1
+
+From influence diagrams to
+computation nodes
+
+Without loss of generality, we assume that U 6= ∅ (if
+this is not the case, one can add U0 = 0 to U ).
+
+maxd
+P
+∅ × Prr1|r Ud,r1
+2 1
+
+3.1.2
+
+P
+Rewriting rules for
+x When a sum-marginalization must be performed, a decomposition rule DΣ ,
+a recomposition rule RΣ , and two simplification rules
+2
+1
+are used. These are illustrated in Figure 2,
+and SΣ
+SΣ
+which corresponds to the influence diagram example
+introduced in 3.1.1.
+P
+DΣ
+(Sov. x , +, {(∅, ×, N ) , N ∈ N})
+
+
+
+P
++x
+,N ∈ N
+Sov, +, ∅, ×, N −x ∪
+x , ×, N
+RΣ [ Prec.: (S 0 ∩ (S ∪ sc(N1 )) = ∅) ∧ (N1 ∩ N2 = ∅)]
+P
+P
+P
+( S∪S 0 , ×, N1 ∪ N2 )
+( S , ×, N1 ∪ {( S 0 , ×, N2 )})
+1
+SΣ
+[ Prec.: x ∈
+/ S ∪ sc(N ) ]
+
+P
+P
+( {x}∪S , ×, N ∪ Px | pa(x) )
+( S , ×, N )
+ P
+ 
+2
+∅, ×, N ∪
+SΣ
+(∅, ×, N )
+∅ , ×, ∅
+
+Example In the example of Figure 2, the first rule to
+be applied is the decomposition rule DΣ , which treats
+
+P
+∅ × Prr1|r Ud,r2
+2 1
+
+maxd
+
+P
+
+P
+
+P
+∅ × Prr1|r Ud
+2 1
+
++
+
+r2
+
+∅ × Ud,r2
+
+∅ ×
+P
+× Prr1|r Ud,r1
+2 1
+
+r1
+
+P
+
+∅ ×
+
+r1
+
+Ud
+
+P
+× Prr1|r
+2 1
+
+DΣ
+maxd
+
+Macrostructuring the initial node
+
+In order to exhibit the macrostructure of the influence
+diagram, we analyze the sequence of computations performed by n0 . To do so, we successively consider the
+eliminations in Sov0 from the right to the left and use
+three types of rewriting rules, preserving nodes values, to make the macrostructure explicit: (1) decomposition rules, which decompose the structure using
+namely the duplication technique; (2) recomposition
+rules, which reveal freedoms in the elimination order;
+(3) simplification rules, which remove useless computations from the architecture, by using normalization
+conditions. Rewriting rules are presented first for the
+case of sum-marginalizations, and then for the case of
+max-marginalizations. A rewriting rule may be preceded by preconditions restricting its applicability.
+
++
+
+r2 ,r1
+
+DΣ
+
+Proposition P
+3. Let Sov0 P
+be the initial sequence
+P
+I0 maxD1 . . .
+Iq−1 maxDq
+Iq of operator-variables
+pairs defined by the influence diagram. The value of
+Equation 1 is equal to the value of the computation
+node n0 = (Sov0 , +, {(∅, ×, P ∪ {Ui }), Ui ∈ U }).
+For the influence
+P diagram associated with the computation of maxd r2 ,r1 Pr1 ·Pr2 |r1 ·(Ud,r1 +Ud,r2 +Ud), n0
+corresponds to the first computation node in Figure 2.
+
+P
+
+∅ ×
+
+P
+
++
+∅ ×
+
+∅ ×
+
+×
+
+P
+
+r2
+
+r1
+
+P
+× Prr1|r Ud,r1
+2 1
+
+P
+
+r2
+
+× Ud,r2
+P
+
+r1
+
+P
+
+r2
+
+Ud
+×
+
+P
+× Prr1|r
+2 1
+
+RΣ
+maxd
+∅ ×
+P
+
+r1 ,r2 ×
+
++
+∅ ×
+
+∅ ×
+
+Ud
+
+P r1
+Pr1 Ud,r1 P
+Pr1 Ud,r2 P
+r1 ,r2 × Pr2 |r1
+r1 ,r2 × P
+Pr2 |r1
+r2 |r1
+1 + S2
+SΣ
+Σ
+
+maxd
+∅ ×
+
+∅ ×
+P
+
+r1
+
+× Pr1 Ud,r1
+
++
+
+P
+
+r1 ,r2 ×
+
+∅ ×
+
+Ud
+
+Pr1 Ud,r2
+Pr2 |r1
+
+Figure 2: Application of rewriting rules for
+
+P
+
+.
+
+P
+the operator-variable pair
+r1 .Such a rule uses the
+duplication mechanism and the distributivity property
+of × over +. It provides us with a DAG of computation nodes. It is a DAG since common computation
+nodes are merged (and it is not hard to detect such
+nodes when applying
+P the rules). Then, DΣ can be
+applied again for
+r2 . One can infer from the obtained architecture that there is no reason for r1 to be
+eliminated before r2 . Using the recomposition rule RΣ
+makes this clear in the structure. Basically, RΣ uses
+1
+the distributivity of × over +. Last, applying SΣ
+and
+2
+SΣ , which use the normalization of conditional probability distributions, simplifies some nodes in the architecture. In the end, no computation involves more
+than
+P two variables if one eliminates r1 first in the node
+( r1 ,r2 , ×, {Pr1 , Pr2 |r1 , Ud,r2 }), whereas with a poten-
+
+tial-based approach, it would be necessary to process
+three variables simultaneously (since r1 would be involved in the potentials (Pr1 , 0), (Pr2 |r1 , 0), (1, Ud,r1 ) if
+eliminated first, and r2 would be involved in the potentials (Pr2 |r1 , 0), (1, Ud,r2 ) if eliminated first).
+
+maxd1
+
+P
+
+maxd2
+
+r2
+
+P r1
+∅ × Pr2 |r1
+U d1
+
+P
+
+r1
+
++
+
+maxd3
+
+P r1
+∅ × Pr2 |r1
+Ud2 ,d3
+
+P r1
+∅ × Pr2 |r1
+Ur2 ,d1 ,d3
+
+P r1
+∅ × Pr2 |r1
+Ur1 ,d2
+
+Dmax
+Rewriting rules for maxx When a max-marginalization must be performed, a decomposition rule Dmax
+and a recomposition rule Rmax are used (there is no
+simplification rule since there is no normalization condition to use for decision variables). These rules are
+a bit more complex than the previous ones and are
+illustrated in Figure P
+3, which corresponds
+to the influP
+ence diagram maxd1 r2 maxd2 r1 maxd3 Pr1 · Pr2 |r1 ·
+(Ud1 + Ud2 ,d3 + Ur2 ,d1 ,d3 + Ur1 ,d2 ).
+
+maxd1
+
+Rmax [ Prec.: (S 0 ∩(S∪sc(N1 )∪sc(N2 )) = ∅)∧(∀N3 ∈
+N, N2 ∩ N3 = ∅) ∧ (∀n ∈ N2 , val(n) ≥ 0) ]
+(maxS , +, N1 ∪
+{(∅, ×, N2 ∪ {(maxS 0 , +, {(∅, ×, N3), N3 ∈ N})})})
+
+r2
+
+maxd2
+
+P
+
++
+
+r1
+
+∅ × Pr1 Pr2 |r1
+
+P r1
+∅ × Pr2 |r1
+U d1
+
+P r1
+∅ × Pr2 |r1
+Ur1 ,d2
+
+maxd3 +
+∅ × Ud2 ,d3
+
+∅ × Ur2 ,d1 ,d3
+
+DΣ
+maxd1
+
+Dmax [ Prec.: ∀N ∈ N+x ∀n ∈ N −x , val(n) ≥ 0 ]
+(Sov.maxx , +, {(∅, ×, N ) , N ∈ N})
+
+ (Sov, +, {(∅, ×, N ) , N ∈ N}) if N+x = ∅
+(Sov, +, {(∅, ×, N ) , N ∈ N−x }
+
+∪ {(∅, ×, N1 ∪ {(maxx , +, N2 )})}) otherwise
+
+N1 = ∩N ∈N+x N −x
+where
+N2 = {(∅, ×, N − N1 ) , N ∈ N+x }
+
+P
+
+P
+
+∅ × U d1
+P
+
+r1
+
+r2
+
+maxd2
+
++
+
+∅ ×
+
+P r1
+× Pr |r
+2
+
+∅ ×
+P
+
+maxd3 +
+
+1
+
+∅ × Ud2 ,d3
+
+r1
+
+Pr Ur ,d
+× Pr 1|r 1 2
+2
+
+1
+
+∅ × Ur2 ,d1 ,d3
+
+Dmax
+maxd1
+
+P
+
++
+
+r2
+
+∅ ×
+
+∅ × U d1
+P
+
+P r1
+r1 × Pr |r
+2
+
+maxd2 +
+
+∅ ×
+1
+
+maxd3 +
+
+(maxS∪S 0 , +, N1 ∪ {(∅, ×, N2 ∪ N3 ) , N3 ∈ N})
+
+∅ × Ud2 ,d3
+
+Example In the example of Figure 3, one first applies the decomposition rule Dmax , in order to treat the
+operator-variable pair maxd3 . Such a rule uses first the
+monotonicity of + (max(a + b, a + c) = a + max(b, c)),
+and then both the distributivity of × over + and
+the monotonicity of × (so as to write things like
+maxd3 ((Pr1 · Pr2 |r1 · Ud2 ,d3 ) + (Pr1 · Pr2 |r1 · Ur2 ,d1 ,d3 )) =
+·maxd3 (Ud2 ,d3 +Ur2 ,d1 ,d3 )). Then, DΣ can be
+Pr1 ·Pr2 |rP
+1
+used for r1 , and Dmax can be used for maxd2 . After
+those steps, the recomposition rule Rmax , which uses
+the monotonicities of × and +, reveals that the elimination order between d2 and d3 is actually free. This
+was not obvious from the initial Sov sequence. The
+approach using potentials is unable to make such freedoms explicit, which may induce exponential increase
+in complexity as shown in 2.3.
+
+P
+
+P
+
+r1
+
+∅ ×
+×
+
+Pr1Ur1 ,d2
+Pr2 |r1
+
+∅ × Ur2 ,d1 ,d3
+
+Rmax
+
+Rule application order A chaotic iteration of the
+rules does not converge, since e.g., rules Dmax and
+Rmax may be infinitely alternately applied. Hence, we
+specify an order in which we apply rules to converge
+to a unique final DAG of computation nodes (we have
+
+maxd1
+∅ × U d1
+
+r2
+
++
+∅ ×
+maxd2 ,d3 +
+
+∅ × Ud2 ,d3
+P
+
+r1
+
+P r1
+× Pr |r
+2
+
+1
+
+∅ ×
+
+∅ × Ur2 ,d1 ,d3
+P
+
+r1
+
+×
+
+Pr1Ur1 ,d2
+Pr2 |r1
+
+Figure 3: Application of rewriting rules for max
+(the application of the rules may create nodes looking like (∅, ×, {n}), which perform no computations;
+these nodes can be eliminated at a final step).
+
+used this order in the previous examples). We successively consider each operator-variable pair of the initial
+sequence Sov
+P 0 from the right to the left
+P (marginalizaP
+tions like x1 ,...,xn can be split into x1 · · · xn ).
+If the rightmost marginalization
+in the Sov sequence of
+P
+the root node is x , then rule DΣ is applied once. It
+creates new grandchildren nodes for the root, for each
+
+of which, we try to apply rule RΣ in order to reveal
+freedoms in the elimination order. If RΣ is applied,
+this creates new computation nodes, on each of which
+1
+2
+simplification rules SΣ
+and then SΣ
+are applied (until
+they cannot be applied anymore).
+If the rightmost marginalization in the Sov sequence of
+the root node is maxx , then rule Dmax is applied once.
+This creates a new child and a new grandchild for the
+root. For the created grandchild, we try to weaken
+constraints on the elimination order using Rmax .
+Therefore, the rewriting rules are applied in a deterministic order, except from the freedom left when
+choosing the next variable
+in S to consider for
+P
+marginalizations like S or maxS . It can be shown
+that this freedom does not change the final structure.
+The soundness of the macrostructure obtained is provided by the soundness of the rewriting rules:
+1
+2
+Proposition 4. Rewriting rules DΣ , RΣ , SΣ
+, SΣ
+,
+Dmax and Rmax are sound, i.e. for any of these
+rules n1
+n2 , if the preconditions are satisfied, then
+val(n1 ) = val(n2 ) holds. Moreover, rules Dmax and
+Rmax leave the set of optimal decision rules unchanged.
+
+Complexity issues An architecture is usable only
+if it is reasonable to build it. Proposition 5 makes
+it possible to save some tests during the application
+of the rewriting rules, and Proposition 6 gives upper
+bounds on the complexity.
+1
+, the preconditions of
+Proposition 5. Except for SΣ
+the rewriting rules are always satisfied.
+
+Proposition 6. The time and space complexity of the
+application of the rewriting rules are O(|C ∪ D| · |U | ·
+(1 + |P |)2 ) and O(|C ∪ D| · (|U | + |P |)) respectively.
+3.2
+
+TOWARDS MCDAGS
+
+The rewriting rules enable us to transform the initial multi-operator computation node n0 into a DAG
+of mono-operator
+P computation nodes looking like
+(maxS , +, N ), ( S , ×, N ), (∅,
+P×, N ), or φ ∈ P ∪ U .
+For nodes (maxS , +, N ) or ( S , ×, N ), it is time to
+use freedoms in the elimination order. To do so, usual
+junction tree construction techniques can be used,
+since on one hand, (R, max, +) and (R, +, ×) are commutative semirings, and since on the other hand, there
+are no constraints on the elimination order inside each
+of these nodes (the only slight difference with usual
+junction trees is that only a subset of the variables
+involved in a computation node may have to be eliminated, but it is quite easy to cope with this).
+To obtain a goodPdecomposition for nodes n like
+(maxS , +, N ) or ( S , ×, N ), one can build a junction tree to eliminate S from the hypergraph G =
+
+(sc(N ), {sc(n0 ) | n0 ∈ N }). The optimal induced-width
+which can be obtained for n is w(n) = wG,S , the
+induced-width of G for the elimination of the variables in S.3 The induced-width of the MCDAG architecture is then defined by wmcdag = maxn∈N w(n),
+where
+P N is the set of nodes looking like (maxS , +, N )
+or ( S , ×, N ).
+After the decomposition of each mono-operator computation node, one obtains a Multi-operator Cluster
+DAG.
+Definition 3. A Multi-operator Cluster DAG is a
+DAG where every vertex c (called a cluster) is labeled
+with four elements: a set of variables V (c), a set of
+scoped functions Ψ(c) taking values in a set E, a set
+of son clusters Sons(c), and a couple (⊕c , ⊗c ) of operators on E s.t. (E, ⊕c , ⊗c ) is a commutative semiring.
+Definition
+4. The
+value
+of
+a
+cluster
+c of a MCDAG is given by val(c)
+=
+
+⊕c V (c)−V (pa(c)) ⊗c ψ∈Ψ(c) ψ ⊗c ⊗c s∈Sons(c) val(s) .
+The value of a MCDAG is the value of its root node.
+Thanks to Proposition 7, working on MCDAGs is sufficient to solve influence diagrams.
+Proposition 7. The value of the MCDAG obtained
+after having decomposed the macrostructure is equal
+to the maximal expected utility. Moreover, for any decision variable Dk , the set of optimal decision rules
+for Dk in the influence diagram is equal to the set of
+optimal decision rules for Dk in the MCDAG.
+3.3
+
+MERGING SOME COMPUTATIONS
+
+There may exist MCDAG clusters performing exactly
+the same computations, even if the computation nodes
+they come from are
+Pdistinct. For instance, a computation node n1 = ( x,y , ×, {Px , Py|x , Uy,z ) may be decomposed into clusters c1 = ({x}, {Px , Py|x }, ∅, (+, ×))
+0
+and c01 = ({y},
+P {Uy,z }, {c1 }, (+, ×)). A computation
+node n2 = ( x,y , ×, {Px , Py|x , Uy,t ) may be decomposed into clusters c2 = ({x}, {Px , Py|x }, ∅, (+, ×))
+and c02 = ({y}, {Uy,t}, {c02 }, (+, ×)). As c1 = c2 , some
+computations can be saved by merging clusters c1 and
+c2 in the MCDAG. Detecting common clusters is not
+as easy as detecting common computation nodes.
+3
+
+For (maxS , +, N ) nodes, which actually always look
+like (maxS , +, {(∅, ×, N 0 ), N 0 ∈ N}), better decompositions can be obtained by using another hypergraph. In
+fact, for each N 0 ∈ N, there exists a unique n ∈ N 0 ,
+denoted N 0 [u], s.t. n or its children involve a utility
+function. It is then better to consider the hypergraph
+(sc(N ), {sc(N 0 [u]) | N 0 ∈ N}). This enables to figure out
+that e.g. only two variables (x and y) must be considered if one eliminates x first in a node like (maxxy , +, N ) =
+(maxxy , +, {(∅, ×, Uy,z ), (∅, ×, {nz , Ux,y }), (∅, ×, {nz , Ux })}),
+since nz is a factor of both Ux,y and Ux . We do not further
+develop this technical point.
+
+this notion is not used only for decision rules conciseness reasons: it is also used to reveal reordering freedoms, which can decrease the time complexity. Note that some of the ordering freedom here
+is obtained by synergism with the duplication.
+
+To sum up, there are three steps to build the architecture. First, the initial multi-operator computation
+node is transformed into a DAG of mono-operator
+computation nodes (via sound rewriting rules). Then,
+each computation node is decomposed with a usual
+junction tree construction. It provides us with a
+MCDAG, in which some clusters can finally be merged.
+
+4
+
+1
+• Thanks to simplification rule SΣ
+, the normalization conditions enable us not only to avoid useless computations, but also to improve the ar1
+may indirectly weaken
+chitecture structure (SΣ
+some constraints on the elimination order). This
+is stronger than Lazy Propagation architectures [Madsen and Jensen, 1999], which use the
+first point only, during the message passing phase.
+Note that with MCDAGs, once the DAG of computation nodes is built, there are no remaining
+normalization conditions to be used.
+
+VE ALGORITHM ON MCDAGs
+
+Defining a VE algorithm on a MCDAG is simple. The
+only difference with existing VE algorithms is the
+multi-operator aspect for both the marginalization
+and the combination operators used. As in usual
+architectures, nodes send messages to their parents.
+Whenever a node c has received all messages val(s)
+from its children, c can compute
+ its own value val(c) =
+
+⊕c V (c)−V (pa(c)) ⊗c ψ∈Ψ(c) ψ ⊗c ⊗c s∈Sons(c) val(s)
+and send it to its parents. As a result, messages go
+from leaves to root, and the value computed by the
+root is the maximal expected utility.
+
+5
+
+COMPARISON WITH EXISTING
+ARCHITECTURES
+
+Compared to existing architectures on influence diagrams, MCDAGs can be exponentially more efficient
+by strongly decreasing the constrained induced-width
+(cf Section 2.3), thanks to (1) the duplication technique, (2) the analysis of extra reordering freedoms,
+and (3) the use of normalizations conditions. One can
+compare these three points with existing works:
+• The idea behind duplication is to use all the decompositions (independences) available in influence diagrams. An influence diagram actually expresses independences on one hand on the global
+probability distribution PC | D , and on the other
+hand on the global utility function. MCDAGs
+separately use these two kinds of independences,
+whereas a potential-based approach uses a kind
+of weaker “mixed” independence relation. Using
+the duplication mechanism during the MCDAG
+building is better, in terms of induced-width, than
+using it “on the fly” as in [Dechter, 2000].4
+• Weakening constraints on the elimination order
+can be linked with the usual notion of relevant information for decision variables. With MCDAGs,
+4
+
+E.g., for the quite simple influence diagram introduced
+in Section 3.1.1, the algorithm in [Dechter, 2000] gives 2
+as an induced-width, whereas MCDAGs give an inducedwidth 1. The reason is that MCDAGs allow to eliminate
+both x1 before x2 in the subproblem corresponding to Ud,x2
+and x2 before x1 in the subproblem corresponding to Ud,x1 .
+
+Compared to existing architectures, MCDAGs actually always produce the best decomposition in terms
+of constrained induced-width, as Theorem 1 shows.
+Theorem 1. Let wGp (p ) be the constrained inducedwidth associated with the potential-based approach (cf
+Section 2.2). Let wmcdag be the induced-width associated with the MCDAG (cf Section 3.2). Then,
+wmcdag ≤ wGp (p ).
+Last, the MCDAG architecture contradicts a common
+belief that using division operations is necessary to
+solve influence diagrams with VE algorithms.
+
+6
+
+POSSIBLE EXTENSIONS
+
+The MCDAG architecture has actually been developed in a generic algebraic framework which subsumes influence diagrams. This framework, called
+the Plausibility-Feasibility-Utility networks (PFUs)
+framework [Pralet et al., 2006a], is a generic framework for sequential decision making with possibly uncertainties (plausibility part), asymmetries in the decision process (feasibility part), and utilities. PFUs
+subsume formalisms from quantified boolean formulas
+or Bayesian networks to stochastic constraint satisfaction problems, and even define new frameworks like
+possibilistic influence diagrams. This subsumption is
+possible because the questions raised in many existing
+formalisms often reduce to a sequence of marginalizations on a combination of scoped functions. Such sequences, a particular case of which is Equation 1, can
+be structured using rewriting rules as the ones previously presented, which actively exploit the algebraic
+properties of the operators at stake.
+Thanks to the generic nature of PFUs, extending the
+previous work to a possibilistic version of influence
+diagrams is trivial. If one uses the possibilistic
+
+pessimistic expected utility [Dubois and Prade, 1995],
+the optimal utility can be defined by (the probability
+distributions Pi become possibility distributions, and
+the utilities Ui become preference
+degrees in [0, 1]):
+
+
+
+min max . . . min max min max max (1 − Pi ), min U .
+I0
+
+D1
+
+Iq−1 Dq
+
+Iq
+
+Pi ∈P
+
+Ui ∈U
+
+These eliminations can be structured via a MCDAG.
+The only difference in the rewriting rules is that ×
+becomes max and + becomes min. The computation
+nodes then look like (min, max, N ), (max, min, N ),
+or (∅, max, N ), and the MCDAG clusters use
+(⊕c , ⊗c ) = (min, max), (max, min), or (∅, max).
+
+7
+
+CONCLUSION
+
+To solve influence diagrams, using potentials allows
+one to reuse existing VE schemes, but may be exponentially sub-optimal. The key point is that taking
+advantage of the composite nature of graphical models such as influence diagrams, and namely of the algebraic properties of the elimination and combination
+operators at stake, is essential to obtain an efficient
+architecture for local computations. The direct handling of several elimination and combination operators in a kind of composite architecture is the key
+mechanism which allows MCDAGs to always produce
+the best constrained induced-width when compared to
+potential-based schemes.
+The authors are currently working to obtain experimental results on MCDAGs in the context of the PFU
+framework (the construction of MCDAG architectures
+is currently implemented). Future directions could be
+first to adapt the MCDAG architecture to the case of
+Limited Memory Influence Diagrams (LIMIDs) [Lauritzen and Nilsson, 2001], and then to use the MCDAG
+architecture in the context of approximate resolution.
+Acknowledgments
+We would like to thank the reviewers of this article
+for their helpful comments on related works. This
+work was partially conducted within the EU IP COGNIRON (“The Cognitive Companion”) funded by the
+European Commission Division FP6-IST Future and
+Emerging Technologies under Contract FP6-002020.
+References
+[Dechter and Fattah, 2001] R. Dechter and Y. El Fattah. Topological Parameters for Time-Space Tradeoff.
+Artificial Intelligence, 125(1-2):93–118, 2001.
+[Dechter, 2000] R. Dechter. A New Perspective on Algorithms for Optimizing Policies under Uncertainty.
+In Proc. of the 5th International Conference on Artifi-
+
+cial Intelligence Planning and Scheduling (AIPS-00),
+pages 72–81, 2000.
+[Dubois and Prade, 1995] D. Dubois and H. Prade.
+Possibility Theory as a Basis for Qualitative Decision
+Theory. In Proc. of the 14th International Joint Conference on Artificial Intelligence (IJCAI-95), pages
+1925–1930, 1995.
+[Howard and Matheson, 1984] R.
+Howard
+and
+J. Matheson. Influence Diagrams. In Readings
+on the Principles and Applications of Decision
+Analysis, pages 721–762, 1984.
+[Jensen et al., 1994] F. Jensen, F.V. Jensen, and
+S. Dittmer. From Influence Diagrams to Junction
+Trees. In Proc. of the 10th International Conference on
+Uncertainty in Artificial Intelligence (UAI-94), pages
+367–373, 1994.
+[Lauritzen and Nilsson, 2001] S.
+Lauritzen
+and
+D. Nilsson. Representing and Solving Decision Problems with Limited Information. Management Science,
+47(9):1235–1251, 2001.
+[Madsen and Jensen, 1999] A. Madsen and F.V.
+Jensen. Lazy Evaluation of Symmetric Bayesian
+Decision Problems. In Proc. of the 15th International
+Conference on Uncertainty in Artificial Intelligence
+(UAI-99), pages 382–390, 1999.
+[Ndilikilikesha, 1994] P. Ndilikilikesha. Potential Influence Diagrams. International Journal of Approximated Reasoning, 10:251–285, 1994.
+[Park and Darwiche, 2004] J. Park and A. Darwiche.
+Complexity Results and Approximation Strategies for
+MAP Explanations. Journal of Artificial Intelligence
+Research, 21:101–133, 2004.
+[Pralet et al., 2006a] C. Pralet, G. Verfaillie, and
+T. Schiex. Decision with Uncertainties, Feasibilities,
+and Utilities: Towards a Unified Algebraic Framework.
+In Proc. of the 17th European Conference on Artificial
+Intelligence (ECAI-06), 2006.
+[Pralet et al., 2006b] C. Pralet, G. Verfaillie, and
+T. Schiex. From Influence Diagrams to MCDAGs: Extended version. Technical report, LAAS-CNRS, 2006.
+http://www.laas.fr/∼cpralet/uai06ext.ps.
+[Shachter, 1986] R. Shachter. Evaluating Influence Diagrams. Operations Research, 34(6):871–882, 1986.
+[Shenoy, 1990] P. Shenoy. Valuation-based Systems for
+Discrete Optimization. In Proc. of the 6th International Conference on Uncertainty in Artificial Intelligence (UAI-90), pages 385–400, 1990.
+[Shenoy, 1992] P. Shenoy. Valuation-based Systems
+for Bayesian Decision Analysis. Operations Research,
+40(3):463–484, 1992.
+
+

@@ -1,0 +1,2648 @@
+graph with two sink nodes (labeled 0 and 1), and every internal node is labeled with a variable and has exactly two
+children: low for 0 and high for 1. A BDD is ordered
+if variables are encountered in the same order along every path. A BDD is reduced if all isomorphic nodes (i.e.,
+with the same label and identical children) are merged, and
+all redundant nodes (i.e., whose low and high children are
+identical) are eliminated. The result is the celebrated reduced ordered binary decision diagram, or OBDD [3].
+AOMDDs combine the two ideas, in order to create a decision diagram that has an AND/OR structure, thus exploiting problem decomposition. As a detail, the number of values is also increased from two to any constant, but this is
+less significant for the algorithms.
+A decision diagram offers a compilation of a problem. It
+typically requires an extended offline effort in order to be
+able to support polynomial (in its size) or constant time online queries. The benefit of moving from OR structure to
+AND/OR is in a lower complexity of the algorithms and
+size of the compiled structure. It typically moves from
+being bounded exponentially in pathwidth pw∗ , which is
+characteristic to chain decompositions or linear structures,
+to being exponentially bounded in treewidth w∗ , which is
+characteristic of tree structures (it always holds that w∗ ≤
+pw∗ and pw∗ ≤ w∗ · log n).
+Our contributions in this paper are as follows. (1) We formally describe the extension of AND/OR multi-valued decision diagram (AOMDD) to weighted graphical models.
+(2) We describe the extension to weighted models of the
+APPLY operator that combines two AOMDDs by an operation. The output of APPLY is still bounded by the product
+of the sizes of the inputs. (3) We present two compilation
+
+MATEESCU & DECHTER
+A
+0
+0
+0
+0
+1
+1
+1
+1
+
+B
+0
+0
+1
+1
+0
+0
+1
+1
+
+f(ABC)
+0
+0
+0
+1
+0
+1
+0
+1
+
+C
+0
+1
+0
+1
+0
+1
+0
+1
+
+A
+
+A
+
+B
+
+B
+
+C
+
+0
+
+C
+
+0
+
+(a) Table
+
+0
+
+0
+
+A
+
+B
+
+C
+
+1
+
+277
+
+C
+
+1
+
+0
+
+C
+
+1
+
+(b) Ordered tree
+
+B
+
+C
+
+C
+
+0
+
+1
+
+A
+
+B
+
+C
+
+(c) Isomorphic nodes
+
+B
+
+C
+
+B
+
+C
+
+0
+
+1
+
+(d) Redundant nodes
+
+C
+
+0
+
+1
+
+(e) OBDD
+
+Figure 1: Boolean function representations
+A
+f1(AC)
+f2(AB)
+f3(ABE)
+
+B
+
+C
+
+A:
+
+h4(A)
+
+B:
+
+C2(AB)
+
+E:
+
+C3(ABE)
+
+C:
+
+C1(AC)
+
+D:
+
+C4 (BCD)
+
+A
+
+h3(AB)
+
+AB bucket-B
+AB
+
+f4(BCD)
+
+ABE
+E
+
+D
+
+(a) Model
+
+h1(BC)
+
+(b) VE execution
+
+bucket-A
+
+A
+
+h2(AB)
+
+bucket-E
+
+AB
+
+ABC bucket-C
+BC
+
+BCD bucket-D
+
+algorithms for AOMDDs. One is based on the repeated application of APPLY along a Variable Elimination schedule.
+The other is based on search. Both schemes are exponential in the treewidth of the model. (4) We provide encouraging preliminary experimental evaluation of the search based
+compilation method. (5) We discuss how AOMDDs relate
+to various earlier and recent works, providing a unifying
+perspective for all these methods.
+The structure of the paper is as follows: Section 2 provides
+preliminaries. Section 3 gives an overview of AND/OR
+search space. Section 4 describes the AOMDD for constraint networks, the Variable Elimination schedule for
+compilation and the APPLY operator, and a search based
+compilation scheme. Section 5 contains the main contribution: the extension of AOMDDs to weighted models, and
+a discussion of their canonical form and the extensions of
+the compilation schedule and APPLY operator. Section 6
+provides experimental evaluation and section 7 concludes.
+
+Preliminaries
+
+In this section we describe graphical models, Binary Decision Diagrams (OBDDs) and Variable Elimination.
+D EFINITION 1 (graphical model) A graphical model R
+is a 4-tuple, R = hX, D, F, ⊗i, where: (1) X =
+{X1 , . . . , Xn } is a set of variables; (2) D =
+{D1 , . . . , Dn } is the set of their respective finite domains
+of values; (3) F = {f1 , . . . , fr } is a set of discrete realvalued functions, each defined over a subset of variables
+Si ⊆ X, called its scope,
+Q and
+P sometimes denoted by
+scope(fi ). (4) ⊗i fi ∈ { i fi , i fi , 1i fi } is a combination operator1 . The graphical model represents the combination of all its functions: ⊗ri=1 fi . A reasoning task is
+1
+
+Examples of graphical models include Bayesian networks,
+constraint networks, influence diagrams, Markov networks.
+
+(c) Bucket tree
+
+Figure 2: Variable Elimination
+
+2
+
+based on a projection (elimination) operator, ⇓, and is defined by: ⇓Z1 ⊗ri=1 fi , . . . , ⇓Zt ⊗ri=1 fi , where Zi ⊆ X.
+
+The combination operator can be defined axiomatically [17].
+
+D EFINITION 2 (universal equivalent graphical model)
+Given a graphical model R = hX, D, F1 , ⊗i the universal equivalent model of R is u(R) = hX, D, F2 =
+{⊗fi ∈F1 fi }, ⊗i.
+Two graphical models are equivalent if they represent the
+same set of solutions. Namely, if they have the same universal model.
+D EFINITION 3 (primal graph) The primal graph of a
+graphical model is an undirected graph that has variables
+as its vertices and an edge connects any two variables that
+appear in the scope of the same function.
+A pseudo tree resembles the tree rearrangements [11]:
+D EFINITION 4 (pseudo tree) A pseudo tree of a graph
+G = (X, E) is a rooted tree T having the same set of
+nodes X, such that every arc in E is a back-arc in T (i.e.,
+it connects nodes on the same path from root).
+D EFINITION 5 (induced graph,
+induced width,
+treewidth, pathwidth) An ordered graph is a pair (G, d),
+where G is an undirected graph, and d = (X1 , ..., Xn )
+is an ordering of the nodes. The width of a node in an
+ordered graph is the number of neighbors that precede it in
+the ordering. The width of an ordering d, denoted by w(d),
+is the maximum width over all nodes. The induced width
+of an ordered graph, w∗ (d), is the width of the induced
+ordered graph obtained as follows: for each node, from
+last to first in d, its preceding neighbors are connected in
+a clique. The induced width of a graph, w∗ , is the minimal
+induced width over all orderings. The induced width is
+also equal to the treewidth of a graph. The pathwidth
+pw∗ of a graph is the treewidth over the restricted class of
+orderings that correspond to chain decompositions.
+2.1
+
+Binary Decision Diagrams
+
+Decision diagrams are widely used in many areas of research to represent decision processes. In particular, they
+
+278
+
+MATEESCU & DECHTER
+A
+
+A
+
+A
+
+A
+
+[]
+
+f1(AC)
+
+0
+
+1
+
+0
+
+1
+
+f2(AB)
+
+B
+
+B
+
+B
+
+B
+
+f3(ABE)
+
+B [A]
+
+B
+
+f4(BCD)
+
+E
+
+[AB] E
+
+E
+
+0
+
+C
+[AB]
+
+D [BC]
+
+D
+
+(a) Graphical model
+
+C
+
+0 1
+
+1
+C
+
+E
+
+0
+
+1
+
+D
+
+D
+
+0 1
+
+0 1
+
+0 1
+
+(b) Pseudo tree
+
+0
+C
+
+E
+
+0
+
+1
+
+D
+0 1
+
+0 1
+
+0
+
+1
+C
+
+E
+
+0
+
+1
+
+D
+
+D
+
+0 1
+
+0 1
+
+0 1
+
+0
+
+1
+
+D
+
+D
+
+D
+
+0 1
+
+0 1
+
+0 1
+
+(c) Search tree
+
+1
+
+E
+
+C
+
+0 1
+
+C
+0
+
+E
+1
+
+0
+C
+
+0 1
+
+E
+
+0
+
+1
+
+1
+C
+
+0 1
+
+0
+
+E
+1
+
+D
+
+D
+
+D
+
+D
+
+0 1
+
+0 1
+
+0 1
+
+0 1
+
+0 1
+
+C
+0
+
+1
+
+(d) Context minimal graph
+
+Figure 3: AND/OR search space
+can be used to represent functions. Due to the fundamental importance of Boolean functions, a lot of effort has
+been dedicated to the study of Binary Decision Diagrams
+(BDDs), which are extensively used in software and hardware verification [5, 15, 12, 3].
+A BDD is a representation of a Boolean function. Given
+B = {0, 1}, a Boolean function f : Bn → B, has n arguments, X1 , · · · , Xn , which are Boolean variables, and takes
+Boolean values. A Boolean function can be represented by
+a table (see Figure 1(a)), but this is exponential in n, and
+so is the binary tree representation in Figure 1(b). The goal
+is to have a compact representation, that also supports efficient operations between functions. OBDDs [3] provide
+such a framework by imposing the same order to the variables along each path in the binary tree, and then applying
+the following two reduction rules exhaustively:
+(1) isomorphism: merge nodes that have the same label
+and the same respective children (see Figure 1(c)).
+(2) redundancy: eliminate nodes whose low (zero) and
+high (one) edges point to the same node, and connect
+the parent of removed node directly to the child of removed node (see Figure 1(d)).
+The resulting OBDD is shown in Figure 1(e).
+2.2
+
+Variable Elimination (VE)
+
+3
+
+AND/OR Search Space
+
+The AND/OR search space [9] is a recently introduced
+unifying framework for advanced algorithmic schemes for
+graphical models. Its main virtue consists in exploiting independencies between variables during search, which can
+provide exponential speedups over traditional search methods oblivious to problem structure.
+3.1
+
+AND/OR Search Trees
+
+Given a graphical model M = hX, D, Fi, its primal graph
+G and a pseudo tree T of G, the associated AND/OR
+search tree, ST (R), has alternating levels of OR and AND
+nodes. The OR nodes are labeled Xi and correspond to the
+variables. The AND nodes are labeled hXi , xi i and correspond to the value assignments in the domains of the variables. The structure of the AND/OR search tree is based
+on the underlying pseudo tree T . The root of the AND/OR
+search tree is an OR node labeled with the root of T . The
+children of an OR node Xi are AND nodes labeled with
+assignments hXi , xi i. that are consistent with the assignments along the path from the root. The children of an
+AND node hXi , xi i are OR nodes labeled with the children
+of variable Xi in the pseudo tree T .
+The AND/OR search tree can be traversed by a depth first
+search algorithm, thus using linear space. It was already
+shown [11, 1, 6, 9] that:
+
+Variable elimination (VE) [2, 8] is a well known algorithm for inference in graphical models. Consider a graphical model R = hX, D, Fi and an elimination ordering
+d = (X1 , X2 , . . . , Xn ) (Xn is eliminated first, X1 last).
+Each function placed in the bucket of its latest variable in
+d. Buckets are processed from Xn to X1 by eliminating
+the bucket variable (the functions residing in the bucket are
+combined together, and the bucket variable is projected out)
+and placing the resulting function (also called message) in
+the bucket of its latest variable in d. Figure 2(a) shows a
+graphical model and 2(b) the execution of VE.
+
+T HEOREM 1 Given a graphical model M and a pseudo
+tree T of depth m, the size of the AND/OR search tree
+based on T is O(n k m ), where k bounds the domains of
+variables. A graphical model having treewidth w∗ has a
+pseudo tree of depth at most w∗ log n, therefore it has an
+∗
+AND/OR search tree of size O(n k w log n ).
+
+VE execution defines a bucket tree, by linking the bucket
+of each Xi to the destination bucket of its message (called
+the parent bucket). A node in the bucket tree has a bucket
+variable, a collection of functions, and a scope (the union
+of the scopes of its functions). If the nodes of the bucket
+tree are replaced by their respective bucket variables, we
+obtain a pseudo tree (see Figure 2(c) and 3(b)).
+
+The AND/OR search tree may contain nodes that root identical conditioned subproblems. These nodes are said to be
+unifiable. When unifiable nodes are merged, the search
+space becomes a graph. Its size becomes smaller at the
+expense of using additional memory by the search algorithm. The depth first search algorithm can therefore be
+modified to cache previously computed results, and retrieve
+
+3.2
+
+AND/OR Search Graphs
+
+MATEESCU & DECHTER
+
+279
+
+A
+
+A
+
+P(A=0)
+0
+
+B
+
+C
+
+B
+
+P(B=0|A=0)
+
+P(B=1|A=0)
+
+0
+
+E
+
+1
+
+D
+E
+P(E=0|A=0,B=0)
+
+A
+
+E
+
+E
+
+P(E=1|A=0,B=0)
+
+0
+
+B
+
+D
+
+1
+
+D
+
+P(D=0|B=0,C=0)×
+P(C=0|A=0)
+
+C
+
+0
+
+P(E=0|A=0,B=1)
+
+0
+
+1
+
+C
+
+C
+
+0
+
+D
+P(E=1|A=0,B=1)
+1
+
+0
+
+1
+
+C
+
+C
+
+P(D=0|B=0,C=1)× P(D=1|B=0,C=0)×
+P(C=1|A=0)
+P(C=0|A=0)
+
+P(D=1|B=0,C=1)× P(D=0|B=1,C=0)×
+P(C=1|A=0)
+P(C=0|A=0)
+
+P(D=0|B=1,C=1)× P(D=1|B=1,C=0)×
+P(C=1|A=0)
+P(C=0|A=0)
+
+P(D=1|B=1,C=1)×
+P(C=1|A=0)
+
+1
+
+1
+
+1
+
+1
+
+0
+
+0
+
+0
+
+Figure 4: Arc weights for probabilistic networks
+3.3
+
+A
+0
+
+B
+
+…
+
+1
+
+E
+
+…
+
+Weighted AND/OR Search Graphs
+
+2
+
+C
+
+…
+
+E
+
+…
+
+D
+
+…
+
+Figure 5: Meta-node
+them when the same nodes are encountered again. Some
+unifiable nodes can be identified based on their contexts.
+We can define graph based contexts for both OR nodes and
+AND nodes, just by expressing the set of ancestor variables
+in T that completely determine a conditioned subproblem.
+However, it can be shown that using caching based on OR
+contexts makes caching based on AND contexts redundant,
+so we will only use OR caching.
+Given a pseudo tree T of an AND/OR search space, the
+context of an OR node X, denoted by context(X) =
+[X1 . . . Xp ], is the set of ancestors of X in T ordered descendingly, that are connected in the primal graph to X or
+to descendants of X.
+It is easy to verify that the context of X separates the subproblem below X from the rest of the network. The context minimal AND/OR graph is obtained by merging all the
+context unifiable OR nodes. It was shown that [1, 9]:
+T HEOREM 2 Given a graphical model M, its primal
+graph G and a pseudo tree T , the size of the context min∗
+imal AND/OR search graph based on T is O(n k wT (G) ),
+∗
+where wT (G) is the induced width of G over the depth first
+traversal of T , and k bounds the domain size.
+Figure 3(a) shows the primal graph of a graphical model
+defined by the functions f1 , . . . , f4 , which are assumed to
+be strictly positive (i.e., every assignment is valid). Figure
+3(b) shows a pseudo tree for the graph. The dotted lines are
+edges in the primal graph, and back-arcs in the pseudo-tree.
+The OR context of each node is shown in square brackets.
+Figure 3(c) shows the AND/OR search tree and 3(d) shows
+the context minimal AND/OR graph.
+
+In some cases (e.g. constraint networks), the functions of
+the graphical model take binary values (0 and 1, or true and
+false). In this case, an AND/OR search graph expresses
+the consistency (valid or not) of each assignment, and can
+associate this value with its leaves.
+In more general cases, which are the focus of this paper, the
+functions of the graphical model take (positive) real values, called weights. For example, in Bayesian networks
+the weights express the conditional probability. In the
+more general case of weighted models, it is useful to associate weights to the internal OR-AND arcs in the AND/OR
+graph, to maintain the global function decomposition and
+facilitate the merging of nodes.
+D EFINITION 6 (buckets relative to a backbone tree)
+Given a graphical model R = hX, D, F, ⊗i and a
+backbone tree T , the bucket of Xi relative to T , denoted
+by BT (Xi ), is the set of functions whose scopes contain
+Xi and are included in pathT (Xi ), which is the set of
+variables from the root to Xi in T . Namely, BT (Xi ) =
+{f ∈ F |Xi ∈ scope(f ), scope(f ) ⊆ pathT (Xi )}.
+D EFINITION 7 (OR-AND weights) Given an AND/OR
+tree ST (R), of a graphical model R, the weight
+w(n,m) (Xi , xi ) of arc (n, m) where Xi labels n and
+xi labels m, is the combination (e.g.
+product) of
+all the functions in BT (Xi ) assigned by values along
+the path to m, πm .
+Formally, w(n,m) (Xi , xi ) =
+⊗f ∈BT (Xi ) f (asgn(πm )[scope(f )]).
+Figure 4 shows a belief network, a DFS tree that drives
+its weighted AND/OR search tree, and a portion of the
+AND/OR search tree with the appropriate weights on the
+arcs expressed symbolically. In this case the bucket of E
+contains the function P (E|A, B), and the bucket of C contains two functions, P (C|A) and P (D|B, C). Note that
+P (D|B, C) belongs neither to the bucket of B nor to the
+bucket of D, but it is contained in the bucket of C, which
+is the last variable in its scope to be instantiated in a path
+from the root of the pseudo tree.
+
+280
+
+MATEESCU & DECHTER
+A
+D
+
+A
+
+G
+
+0
+
+B
+
+1
+
+B
+
+C
+
+B
+
+F
+
+E
+
+A
+
+H
+
+C
+
+0
+
+F
+
+D
+
+E
+
+G
+
+H
+
+C
+0
+
+B
+1
+
+0
+
+C
+1
+
+0
+
+C
+1
+
+0
+
+C
+1
+
+0
+
+F
+1
+
+0
+
+1
+
+F
+1
+
+0
+
+F
+1
+
+0
+
+F
+1
+
+0
+
+1
+
+(a) Primal graph and pseudo tree
+D
+
+m7
+
+A
+
+0
+
+m7
+0
+
+1
+
+0
+
+C
+1
+
+0
+
+0
+
+1
+
+C
+1
+
+0
+
+F
+
+C
+1
+
+0
+
+0
+
+D
+1
+
+0
+
+1
+
+0
+
+F
+1
+
+0
+
+F
+1
+
+B
+
+F
+
+0
+
+1
+
+G
+
+E
+1
+
+0
+
+0
+
+0
+
+0
+
+1
+
+0
+
+1
+
+m6
+
+G
+1
+
+0
+
+H
+1
+
+0
+
+0
+
+1
+
+D
+
+E
+
+G
+
+0
+
+0
+
+C
+0
+
+1
+
+D
+1
+
+0
+
+0
+
+C
+0
+
+1
+
+0
+
+1
+
+0
+
+0
+
+H
+1
+
+0
+
+1
+
+A
+B
+
+1
+
+0
+
+0
+
+F
+
+B
+
+0
+
+F
+0
+
+1
+
+A
+
+1
+
+0
+
+G
+
+1
+
+0
+
+1
+
+0
+
+0
+
+C
+0
+
+H
+1
+
+0
+
+0
+
+C
+
+C
+
+1
+
+H
+1
+
+C
+
+B
+
+F
+1
+
+G
+1
+
+1
+
+F
+
+F
+
+1
+
+B
+
+A
+
+B
+1
+
+B
+1
+
+E
+
+D
+1
+
+H
+1
+
+H
+
+A
+
+A
+
+C
+1
+
+0
+
+1
+
+m3
+0
+
+B
+
+G
+1
+
+(c) Final AOMDD (message m7 )
+
+H
+1
+
+1
+
+m3
+
+F
+
+B
+
+A
+
+0
+
+0
+
+0
+
+1
+
+m6
+
+C
+
+1
+
+1
+
+C
+D
+
+G
+
+0
+
+B
+1
+
+B
+0
+
+E
+1
+
+A
+
+1
+
+B
+
+B
+1
+
+C
+0
+
+0
+
+A
+
+A
+0
+
+B
+0
+
+D
+1
+
+D
+
+F
+
+D
+
+D
+
+D
+
+D
+
+D
+
+1
+
+C
+
+0 1
+
+0
+
+1
+m5
+
+C9
+
+0
+
+C
+
+0
+
+E
+
+0
+
+C
+
+D
+1
+
+0
+
+0
+
+1
+
+1
+C8
+
+D
+
+C
+1
+
+0
+
+0
+
+1
+
+1
+
+m2
+
+1
+
+0
+
+1
+
+0
+
+0
+
+1
+
+0 1
+
+0 1
+
+C6
+
+C7
+
+0
+
+C
+
+1
+
+0
+
+1
+
+0
+
+1
+
+E
+
+C3
+
+0
+
+0
+
+1
+
+H
+
+1
+
+0 1
+C4
+
+A
+1
+
+0
+
+H
+
+B
+
+G
+1
+
+E
+
+1
+
+A
+
+G
+
+G
+
+F
+
+F
+
+G
+
+F
+G
+
+G
+
+1
+
+G
+0
+
+0
+
+E
+
+F
+
+F
+
+F
+0
+
+B
+
+G
+
+G
+
+E
+
+m1
+
+A
+
+1
+
+B
+
+H
+
+m1
+
+A
+
+A
+
+E
+
+E
+
+E
+
+0
+
+C5
+
+m2
+
+A
+1
+
+D
+
+D
+
+D
+
+m4
+
+m5
+0
+
+0 1
+
+1
+m4
+
+G
+
+0
+
+H
+1
+
+0
+
+1
+
+F
+
+0 1
+
+0 1
+
+G
+
+C1
+
+C2
+
+F
+
+H
+
+H
+
+H
+
+1
+
+0
+
+(d) OBDD equivalent to m7
+
+(b) Variable Elimination based compilation
+
+Figure 6: Execution of VE with AOMDDs
+
+4
+
+AND/OR Multi-Valued Decision Diagram
+for Constraint Networks
+
+Constraint networks have only binary valued functions. In
+[13] we presented a compilation scheme for AOMDDs
+for constraint networks based on the Variable Elimination
+schedule. For completeness, we only provide below the
+main ideas for constraint networks, and then present the
+current contribution extending the AOMDD for weighted
+graphical models.
+The context minimal graph is a data structure that is equivalent to the given graphical model, in the sense that it represents the same set of solutions, and any query on the graphical model can be answered by inspecting the context minimal graph. Our goal is to shrink the context minimal graph
+even further, by identifying mergeable nodes beyond those
+based on context. Redundant nodes can also be identified
+and removed.
+Suppose we are given an AND/OR search graph (it could
+also be a tree initially). The reduction rules of OBDDs are
+also applicable to it, if we maintain the semantics. In particular, we have to detail the treatment of AND nodes and
+OR nodes. If we consider only reduction by isomorphism,
+then the AND/OR graph can be processed by ignoring the
+AND or OR attributes of the nodes. If we consider reduction by redundancy, then it is useful to group each OR node
+
+together with its AND children into a meta-node.
+D EFINITION 8 (meta-node) A nonterminal meta-node v
+in an AND/OR search graph consists of an OR node labeled
+var(v) = Xi and its ki AND children labeled hXi , xi1 i,
+. . . , hXi , xiki i that correspond to its value assignments.
+We will sometimes abbreviate hXi , xij i, by xij . Each
+AND node labeled xij points to a list of child meta-nodes,
+u.childrenj .
+Consider the pseudo tree in Figure 3(b). An example of
+meta-node corresponding to variable A is given in Figure 5,
+assuming three values. That is just a portion of an AND/OR
+graph, where redundant meta-nodes were removed. For
+A = 0, the child meta-node has variable B. For A = 1, B
+is irrelevant so the corresponding meta-node was removed,
+and there is an AND arc pointing to E and C. For A = 2,
+both B and C are irrelevant. This example did not take into
+account possible weights on the OR-AND arcs.
+4.1
+
+Compiling AOMDDs by Variable Elimination
+
+Consider the network defined by X = {A, B, . . . , H},
+DA = . . . = DH = {0, 1} and the constraints (⊕ denotes
+XOR): C1 = F ∨H, C2 = A∨¬H, C3 = A⊕B⊕G, C4 =
+F ∨G, C5 = B∨F , C6 = A∨E, C7 = C∨E, C8 = C⊕D,
+C9 = B ∨ C. The constraint graph is shown in Figure 6(a).
+
+MATEESCU & DECHTER
+Algorithm 1:
+
+APPLY (v1 ;
+
+w1 , . . . , wm )
+
+: AOMDDs f with nodes vi and g with nodes wj , based on
+compatible pseudo trees T1 , T2 that can be embedded in T .
+var(v1 ) is an ancestor of all var(w1 ), . . . , var(wm ) in T .
+var(wi ), var(wj ) are not ancestor-descendant in T .
+output
+: AOMDD v1 ./ (w1 ∧ . . . ∧ wm ), based on T .
+if H1 (v1 , w1 , . . . , wm ) 6= null then return H1 (v1 , w1 , . . . , wm )
+if (any of v1 , w1 , . . . , wm is 0) then return 0
+if (v1 = 1) then return 1
+if (m = 0) then return v1
+create new nonterminal meta-node u
+var(u) ← var(v1 ) (call it Xi , with domain Di = {x1 , . . . , xki } )
+for j ← 1 to ki do
+u.childrenj ← φ // children of j-th AND node of u
+if ( (m = 1) and (var(v1 ) = var(w1 ) = Xi ) ) then
+temp Children ← w1 .childrenj
+input
+
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+
+else
+
+13
+
+group nodes from v1 .childrenj ∪ temp Children in several {v 1 ;
+w1 , . . . , wr }
+for each {v 1 ; w1 , . . . , wr } do
+y ← APPLY(v 1 ; w1 , . . . , wr )
+if (y = 0) then
+u.childrenj ← 0; break
+
+14
+15
+16
+17
+18
+19
+
+temp Children ← {w1 , . . . , wm }
+
+where F has two children, G and H. Some of the nodes
+corresponding to F have two outgoing edges for value 1.
+The processing continues in the same manner The final output of the algorithm, which coincides with m7 , is shown
+in Figure 6(c). The OBDD based on the same ordering d
+is shown in Fig. 6(d). Notice that the AOMDD has 18
+nonterminal nodes and 47 edges, while the OBDD has 27
+nonterminal nodes and 54 edges.
+We present the APPLY algorithm for combining AOMDDs
+for constraints. It was shown in [13] that the complexity of
+the APPLY is at most quadratic in the input.
+In [13] it was shown that the time and space complexity
+of the VE based compilation scheme is exponential in the
+treewidth of the model.
+4.2
+
+Compiling AOMDDs by AND/OR Search
+
+else
+u.childrenj ← u.childrenj ∪ {y}
+
+20
+21
+
+if (u.children1 = . . . = u.childrenki ) then
+return u.children1
+
+22
+
+if (H2 (var(u), u.children1 , . . . , u.childrenki ) 6= null)
+then
+return H2 (var(u), u.children1 , . . . , u.childrenki )
+
+23
+
+281
+
+24 Let H1 (v1 , w1 , . . . , wm ) = u
+25 Let H2 (var(u), u.children1 , . . . , u.childrenki ) = u
+26 return u
+
+Consider the ordering d = (A, B, C, D, E, F, G, H). The
+pseudo tree induced by d is given in Fig. 6(a). Figure 6(b)
+shows the execution of VE with AOMDDs along ordering
+d. Initially, the constraints C1 through C9 are represented
+as AOMDDs and placed in the bucket of their latest variable in d. Each original constraint is represented by an
+AOMDD based on a chain. For bi-valued variables, they
+are OBDDs, for multiple-valued they are MDDs (multivalued decision diagrams). Note that we depict metanodes: one OR node and its two AND children, that appear inside each larger square node. The dotted edge corresponds to the 0 value (the low edge in OBDDs), the solid
+edge to the 1 value (the high edge). We have some redundancy in our notation, keeping both AND value nodes and
+arc types (doted arcs from “0” and solid arcs from “1”).
+The VE scheduling is used to process the buckets in reverse order of d. A bucket is processed by joining all the
+AOMDDs inside it, using the APPLY operator (described
+further). However, the step of eliminating the bucket variable will be omitted because we want to generate the full
+AOMDD. In our example, the messages m1 = C1 ./ C2
+and m2 = C3 ./ C4 are still based on chains, so they are
+still OBDDs. Note that they still contain the variables H
+and G, which have not been eliminated. However, the message m3 = C5 ./ m1 ./ m2 is not an OBDD anymore.
+We can see that it follows the structure of the pseudo tree,
+
+We describe here a search based approach for compiling
+an AOMDD. Theorem 2 ensures that the context minimal
+(CM) graph can be traversed by AND/OR search in time
+∗
+and space O(n k wT (G) ). When full caching is used, the
+trace of AND/OR search (i.e., the AND/OR graph traversed
+by the algorithm) is a subset of the CM graph (if pruning
+techniques are used, some portions of the CM graph may
+not be traversed). When the AND/OR search algorithm terminates, its trace is an AND/OR graph that expresses the
+original graphical model. We can therefore apply the reduction rules (isomorphism and redundancy) to the trace of
+the AND/OR search in a single bottom up pass, that has
+complexity linear in the size of the trace. In fact, the reduction rules can be included in the depth first AND/OR
+search algorithm itself: whenever the entire subgraph of a
+meta-node has been visited, the algorithm can check for
+isomorphism between the current node and metanodes of
+the same variable, and also check redundancy, before the
+search retracts to the parent meta-node. The end result
+will be the AOMDD of the original graphical model. The
+time and space complexity of this scheme is bounded in
+the worst case by that of exploring the CM graph, which is
+given in Theorem 2 (i.e., exponential in the treewidth of the
+model). In Section 6 we provide preliminary evaluation of
+the search based compilation.
+
+5
+
+AND/OR Multi-Valued Decision Diagram
+for Weighted Graphs
+
+We will now describe an extension of AOMDDs to
+weighted graphical models, which include probabilistic
+graphical models. The functions defining the model can in
+this case take arbitrary positive real values. The AND/OR
+search space is well defined for such graphical models, and
+in particular the context minimal graph is a decision diagram that represents the same function as the model. The
+
+282
+
+MATEESCU & DECHTER
+A
+
+M
+
+A
+0
+0
+1
+1
+0
+0
+1
+1
+
+0
+
+1
+
+B
+
+A
+
+A
+
+C
+
+B f(M,A,B)
+0
+12
+1
+5
+0
+18
+1
+2
+0
+4
+1
+10
+0
+6
+1
+4
+
+M
+0
+0
+0
+0
+1
+1
+1
+1
+
+B
+0
+0
+1
+1
+0
+0
+1
+1
+
+M
+
+A
+B
+
+C
+M
+0
+0
+0
+0
+1
+1
+1
+1
+
+M
+
+M
+
+C g(M,B,C)
+0
+3
+1
+5
+0
+14
+1
+12
+0
+9
+1
+15
+0
+7
+1
+6
+
+0
+
+1
+
+0
+
+1
+
+B
+
+B
+
+B
+
+B
+
+12
+
+5
+
+18
+
+2
+
+4
+
+10
+
+6
+
+4
+
+0
+
+1
+
+0
+
+1
+
+0
+
+1
+
+0
+
+1
+
+C
+
+C
+
+C
+
+C
+
+C
+
+C
+
+C
+
+C
+
+3
+
+5
+
+0
+
+1
+
+14
+0
+
+36 60
+
+12
+
+3
+
+5
+
+1
+
+0
+
+1
+
+70 60
+
+(a) Graphical model
+
+14
+0
+
+54 90
+
+12
+
+9
+
+15
+
+7
+
+6
+
+9
+
+15
+
+7
+
+1
+
+0
+
+1
+
+0
+
+1
+
+0
+
+1
+
+0
+
+28 24
+
+36 60
+
+70 60
+
+54 90
+
+0
+
+1
+
+A
+
+A
+
+0
+
+1
+
+0
+
+1
+
+B
+
+B
+
+B
+
+B
+
+12
+
+5
+
+18
+
+2
+
+0
+
+1
+
+0
+
+1
+
+6
+
+C
+
+4
+
+10
+
+6
+
+4
+
+1
+
+0
+
+1
+
+0
+
+C
+
+C
+
+C
+
+1
+
+28 24
+
+3
+
+5
+
+0
+
+1
+
+14
+0
+
+12
+
+9
+
+15
+
+7
+
+6
+
+1
+
+0
+
+1
+
+0
+
+1
+
+(c) AND/OR context
+36 60 minimal graph
+
+(b) AND/OR search tree
+
+Figure 7: Weighted graphical model
+M
+
+844
+
+M
+
+M
+
+1/2
+0
+
+1
+
+0
+
+1/2
+
+1
+0
+
+A
+
+A
+
+A
+
+1
+
+A
+A
+
+0
+
+1
+
+0
+
+1
+
+0
+
+1
+
+0
+
+1
+
+B
+
+B
+
+B
+
+B
+
+B
+
+B
+
+B
+
+B
+
+12
+
+5
+
+18
+
+2
+
+0
+
+1
+
+0
+
+1
+
+8
+
+26 C
+
+C
+
+3/8
+0
+
+5/8
+1
+
+14/26
+0
+
+4
+0
+
+10
+
+6
+
+4
+
+1
+
+0
+
+1
+
+24 C
+12/26
+1
+
+3/8
+0
+
+8*12
+
+26*5
+
+0
+
+1
+
+13 C
+5/8
+1
+
+14/26
+0
+
+8*18
+
+26*2
+
+0
+
+1
+
+C
+
+12/26
+1
+
+3/8
+0
+
+24*4
+
+13*10
+
+0
+
+1
+
+C
+
+5/8
+1
+
+(a) Normalizing level of C
+
+7/13
+0
+
+1
+
+3/8
+
+13*4
+
+0
+
+1
+
+0
+
+1
+
+(b) Promoting constants
+
+7/13
+0
+
+0
+
+1
+
+B
+
+96/226
+
+130/226 144/196
+
+0
+
+1
+
+C
+
+5/8
+
+196/422
+
+B
+
+24*6
+
+C
+
+6/13
+
+226/422
+
+52/196
+
+0
+
+1
+
+C
+
+6/13
+1
+
+3/8
+0
+
+C
+
+5/8
+
+7/13
+
+1
+
+0
+
+6/13
+1
+
+(c) AOMDD
+
+Figure 8: Normalizing values bottom up
+reduction rules (merge isomorphic nodes and reduce redundant nodes) are also well defined for weighted models
+(if we operate with meta-nodes), and guaranteed to produce equivalent decision diagrams. For example, isomorphic nodes should have the same variable, the same sets
+of children, and the same weights on their respective ORAND arcs. If we start with the AND/OR tree and apply the
+isomorphism rule exhaustively, we are guaranteed to obtain
+a graph at least as compact as the context minimal graph.
+This is because OR nodes that have the same context also
+represent isomorphic meta-nodes when the isomorphic rule
+was applied exhaustively to all the levels below.
+However, the property of being a canonical representation
+of a function is lost in the case of weighted graphs, if we
+only use the usual reduction rules.
+Figure 7(a) shows a weighted graphical model, defined by
+two (cost) functions, f (M, A, B) and g(M, B, C). Assuming the order (M, A, B, C), Figure 7(b) shows the
+AND/OR search tree. The arcs are labeled with function
+values, and the leaves show the value of the corresponding full assignment (which is the product of numbers on
+the arcs of the path). We can see that either value of M (0
+or 1) gives rise to the same function (because the leaves in
+the two subtrees have the same values). Therefore, the universal model of the conditioned subproblem for M = 0 is
+identical to that for M = 1. However, the two subtrees can
+not be identified as representing the same function by the
+usual reduction rules, because of different weights on the
+arcs. Figure 7(c) shows the context minimal graph, which
+
+has a compact representation of each subtree, but does not
+share any of their parts. In these figures we do not show the
+contours of meta-nodes, to reduce clutter.
+What we would like in this case is to have a method of
+recognizing that the left and right subtrees corresponding to
+M = 0 and M = 1 represent the same function. We do this
+by normalizing the weights in each level, and processing
+bottom up by promoting the normalization constant.
+In Figure 8(a) the weights on the OR-AND arcs of level C
+have been normalized, and the normalization constant was
+promoted up to the OR node value. In Figure 8(b) the normalization constants are promoted upwards again by multiplication into the OR-AND weights. This process does
+not change the value of each full assignment, and therefore
+produces equivalent graphs. We can see now that some of
+the C level (meta) nodes are mergeable. Continuing this
+process gives the final AOMDD for the weighted model, in
+Figure 8(c).
+D EFINITION 9 (weighted AOMDD) A weighted AOMDD
+is an AND/OR graph (with meta-nodes), where for each
+OR node, the emanating OR-AND arcs have an associated
+weight, such that their sum is 1, and the root meta-node
+has a weight (the resulting normalization constant). The
+terminal nodes are just 0 and 1.
+The following theorem ensures the that the weighted
+AOMDD is a canonical representation.
+T HEOREM 3 Given two equivalent weighted graphical
+
+MATEESCU & DECHTER
+Network
+cpcs54
+cpcs179
+cpcs360b
+cpcs422b
+c432
+c499
+s386
+s953
+90-10-1
+90-14-1
+90-16-1
+90-24-1
+EA3
+EA4
+EA5
+EA6
+bm-05-01
+bm-05-02
+mm-03-08-03
+mm-04-08-03
+
+Class
+
+CPCS
+
+ISCAS
+
+GRID
+
+LINKAGE
+
+PRIMULA
+
+(n, d)
+(54, 2)
+(179, 4)
+(360, 2)
+(422, 2)
+(432, 2)
+(499, 2)
+(172, 2)
+(440, 2)
+(100, 2)
+(196, 2)
+(256, 2)
+(576, 2)
+(711, 5)
+(775, 5)
+(944, 5)
+(1136, 5)
+(700, 2)
+(1418, 2)
+(1220, 2)
+(1418, 2)
+
+e
+5
+5
+50
+15
+40
+40
+10
+120
+10
+10
+20
+120
+0
+0
+0
+0
+100
+100
+100
+300
+
+(w*, h)
+(12, 20)
+(7, 13)
+(16, 21)
+(16, 33)
+(21, 37)
+(20, 50)
+(17, 30)
+(29, 51)
+(10, 31)
+(16, 60)
+(18, 66)
+(17, 77)
+(14, 46)
+(16, 62)
+(13, 53)
+(17, 79)
+(17, 36)
+(16, 50)
+(17, 53)
+(17, 49)
+
+Zeros (%)
+0.00
+0.32
+0.68
+0.78
+48.98
+47.76
+48.18
+45.45
+42.42
+45.25
+43.99
+44.66
+37.49
+37.34
+36.46
+36.60
+49.17
+49.44
+48.94
+47.89
+
+Time (sec)
+1.02
+110.24
+105.49
+57.74
+63.38
+20.45
+6.27
+180.60
+0.78
+68.16
+278.05
+102.78
+4.55
+5.88
+6.75
+18.12
+105.19
+60.97
+748.71
+48.44
+
+283
+#cm
+24,422
+31,389
+159,863
+429,270
+345,401
+106,659
+33,806
+183,199
+6,812
+317,527
+1,305,719
+569,282
+29,144
+21,246
+25,973
+43,202
+275,445
+143,866
+898,631
+158,584
+
+#aomdd
+23,845
+9,702
+155,670
+25,754
+119,109
+105,921
+4,425
+46,890
+3,544
+73,245
+256,990
+179,668
+15,654
+14,653
+12,377
+27,960
+115,327
+74,818
+384,049
+50,718
+
+Ratio
+1.02
+3.24
+1.03
+16.67
+2.90
+1.01
+7.64
+3.91
+1.92
+4.34
+5.08
+3.17
+1.86
+1.45
+2.10
+1.55
+2.39
+1.92
+2.34
+3.13
+
+Table 1: Results for experiments with 20 belief networks from 5 problem classes.
+models that accept a common pseudo tree T , normalizing
+arc values together with exhaustive application of reduction rules yields the same AND/OR graphs.
+The proof is omitted here for space reasons. We only mention that the proof is by structural induction bottom up over
+the layers of the AND/OR graph.
+The APPLY algorithm needs minimal modifications now to
+operate on weighted AOMDDs. The hash function H2 ,
+which hashes meta-nodes, has to take as extra arguments
+the weights of the meta-node. Similarly, when checking
+redundancy in line 21, the weights should also be equal for
+the node to be redundant, and their common value has to be
+promoted by multiplication. When checking isomorphism
+in line 23, the corresponding weights are checked via the
+hash function H2 . The same VE schedule can now be used
+to compile an AOMDD for a weighted graphical model.
+
+6
+
+Experimental Evaluation
+
+Our experimental evaluation is in preliminary stages, but
+the results we have are already encouraging. We ran the
+search based compile algorithm, by recording the trace
+of the AND/OR search, and then reducing the resulting
+AND/OR graph bottom up. In these results we only applied
+the reduction by isomorphism and still kept the redundant
+meta-nodes.
+Table 1 shows the results for 20 belief networks from 5
+problem classes: medical diagnosis (CPCS), digital circuits (ISCAS), deterministic grid networks (GRID), genetic linkage analysis (LINKAGE) as well as relational belief networks (PRIMULA). For each network we chose randomly e variables and set their values as evidence. For each
+
+query we recorded the compilation time in seconds, the
+number of OR nodes in the context minimal graph explored
+(#cm) and the size of the resulting AOMDD (#aomdd).
+In addition, we also computed the compression ratio of the
+AOMDD structure as ratio = #cm/#aomdd. We also
+report the number of variables (n), domain size (d), induced
+width (w∗ ), pseudo tree depth (h), as well as the percentage
+of zero probability tuples (zeros (%)) for each test instance.
+We see that in a few cases the compression ratio is significant (e.g., cpcs422b 16.67%, s386 7.64%). Our future work will include the reduction rule by redundancy, as
+well as the compilation algorithm by Variable Elimination
+schedule.
+
+7
+
+Conclusion and Discussion
+
+We presented the new data structure of weighted AOMDD,
+as a target for compilation of weighted graphical models.
+It is based on AND/OR search spaces and Binary Decision Diagrams. We argue that the AOMDD has an intuitive
+structure, and can easily be incorporated into other already
+existing algorithm (e.g., join tree clustering). We provide
+two compilation methods, one based on Variable Elimination and the other based on search, both being time and
+space exponential in the treewidth of the graphical model.
+The preliminary experimental evaluation is quite encouraging, and shows the potential of the new AOMDD data
+structure.
+Compiling graphical models into weighted AOMDDs also
+extends decision diagrams for the computation of semiring valuations [18], from linear variable ordering into treebased partial ordering. This provides an improvement
+
+284
+
+MATEESCU & DECHTER
+
+of the complexity guarantees to exponential in treewidth,
+rather than pathwidth.
+There are various lines of related research. We only mention here: deterministic decomposable negation normal
+form (d-DNNF) [7]; case factor diagrams [14]; compilation of CSPs into tree-driven automata [10]; and the recent
+work on compilation [16, 4]. We think that our framework
+using AND/OR search graphs has a unifying quality that
+helps make connections among seemingly different compilation techniques.
+The approach of compiling graphical models into
+AOMDDs may seem to go against the current trend in
+model checking, which moves away from BDD-based algorithms into CSP/SAT based approaches. However, algorithms that are search-based and compiled data-structures
+such as BDDs differ primarily by their choices of time vs
+memory. When we move from regular OR search space to
+an AND/OR search space the spectrum of algorithms available is improved for all time vs memory decisions. We believe that the AND/OR search space clarifies the available
+choices and helps guide the user into making an informed
+selection of the algorithm that would fit best the particular
+query asked, the specific input function and the computational resources.
+
+Acknowledgments
+We thank Radu Marinescu for his help with the experimental evaluation. This research was supported in part by the
+NSF grant IIS-0412854.
+
+References
+[1] R. Bayardo and D. Miranker. A complexity analysis
+of space-bound learning algorithms for the constraint
+satisfaction problem. In Proceedings of the Thirteenth
+National Conference on Artificial Intelligence, pages
+298–304, 1996.
+[2] U. Bertele and F. Brioschi. Nonserial Dynamic Programming. Academic Press, 1972.
+[3] R. E. Bryant. Graph-based algorithms for boolean
+function manipulation. IEEE Transaction on Computers, 35:677–691, 1986.
+[4] M. Chavira and A. Darwiche. Compiling bayesian
+networks using variable elimination. In Proceedings
+of the Twentieth International Joint Conference on
+Artificial Intelligence, pages 2443–2449, 2007.
+[5] E.M. Clarke, O. Grumberg, and D. Peled. Model
+Checking. MIT Press, 1999.
+[6] A. Darwiche. Recursive conditioning. Artificial Intelligence, 125(1-2):5–41, 2001.
+
+[7] A. Darwiche and P. Marquis. A knowledge compilation map. Journal of Artificial Intelligence Research
+(JAIR), 17:229–264, 2002.
+[8] R. Dechter. Bucket elimination: A unifying framework for reasoning. Artificial Intelligence, 113:41–
+85, 1999.
+[9] R. Dechter and R. Mateescu. AND/OR search spaces
+for graphical models. Artificial Intelligence, 171(23):73–106, 2007.
+[10] H. Fargier and M. Vilarem. Compiling csps into treedriven automata for interactive solving. Constraints,
+9(4):263–287, 2004.
+[11] E. C. Freuder and M. J. Quinn. Taking advantage of stable sets of variables in constraint satisfaction problems. In Proceedings of the Ninth International Joint Conference on Artificial Intelligence (IJCAI’85), pages 1076–1078, 1985.
+[12] C.Y. Lee. Representation of switching circuits by
+binary-decision programs. Bell System Technical
+Journal, 38:985–999, 1959.
+[13] R. Mateescu and R. Dechter. Compiling constraint
+networks into AND/OR multi-valued decision diagrams (AOMDDs). In Proceedings of the Twelfth
+International Conference on Principles and Practice
+of Constraint Programming (CP’06), pages 329–343,
+2006.
+[14] D. McAllester, M. Collins, and F. Pereira. Case-factor
+diagrams for structured probabilistic modeling. In
+Proceedings of the Twentieth Conference on Uncertainty in Artificial Intelligence (UAI’04), pages 382–
+391, 2004.
+[15] K. L. McMillan. Symbolic Model Checking. Kluwer
+Academic, 1993.
+[16] S. Minato, K. Satoh, and T. Sato. Compiling bayesian
+networks by symbolic probability calculation based
+on zero-suppressed bdds. In Proceedings of the Twentieth International Joint Conference on Artificial Intelligence, pages 2550–2555, 2007.
+[17] P.P. Shenoy. Valuation-based systems for bayesian decision analysis. Operations Research, 40:463–484,
+1992.
+[18] Nic Wilson. Decision diagrams for the computation
+of semiring valuations. In Proceedings of the Nineteenth International Joint Conference on Artificial Intelligence (IJCAI’05), pages 331–336, 2005.
+
+

@@ -1,0 +1,960 @@
+possible to apply probabilistic reasoning to problems
+for which it is impractical to have a single large, static
+model.
+There are a number of applications where such a fa­
+cility would be useful. An expert system for genetic
+counseling would be able to quickly draw up and eval­
+uate a pedigree network for a given family. Our lan­
+guage provides a convenient facility for combining gen­
+eral knowledge from a domain theory ( in this case, ge­
+netics) with facts about a specific case ( an individual
+pedigree) . One could also diagnose machine faults in a
+large class of machines, all built out of a given set of
+components. For example, one could define a class of
+models for diagnosing mechanical problems in motorcy­
+cles. This class of models would defined in terms of the
+operation of components. To create a instance of this
+class of models for a particular motorcycle, one would
+specify the values of parameters like fuel supply ( car­
+buretion or fuel-ignition) , transmission ( chain or shaft) ,
+
+*This work has been supported in part by the National
+Science Foundation under grant ffil-8911122, and Office of
+Naval Research under grant N00014-88-K-0589.
+
+number of cylinders, etc. For pattern theory, this ap­
+proach would make it more convenient to experiment
+with different topologies and bond functions.1
+This technique is tailored to the production of be­
+lief networks that can be incrementally constructed
+and evaluated. We have been working with belief net­
+works which are theoretically infinite. For computa­
+tional practicality it is necessary that we be able to
+confine our attention to small, directly relevant portions
+of such networks. For such situations, our language
+provides the ability to compose different probabilistic
+influences in stereotyped ways.
+In the next section of this paper, we will give a ( very)
+brief introduction to belief networks, the graphical rep­
+resentation we use for probability distributions. Then
+we will give an outline of our language for belief network
+construction. We will illustrate the use of our language
+with a simple example from the domain of genetics.
+Then we will outline the application of dynamically­
+constructed belief networks to the problem of natural­
+language understanding, and the way it has directed
+the evolution of our network-construction language. Fi­
+nally, we will discuss related work.
+Belief Networks
+
+Belief networks are directed acyclic graphs used to rep­
+resent probability distributions.2 In a belief network,
+nodes represent random variables, and arcs represent
+direct influences between random variables. The prob­
+ability distribution corresponding to a belief network
+may be specified by giving a conditional probability ta­
+ble for each node, conditioned on its parents. This local
+representation makes possible the rule-based specifica­
+tion of probability distributions that we describe here.
+There are other graphical representations for prob­
+ability problems that are also amenable to our ap­
+proach. Belief networks are the most suitable to the
+natural-language problems we face. For problems in
+1 An observation for which we are indebted to Ulf
+Grenander.
+2 Judea Pearl's book [Pearl, 1988] gives a thorough ac­
+count of the properties of such networks.
+
+91
+
+decision-theory, influence diagrams would be appropri­
+ate [Schachter, 1986]. For problems in pattern theory,
+Markov networks may be used. Because we have some
+nodes between which it is difficult to assign a causal di­
+rection, we are considering using chain graphs, which
+mix directed and undirected edges [Lauritzen, 1988,
+Frydenberg, 1989]. Our techniques would be equally ap­
+plicable to these other representations; it would just be
+necessary to adapt the way the local probability func­
+tions are specified.
+
+:parents (a, b, c) :child v
+:parents ( d, e) :child v
+(a) pforms
+
+Our network-construction language
+
+This section describes how rules are written in our
+network-construction language, FRAIL3. FRAIL3 has
+the following features:
+•
+
+It allows us to create propositions, random variables
+in a belief network, which are also indexed as state­
+ments in a first-order logic database.
+
+•
+
+In order that these belief networks be solved, FRAIL3
+makes it convenient to specify the conditional prob­
+ability matrices of these propositions, using declara­
+tive knowledge stored in the logical database.
+
+Our probabilistic database has a great deal in com­
+mon with a deductive database with truth maintenance
+(see [Charniak and McDermott, 1985] for an introduc­
+tion, or [Doyle, 1979, McAllester, 1982, deKleer, 1986]).
+Such a system combines a logic-programming language
+with forward- and backward-chaining (bottom-up and
+goal-directed inference, respectively) with a data depen­
+dency, or justification, network. When statements are
+added to the database, they are given a justification,
+which records the antecedent statements necessary to
+justify belief in the consequent.
+Our database language is similar to a TMS language
+in having rules for forward and backward reasoning. It
+differs in allowing greater flexibility in specifying the
+way arcs connecting database statements are added.
+In a TMS, one always adds arcs (justifications) from
+antecedent statements to consequents. However, in evi­
+dential reasoning, we often want to chain from observed
+statements to possible causes, and direct arcs from the
+causes to the observation. Our rules allow us to spec­
+ify independently the statements to be added to the
+database, and the arcs to be drawn between them.
+The data structures corresponding to the arcs are
+also more expressive. Rather than having justifications,
+we attach pfof'TII,8 to the statements in the database.
+Pforms contain information which specifies the proba­
+bilistic dependency of the node at the head of an arc
+set on its direct ancestors. More formally, each pform
+is a hyperedge from a set of statements to one state­
+ment. This hyperedge corresponds to a set of edges in
+a belief-network. See Figure 1
+The important operators of our database language
+are --+1 - , -- defpreddist and index In the next several
+
+(b) corresponding hypergraph
+
+(c) corresponding belief network
+Figure 1: The interpretation of pforms.
+paragraphs we will discuss each of these operators and
+how they work.
+(- query antecedent(s)) To answer a request
+for query, retrieve antecedent(s).
+A conventional
+backward-chaining rule.
+( --+ trigger consequent :prob pforms) -+ is the ba­
+sic network-constructing operator. When a statement
+unifying with trigger is added to the database, apply
+the bindings to consequent, and add it to the database.
+The pforms control the way arcs are added to the net­
+work, and give information about the way the condi­
+tional probability matrices are set up at the tails of the
+arcs. This information will be used by the distribution
+functions discussed below. A sample rule:
+Rule
+
+1
+
+(-+(condition ?x) :label ?caused
+(causal-event ?x) :label ?cause
+:prob ((?cause -+?caused ((tIt) .9) ((t If) :p))))
+This states that whenever we predicate condition of
+some entity, we should also postulate a corresponding
+
+causal-event. The first part of the :prob argument spec­
+ifies that we should draw an arc from the causal-event
+node to the condition node. In order that we be able
+
+to specify the addition of arbitrary arcs, we need to be
+able to refer to statements by name. The :label oper­
+ator provides this capability. In this rule, ?caused will
+be bound to a pointer to the triggering statement, and
+
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+
+92
+
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+
+?cause will be bound to a pointer to the newly-added
+statement. It should be emphasized that, unlike in a
+conventional TMS language, which automatically adds
+arcs from antecedents to consequents, we do not add
+any arcs other than those explicitly designated by :prob
+arguments to rules.
+The second part of the :prob argument indicates that
+when we draw up the conditional probability matrix
+for the condition node, its probability given that causal­
+ev ent is true is .9. Its probability given that causal-event
+is false should default to the prior probability (the way
+this defaulting can be done will be discussed below when
+we discuss defpreddist).
+( -++- additional-antecedent.! consequent pform8) If
+FRAIL3 is told to add a statement of this form to its
+database, it will try to retrieve additional-antecedent6,
+and apply their variable bindings to assert con6equent.
+This operator is often used to retrieve additional facts
+from our domain knowledge. For example, the follow­
+ing is a rule used in our language-understanding appli­
+cation, for reasoning about word-senses:
+Rule 2
+
+(-+(word-inst ?i ?word) :label ?A
+(-++-(word-sense ?word ?frame ?prob)
+(inst ?i ?frame) :label ?C)
+:prob ((?C -+?A) ((t I t) ?prob) ((t I f) (/ :p 100))))
+This rule may be read as follows: If a node is added to
+the network describing a new word-token (an instance
+of a word), and if there is a statement in the database
+specifying that one of the senses of this word is ?frame,
+add a node for an instance of the type ?frame. Draw an
+arc from this newly-added node (?C), to the word-inst
+node (?A). When drawing up the probability matrix for
+the word-inst node, use information about the frequency
+with which it is used to express the concept frame, for
+the case where the node for frame is true, else use a
+default value of 1�0th of the prior probability.
+Another common use of -++- is to collect additional
+parents for a node. For example, one of the tasks for
+our natural language system is to find referents for pr�
+nouns. A desire to refer to an already-discussed person
+or thing can be the explanation for using a pronoun. So
+when we see a pronoun, we need to find all the previ­
+ously known entities that are of the same gender as the
+pronoun, and build arcs from them to the newly-added
+statement. This requires the kind of combined forward­
+and backward-chaining that -++-provides. A simplified
+version of our pronoun rule follows:
+Rule 3
+
+( ->(word-inst ?i ?pronoun) :label ?PRONOUN
+(-++-(and (inst ?x ?frame) :label ?POS-REFERENT
+(compatible-gender ?pronoun ?frame))
+(has-referent ?i) :label ?HAS-REF)
+:prob (?POS-REFERENT -+?HAS-REF
+((t It) (ref-prob ?frame ?pronoun)
+((t If) o)))
+
+(?HAS-REF -+?PRONOUN)
+(((t It) 1) ((t If) .oooo1)))
+(defpreddist predicate prior-fn po6terior-fn) These
+
+rules are declarations, which tell us what functions to
+use to set up the conditional probability matrices for
+statements with predicate predicate. If such a state­
+ment is a root node of the graph, prior-fn will be
+called with the statement as an argument. Otherwise,
+FRAIL3 will apply po6terior-fn to the pforms attached
+to the statement. The function of the posterior-fn is to
+combine the information from the various pforms.
+We need defpreddist because our other rules are
+not sufficient to quantify belief networks. There are
+two cases where we fall short:
+1. They do not allow us to specify distributions for
+nodes without parents, and
+2. they do not dictate how to fill out the conditional
+probability distributions for nodes which have more
+than one pform.
+Problem (2), filling out the conditional probability dis­
+tributions, arises in hand-construction of belief net­
+works, as well. It occurs because, typically, rather than
+being able to determine the probability of a random
+variable conditioned on all direct influences, one only
+has lower-order conditional probabilities.
+Functions which we use as posterior-fns in our
+language-processing application are noisy versions of
+various logic gates: noisy-or, noisy-xor and noisy-and.
+To see how these are used, consider the rule for word­
+senses, given above as rule 2. The posterior-fn we use
+for word-inst statements is xor-dist. Typically, words
+are ambiguous, and have a number of senses. Each
+such sense will give rise to a different pform. What
+we want our posterior-fn to dictate is that each one of
+these senses is a possible explanation for the use of the
+given word, and that the senses are mutually exclusive.
+Pseud�code for xor-dist is given as Figure 2. This is
+a simple procedure which specifies that the probabil­
+ity of a node given a state of its parents is 1 if that
+conditioning-case satisfies one and only one pform, and
+0 otherwise. 3
+(index 6tatement) Adds statements to the first-order
+logic database that are not also linked into the belief
+network. Rules, and other non-ground formulae are
+indexed.
+An example from genetics
+
+To give an idea of how our system can be used, we
+give our treatment of an example in genetics. We have
+adapted this example from [Jensen et al., 1988] and
+[Spiegelhalter, 1988]. This example has been chosen
+sA conditioning-case is a list of (node . state) pairs, and
+a node-case is (node . state). This terminology is borrowed
+from IDEAL[Srinivas and Breese, 1989].
+
+93
+
+procedure xor-dist (node pforms)
+/•this loops through all possible instantiations of the predecessors
+of node •I
+all-states(node-predecessors node)
+for conditioning-case
+I* this loops through all possible assignments to node
+in this case, since node is boolean, :true and :false •/
+for node-case = all-states(node)
+number of pforms satisfied by conditioning-case;
+number-true
+:true then
+if state-name(node-case)
+if number-true = 1 then
+prob[node-state,conditioning-case] = 1;
+else
+prob[node-state,conditioning-case]
+o·
+else %the state of the node is :false
+1 then
+if number-true
+prob[node-state,conditioning-case]
+o·
+else
+prob[node-state,conditioning-case] = 1 ;
+end for node-case;
+end for conditioning-case;
+end procedure.
+=
+
+=
+
+=
+
+=
+
+•
+
+=
+
+=
+
+'
+
+Figure 2: Pseudo-code for the xor-dist posterior-fn.
+solely for its convenience and clarity. Any errors should
+be attributed to our ignorance about the domain.
+We consider a gene with two allelles ( or values) , a1
+and a2. Every individual's genotype consists of two
+alleles, one inherited randomly from each parent. Be­
+cause we have no way, in general, of knowing from which
+parent a given allele has been inherited, we represent
+genotypes as unordered pairs: a1a1, a1a2 or a2a2. a1
+is recessive and gives rise to a detectable condition, a2
+is dominant and does not. Therefore, the phenotypes
+( the detectable conditions) are present corresponding
+to genotype a1a1, and absent corresponding to geno­
+types a1a2 and a2a2.
+In order to model the situation resulting in popula­
+tions with these genotypes, we need to know probabili­
+ties determining the transmission of the genes from par­
+ents to children. These are given in Figure 3. In order
+to avoid infinite regress, we must make some assump­
+tions about the genotypes of individuals about whose
+ancestry we are ignorant (founders). We assume they
+are members of a population in Hardy-Weinberg equi­
+librium. This yields the follwing table of priors:
+
+p
+q
+p(a1a1)
+p(ala2)
+p(a2a2)
+
+=
+=
+=
+
+p(a1)
+p(a2)
+p2
+
+1
+
+-
+
+p
+
+2pq
+
+q2
+
+Finally, we need the penetrance probabilities: the
+distribution of the phenotype given a genotype. A very
+simple one is given in Figure 4.
+The rules necessary to describe this situation are:
+
+II
+
+a1a1
+(1, 0 , 0 )
+
+a1a2
+
+a2a2
+II
+{O, 1, oT
+
+(0.5, 0 .5, 0 )
+(0.5, 0 .5, 0 ) (0 .25, 0 .5, 0 .25) (0, 0 .5, 0 .5}
+a2a2
+10, o, 1}
+(0, 0 .5, 0.5)
+(0 , 1, 0 )
+
+a1a1
+a1a2
+
+Figure 3: Conditional Probability Matrix for Transmis­
+sion Probabilities. The three entries in each cell are
+P( alal l conditioning-ca&e), P( a1a2 1 conditioning-ca&e),
+and P(a2a2iconditioning-ca&e), respectively. Geno­
+types of parents are the horizontal and vertical indices.
+
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+
+94
+
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+
+Trammiuion of genotypes:
+(-+(child ?c ?pi ?p2)
+(and (genotype ?c) :label ?CHILD-NODE
+(genotype ?pi) :label ?PARENT-I
+(genotype ?p2) :label ?PARENT-2)
+:prob ((?PARENTI ?PARENT-2 -+?CHILD-NODE
+((a1ai jalai a1a1) 1)
+((a1al ja1a1 a1a2) 0.5) ((a1a2 jaiai a1a2) 0.5)
+((a1a2 jala1 a2a2) 1)
+((a1al jaia2 a1ai) 0.5) ((a1a2 jaia2 a1a1) 0.5)
+((a1a1 jaia2 a1a2) 0.25) ((aia2 jaia2 a1a2) 0.5)
+((a1a2 jaia2 a2a2) 0.5) ((a2a2 ja1a2 a2a2) 0.5)
+((a1a2 ja2a2 a1ai) I)
+((a1a2 ja2a2 a1a2) 0.5) ((a2a2 ja2a2 a1a2) 0.5)
+((a2a2 ja2a2 a2a2) 1))))
+Rule 4
+
+Rule 5
+
+Penetrance:
+(-+(observed-phenotype ?NAME ?CONDITION)
+(-++-(penetrance-prob ?PROB)
+(and (genotype ?NAME) :label ?GENOTYPE
+(phenotype ?NAME) :label ?PHENOTYPE
+(instantiate-observation ?PHENOTYPE
+?CONDITION)))
+:prob ((?GENOTYPE -+?PHENOTYPE
+(((present ja1a1) ?PROB)
+((absent ja1a2) 1) ((absent la2a2) 1)))))
+The instantiate-observation statement above will not
+be a real statement. We specify an assert function for
+this predicate, so that when FRAIL3 is told to assert
+such a statement, it will instead call the function add­
+evidence on the statement to which ?PHENOTYPE is
+bound.
+Rule 6
+
+:absent
+Figure 4: Conditional Probability Matrix for Pene­
+trance Probabilities.
+unnecessary phenotype nodes. We will only have phe­
+notype nodes which correspond to actual observations.4
+In [Jensen et al., 1988], Jensen et. al. give an exam­
+ple of a belief network for an example of incest. It is
+given as Figure 5. Individual E is known to have the
+condition. We would create a diagram corresponding
+to this situation by asserting the following statements
+into a database containing the above rules:
+
+Auert function for instantiate-observation:
+(defun assert-observation (pattern)
+(add-evidence {second pattern)
+{third pattern)))
+
+(child C A B)
+(child D B F)
+(child E C D)
+(observed-phenotype E :present)
+
+(setf (assert-function imtantiate-observation)
+auert-observation)
+
+It can be seen from the above how easy it is to use
+FRAIL3 to combine information about a class of situa­
+tions with the details of a particular case to construct
+a complete probabilistic model.
+
+Rule 7 Penetrance probability:
+(penetrance-prob I)
+
+Predicate definitiom:
+(defpreddist genotype hardy-weinberg transmission)
+(defpreddist phenotype nil simple-pform)
+
+Rule 8
+
+We should note a couple of features of the above rules.
+First of all, note that we can use the same rules for
+many different values of p and q, simply by changing
+the prior-function for genotype nodes. Furthermore, we
+can change the penetrance probability just by changing
+rule 7. Finally, note that this scheme avoids adding
+
+How we use dynamic belief networks
+
+Our interest in belief networks has grown out of our
+work on story understanding. The problem of story
+understanding is to take a story written in some nat­
+ural language, and "understand" it in the sense that
+one's program could answer questions about it. It is
+generally understood that this involves translating the
+story into an internal representation which will support
+•rr we so desired, we could also have phenotype nodes for
+individuals about whom we would like to query.
+
+95
+
+Figure 5: Belief network/pedigree corresponding to a case of incest.
+the inferences necessary to answer questions. This in­
+ternal representation should be an unambiguous repre­
+sentation of the meaning of the text. In this translation
+process, the program will make use of knowledge about
+language and about the world the language is being
+used to describe. Central to the problem of story un­
+derstanding is plan-recognition: the ability to recognize
+the plans and goals of characters in a story, based on
+their actions.
+For some time we have been interested in the prob­
+lems posed by uncertainty in story understanding. Un­
+certainty in language understanding comes from the
+ambiguity which exists at all levels of natural-language:
+syntactic, semantic and pragmatic. Our current p�o­
+gram, Wimp3, operates by turning problems of text m­
+terpretation into probability questions such as "What
+is the probability that this word has this sense, given
+the evidence?" (where the evidence is the text of the
+story so far), and "What is the probability that the ac­
+tion described by the word plays a role in the actor's
+plan to achieve some known goal?" Wimp3 does this
+on a word-by-word basis. These probability questions
+are formulated as belief networks.
+The networks we create contain nodes describing the
+text at all many levels of detail (see Figure 6 for an ex­
+ample). At the leaves are the nodes describing the 'ev­
+idence' we've observed: the input string. Above these
+are nodes describing the denotations of the words in the
+input (e.g., liquor-store3 in Figure 6). At the top of
+the networks are descriptions of the plans of the char­
+acters in the story ( liquor-sh.op-4 is a hypothesized plan
+to buy liquor at a. liquor-store).
+More precisely, Wimp3 works as follows:
+1. A parser reads a. single word of the English text. It
+produces statements which describe the words in the
+story and the syntactic relations between them.
+2. The output of the parser is used by the network con­
+struction component. This component contains rules
+
+for language abduction. It builds a net, or extends
+the current net if some input has already been re­
+ceived.
+3. We collect the portion of the belief network which
+may be affected by the most-recent additions to the
+belief network. This sub-graph is evaluated by a
+network-evaluation component. 5
+4. If certain conclusions are overwhelmingly favored,
+they may be accepted as true to simplify further com­
+putation. Statements not rejected as too improbable
+will trigger further network-expansion. If nodes are
+added to the network, go to step 3, else, return to
+step 1.
+To return to the example of Figure 6, on the first iter­
+ation after reading 'liquor-store' we will add the state­
+ment (inst liquor-store3 liquor-store) to the database.
+This hypothesis will not be eliminated as false when
+the network is evaluated, so we will consider it further,
+adding the nodes for a liquor-shopping plan. We do
+this iterative expansion of the network to keep its size
+small. For example, one possible (although unusual)
+use of the word 'went' is to mean 'died', as in "Franco
+went at 10 o'clock last night." In the context of "Jack
+went to the liquor-store." this sense is clearly ruled out
+by syntactic information. By expanding the belief net­
+work incrementally, we avoid adding nodes to represent
+explanations for the non-existent event of Jack dying.
+We use the IDEAL system [Srinivas and Breese, 1989]
+to evaluate the networks we Wimp3 creates. IDEAL is
+a program allowing the specification of belief networks
+and influence diagrams in LISP. It provides a framework
+within which a number of network-solution algorithms
+can be applied to such diagrams. Wimp3 creates net'This aspect of the work has not been thoroughly
+worked-out. At the moment, we simply commit to beliefs
+based on the probability a statement has &fter 11. fixed period
+of time.
+
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+
+96
+
+I
+I
+
+(and(inst liquor-shop4 liquor-shop)
+(-=(go-step liquor-shop4) went2))
+
+�
+
+I
+
+(inst(store-of liquor-shop4)
+liquor-store)
+
+\
+
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+
+(inst I iquor-store3
+I iquor-store)
+
+(==(store-of liquor-shop4)
+liquor-store3)
+
+�
+
+(lnst w nt2 go)
+
+r
+
+(== (dest went2)
+liquor-store3)
+
+(word-inst went2 go)
+
+(syn-rel to Iiquor-store3
+went2)
+
+�
+
+(word-inst liquor-store3
+liquor-store)
+
+Figure 6: A fragment of the belief network representation of the sentence "Jack went to the liquor-store."
+works in FRAIL3, then decides (see step 3 above) what
+portion of the belief network has changed and needs
+to be evaluated. This part of the network is solved by
+a version of Jensen's junction-tree algorithm [Jensen,
+1989] , which we have optimized for special features of
+our networks[Goldman and Boddy, 1990] .
+
+construction of probabilistic models[Breese, 1989] . The
+differences between his work and ours arise from the dif­
+ferent problems we are trying to solve. Breese's method
+is aimed at creating belief networks and influence dia­
+grams in order to reply to queries. Because our work is
+aimed at interpretation, and requires complex hypothe­
+ses, we do not have clearly goal-directed networks.
+
+Related Work
+
+Another difference is that Breese does not have any­
+thing corresponding to our posterior-functions. Asso­
+ciated with his network-constructing rules are fully­
+fleshed-out conditional probability distributions. When
+more than one such distribution applies, his system
+chooses which to apply according to some simple heuris­
+tics. We need to be able to specify in greater detail
+how to compare different probabilistic dependencies,
+because our models are too big to describe more ex­
+plicitly, and because nodes and arcs are added to and
+deleted from our networks.
+
+There has been a great deal of work on probabilis­
+tic ATMS's for dynamically constructing probabilistic
+models. An ATMS[deKleer, 1986] is a multiple-context
+truth maintenance system. Laskey and Lehner [Laskey
+and Lehner, 1988] have shown that Dempster-Shafer
+theory can be mapped onto the ATMS in a straight­
+forward way. D'Ambrosio developed a probabilistic
+ATMS[D'Ambrosio, 1988a, D'Ambrosio, 1988b], and
+we developed a probabilistic ATMS tailored for lan­
+guage understanding [Goldman and Charniak, 1988].
+In our experience, these logical-probabilistic hybrids
+are unsatisfactory for a number of reasons. Probabilis­
+tic inference and logical inference do not correspond
+perfectly. The operation of conditioning is not natu­
+ral in logic. Logical inference does not permit us to
+distinguish between evidential and causal support for a
+proposition. Pragmatically, it seemed wasteful to com­
+bine two expensive labelling procedures - ATMS con­
+text labelling and probabilities.
+We are greatly indebted to Judea Pearl for his idea
+of combining causal influences in stereotyped ways like
+the noisy-or gate [Pearl, 1988] . Our posterior-functions
+are a generalization of this idea.
+In work done simultaneously with ours, Jack Breese
+has developed very similar techniques for rule-based
+
+Two examples will clarify this important difference:
+First of all, consider our rule for finding word-senses
+(rule 2). If each word has a large number of possi­
+ble senses, it is clearly impossible for us to store a full
+conditional probability matrix for each word, given all
+its senses. Impossible, and unnecessary as well, be­
+cause the different causes interact in a stereotyped way.
+Second, our interpretation problem is hierarchical: we
+make hypotheses about actions and events to explain
+the text, and then consider the plans and goals of char­
+acters in the story in order to explain these actions and
+events. We do not want to expand our networks to in­
+clude plans hypothesized to explain characters' actions
+until we are at least reasonably sure that the actions we
+are trying to explain actually occurred - that we have
+
+97
+
+not simply misunderstood some verb. This leads to our
+need to make root nodes into interior nodes.
+More details on our work on language understand­
+ing is given in [Charniak and Goldman, 1989a, Carroll
+and Charniak, 1989, Charniak and Goldman, 1989b,
+Goldman and Charniak, 1990].
+Conclusions
+
+In this paper we have outlined a language for construct­
+ing belief networks on an as-needed basis. This lan­
+guage of rules makes it convenient to define parameter­
+ized classes of probabilistic models. Such parameterized
+models are more convenient to use, and more efficient
+to represent than full-blown belief networks. We have
+·demonstrated the usefulness of this technique with a
+simple example from genetics, and an account of our
+work in language understanding.
+References
+
+[Breese, 1989] John S. Breese. Construction of belief
+and decision networks. forthcoming, 1989.
+[Carroll and Charniak, 1989] Glenn Carroll and Eu­
+gene Charniak. Finding plans with a marker-passer.
+In Proceeding11 of the Plan-recognition work11hop,
+1989.
+[Charniak and Goldman, 1989a] Eugene Charniak and
+Robert P. Goldman. Plan recognition in stories and
+in life. In Proceeding11 of the Workllhop on Uncer­
+tainty and Probability in AI. Morgan Kaufmann Pub­
+lishers, Inc., 1989.
+[Charniak and Goldman, 1989b] Eugene Charniak and
+Robert P. Goldman. A semantics for probabilistic
+quantifier-free first-order languages, with particular
+application to story understanding. In Proceeding11 of
+
+the 11th International Joint Conference on Artificial
+Intelligence, 1989.
+
+[Charniak and McDermott, 1985]
+Eugene Charniak and Drew McDermott. Introduc­
+tion to Artificial Intelligence. Addison Wesley, 1985.
+[D'Ambrosio, 1988a] Bruce D'Ambrosio. A hybrid ap­
+proach to reasoning under uncertainty. International
+Journal of Approzimate Rea11oning, 2:29-45, 1988.
+[D'Ambrosio, 1988b] Bruce D'Ambrosio.
+Process,
+structure and modularity in reasoning with uncer­
+tainty. In The Fourth Workllhop on Uncertainty in
+Artific ial Intelligence, pages 64-72, 1988.
+[deKleer, 1986] Johan deKleer. An assumption-based
+TMS. Artificial Intelligence, 28:127-162, 1986.
+[Doyle, 1979] Jon Doyle. A truth maintenance system.
+Artificial Intelligence, 12(3):231-272, 1979.
+[Frydenberg, 1989] Morten Frydenberg.
+The chain
+graph markov property. Technical Report 186, De­
+partment of Theoretical Statistics, Institute of Math­
+ematics, University of Aarhus, 1989.
+
+[Goldman and Boddy, 1990] Robert P. Goldman and
+Mark Boddy. Bayesian updating for dynamic belief
+nets. in preparation, 1990.
+[Goldman and Charniak, 1988] Robert P. Goldman
+and Eugene Charniak. A probabilistic ATMS for plan
+recognition. In Proceeding11 of the Plan-recognition
+workllhop, 1988.
+[Goldman and Charniak, 1990] Robert Goldman and
+Eugene Charniak. A probabilistic approach to text
+understanding. forthcoming, 1990.
+[Jensen et al., 1988] Finn V. Jensen, Kristian G. Ole­
+son, and Stig Kjcer Anderson. An algebra of bayesian
+belief universes for knowledge-based systems. Techni­
+cal Report R 88-25, Institute for Electronic Systems,
+Department of Mathematics and Computer Science,
+University of Aalborg, 1988.
+[Jensen, 1989] Finn V. Jensen. Bayesian updating in
+recursive graphical models by local computations.
+Technical Report R 89-15, Institute for Electronic
+Systems, Department of Mathematics and Computer
+Science, University of Aalborg, 1989.
+[Laskey and Lehner, 1988] Kathryn B. Laskey and
+Paul E. Lehner. Belief maintenance: An integrated
+approach to uncertainty management. In Proceed­
+
+ingll of the Eighth National Conference on Artificial
+Intelligence, pages 210-214, 1988.
+
+[Lauritzen, 1988] Steffen L. Lauritzen. Mixed graphical
+association models. Technical Report R 88-21, Insti­
+tute for Electronic Systems, Department of Mathe­
+matics and Computer Science, University of Aalborg,
+1988.
+[McAllester, 1982] David McAllester. Reasoning utility
+package user's manual, version one. Technical report,
+MIT Artificial Intelligence Laboratory, 1982.
+[Pearl, 1988] Judea Pearl. Probabililltic Rea11oning in
+
+Intelligent Sylltem11: Networkll of PlaUIIible Inference.
+
+Morgan Kaufmann Publishers, Inc., 95 First Street,
+Los Altos, CA 94022, 1988.
+[Schachter, 1986] Ross D. Schachter. Evaluating influ­
+ence diagrams. Operation11 Re11earch, 34(6):871-882,
+1986.
+[Spiegelhalter, 1988] David J. Spiegelhalter. Fast al­
+gorithms for probabilistic reasoning in influence di­
+agrams with application in genetics and expert sys­
+tems. In Proceeding11 of the Conference on Influence
+Diagram11, pages 133-136, 1988.
+[Srinivas and Breese, 1989] Sampath Srinivas and Jack
+Breese. IDEAL: Influence Diagram Evaluation and
+Analy11ill in Li11p. Rockwell International Science
+Center, May 1989.
+
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+
+

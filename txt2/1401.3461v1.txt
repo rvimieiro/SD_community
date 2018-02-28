@@ -1,0 +1,2709 @@
+
+Lesser, & Zilberstein, 2004; Kim, Nair, Varakantham, Tambe, & Yokoo, 2006) or provide
+only approximate solutions (Emery-Montemerlo, Gordon, Schneider, & Thrun, 2004; Nair,
+Roth, Yokoo, & Tambe, 2004; Seuken & Zilberstein, 2007). In this paper, we introduce
+an efficient algorithm for several restricted classes, most notably decentralized MDPs with
+transition and observation independence (Becker et al., 2003). For the sake of simplicity,
+we denote this model as DEC-MDP, although this is usually used to denote the model
+without the independence assumptions. The objective in these problems is to maximize the
+cumulative reward of a set of cooperative agents over some finite horizon. Each agent can
+be viewed as a single decision-maker operating on its own “local” MDP. What complicates
+the problem is the fact that all these MDPs are linked through a common reward function
+that depends on their states.
+The coverage set algorithm (CSA) was the first optimal algorithm to solve efficiently
+transition and observation independent DEC-MDPs (Becker, Zilberstein, Lesser, & Goldman, 2004). By exploiting the fact that the interaction between the agents is limited
+compared to their individual local problems, CSA can solve problems that cannot be solved
+by the more general exact DEC-POMDP algorithms. It also exhibits good anytime behavior. However, the anytime behavior is of limited applicability because solution quality is
+only known in hindsight, after the algorithm terminates.
+We develop a new approach to solve DEC-MDPs–as well as a range of other multiagent
+planning problems–by representing them as bilinear programs. We also present an efficient
+new algorithm for solving these kinds of separable bilinear problems. When the algorithm
+is applied to DEC-MDPs, it improves efficiency by several orders of magnitude compared
+with previous state-of the art algorithms (Becker, 2006; Petrik & Zilberstein, 2007a). In
+addition, the algorithm provides useful runtime bounds on the approximation error, which
+makes it more useful as an anytime algorithm. Finally, the algorithm is formulated for
+general separable bilinear programs and therefore it can be easily applied to a range of
+other problems.
+The rest of the paper is organized as follows. First, in Section 2, we describe the basic
+bilinear program formulation and how a range of multiagent planning problems can be
+expressed within this framework. In Section 3, we describe a new successive approximation
+algorithm for bilinear programs. The performance of the algorithm depends heavily on the
+number of interactions between the agents. To address that, we propose in Section 4 a
+method that automatically reduces the number of interactions and provides a bound on
+the degradation in solution quality. Furthermore, to be able to project the computational
+effort required to solve a given problem instance, we develop offline approximation bounds
+in Section 5. In Section 6, we examine the performance of the approach on a standard
+benchmark problem. We conclude with a summary of the results and a discussion of future
+work that could further improve the performance of this approach.
+
+2. Formulating Multiagent Planning Problems as Bilinear Programs
+We begin with a formal description of bilinear programs and the different types of multiagent
+planning problems that can be formulated as such. In addition to multiagent planning
+problems, bilinear programs can be used to solve a variety of other problems such as robotic
+manipulation (Pang, Trinkle, & Lo, 1996), bilinear separation (Bennett & Mangasarian,
+236
+
+A Bilinear Programming Approach for Multiagent Planning
+
+1992), and even general linear complementarity problems (Mangasarian, 1995). We focus on
+multiagent planning problems where this formulation turns out to be particularly effective.
+Definition 1. A separable bilinear program in the normal form is defined as follows:
+maximize
+w,x,y,z
+
+T
+T
+T
+T
+f (w, x, y, z) = sT
+1 w + r1 x + x Cy + r2 y + s2 z
+
+subject to A1 x + B1 w = b1
+
+(1)
+
+A2 y + B2 z = b2
+w, x, y, z ≥ 0
+
+The size of the program is the total number of variables in w, x, y and z. The number of
+variables in y determines the dimensionality of the program1 .
+Unless otherwise specified, all vectors are column vectors. We use boldface 0 and 1
+to denote vectors of zeros and ones respectively of the appropriate dimensions. This program specifies two linear programs that are connected only through the nonlinear objective
+function term xT Cy. The program contains two types of variables. The first type includes
+the variables x, y that appear in the bilinear term of the objective function. The second
+type includes the additional variables w, z that do not appear in the bilinear term. As we
+show later, this distinction is important because the complexity of the algorithm we propose
+depends mostly on the dimensionality of the problem, which is the number of variables y
+involved in the bilinear term.
+The bilinear program in Eq. (1) is separable because the constraints on x and w are
+independent of the constraints on y and z. That is, the variables that participate in the
+bilinear term of the objective function are independently constrained. The theory of nonseparable bilinear programs is much more complicated and the corresponding algorithms
+are not as efficient (Horst & Tuy, 1996). Thus, we limit the discussion in this paper to
+separable bilinear programs and often omit the term “separable”. As discussed later in
+more detail, a separable bilinear program may be seen as a concave minimization problem
+with multiple local minima. It can be shown that solving this problem is NP-complete,
+compared to polynomial time complexity of linear programs.
+In addition to the formulation of the bilinear program shown in Eq. (1), we also use the
+following formulation, stated in terms of inequalities:
+maximize
+x,y
+
+xT Cy
+
+subject to A1 x ≤ b1
+
+x≥0
+
+A2 y ≤ b2
+
+y≥0
+
+(2)
+
+The latter formulation can be easily transformed into the normal form using standard
+transformations of linear programs (Vanderbei, 2001). In particular, we can introduce slack
+1. It is possible to define the dimensionality in terms of x, or the minimum of dimensions of x and y. The
+issue is discussed in Appendix B.
+
+237
+
+Petrik & Zilberstein
+
+variables w, z to obtain the following identical bilinear program in the normal form:
+xT Cy
+
+maximize
+w,x,y,z
+
+subject to A1 x − w = b1
+A2 y − z = b2
+
+(3)
+
+w, x, y, z ≥ 0
+We use the following matrix and block matrix notation in the paper. Matrices are
+denoted by square brackets, with columns separated by commas and rows separated by
+semicolons. Columns haveprecedence
+over rows. For example, the notation [A, B; C, D]
+
+corresponds to the matrix
+
+A
+C
+
+B
+.
+D
+
+As we show later, the presence of the variables w, z in the objective function may prevent
+a crucial function from being convex. Since this has an unfavorable impact on the properties
+of the bilinear program, we introduce a compact form of the problem.
+Definition 2. We say that the bilinear program in Eq. (1) is in a compact form when s1
+and s2 are zero vectors. It is in a semi-compact form if s2 is a zero vector.
+The compactness requirement is not limiting because any bilinear program in the form
+shown in Eq. (1) can be expressed in a semi-compact form as follows:
+maximize
+w,x,y,z,x̂,ŷ
+
+sT
+1w
+
++
+
+r1T x
+
++
+
+xT
+
+subject to A1 x + B1 w = b1
+x̂ = 1 ŷ =
+
+ 
+
+ C 0
+y
+x̂
++ r2T y
+ŷ
+0 1
+A2 y + B2 z = b2
+
+(4)
+
+sT
+2z
+
+w, x, y, z ≥ 0
+Clearly, feasible solutions of Eq. (1) and Eq. (4) have the same objective value when ŷ is set
+appropriately. Notice that the dimensionality of the bilinear term in the objective function
+increases by 1 for both x and y. Hence, this transformation increases the dimensionality of
+the program by 1.
+The rest of this section describes several classes of multiagent planning problems that can
+be formulated as bilinear programs. Starting with observation and transition independent
+DEC-MDPs, we extend the formulation to allow a different objective function (maximizing
+average reward over an infinite horizon), to handle interdependent observations, and to find
+Nash equilibria in competitive settings.
+2.1 DEC-MDPs
+As mentioned previously, any transition-independent and observation-independent DECMDP (Becker et al., 2004) may be formulated as a bilinear program. Intuitively, a DECMDP is transition independent when no agent can influence the other agents’ transitions. A
+DEC-MDP is observation independent when no agent can observe the states of other agents.
+These assumptions are crucial since they ensure a lower complexity of the problem (Becker
+238
+
+A Bilinear Programming Approach for Multiagent Planning
+
+et al., 2004). In the remainder of the paper, we use simply the term DEC-MDP to refer to
+transition and observation independent DEC-MDP.
+The DEC-MDP model has proved useful in several multiagent planning domains. One
+example that we use is the Mars rover planning problem (Bresina, Golden, Smith, & Washington, 1999), first formulated as a DEC-MDP by Becker et al. (2003). This domain
+involves two autonomous rovers that visit several sites in a given order and may decide to
+perform certain scientific experiments at each site. The overall activity must be completed
+within a given time limit. The uncertainty about the duration of each experiment is modeled by a given discrete distribution. While the rovers operate independently and receive
+local rewards for each completed experiment, the global reward function also depends on
+some experiments completed by both rovers. The interaction between the rovers is thus
+limited to a relatively small number of such overlapping tasks. We return to this problem
+and describe it in more detail in Section 6.
+A DEC-MDP problem is composed of two MDPs with state-sets S1 , S2 and action sets
+A1 , A2 . The functions r1 and r2 define local rewards for action-state pairs. The initial
+state distributions are α1 and α2 . The MDPs are coupled through a global reward function
+defined by the matrix R. Each entry R(i, j) represents the joint reward for the state-action
+i by one agent and j by the other. Our definition of a DEC-MDP is based on the work of
+Becker et al. (2004), with some modifications that we discuss below.
+Definition 3. A two-agent transition and observation independent DEC-MDP with extended reward structure is defined by a tuple hS, F, α, A, P, Ri:
+• S = (S1 , S2 ) is the factored set of world states
+• F = (F1 ⊆ S1 , F2 ⊆ S2 ) is the factored set of terminal states.
+• α = (α1 , α2 ) where αi : Si 7→ [0, 1] are the initial state distribution functions
+• A = (A1 , A2 ) is the factored set of actions
+• P = (P1 , P2 ), Pi : Si × Ai × Si 7→ [0, 1] are the transition functions. Let a ∈ Ai
+be an action, then Pia : Si × Si 7→ [0, 1] is a stochastic transition matrix such that
+Pi (s, a, s0 ) = Pia (s, s0 ) is the probability of a transition from state s ∈ Si to state
+s0 ∈ Si of agent i, assuming it takes action a. The transitions from the final states
+have 0 probability; that is Pi (s, a, s0 ) = 0 if s ∈ Fi , s0 ∈ Si , and a ∈ Ai .
+• R = (r1 , r2 , R) where ri : Si × Ai 7→ R are the local reward functions and
+R : (S1 × A1 ) × (S2 × A2 ) 7→ R is the global reward function. Local rewards ri are
+represented as vectors, and R is a matrix with (s1 , a1 ) as rows and (s2 , a2 ) as columns.
+Definition 3 differs from the original definition of transition and observation independent DEC-MDP (Becker et al. 2004, Definition 1) in two ways. The modifications allow
+us to explicitly capture assumptions that are implicit in previous work. First, the individual MDPs in our model are formulated as stochastic shortest-path problems (Bertsekas &
+Tsitsiklis, 1996). That is, there is no explicit time horizon, but instead some states are
+terminal. The process stops upon reaching a terminal state. The objective is to maximize
+the cumulative reward received before reaching the terminal states.
+The second modification of the original definition is that Definition 3 generalizes the
+reward structure of the DEC-MDP formulation, using the extended reward structure. The
+joint rewards in the original DEC-MDP are defined only for the joint states (s1 ∈ S1 , s2 ∈ S2 )
+239
+
+Petrik & Zilberstein
+
+s11
+
+s21
+
+s12
+
+s22
+
+s13
+
+s23
+
+s31
+
+t1
+
+s1
+
+s2
+
+s3
+t2
+
+s32
+
+t3
+
+s33
+
+Figure 1: An MDP and its stochastic shortest path version with time horizon 3. The dotted
+circles are terminal states.
+
+visited by both agents simultaneously. That is, if agent 1 visits states s11 , s12 and agent 2
+visits states s21 , s22 , then the reward can only be defined for joint states (s11 , s21 ) and (s12 , s22 ).
+However, our DEC-MDP formulation with extended reward structure also allows the reward
+to depend on (s11 , s22 ) and (s12 , s21 ), even when they are not visited simultaneously. As a result,
+the global reward may depend on the history, not only on the current state. Note that this
+reward structure is more general than what is commonly used in DEC-POMDPs.
+We prefer the more general definition because it has been already implicitly used in
+previous work. In particular, this extended reward structure arises from introducing the
+primitive and compound events in the work of Becker et al. (2004). This reward structure
+is necessary to capture the characteristics of the Mars rover benchmark. Interestingly,
+this extension does not complicate our proposed solution methods in any way. Note that
+the stochastic shortest path formulation (right side of Figure 1) inherently eliminates any
+loops because time always advances when an action is taken. Therefore, every state in that
+representation may be visited at most once. This property is commonly used when an MDP
+is formulated as a linear program (Puterman, 2005).
+The solution of a DEC-MDP is a deterministic stationary policy π = (π1 , π2 ), where
+πi : Si 7→ Ai is the standard MDP policy (Puterman, 2005) for agent i. In particular, πi (si )
+represents the action taken by agent i in state si . To define the bilinear program, we use
+variables x(s1 , a1 ) to denote the probability that agent 1 visits state s1 and takes action a1
+and y(s2 , a2 ) to denote the same for agent 2. These are the standard dual variables in MDP
+formulation. Given a solution in terms of x for agent 1, the policy is calculated for s ∈ S1
+as follows, breaking ties arbitrarily.
+π1 (s) = arg max x(s, a)
+a∈A1
+
+The policy π2 is similarly calculated from y. The correctness of the policy calculation follows
+from the existence of an optimal policy that is deterministic and depends only on the local
+states of that agent (Becker et al., 2004).
+The objective in DEC-MDPs in terms of x and y is then to maximize:
+X
+X
+X X
+r1 (s1 , a1 )x(s1 , a1 ) +
+R(s1 , a1 , s2 , a2 )x(s1 , a1 )y(s2 , a2 ) +
+r2 (s2 , a2 )y(s2 , a2 ).
+s1 ∈S1
+a1 ∈A1
+
+s1 ∈S1 s2 ∈S2
+a1 ∈A1 a2 ∈A2
+
+s2 ∈S2
+a2 ∈A2
+
+The stochastic shortest path representation is more general because any finite-horizon MDP
+can be represented as such by keeping track of time as part of the state, as illustrated
+240
+
+A Bilinear Programming Approach for Multiagent Planning
+
+s11
+
+s21
+
+s12
+
+r1
+
+s13
+
+s22
+
+s14
+
+s23
+s24
+
+s25
+
+Figure 2: A sample DEC-MDP.
+
+in Figure 1. This modification allows us to apply the model directly to the Mars rover
+benchmark problem. Actions in the Mars rover problem may have different durations,
+while all actions in finite-horizon MDPs take the same amount of time.
+A DEC-MDP problem with an extended reward structure can be formulated as a bilinear mathematical program as follows. Vector variables x and y represent the state-action
+probabilities for each agent, as used in the dual linear formulation of MDPs. Given the transition and observation independence, the feasible regions may be defined by linear equalities
+A1 x = α1 and x ≥ 0, and A2 y = α2 and y ≥ 0. The matrices A1 and A2 are the same
+as for the dual formulation of total expected reward MDPs (Puterman, 2005), representing
+the following equalities for agent i:
+X
+a0 ∈Ai
+
+X X
+
+x(s0 , a0 ) −
+
+Pi (s, a, s0 )x(s, a) = αi (s0 ),
+
+s∈Si a∈Ai
+
+for every s0 ∈ Si . As described above, variables x(s, a) represent the probabilities of visiting
+the state s and taking action a by the appropriate agent during plan execution. Note that
+for agent 2, the variables are y(s, a) rather than x(s, a). Intuitively, these equalities ensure
+that the probability of entering each non-terminal state, through either the initial step or
+from other states, is the same as the probability of leaving the state. The bilinear problem
+is then formulated as follows:
+maximize
+x,y
+
+r1T x + xT Ry + r2T y
+
+subject to A1 x = α1
+
+x≥0
+
+A2 y = α 2
+
+y≥0
+
+(5)
+
+In this formulation, we treat the initial state distributions αi as vectors, based on a fixed
+ordering of the states. The following simple example illustrates the formulation.
+Example 4. Consider a DEC-MDP with two agents, depicted in Figure 2. The transitions
+in this problem are deterministic, and thus all the branches represent actions ai , ordered for
+each state from left to right. In some states, only one action is available. The shared reward
+r1 , denoted by a dotted line, is received when both agents visit the state. The local rewards
+are denoted by the numbers above next to the states. The terminal states are omitted. The
+241
+
+Petrik & Zilberstein
+
+agents start in states s11 and s21 respectively. The bilinear formulation of this problem is:
+maximize
+subject to
+
+x(s14 , a1 ) ∗ r1 ∗ y(s24 , a1 )
+x(s11 , a1 )
+1
+1
+x(s2 , a1 ) + x(s2 , a2 ) − x(s11 , a1 )
+x(s13 , a1 ) − x(s12 , a1 )
+x(s14 , a1 ) − x(s12 , a2 )
+
+=1
+=0
+=0
+=0
+
+y(s21 , a1 ) + y(s21 , a2 )
+y(s22 , a1 ) − y(s21 , a1 )
+y(s23 , a1 ) − y(s22 , a1 )
+y(s24 , a1 ) − y(s22 , a1 )
+y(s25 , a1 ) − y(s23 , a1 )
+
+=1
+=0
+=0
+=0
+=0
+
+While the results in this paper focus on two-agent problems, our approach can be extended to DEC-MDPs with more than two agents in two ways. The first approach requires
+that each component of the global reward depends on at most two agents. The DEC-MDP
+then may be viewed as a graph with vertices representing agents and edges representing
+the immediate interactions or dependencies. To formulate the problem as a bilinear program, this graph must be bipartite. Interestingly, this class of problems has been previously
+formulated (Kim et al., 2006). Let G1 and G2 be the indices of the agents in the two
+partitions of the bipartite graph. Then the problem can be formulated as follows:
+X
+T
+maximize
+riT xi + xT
+i Rij yj + rj yj
+x,y
+
+i∈G1 ,j∈G2
+
+subject to Ai xi = α1
+
+x i ≥ 0 i ∈ G1
+
+Aj yj = α2
+
+yj ≥ 0 j ∈ G2
+
+(6)
+
+Here, Rij denotes the global reward for interactions between agents i and j. This program is bilinear and separable because the constraints on the variables in G1 and G2 are
+independent.
+The second approach to generalize the framework is to represent the DEC-MDP as a
+multilinear program. In that case, no restrictions on the reward structure are necessary.
+An algorithm to solve, say a trilinear program, could be almost identical to the algorithm
+we propose, except that the best response would be calculated using bilinear, not linear
+programs. However, the scalability of this approach to more than a few agents is doubtful.
+2.2 Average-Reward Infinite-Horizon DEC-MDPs
+The previous formulation deals with finite-horizon DEC-MDPs. An average-reward problem may also be formulated as a bilinear program (Petrik & Zilberstein, 2007b). This
+is particularly useful for infinite-horizon DEC-MDPs. For example, consider the infinitehorizon version of the Multiple Access Broadcast Channel (MABC) (Rosberg, 1983; Ooi &
+Wornell, 1996). In this problem, which has been used widely in recent studies of decentralized decision making, two communication devices share a single channel, and they need to
+periodically transmit some data. However, the channel can transmit only a single message
+at a time. When both agents send messages at the same time, this leads to a collision, and
+the transmission fails. The memory of the devices is limited, thus they need to send the
+messages sooner rather than later. We adapt the model from the work of Rosberg (1983),
+which is particularly suitable because it assumes no sharing of local information among the
+devices.
+242
+
+A Bilinear Programming Approach for Multiagent Planning
+
+The definition of average-reward two-agent transition and observation independent DECMDP is the same as Definition 3, with the exception of the terminal states, policy, and objective. There are no terminal states in average-reward DEC-MDPs, and the policy (π1 , π2 )
+may be stochastic. That is, πi (s, a) 7→ [0, 1] is the probability of agent i taking an action
+a in state s. The objective is to find a stationary infinite-horizon policy π that maximizes
+the average reward, or gain, defined as follows.
+Definition 5. Let π = (π1 , π2 ) be a stochastic policy, and Xt and Yt be random variables
+that represent the probability distributions over the state-action pairs at time t of the two
+agents respectively according to π. The gain G of the policy π is then defined for states
+s1 ∈ S1 and s2 ∈ S2 as:
+"N −1
+#
+X
+1
+G(s , s ) = lim
+E(s1 ,π1 (s1 )),(s2 ,π2 (s2 ))
+r1 (Xt ) + R(Xt , Yt ) + r2 (Yt ) ,
+N →∞ N
+1
+
+2
+
+t=0
+
+where πi (si ) is the distribution over the actions in state si . Note that the expectation is
+with respect to the initial states and action distributions (s1 , π1 (s1 )), (s2 , π2 (s2 )).
+The actual gain of a policy depends on the agents’ initial state distributions α1 , α2
+and may be expressed as α1T Gα2 , with G represented as a matrix. Puterman (2005), for
+example, provides a more detailed discussion of the definition and meaning of policy gain.
+To simplify the bilinear formulation of the average-reward DEC-MDP, we assume that
+r1 = 0 and r2 = 0. The bilinear program follows.
+maximize
+p1 ,p2 ,q1 ,q2
+
+τ (p1 , p2 , q1 , q2 ) = pT
+1 Rp2
+
+subject to pX
+1 , p2 ≥ 0
+∀s0 ∈ S1
+p1 (s0 , a) −
+∀s0 ∈ S1
+∀s0 ∈ S2
+∀s0 ∈ S2
+
+a∈A
+X1
+a∈A
+X1
+a∈A
+X2
+a∈A2
+
+p1 (s0 , a) +
+p2 (s0 , a) −
+p2 (s0 , a) +
+
+X
+
+
+p1 (s, a)P1a s, s0 = 0
+
+s∈S
+X1 ,a∈A1
+
+q1 (s0 , a) −
+
+a∈AX
+1
+
+X
+
+
+q1 (s, a)P1a s, s0 = α1 (s0 )
+
+s∈S1 ,a∈A1
+
+p2 (s, a)P2a s, s0
+
+s∈S
+X2 ,a∈A2
+
+q2 (s0 , a) −
+
+a∈A2
+
+X
+
+(7)
+
+=0
+
+
+q2 (s, a)P2a s, s0 = α2 (s0 )
+
+s∈S2 ,a∈A2
+
+The variables in the program come from the dual formulation of the average-reward MDP
+linear program (Puterman, 2005). The state sets of the MDPs is divided into recurrent
+and transient states. The recurrent states are expected to be visited infinitely many times,
+while the transient states are expected to be visited finitely many times. Variables p1 and
+p2 represent the limiting distributions of each MDP, which is non-zero for all recurrent
+states. The (possibly stochastic) policy πi of agent i is defined in the recurrent states by
+the probability of taking action a ∈ Ai in state s ∈ Si :
+pi (s, a)
+.
+0
+a0 ∈Ai pi (s, a )
+
+πi (s, a) = P
+
+243
+
+Petrik & Zilberstein
+
+a11
+
+a12
+
+b12
+
+b11
+
+b11
+
+b12
+
+a21
+
+a22
+
+a21
+
+a22
+
+a23
+
+a24
+
+a23
+
+a24
+
+r1
+
+r2
+
+r3
+
+r4
+
+r5
+
+r1
+
+r7
+
+r8
+
+Figure 3: A tree form of a policy for a DEC-POMDP or an extensive game. The dotted
+ellipses denote the information sets.
+
+The variables pi are 0 in transient states. The policy in the transient states is calculated
+from variables qi as:
+qi (s, a)
+πi (s, a) = P
+.
+0
+a0 ∈Ai qi (s, a )
+The correctness of the constraints follows from the dual formulation of optimal average
+reward (Puterman 2005, Equation 9.3.4). Petrik and Zilberstein (2007b) provide further
+details of this formulation.
+2.3 General DEC-POMDPs and Extensive Games
+The general DEC-POMDP problem and extensive-form games with two agents, or players,
+can also be formulated as bilinear programs. However, the constraints may not be separable
+because actions of one agent influence the other agent. The approach in this case may be
+similar to linear complementarity problem formulation of extensive games (Koller, Megiddo,
+& von Stengel, 1994), and integer linear program formulation of DEC-POMDPs (Aras
+& Charpillet, 2007). The approach we develop is closely related to event-driven DECPOMDPs (Becker et al., 2004), but it is in general more efficient. Nevertheless, the size of
+the bilinear program is exponential in the size of the DEC-POMDP. This can be expected
+since solving DEC-POMDPs is NEXP-complete (Bernstein et al., 2000), while solving
+bilinear programs is NP-complete (Mangasarian, 1995). Because the general formulation in
+this case is somewhat cumbersome, we only illustrate it using the following simple example.
+Aras (2008) provides the details of a similar construction.
+Example 6. Consider the problem depicted in Figure 3, assuming that the agents are
+cooperative. The actions of the other agent are not observable, as denoted by the information
+sets. This approach can be generalized to any problem with any observable sets as long as
+the perfect recall condition is satisfied. Agents satisfy the perfect recall condition when
+they remember the set of actions taken in the prior moves (Osborne & Rubinstein, 1994).
+Rewards are only collected in the leaf-nodes in this case. The variables on the edges represent
+the probability of taking the action. Here, variables a denote the actions of one agent, and
+244
+
+A Bilinear Programming Approach for Multiagent Planning
+
+variables b of the other. The total common reward received in the end is:
+r = a11 b11 a21 r1 + a11 b11 a22 r2 + a11 b12 a21 r3 + a11 b12 a22 r4 +
+a12 b11 a23 r5 + a12 b11 a24 r6 + a12 b12 a23 r7 + a12 b12 a24 r8 .
+The constraints in this problem are of the following form: a11 + a12 = 1.
+Any DEC-POMDP problem can be represented using the approach used above. It is
+also straightforward to extend the approach to problems with rewards in every node. However, the above formulation is clearly not bilinear. To apply our algorithm to this class
+of problems, we need to reformulate the problem in a bilinear form. This can be easily
+accomplished in a way similar to the construction of the dual linear program for an MDP.
+Namely, we introduce variables:
+c11 = a11
+c12 = a12
+c21 = a11 a21
+c22 = a11 a22
+and so on for every set of variables on any path to a leaf node. Then, the objective may be
+reformulated as follows:
+r = c21 b11 r1 + c22 b11 r2 + c23 b12 r3 + c24 b12 r4 +
+c25 b11 r5 + c26 b11 r6 + c27 b12 r7 + c28 b12 r8 .
+Variables bij are replaced in the same fashion. This objective function is clearly bilinear.
+The constraints may be reformulated as follows. The constraint a21 + a22 = 1 can be
+multiplied by a11 and then replaced by c21 + c22 = c11 , and so on. That is, the variables in
+each level have to sum to the variable that is their least common parent in the level above
+for the same agent.
+2.4 General Two-Player Games
+In addition to cooperative problems, some competitive problems with 2 players may be
+formulated as bilinear programs. It is known that the problem of finding an equilibrium for
+a bi-matrix game may be formulated as a linear complementarity problem (Cottle, Pang,
+& Stone, 1992). It has also been shown that a linear complementarity problem may be
+formulated as a bilinear problem (Mangasarian, 1995). However, a direct application of
+these two reductions results in a complex problem with a large dimensionality. Below, we
+demonstrate how a general game can be directly formulated as a bilinear program. There
+are many ways to formulate a game, thus we take a very general approach. We simply
+assume that each agent optimizes a linear program, as follows.
+maximize
+x
+
+maximize
+
+d1 (x) = r1T x + xT C1 y
+
+subject to A1 x = b1
+
+y
+
+(8)
+
+d2 (y) = r2T y + xT C2 y
+
+subject to A2 y = b2
+y≥0
+
+x≥0
+245
+
+(9)
+
+Petrik & Zilberstein
+
+In Eq. (8), the variable y is considered to be a constant and similarly in Eq. (9) the
+variable x is considered to be a constant. For normal form games, the constraint matrices
+A1 and A2 are simply rows of ones, and b1 = b2 = 1. For competitive DEC-MDPs, the
+constraint matrices A1 and A2 are the same as in Section 2.1. Extensive games may be
+formulated similarly to DEC-POMDPs, as described in Section 2.3.
+The game specified by linear programs Eq. (8) and Eq. (9) may be formulated as a
+bilinear program as follows. First, define the reward vectors for each agent, given a policy
+of the other agent.
+q1 (y) = r1 + C1 y
+q2 (x) = r2 + C2T x.
+
+These values are unrelated to those of Eq. (7). The complementary slackness values (Vanderbei, 2001) for the linear programs Eq. (8) and Eq. (9) are:
+
+
+k1 (x, y, λ1 ) = q1 (y)T − λT
+1 A1 x
+
+
+k2 (x, y, λ2 ) = q2 (x)T − λT
+A
+2 2 y,
+where λ1 and λ2 are the dual variables of the corresponding linear programs. For any
+primal feasible x and y, and dual feasible λ1 and λ2 , we have that k1 (x, y, λ1 ) ≥ 0 and
+k2 (x, y, λ2 ) ≥ 0. The equality is attained if and only if x and y are optimal. This can
+be used to write the following optimization problem, in which we implicitly assume that
+x,y,λ1 ,λ2 are feasible in the appropriate primal and dual linear programs:
+0≤
+=
+=
+=
+=
+
+min k1 (x, y, λ1 ) + k2 (x, y, λ2 )
+
+x,y,λ1 ,λ2
+
+T
+T
+min (q1 (y)T − λT
+1 A1 )x + (q2 (x) − λ2 A2 )y
+
+x,y,λ1 ,λ2
+
+T T
+T
+min ((r1 + C1 y)T − λT
+1 A1 )x + ((r2 + C2 x) − λ2 A2 )y
+
+x,y,λ1 ,λ2
+
+T T
+min r1T x + r2T y + xT (C1 + C2 )y − xT AT
+1 λ 1 − y A2 λ 2
+
+x,y,λ1 ,λ2
+
+T
+min r1T x + r2T y + xT (C1 + C2 )y − bT
+1 λ1 − b2 λ2 .
+
+x,y,λ1 ,λ2
+
+Therefore, any feasible x and y that set the right hand side to 0 solve both linear programs
+in Eq. (8) and Eq. (9) optimally. Adding the primal and dual feasibility conditions to the
+above, we get the following bilinear program:
+minimize
+x,y,λ1 ,λ2
+
+T
+r1T x + r2T y + xT (C1 + C2 )y − bT
+1 λ1 − b2 λ2
+
+subject to A1 x = b1
+
+A2 y = b2
+
+r1 + C1 y − AT
+1 λ1 ≤ 0
+r2 + C2T x − AT
+2 λ2 ≤ 0
+x≥0
+
+y≥0
+246
+
+(10)
+
+A Bilinear Programming Approach for Multiagent Planning
+
+Algorithm 1: IterativeBestResponse(B)
+x0 , w0 ← rand ;
+i←1;
+while yi−1 6= yi or xi−1 6= xi do
+(yi , zi ) ← arg maxy,z f (wi−1 , xi−1 , y, z) ;
+(xi , wi ) ← arg maxx,w f (w, x, yi , zi ) ;
+6
+i←i+1
+
+1
+2
+3
+4
+5
+
+7
+
+return f (wi , xi , yi , zi )
+
+The optimal solution of Eq. (10) is 0 and it corresponds to a Nash equilibrium. This
+is because both the primal variables x, y and dual variables λ1 , λ2 are feasible and the
+complementary slackness condition is satisfied. The open question in this example are the
+interpretation of an approximate result and a formulation that would select the equilibrium.
+It is not clear yet whether it is possible to formulate the program so that the optimal solution
+will be a Nash equilibrium that maximizes a certain criterion. The approximate solutions
+of the program probably correspond to -Nash equilibria, but this remain an open question.
+The algorithm in this case also relies on the number of shared rewards being small
+compared to the size of the problem. But even if this is not the case, it is often possible
+that the number of shared rewards may be automatically reduced as described in Section 4.
+In fact, it is easy to show that a zero-sum normal form game is automatically reduced to
+two uncoupled linear programs. This follows from the dimensionality reduction procedure
+in Section 4.
+
+3. Solving Bilinear Programs
+One simple method often used for solving bilinear programs is the iterative procedure shown
+in Algorithm 1. The parameter B represents the bilinear program. While the algorithm
+often performs well in practice, it tends to converge to a suboptimal solution (Mangasarian,
+1995). When applied to DEC-MDPs, this algorithm is essentially identical to JESP (Nair,
+Tambe, Yokoo, Pynadath, & Marsella, 2003)–one of the early solution methods. In the
+following, we use f (w, x, y, z) to denote the objective value of Eq. (1).
+The rest of this section presents a new anytime algorithm for solving bilinear programs.
+The goal of the algorithm to is to produce a good solution quickly and then improve the
+solution in the remaining time. Along with each approximate solution, the maximal approximation bound with respect to the optimal solution is provided. As we show below, our
+algorithm can benefit from results produced by suboptimal algorithms, such as Algorithm 1,
+to quickly determine tight approximation bounds.
+3.1 The Successive Approximation Algorithm
+We begin with an overview of a successive approximation algorithm for bilinear problems
+that takes advantage of a low number of interactions between the agents. It is particularly
+suitable when the input problem is large in comparison to its dimensionality, as defined in
+Section 2. We address the issue of dimensionality reduction in Section 4.
+247
+
+Petrik & Zilberstein
+
+We begin with a simple intuitive explanation of the algorithm, and then show how it
+can be formalized. The bilinear program can be seen as an optimization game played by
+two agents, in which the first agent sets the variables w, x and the second one sets the
+variables y, z. This is a general observation that applies to any bilinear program. In any
+practical application, the feasible sets for the two sets of variables may be too large to
+explore exhaustively. In fact, when this method is applied to DEC-MDPs, these sets are
+infinite and continuous. The basic idea of the algorithm is to first identify the set of best
+responses of one of the agents, say agent 1, to some policy of the other agent. This is
+simple because once the variables of agent 2 are fixed, the program becomes linear, which
+is relatively easy to solve. Once the set of best-response policies of agent 1 is identified,
+assuming it is of a reasonable size, it is possible to calculate the best response of agent 2.
+This general approach is also used by the coverage set algorithm (Becker et al., 2004).
+One distinction is that the representation used in CSA applies only to DEC-MDPs, while
+our formulation applies to bilinear programs–a more general representation. The main
+distinction between our algorithm and CSA is the way in which the variables y, z are chosen.
+In CSA, the values y, z are calculated in a way that simply guarantees termination in
+finite time. We, on the other hand, choose values y, z greedily so as to minimize the
+approximation bound on the optimal solution. This is possible because we establish bounds
+on the optimality of the solution throughout the calculation. As a result, our algorithm
+converges more rapidly and may be terminated at any time with a guaranteed performance
+bound. Unlike the earlier version of the algorithm (Petrik & Zilberstein, 2007a), the version
+described in this paper calculates the best response using only a subset of the values of y, z.
+As we show, it is possible to identify regions of y, z in which it is impossible to improve the
+current best solution and exclude these regions from consideration.
+We now formalize the ideas described above. To simplify the notation, we define feasible
+sets as follows:
+X = {(x, w) A1 x + B1 w = b1 }
+Y
+
+= {(y, z) A2 y + B2 z = b2 }.
+
+We use y ∈ Y to denote that there exists z such that (y, z) ∈ Y . In addition, we assume that
+the problem is in a semi-compact form. This is reasonable because any bilinear program
+may be converted to semi-compact form with an increase in dimensionality of one, as we
+have shown earlier.
+Assumption 7. The sets X and Y are bounded, that is, they are contained in a ball of a
+finite radius.
+While Assumption 7 is limiting, coordination problems under uncertainty typically have
+bounded feasible sets because the variables correspond to probabilities bounded to [0, 1].
+Assumption 8. The bilinear program is in a semi-compact form.
+The main idea of the algorithm is to compute a set X̃ ⊆ X that contains only those
+elements that satisfy a necessary optimality condition. The set X̃ is formally defined as
+follows:
+
+
+∗
+∗
+∗ ∗
+X̃ ⊆ (x , w ) ∃(y, z) ∈ Y f (w , x , y, z) = max f (w, x, y, z) .
+(x,w)∈X
+
+248
+
+A Bilinear Programming Approach for Multiagent Planning
+
+As described above, this set may be seen as a set of best responses of one agent to the
+variable settings of the other. The best responses are easy to calculate since the bilinear
+program in Eq. (1) reduces to a linear program for fixed w, x or fixed y, z. In our algorithm,
+we assume that X̃ is potentially a proper subset of all necessary optimality points and
+focus on the approximation error of the optimal solution. Given the set X̃, the following
+simplified problem is solved.
+maximize
+w,x,y,z
+
+f (w, x, y, z)
+
+subject to (x, w) ∈ X̃
+
+(11)
+
+A2 y + B2 z = b2
+y, z ≥ 0
+
+Unlike the original continuous set X, the reduced set X̃ is discrete and small. Thus the
+elements of X̃ may be enumerated. For a fixed w and x, the bilinear program in Eq. (11)
+reduces to a linear program.
+To help compute the approximation bound and to guide the selection of elements for
+X̃, we use the best-response function g(y), defined as follows:
+g(y) =
+
+max
+
+{w,x,z (x,w)∈X,(y,z)∈Y }
+
+f (w, x, y, z) =
+
+max
+
+{x,w (x,w)∈X}
+
+f (w, x, y, 0),
+
+with the second equality for semi-compact programs only and feasible y ∈ Y . Note that
+g(y) is also defined for y ∈
+/ Y , in which case the choice of z is arbitrary since it does
+not influence the objective function. The best-response function is easy to calculate using
+a linear program. The crucial property of the function g that we use to calculate the
+approximation bound is its convexity. The following proposition holds because g(y) =
+max{x,w (x,w)∈X} f (w, x, y, 0) is a maximum of a finite set of linear functions.
+Proposition 9. The function g(y) is convex when the program is in a semi-compact form.
+Proposition 9 relies heavily on the separability of Eq. (1), which means that the constraints on the variables on one side of the bilinear term are independent of the variables on
+the other side. The separability ensures that w, x are valid solutions regardless of the values
+of y, z. The semi-compactness of the program is necessary to establish convexity, as shown
+in Example 23 in Appendix C. The example is constructed using the properties described
+in the appendix, which show that f (w, x, y, z) may be expressed as a sum of a convex and
+a concave function.
+We are now ready to describe Algorithm 2, which computes the set X̃ for a bilinear
+problem B such that the approximation error is at most 0 . The algorithm iteratively adds
+the best response (x, w) for a selected pivot point y into X̃. The pivot points are selected
+hierarchically. At an iteration j, the algorithm keeps a set of polyhedra S1 . . . Sj which
+represent the triangulation of the feasible space Y , which is possible based on Assumption 7.
+For each polyhedron Si = (y1 . . . yn+1 ), the algorithm keeps a bound i on the maximal
+difference between the optimal solution on the polyhedron and the best solution found so
+far. This error bound on a polyhedron Si is defined as:
+i = e(Si ) =
+
+max
+
+{w,x,y|(x,w)∈X,y∈Si }
+
+f (w, x, y, 0) −
+
+max
+{w,x,y|(x,w)∈X̃,y∈Si }
+
+249
+
+f (w, x, y, 0),
+
+Petrik & Zilberstein
+
+Algorithm 2: BestResponseApprox(B, 0 ) returns (w, x, y, z)
+1
+
+2
+3
+4
+5
+6
+7
+
+8
+9
+10
+11
+12
+
+13
+
+14
+
+// Create the initial polyhedron S1 .
+S1 ← (y1 . . . yn+1 ), Y ⊆ S1 ;
+// Add best-responses for vertices of S1 to X̃
+X̃ ← {arg max(x,w)∈X f (w, x, y1 , 0), ..., arg max(x,w)∈X f (w, x, yn+1 , 0)} ;
+// Calculate the error  and pivot point φ of the initial polyhedron
+(1 , φ1 ) ← P olyhedronError(S1 ) ;
+// Section 3.2,Section 3.3
+// Initialize the number of polyhedra to 1
+j←1;
+// Continue until reaching a predefined precision 0
+while maxi=1,...,j i ≥ 0 do
+// Find the polyhedron with the largest error
+i ← arg maxk=1,...,j k ;
+// Select the pivot point of the polyhedron with the largest error
+y ← φi ;
+// Add the best response to the pivot point y to the set X̃
+X̃ ← X ∪ {arg max(x,w)∈X f (w, x, y, 0)} ;
+// Calculate errors and pivot points of the refined polyhedra
+for k = 1, . . . , n + 1 do
+j ←j+1 ;
+// Replace the k-th vertex by the pivot point y
+Sj ← (y, y1 . . . yk−1 , yk+1 , . . . yn+1 ) ;
+(j , φj ) ← P olyhedronError(Sj ) ;
+// Section 3.2,Section 3.3
+// Take the smaller of the errors on the original and the refined
+polyhedron. The error may not increase with the refinement,
+although the bound may
+j ← min{i , j } ;
+// Set the error of the refined polyhedron to 0, since the region is
+covered by the refinements
+i ← 0 ;
+
+(w, x, y, z) ← arg max{w,x,y,z
+16 return (w, x, y, z) ;
+
+15
+
+(x,w)∈X̃,(y,z)∈Y }
+
+f (w, x, y, 0) ;
+
+where X̃ represents the current, not final, set of best responses.
+Next, a point y0 is selected as described below and n + 1 new polyhedra are created
+by replacing one of the vertices by y0 to get: (y0 , y2 , . . .), (y1 , y0 , y3 , . . .), . . . , (y1 , . . . , yn , y0 ).
+This is depicted for a 2-dimensional set Y in Figure 4. The old polyhedron is discarded
+and the above procedure is then repeatedly applied to the polyhedron with the maximal
+approximation error.
+For the sake of clarity, the pseudo-code of Algorithm 2 is simplified and does not address
+any efficiency issues. In practice, g(yi ) could be cached, and the errors i could be stored in
+a prioritized heap or at least in a sorted array. In addition, a lower bound li and an upper
+bound ui is calculated and stored for each polyhedron Si = (y1 . . . yn+1 ). The function e(Si )
+calculates their maximal difference on the polyhedron Si and the point where it is attained.
+The error bound i on the polyhedron Si may not be tight, as we describe in Remark 13.
+As a result, when the polyhedron Si is refined to n polyhedra S10 . . . Sn0 with online error
+250
+
+A Bilinear Programming Approach for Multiagent Planning
+
+y3
+
+y0
+y1
+
+y2
+
+Figure 4: Refinement of a polyhedron in two dimensions with a pivot y0 .
+bounds 01 . . . 0n , it is possible that for some k: 0k > i . Since S10 . . . Sn0 ⊆ Si , the true error
+on Sk0 is less than on Si and therefore 0k may be set to i .
+Conceptually, the algorithm is similar to CSA, but there are some important differences.
+The main difference is in the choice of the pivot point y0 and the bounds on g. CSA does not
+keep any upper bound and it evaluates g(y) on all the intersection points of planes defined
+by the current solutions in X̃. That guarantees that g(y) is eventually known precisely
+(Becker et al., 2004). A similar approach was also taken for POMDPs (Cheng, 1988). The
+|X̃| 
+upper bound on the number of intersection points in CSA is dim
+Y . The principal problem
+is that the bound is exponential in the dimension of Y , and experiments do not show a
+slower growth in typical problems. In contrast, we choose the pivot points to minimize
+the approximation error. This is more selective and tends to more rapidly reduce the error
+bound. In addition, the error at the pivot point may be used to determine the overall
+error bound. The following proposition states the soundness of the triangulation, proved
+in Appendix A. The correctness of the triangulation establishes that in each iteration the
+approximation error over Y is equivalent to the maximum of the approximation errors over
+the current polyhedra S1 . . . Sj .
+Proposition 10. In the proposed triangulation, the sub-polyhedra do not overlap and they
+cover the whole feasible set Y , given that the pivot point is in the interior of S.
+
+3.2 Online Error Bound
+The selection of the pivot point plays a key role in the performance of the algorithm, in both
+calculating the error bound and the speed of convergence to the optimal solution. In this
+section we show exactly how we use the triangulation in the algorithm to calculate an error
+bound. To compute the approximation bound, we define the approximate best-response
+function g̃(y) as:
+g̃(y) =
+max
+f (w, x, y, 0).
+{x,w (x,w)∈X̃}
+
+Notice that z is not considered in this expression, since we assume that the bilinear program is in the semi-compact form. The value of the best approximate solution during the
+execution of the algorithm is:
+max
+
+f (w, x, y, 0) = max g̃(y).
+y∈Y
+
+{w,x,y,z (x,w)∈X̃,y∈Y }
+
+251
+
+Petrik & Zilberstein
+
+This value can be calculated at runtime when each new element of X̃ is added. Then the
+maximal approximation error between the current solution and the optimal one may be
+calculated from the approximation error of the best-response function g(·), as stated by the
+following proposition.
+Proposition 11. Consider a bilinear program in a semi-compact form. Then let w̃, x̃, ỹ
+be an optimal solution of Eq. (11) and let w∗ , x∗ , y ∗ be an optimal solution of Eq. (1). The
+approximation error is then bounded by:
+f (w∗ , x∗ , y ∗ , 0) − f (w̃, x̃, ỹ, 0) ≤ max (g(y) − g̃(y)) .
+y∈Y
+
+Proof.
+f (w∗ , x∗ , y ∗ , 0) − f (w̃, x̃, ỹ, 0) = max g(y) − max g̃(y) ≤ max g(y) − g̃(y)
+y∈Y
+
+y∈Y
+
+y∈Y
+
+Now, the approximation error is maxy∈Y g(y) − g̃(y), which is bounded by the difference
+between an upper bound and a lower bound on g(y). Clearly, g̃(y) is a lower bound on
+g(y). Given points in which g̃(y) is the same as the best-response function g(y), we can use
+Jensen’s inequality to obtain the upper bound. This is summarized by the following lemma.
+Lemma
+12.Let yi ∈ Y for i = 1, . . . , n + 1 such that g̃(yi ) = g(yi ). Then
+P
+Pn+1
+Pn+1
+n+1
+g
+i=1 ci yi ≤
+i=1 ci g(yi ) when
+i=1 ci = 1 and ci ≥ 0 for all i.
+The actual implementation of the bound relies on the choice of the pivot points. Next
+we describe the maximal error calculation on a single polyhedron defined by S = (y1 . . . yn ).
+Let matrix T have yi as columns, and let L = {x1 . . . xn+1 } be the set of the best responses
+for its vertices. The matrix T is used to convert any y in absolute coordinates to a relative
+representation t that is a convex combination of the vertices. This is defined formally as
+follows:
+
+
+...
+y = T t = y1 y2 . . . t
+...
+1 = 1T t
+0 ≤ t
+where the yi ’s are column vectors.
+We can represent a lower bound l(y) for g̃(y) and an upper bound u(y) for g(y) as:
+l(y) = max rT x + xT Cy
+x∈L
+
+u(y) = [g(y1 ), g(y2 ), . . .]T t = [g(y1 ), g(y2 ), . . .]T
+
+
+
+T
+1T
+
+−1  
+y
+,
+1
+
+The upper bound correctness follows from Lemma 12. Notice that u(y) is a linear function,
+which enables us to use a linear program to determine the maximal-error point.
+252
+
+A Bilinear Programming Approach for Multiagent Planning
+
+Algorithm 3: PolyhedronError(B, S)
+P ← one of Eq. (12), or (13), or (14), or (20) ;
+t ← the optimal solution of P ;
+ ← the optimal objective value of P ;
+// Coordinates t are relative to the vertices of S, convert them to absolute
+values in Y
+4 φ ← Tt ;
+5 return (, φ) ;
+
+1
+2
+3
+
+Remark 13. Notice that we use L instead of X̃ in calculating l(y). Using all of X̃ would
+lead to a tighter bound, as it is easy to show in three-dimensional examples. However, this
+also would substantially increase the computational complexity.
+Now, the error on a polyhedron S may be expressed as:
+e(S) ≤ max u(y) − l(y) = max u(y) − max rT x + xT Cy
+y∈S
+
+y∈S
+
+T
+
+x∈L
+
+T
+
+= max min u(y) − r x − x Cy.
+y∈S x∈L
+
+We also have
+
+
+y ∈ S ⇔ y = T t ∧ t ≥ 0 ∧ 1T t = 1 .
+As a result, the point with the maximal error bound may be determined using the following
+linear program in terms of variables t, :
+maximize
+t,
+
+
+
+subject to  ≤ u(T t) − rT x − xT CT t
+
+∀x ∈ L
+
+(12)
+
+1T t = 1 t ≥ 0
+Here x is not a variable. The formulation is correct because all feasible solutions are
+bounded below the maximal error and any maximal-error solution is feasible.
+Proposition 14. The optimal solution of Eq. (12) is equivalent to maxy∈S |u(y) − l(y)|.
+We thus select the next pivot point to greedily minimize the error. The maximal difference is actually achieved in points where some of the planes meet, as Becker et al. (2004)
+have suggested. However, checking these intersections is very similar to running the simplex
+algorithm. In general, the simplex algorithm is preferable to interior point methods for this
+program because of its small size (Vanderbei, 2001).
+Algorithm 3 shows a general way to calculate the maximal error and the pivot point on
+the polyhedron S. This algorithm may use the basic formulation in Eq. (12), or the more
+advanced formulations in Eqs. (13), (14), and (20) defined in Section 3.3.
+In the following section, we describe a more refined pivot point selection method that
+can in some cases dramatically improve the performance.
+253
+
+Petrik & Zilberstein
+
+20
+
+15
+
+h10
+5
+−6
+
+Yh
+
+−4
+
+−2
+
+0
+
+2
+
+4
+
+Yh
+
+6
+
+Figure 5: The reduced set Yh that needs to be considered for pivot point selection.
+3.3 Advanced Pivot Point Selection
+As described above, the pivot points are chosen greedily to both determine the maximal
+error in each polyhedron and to minimize the approximation error. The basic approach
+described in Section 3.1 may be refined, because the goal is not to approximate the function
+g(y) with the least error, but to find the optimal solution. Intuitively, we can ignore those
+regions of Y that will not guarantee any improvement of the current solution, as illustrated
+in Figure 5. As we show below, the search for the maximal error point could be limited to
+this region as well.
+We first define a set Yh ⊆ Y that we will search for the maximal error, given that the
+optimal solution f ∗ ≥ h.
+Yh = {y g(y) ≥ h, y ∈ Y }.
+The next proposition states that the maximal error needs to be calculated only in a superset
+of Yh .
+Proposition 15. Let w̃, x̃, ỹ, z̃ be the approximate optimal solution and w∗ , x∗ , y ∗ , z ∗ be the
+optimal solution. Also let f (w∗ , x∗ , y ∗ , z ∗ ) ≥ h and assume some Ỹh ⊇ Yh . The approximation error is then bounded by:
+f (w∗ , x∗ , y ∗ , z ∗ ) − f (w̃, x̃, ỹ, z̃) ≤ max g(y) − g̃(y).
+y∈Ỹh
+
+Proof. First, f (w∗ , x∗ , y ∗ , z ∗ ) = g(y ∗ ) ≥ h and thus y ∗ ∈ Yh . Then:
+f (w∗ , x∗ , y ∗ , z ∗ ) − f (w̃, x̃, ỹ, z̃) = max g(y) − max g̃(y)
+y∈Yh
+
+y∈Y
+
+≤ max g(y) − g̃(y)
+y∈Yh
+
+≤ max g(y) − g̃(y)
+y∈Ỹh
+
+Proposition 15 indicates that the point with the maximal error needs to be selected only
+from the set Yh . The question is how to easily identify Yh . Because the set is not convex in
+general, a tight approximation of this set needs to be found. In particular, we use methods
+254
+
+A Bilinear Programming Approach for Multiagent Planning
+
+that approximate the intersection of a superset of Yh with the polyhedron that is being
+refined, using the following methods:
+1. Feasibility [Eq. (13)]: Require that pivot points are feasible in Y .
+2. Linear bound [Eq. (14)]: Use the linear upper bound u(y) ≥ h.
+3. Cutting plane [Eq. (20)]: Use the linear inequalities that define YhC , where
+YhC = R|Y | \ Yh is the complement of Yh .
+Any combination of these methods is also possible.
+Feasibility The first method is the simplest, but also the least constraining. The linear
+program to find the pivot point with the maximal error bound is as follows:
+maximize
+,t,y,z
+
+
+
+subject to  ≤ u(T t) − rT x + xT CT t
+
+∀x ∈ L
+
+1T t = 1 t ≥ 0
+
+(13)
+
+y = Tt
+A2 y + B2 z = b2
+y, z ≥ 0
+
+This approach does not require that the bilinear program is in the semi-compact form.
+Linear Bound The second method, using the linear bound, is also very simple to implement and compute, and it is more selective than just requiring feasibility. Let:
+Ỹh = {y u(y) ≥ h} ⊇ {y g(y) ≥ h} = Yh .
+This set is convex and thus does not need to be approximated. The linear program used to
+find the pivot point with the maximal error bound is as follows:
+maximize
+,t
+
+
+
+subject to  ≤ u(T t) − rT x + xT CT t
+
+∀x ∈ L
+
+1T t = 1 t ≥ 0
+
+(14)
+
+u(T t) ≥ h
+The difference from Eq. (12) is the last constraint. This approach requires that the bilinear
+program is in the semi-compact form to ensure that u(y) is a bound on the total return.
+Cutting Plane The third method, using the cutting plane elimination, is the most computationally intensive one, but also the most selective one. Using this approach requires
+additional assumptions on the other parts of the algorithm, which we discuss below. The
+method is based on the same principle as α-extensions in concave cuts (Horst & Tuy, 1996).
+We start with the set YhC because it is convex and may be expressed as:
+
+
+T
+T T
+T
+max sT
+w
++
+r
+x
++
+y
+C
+x
++
+r
+y
+≤ h
+(15)
+1
+1
+2
+w,x
+
+255
+
+A1 x + B1 w = b1
+
+(16)
+
+w, x ≥ 0
+
+(17)
+
+Petrik & Zilberstein
+
+y3
+
+f1
+y1
+y2
+f2
+
+Y − Yh
+
+Figure 6: Approximating Yh using the cutting plane elimination method.
+To use these inequalities in selecting the pivot point, we need to make them linear. But
+there are two obstacles: Eq. (15) contains a bilinear term and is a maximization. Both
+of these issues can be addressed by using the dual formulation of Eq. (15). The corresponding linear program and its dual for fixed y, ignoring constants h and r2T y, are:
+maximize
+w,x
+
+T
+T T
+sT
+1 w + r1 x + y C x
+
+subject to A1 x + B1 w = b1
+
+minimize
+(18)
+
+λ
+
+bT
+1λ
+
+subject to AT
+1 λ ≥ r1 + Cy
+
+w, x ≥ 0
+
+(19)
+
+B1T λ ≥ s1
+
+Using the dual formulation, Eq. (15) becomes:
+
+
+T
+T
+min b1 λ + r2 y
+≤ h
+λ
+
+AT
+1 λ ≥ r1 + Cy
+B1T λ ≥ s1
+Now, we use that for any function φ and any value θ the following holds:
+min φ(x) ≤ θ ⇔ (∃x) φ(x) ≤ θ.
+x
+
+Finally, this leads to the following set of inequalities.
+r2T y ≤ h − bT
+1λ
+Cy ≤ AT
+1 λ − r1
+s1 ≤ B1T λ
+The above inequalities define the convex set YhC . Because its complement Yh is not
+necessarily convex, we need to use its convex superset Ỹh on the given polyhedron. This
+is done by projecting YhC , or its subset, onto the edges of each polyhedron as depicted in
+Figure 6 and described in Algorithm 4. The algorithm returns a single constraint which
+cuts off part of the set YhC . Notice that only the combination of the first n points fk is
+256
+
+A Bilinear Programming Approach for Multiagent Planning
+
+Algorithm 4: PolyhedronCut({y1 , . . . , yn+1 }, h) returns constraint σ T y ≤ τ
+1
+2
+
+3
+4
+5
+6
+7
+8
+9
+
+// Find vertices of the polyhedron {y1 , . . . , yn+1 } inside of YhC
+I ← {yi yi ∈ YhC } ;
+// Find vertices of the polyhedron outside of YhC
+O ← {yi yi ∈ Yh } ;
+// Find at least n points fk in which the edge of Yh intersects an edge of
+the polyhedron
+k←1;
+for i ∈ O do
+for j ∈ I do
+fk ← yj + maxβ {β β(yi − yj ) ∈ (YhC )} ;
+k ←k+1 ;
+if k ≥ n then
+break ;
+
+Find σ and τ , such that [f1 , . . . , fn ]σ = τ and 1T σ = 1 ;
+// Determine the correct orientation of the constraint to have all y in Yh
+feasible
+11 if ∃yj ∈ O, and σ T yj > τ then
+// Reverse the constraint if it points the wrong way
+12
+σ ← −σ ;
+13
+τ ← −τ ;
+10
+
+14
+
+return σ T y ≤ τ
+
+used. In general, there may be more than n points, and any subset of points fk of size n can
+be used to define a new cutting plane that constraints Yh . This did not lead to significant
+improvements in our experiments. The linear program to find the pivot point with the
+cutting plane option is as follows:
+maximize
+,t,y
+
+
+
+subject to  ≤ u(T t) − rT x + xT CT t
+1T t = 1 t ≥ 0
+
+∀x ∈ L
+(20)
+
+y = Tt
+σTy ≤ τ
+Here, σ, and τ are obtained as a result of running Algorithm 4.
+Note that this approach requires that the bilinear program is in the semi-compact form
+to ensure that g(y) is convex. The following proposition states the correctness of this
+procedure.
+Proposition 16. The resulting polyhedron produced by Algorithm 4 is a superset of the
+intersection of the polyhedron S with the complement of Yh .
+Proof. The convexity of g(y) implies that YhC is also convex. Therefore, the intersection
+Q = {y σ T y ≥ τ } ∩ S
+257
+
+Petrik & Zilberstein
+
+is also convex. It is also a convex hull of points fk ∈ YhC . Therefore, from the convexity of
+YhC , we have that Q ⊆ YhC , and therefore S − Q ⊇ Yh .
+
+4. Dimensionality Reduction
+Our experiments show that the efficiency of the algorithm depends heavily on the dimensionality of the matrix C in Eq. (1). In this section, we show the principles behind automatically
+determining the necessary dimensionality of a given problem. Using the proposed procedure, it is possible to identify weak interactions and eliminate them. Finally, the procedure
+works for arbitrary bilinear programs and is a generalization of a method we have previously
+introduced (Petrik & Zilberstein, 2007a).
+The dimensionality is inherently part of the model, not the problem itself. There may be
+equivalent models of a given problem with very different dimensionality. Thus, procedures
+for reducing the dimensionality are not necessary when the modeler can create a model
+with minimal dimensionality. However, this is nontrivial in many cases. In addition, some
+dimensions may have little impact on the overall performance. To determine which ones
+can be discarded, we need a measure of their contribution that can be computed efficiently.
+We define these notions more formally later in this section.
+We assume that the feasible sets have bounded L2 norms, and assume a general formulation of the bilinear program, not necessarily in the semi-compact form. Given Assumption 7,
+this can be achieved by scaling the constraints when the feasible region is bounded.
+Assumption 17. For all x ∈ X and y ∈ Y , their norms satisfy kxk2 ≤ 1 and kyk2 ≤ 1.
+We discuss the implications of and problems with this assumption after presenting Theorem 18. Intuitively, the dimensionality reduction removes those dimensions where g(y) is
+constant, or almost constant. Interestingly, these dimensions may be recovered based on
+the eigenvectors and eigenvalues of C T C. We use the eigenvectors of C T C instead of the
+eigenvectors of C, because our analysis is based on L2 norm of x and y and thus of C.
+The L2 norm kCk2 is bounded by the largest eigenvalue of C T C. In addition, a symmetric
+matrix is required to ensure that the eigenvectors are perpendicular and span the whole
+space.
+Given a problem represented using Eq. (1), let F be a matrix whose columns are all the
+eigenvectors of C T C with eigenvalues greater than some λ̄. Let G be a matrix with all the
+remaining eigenvectors as columns. Notice that together, the columns of the matrices span
+the whole space and are real-valued, since C T C is a symmetric matrix. Assume without
+loss of generality that the eigenvectors are unitary. The compressed version of the bilinear
+program is then the following:
+maximize
+w,x,y1 ,y2 ,z
+
+T
+T
+f˜(w, x, y1 , y2 , z) = r1T x + sT
+2 w + x CF y1 + r2 F
+
+subject to A1 x + B1 w = b
+ 
+ y1
+A2 F G
++ B2 z = b2
+y2
+w, x, y1 , y2 , z ≥ 0
+258
+
+ 
+ y1
+G
++ sT
+2z
+y2
+(21)
+
+A Bilinear Programming Approach for Multiagent Planning
+
+Notice that the program is missing the element xT CGy2 , which would make its optimal
+solutions identical to the optimal solutions of Eq. (1). We describe a more practical approach
+to reducing the dimensionality in Appendix B. This approach is based on singular value
+decomposition and may be directly applied to any bilinear program. The following theorem
+quantifies the maximum error when using the compressed program.
+Theorem 18. Let f ∗ and f˜∗ be optimal solutions of Eq. (1) and Eq. (21) respectively. Then:
+p
+ = |f ∗ − f˜∗ | ≤ λ̄.
+Moreover, this is the maximal linear dimensionality reduction possible with this error without
+considering the constraint structure.
+√
+Proof. We first show that indeed the error is at most λ̄ and that any linearly compressed
+problem with the given error has at least f dimensions. Using a mapping that preserves
+the feasibility of both programs, the error is bounded by:
+
+  
+
+ 
+ y1
+y
+ ≤ f w, x, F G
+, z − f˜ w, x, y1 , 2
+= xT CGy2 .
+y2
+z
+Denote the feasible region of y2 as Y2 . From the orthogonality of [F, G], we have that
+ky2 k2 ≤ 1 as follows:
+ 
+ y1
+y = F G
+y2
+ 
+ T
+y1
+F
+y =
+y2
+GT
+GT y = y2
+kGT yk2 = ky2 k2
+Then we have:
+ ≤
+≤
+
+max max xT CGy2 ≤ max kCGy2 k2
+y2 ∈Y2
+q
+q
+p
+λ̄
+max y2T GT C T CGy2 ≤ max y2T Ly2 ≤
+
+y2 ∈Y2 x∈X
+
+y2 ∈Y2
+
+y2 ∈Y2
+
+The result follows from Cauchy-Schwartz inequality, the fact that C T C is symmetric, and
+Assumption 17. The matrix L denotes a diagonal matrix of eigenvalues corresponding to
+eigenvectors of G.
+Now, let H be an arbitrary matrix that satisfies the preceding error inequality for G.
+Clearly, H ∩ F = ∅, otherwise ∃y, kyk2 = 1, such that kCHyk2 > . Therefore, we have
+|H| ≤ n − |F | ≤ |G|, because |H| + |F | = |Y |. Here | · | denotes the number of columns of
+the matrix.
+Alternatively, the bound can be proved by replacing the equality A1 x + B1 w = b1 by
+kxk2 = 1. The bound can then be obtained by Lagrange necessary optimality conditions. In
+these bounds we use L2 -norm; an extension to a different norm is not straightforward. Note
+259
+
+Petrik & Zilberstein
+
+Y
+
+ŷ
+
+kyk2 ≤ 1
+
+Figure 7: Approximation of the feasible set Y according to Assumption 17.
+also that this dimensionality reduction technique ignores the constraint structure. When
+the constraints have some special structure, it might be possible to obtain an even tighter
+bound. As described in the next section, the dimensionality reduction technique generalizes
+the reduction that Becker et al. (2004) used implicitly.
+The result of Theorem 18 is based on an approximation of the feasible set Y by kyk2 ≤ 1,
+as Assumption 17 states. This approximation may be quite loose in some problems, which
+may lead to a significant multiplicative overestimation of the bound in Theorem 18. For
+example, consider the feasible set depicted in Figure 7. The bound may be achieved in a
+point ŷ, which is far from the feasible region. In specific problems, a tighter bound could be
+obtained by either appropriately scaling the constraints, or using a weighted L2 with a better
+precision. We partially address this issue by considering the structure of the constraints.
+To derive this, consider the following linear program and corresponding theorem:
+maximize
+x
+
+cT x
+
+subject to Ax = b
+
+(22)
+
+x≥0
+
+Theorem 19. The optimal solution of Eq. (22) is the same as when the objective function
+is modified to
+cT (I − AT (AAT )−1 A)x,
+where I is the identity matrix.
+Proof. The objective function is:
+max
+
+{x Ax=b, x≥0}
+
+cT x =
+=
+
+max
+
+{x Ax=b, x≥0}
+
+cT (I − AT (AAT )−1 A)x + cT AT (AAT )−1 Ax
+
+= cT AT (AAT )−1 b +
+
+max
+
+{x Ax=b, x≥0}
+
+cT (I − AT (AAT )−1 A)x.
+
+The first term may be ignored because it does not depend on the solution x.
+260
+
+A Bilinear Programming Approach for Multiagent Planning
+
+The following corollary shows how the above theorem can be used to strengthen the
+dimensionality reduction bound. For example, in zero-sum games, this stronger dimensionality reduction splits the bilinear program into two linear programs.
+Corollary 20. Assume that there are no variables w and z in Eq. (1). Let:
+T −1
+Qi = (I − AT
+i (Ai Ai ) Ai )),
+
+i ∈ {1, 2},
+
+where Ai are defined in Eq. (1). Let C̃ be:
+C̃ = Q1 CQ2 ,
+where C is the bilinear-term matrix from Eq. (1). Then the bilinear programs will have
+identical optimal solutions with either C or C̃.
+Proof. Using Theorem 19, we can modify the original objective function in Eq. (1) to:
+T −1
+T
+T −1
+T
+f (x, y) = r1T x + xT (I − AT
+1 (A1 A1 ) A1 ))C(I − A2 (A2 A2 ) A2 ))y + r2 y.
+
+For the sake of simplicity we ignore the variables w and z, which do not influence the bilinear
+T −1
+term. Because both (I − AT
+i (Ai Ai ) Ai ) for i = 1, 2 are orthogonal projection matrices,
+none of the eigenvalues in Theorem 18 will increase.
+The dimensionality reduction presented in this section is related to the idea of compound events used in CSA. Allen, Petrik, and Zilberstein (2008a, 2008b) provide a detailed
+discussion of this issue.
+
+5. Offline Bound
+In this section we develop an approximation bound that depends only on the number of
+points for which g(y) is evaluated and the structure of the problem. This kind of bound
+is useful in practice because it provides performance guarantees without actually solving
+the problem. In addition, the bound reveals which parameters of the problem influence the
+algorithm’s performance. The bound is derived based on the maximal slope of g(y) and the
+maximal distance among the points.
+Theorem 21. To achieve an approximation error of at most , the number of points to be
+evaluated in a regular grid with k points in every dimension must satisfy:
+
+√ n
+kCk2 n
+n
+k ≥
+,
+
+where n is the number of dimensions of Y .
+The theorem follows using basic algebraic manipulations from the following lemma.
+Lemma 22. Assume that for each y1 ∈ Y there exists y2 ∈ Y such that ky1 − y2 k2 ≤ δ and
+g̃(y2 ) = g(y2 ). Then the maximal approximation error is:
+ = max g(y) − g̃(y) ≤ kCk2 δ.
+y∈Y
+
+261
+
+Petrik & Zilberstein
+
+Proof. Let y1 be a point where the maximal error is attained. This point is in Y , because
+this set is compact. Now, let y2 be the closest point to y1 in L2 norm. Let x1 and x2 be
+the best responses for y1 and y2 respectively. From the definition of solution optimality we
+can derive:
+T
+T
+T
+r1T x1 + r2T y2 + xT
+1 Cy2 ≤ r1 x2 + r2 y2 + x2 Cy2
+
+r1T (x1 − x2 ) ≤ −(x1 − x2 )T Cy2 .
+The error now can be expressed, using the fact that kx1 − x2 k2 ≤ 1, as:
+T
+T
+T
+ = r1T x1 + r2T y1 + xT
+1 Cy1 − r1 x2 − r2 y1 − x2 Cy1
+
+= r1T (x1 − x2 ) + (x1 − x2 )T Cy1
+≤ −(x1 − x2 )T Cy2 + (x1 − x2 )T Cy1
+≤ (x1 − x2 )T C(y1 − y2 )
+(x1 − x2 )T
+(y1 − y2 )
+≤ ky1 − y2 k2
+C
+k(x1 − x2 )k2 ky1 − y2 k2
+≤ ky1 − y2 k2
+
+max
+
+max
+
+{x kxk2 ≤1} {y kyk2 ≤1}
+
+xT Cy
+
+≤ δkCk2
+The above derivation follows from Assumption 17, and the bound reduces to the matrix
+norm using Cauchy-Schwartz inequality.
+Not surprisingly, the bound is independent of the local rewards and transition structure
+of the agents. Thus it in fact shows that the complexity of achieving a fixed approximation
+with a fixed interaction structure is linear in the problem size. However, the bounds are
+still exponential in the dimensionality of the space. Notice also that the bound is additive.
+
+6. Experimental Results
+We now turn to an empirical analysis of the performance of the algorithm. For this purpose
+we use the Mars rover problem described earlier. We compared our algorithm with the
+original CSA and with a mixed integer linear program (MILP), derived for Eq. (1) as Petrik
+and Zilberstein (2007b) describe. Although Eq. (1) can also be modeled as a linear complementarity problem (LCP) (Murty, 1988; Cottle et al., 1992), we do not evaluate that
+option experimentally because LCPs are closely related to MILPs (Rosen, 1986). We expect
+these two formulations to exhibit similar performance. We also do not compare to any of
+the methods described by Horst and Tuy (1996) and Bennett and Mangasarian (1992) due
+to their very different nature and high complexity, and because some of these algorithms
+do not provide any optimality guarantees.
+In our experiments, we applied the algorithm to randomly generated problem instances
+with the same parameters that Becker et al. (2003, 2004) used. Each problem instance
+includes 2 rovers and 6 sites. At each site, the rovers can decide to perform an experiment
+or to skip the site. Performing experiments takes some time, and all the experiments must
+be performed in 15 time units. The time required to perform an experiment is drawn from
+a discrete normal distribution with the mean uniformly chosen from 4.0-6.0. The variance
+262
+
+A Bilinear Programming Approach for Multiagent Planning
+
+Algorithm 5: MPBP: Multiagent Planning with Bilinear Programming
+
+6
+
+Formulate DEC-MDP M as a bilinear program B ;
+// [Section 2.1]
+B 0 ← ReduceDimensionality(B) with  ≤ 10−4 ;
+// [Section 4, Appendix B]
+Convert B 0 to a semi-compact form ;
+// [Definition 2]
+h ← −∞ ;
+// Presolve step: run Algorithm 1 θ times with random initialization
+for i ∈ {1 . . . θ} do
+h ← max{h, IterativeBestResponse(B 0 )} ;
+// [Algorithm 1]
+
+7
+
+BestResponseApprox(B 0 , 0 ) ;
+
+1
+2
+3
+4
+
+5
+
+// [Algorithm 2]
+
+is 0.4 of the mean. The local reward for performing an experiment is selected uniformly
+from the interval [0.1,1.0] for each site and it is identical for both rovers. The global reward,
+received when both rovers perform an experiment on a shared site, is super-additive and is
+1/2 of the local reward. The experiments were performed with sites {1, 2, 3, 4, 5} as shared
+sites. Typically, the performance of the algorithm degrades with the number of shared sites.
+Because the problem with fewer than 5 shared sites–as used in the original CSA paper–were
+too easy to solve, we only present results for problems with 5 shared sites. Note that CSA
+was used on this problem with an implicit dimensionality reduction due to the use of the
+compound events.
+In these experiments, the naive dimensionality of Y in Eq. (5) is 6 ∗ 15 ∗ 2 = 180.
+This dimensionality can be reduced to be one per each shared site using the automatic
+dimensionality reduction procedure. Each dimension then represents the probability that
+an experiment on a shared site is performed regardless of the time. Therefore, the dimension
+represents the sum of the individual probabilities. Becker et al. (2004) achieved the same
+compression using compound events, where each compound event represents the fact that
+an experiment is performed on some site regardless of the specific time.
+The complete algorithm–Multiagent Planning with Bilinear Programming (MPBP)–is
+summarized in Algorithm 5. The automatic dimensionality reduction reduces Y to 5 dimensions. Then, reformulating the problem to a semi-compact form increases the dimensionality
+to 6. We experimented with different configurations of the algorithm that differ in the way
+the refinements of the pivot point selection is performed. The different methods, described
+in Section 3.3, were used to create six configurations as shown in Figure 8. The configuration
+C1 corresponds to an earlier version of the algorithm (Petrik & Zilberstein, 2007a).
+We executed the algorithm 20 times with each configuration on every problem, randomly
+generated according to the distribution described above. The results represent the average
+over the random instances. The maximum number of iterations of the algorithm was 200.
+Due to rounding errors, we considered any error less than 10−4 to be 0. The algorithm
+is implemented in MATLAB release 2007a. The linear solver we used is MOSEK version
+5.0. The hardware configuration was Intel Core 2 Duo 1.6 GHz Low Voltage with 2GB
+RAM. The time to perform the dimensionality reduction is negligible and not included in
+the result.
+A direct comparison with CSA was not possible because CSA cannot solve problems
+with this dimensionality within a reasonable amount of time. However, in a very similar
+263
+
+Petrik & Zilberstein
+
+Configuration
+
+Feasible
+[Eq. (13)]
+
+C1
+
+Linear bound
+[Eq. (14)]
+
+Cutting plane
+[Eq. (20)]
+
+0
+
+√
+
+C2
+
+√
+
+C3
+
+0
+
+√
+
+√
+
+C4
+
+0
+
+√
+
+√
+
+C6
+
+0
+
+√
+
+√
+
+C5
+
+Presolve [θ]
+
+10
+
+√
+
+10
+
+Figure 8: The six algorithm configurations that were evaluated. Feasible, linear bound, and
+cutting plane refer to methods used to determine the optimal solution.
+
+problem setup with at most 4 shared sites, CSA solved only 76% of the problems, and
+the longest solution took approximately 4 hours (Becker et al., 2004). In contrast, MPBP
+solved all 200 problems with 4 shared sites optimally in less than 1 second on average, about
+10000 times faster. In addition, MPBP returns solutions that are guaranteed to be close to
+optimal in the first few iterations. While CSA also returns solutions close to optimal very
+rapidly, it takes a very long time to confirm that.
+Figure 9 shows the average guaranteed ratio of the optimal solution, achieved as a
+function of the number of iterations, that is, points for which g(y) is evaluated. This figure,
+as all others, shows the result of the online error bound. This value is guaranteed and is not
+based on the optimal solution. This compares the performance of the various configurations
+of the algorithm, without using the presolve step. While the optimal solution was typically
+discovered in the first few iterations, it takes significantly longer to prove its optimality.
+The average of absolute errors in both linear and log scale are shown in Figure 10. These
+results indicate that the methods proposed to eliminate the dominated region in searching
+for the pivot point can dramatically improve performance. While requiring that the new
+pivot points are feasible in Y improves the performance, it is much more significant with
+1
+
+Fraction Optimal
+
+C1
+0.95
+
+C2
+
+0.9
+
+C3
+C4
+
+0.85
+0.8
+0.75
+0.7
+0.65
+0.6
+0
+
+50
+
+100
+Iteration
+
+150
+
+200
+
+Figure 9: Guaranteed fraction of optimality according to the online bound.
+264
+
+A Bilinear Programming Approach for Multiagent Planning
+
+1
+
+5
+
+10
+
+C1
+
+C1
+
+C2
+
+4
+
+C
+
+2
+
+0
+
+10
+
+C
+
+C3
+
+C4
+3
+
+2
+
+Absolute Error
+
+Absolute Error
+
+3
+
+4
+
+−2
+
+10
+
+−3
+
+1
+
+0
+0
+
+C
+−1
+
+10
+
+10
+
+−4
+
+50
+
+100
+Iteration
+
+150
+
+10
+
+200
+
+0
+
+50
+
+100
+Iteration
+
+150
+
+200
+
+Figure 10: Comparison of absolute error of various region elimination methods.
+
+a better approximation of Yh . As expected, the cutting plane elimination is most efficient,
+but also most complex.
+To evaluate the tradeoffs in the implementation, we also show the average time per
+iteration and the average total time in Figure 11. These figures show that the time per
+iteration is significantly larger when the cutting plane elimination is used. Overall, the
+algorithm is faster when the simpler linear bound is used.
+
+0.03
+
+12
+
+0.025
+
+10
+
+0.02
+
+8
+
+Total Seconds
+
+Seconds per Iteration
+
+This trend is most likely problem specific. In problems with higher dimensionality, the
+more precise cutting plane algorithm may be more efficient. Implementation issues play a
+significant role in this problem too, and it is likely that the implementation of Algorithm 4
+can be further improved.
+
+0.015
+0.01
+
+4
+2
+
+0.005
+0
+
+6
+
+C1
+
+C2
+
+C3
+
+0
+
+C4
+
+C1
+
+C2
+
+C3
+
+C4
+
+Figure 11: Time per iteration and the total time to solve. With configurations C1 and C2 ,
+the optimal value is not reached with 200 iterations . The figure only shows the
+time to compute up to 200 iterations.
+
+265
+
+Petrik & Zilberstein
+
+−1
+
+10
+
+C3
+C
+
+4
+
+C5
+Absolute Error
+
+−2
+
+C6
+
+10
+
+−3
+
+10
+
+−4
+
+10
+
+0
+
+10
+
+20
+Iteration
+
+30
+
+40
+
+Figure 12: Influence of the presolve method.
+Figure 12 shows the influence of using the presolve method. The plots of C3 and C4 are
+identical to the plots of C5 and C6 respectively, indicating that the presolve method does
+not have any significant influence. This also indicates that a solution that is very close to
+optimal is obtained when the values of the initial points are calculated.
+We also performed experiments with CPLEX–a state-of-the-art MILP solver on the direct MILP formulation of the DEC-MDP. CPLEX was not able to solve any of the problems
+within 30 minutes, no matter how many of the sites were shared. The main reason for this
+is that it does not take any advantage of the limited interaction. Nevertheless, it is possible
+that some specialized MILP solvers may perform better.
+
+7. Conclusion and Further Work
+We present an algorithm that significantly improves the state-of-the-art in solving two-agent
+coordination problems. The algorithm takes as input a bilinear program representing the
+problem, and solves the problem using a new successive approximation method. It provides
+a useful online performance bound that can be used to decide when the approximation is
+good enough. The algorithm can take advantage of the limited interaction among the agents,
+which is translated into a small dimensionality of the bilinear program. Moreover, using
+our approach, it is possible to reduce the dimensionality of such problems automatically,
+without extensive modeling effort. This makes it easy to apply our new method in practice.
+When applied to DEC-MDPs, the algorithm is much faster than the existing CSA method,
+on average reducing computation time by four orders of magnitude. We also show that a
+variety of other coordination problems can be treated within this framework.
+Besides multiagent coordination problems, bilinear programs have been previously used
+to solve problems in operations research and global optimization (Sherali & Shetty, 1980;
+White, 1992; Gabriel, Garca-Bertrand, Sahakij, & Conejo, 2005). Global optimization
+deals with finding the optimal solutions to problems with multi-extremal objective function.
+Solution techniques often share the same idea and are based on cutting plane methods. The
+main idea is to iteratively restrict the set of feasible solutions, while improving the incumbent
+266
+
+A Bilinear Programming Approach for Multiagent Planning
+
+solution. Horst and Tuy (1996) provide an excellent overview of these techniques. These
+algorithms have different characteristics and cannot be directly compared to the algorithm
+we developed. Unlike these traditional algorithms, we focus on providing quickly good
+approximate solutions with error bounds. In addition, we exploit the small dimensionality
+of the best-response space Y to get tight approximation bounds.
+Future work will address several interesting open questions with respect to the bilinear
+formulation as well as further improvement of the efficiency of the algorithm. With regard to
+the representation, it is yet to be determined whether the anytime behavior can be exploited
+when applied to games. That is, it is necessary to verify that an approximate solution to
+the bilinear program is also a meaningful approximation of the Nash equilibrium. It is also
+important to identify the classes of extensive games that can be efficiently formulated as
+bilinear programs.
+The algorithm we present can be made more efficient in several ways. In particular, a
+significant speedup could be achieved by reducing the size of the individual linear programs.
+The programs are solved many times with the same constraints, but a different objective
+function. The objective function is always from a small-dimensional space. Therefore, the
+problems that are solved are all very similar. In the DEC-MDP domain, one option would
+be to use a procedure similar to action elimination. In addition, the performance could be
+significantly improved by starting with a tight initial triangulation. In our implementation,
+we simply use a single large polyhedron that covers the whole feasible region. A better
+approach would be to start with something that approximates the feasible region more
+tightly. A tighter approximation of the feasible region could also improve the precision of
+the dimensionality reduction procedure. Instead of the naive ellipsis used in Assumption 7,
+it is possible to use one that approximates the feasible region as tightly as possible. It is
+however very encouraging to see that even without these improvements, the algorithm is
+very effective compared with existing solution techniques.
+
+Acknowledgments
+We thank Chris Amato, Raghav Aras, Alan Carlin, Hala Mostafa, and the anonymous
+reviewers for useful comments and suggestions. This work was supported in part by the
+Air Force Office of Scientific Research under Grants No. FA9550-05-1-0254 and FA955008-1-0181, and by the National Science Foundation under Grants No. IIS-0535061 and
+IIS-0812149.
+
+Appendix A. Proofs
+Proof of Proposition 10 The proposition states that in the proposed triangulation, the
+sub-polyhedra do not overlap and they cover the whole feasible set Y , given that the pivot
+point is in the interior of S.
+Proof. We prove the theorem by induction on the number of polyhedron splits that were
+performed. The base case is trivial: there is only a single polyhedron, which covers the
+whole feasible region.
+For the inductive case, we show that for any polyhedron S the sub-polyhedra induced
+by the pivot point ŷ cover S and do not overlap. The notation we use is the following: T
+267
+
+Petrik & Zilberstein
+
+denotes the original polyhedron and ŷ = T c is the pivot point, where 1T c = 1 and c ≥ 0.
+Note that T is a matrix and c, d, ŷ are vectors, and β is a scalar.
+We show that the sub-polyhedra cover the original polyhedron S as follows. Take any
+a = T d such that 1T d = 1 and d ≥ 0. We show that there exists a sub-polyhedron that
+contains a and has ŷ as a vertex. First, let
+ 
+T
+T̂ =
+1T
+This matrix is square and invertible, since the polyhedron is non-empty. To get a representation of a that contains ŷ, we show that there is a vector o such that for some i,
+o(i) = 0:
+ 
+
+a
+= T̂ d = T̂ o + β ŷ
+1
+o ≥ 0,
+for some β > 0. This will ensure that a is in the sub-polyhedron with ŷ with vertex i
+replaced by ŷ. The value o depends on β as follows:
+ 
+−1 ŷ
+.
+o = d − β T̂
+1
+This can be achieved by setting:
+β = min
+i
+
+d(i)
+(T̂ −1 ŷ)(i)
+
+.
+
+Since both d and c = T̂ −1 ŷ are non-negative. This leaves us with an equation for the
+sub-polyhedron containing the point a. Notice that the resulting polyhedron may be of a
+smaller dimension than n when o(j) = 0 for some i 6= j.
+To show that the polyhedra do not overlap, assume there exists a point a that is common to the interior of at least two of the polyhedra. That is, assume that a is a convex
+combination of the vertices:
+a = T3 c1 + h1 ŷ + β1 y1
+a = T3 c2 + h2 ŷ + β2 y2 ,
+where T3 represents the set of points common to the two polyhedra, and y1 and y2 represent
+the disjoint points in the two polyhedra. The values h1 , h2 , β1 , and β2 are all scalars, while
+c1 and c2 are vectors. Notice that the sub-polyhedra differ by at most one vertex. The
+coefficients satisfy:
+c1 ≥ 0
+
+c2 ≥ 0
+
+h1 ≥ 0
+
+h2 ≥ 0
+
+β1 ≥ 0
+
+β2 ≥ 0
+
+T
+
+T
+
+1 c1 + h1 + β1 = 1
+
+1 c2 + h2 + β2 = 1
+268
+
+A Bilinear Programming Approach for Multiagent Planning
+
+Since the interior of the polyhedron is non-empty, this convex combination is unique.
+First assume that h = h1 = h2 . Then we can show the following:
+a = T3 c1 + hŷ + β1 y1 = T3 c2 + hŷ + β2 y2
+T3 c1 + β1 y1 = T3 c2 + β2 y2
+β1 y1 = β2 y2
+β1 = β2 = 0
+This holds since y1 and y2 are independent of T3 when the polyhedron is nonempty and
+y1 6= y2 . The last equality follows from the fact that y1 and y2 are linearly independent.
+This is a contradiction, since β1 = β2 = 0 implies that the point a is not in the interior of
+two polyhedra, but at their intersection.
+Finally, assume WLOG that h1 > h2 . Now let ŷ = T3 ĉ + α1 y1 + α2 y2 , for some scalars
+α1 ≥ 0 and α2 ≥ 0 that represent a convex combination. We get:
+a = T3 c1 + h1 ŷ + β1 y1 = T3 (c1 + h1 ĉ) + (h1 α1 + β1 )y1 + h1 α2 y2
+a = T3 c2 + h2 ŷ + β2 y2 = T3 (c2 + h2 ĉ) + h2 α1 y1 + (h2 α2 + β2 )y2 .
+The coefficients sum to one as shown below.
+1T (c1 + h1 ĉ) + (h1 α1 + β1 ) + h1 α2 = 1T c1 + β1 + h1 (1T ĉ + α1 + α2 ) = 1T c1 + β1 + h1 = 1
+1T (c2 + h2 ĉ) + α1 + (h2 α2 + β2 ) = 1T c2 + β2 + h2 (1T ĉ + α1 + α2 ) = 1T c2 + β2 + h2 = 1
+Now, the convex combination is unique, and therefore the coefficients associated with each
+vertex for the two representations of a must be identical. In particular, equating the coefficients for y1 and y2 results in the following:
+h1 α1 + β1 = h2 α1
+
+h1 α2 = h2 α2 + β2
+
+β1 = h2 α1 − h1 α1
+
+β2 = h1 α2 − h2 α2
+
+β1 = α1 (h2 − h1 ) > 0
+
+β2 = α2 (h1 − h2 ) < 0
+
+We have that α1 > 0 and α2 > 0 from the fact that ŷ is in the interior of the polyhedron S.
+Then, having β2 ≤ 0 is a contradiction with a being a convex combination of the vertices
+of S.
+
+Appendix B. Practical Dimensionality Reduction
+In this section we describe an approach to dimensionality reduction that is easy to implement. Note that there are at least two possible approaches to take advantage of reduced
+dimensionality. First, it is possible to use the dimensionality information to limit the algorithm to work only in the significant dimensions of Y . Second, it is possible to modify the
+bilinear program to have a small dimensionality. While changing the algorithm may be more
+straightforward, it limits the use of the advanced pivot point selection methods described
+in Section 3.3. Here, we show how to implement the second option in a straightforward way
+using singular value decomposition.
+269
+
+Petrik & Zilberstein
+
+The dimensionality reduction is applied to the following bilinear program:
+maximize
+w,x,y,z
+
+T
+T
+T
+r1T x + sT
+1 w + x Cy + r2 y + s2 z
+
+subject to A1 x + B1 w = b1
+A2 y + B2 z = b2
+
+(23)
+
+w, x, y, z ≥ 0
+Let C = SV T T be a singular value decomposition. Let T = [T1 , T2 ], such that the
+singular value of vectors ti in T2 is less than the required . Then, a bilinear program with
+reduced dimensionality may be defined as follows:
+maximize
+w,x,ȳ,y,z
+
+T
+T
+T
+r1T x + sT
+1 w + x SV T1 ȳ + r2 y + s2 z
+
+subject to T1 ȳ = y
+A1 x + B1 w = b1
+
+(24)
+
+A2 y + B2 z = b2
+w, x, y, z ≥ 0
+Note that ȳ is not constrained to be non-negative. One problematic aspect of reducing the
+dimensionality is how to define the initial polyhedron that needs to encompass all feasible
+solutions. One option is to make it large enough to contain the set {y kyk2 = 1}, but this
+may be too large. Often in practice, it may be more efficient to first triangulate a rough
+approximation of the feasible region, and then execute the algorithm on this triangulation.
+
+Appendix C. Sum of Convex and Concave Functions
+In this section we show that the best-response function g(y) may not be convex when the
+program is not in a semi-compact form. The convexity of the best-response function is
+crucial in bounding the approximation error and in eliminating the dominated regions.
+We show that when the program is not in a semi-compact form, the best-response
+function can we written as a sum of a convex function and a concave function. To show
+that consider the following bilinear program.
+maximize
+w,x,y,z
+
+T
+T
+T
+f = r1T x + sT
+1 w + x Cy + r2 y + s2 z
+
+subject to A1 x + B1 w = b1
+A2 y + B2 z = b2
+w, x, y, z ≥ 0
+This problem may be reformulated as:
+f
+
+=
+=
+
+max
+
+max
+
+max
+
+g 0 (y) + sT
+2 z,
+
+{y,z (y,z)∈Y } {x,w (x,w)∈X}
+{y,z (y,z)∈Y }
+
+T
+T
+T
+r1T x + sT
+1 w + x Cy + r2 y + s2 z
+
+270
+
+(25)
+
+A Bilinear Programming Approach for Multiagent Planning
+
+where
+g 0 (y) =
+
+max
+
+{x,w (x,w)∈X}
+
+T
+T
+r1T x + sT
+1 w + x Cy + r2 y.
+
+Notice that function g 0 (y) is convex, because it is a maximum of a set of linear functions.
+Since f = max{y (y,z)∈Y } g(y), the best-response function g(y) can be expressed as:
+g(y) =
+
+max
+
+{z (y,z)∈Y }
+0
+
+0
+g 0 (y) + sT
+2 z = g (y) +
+
+max
+
+{z (y,z)∈Y }
+
+sT
+2z
+
+= g (y) + t(y),
+where
+t(y) =
+
+max
+
+{z A2 y+B2 z=b2 , y,z≥0}
+
+sT
+2 z.
+
+Function g 0 (y) does not depend on z, and therefore could be taken out of the maximization.
+The function t(y) corresponds to a linear program, and its dual using the variable q is:
+(b2 − A2 y)T q
+
+minimize
+q
+
+subject to B2T q ≥ s2
+
+(26)
+
+Therefore:
+t(y) =
+
+(b2 − A2 y)T q,
+
+min
+
+{q B2T q≥s2 }
+
+which is a concave function, because it is a minimum of a set of linear functions. The
+best-response function can now be written as:
+g(y) = g 0 (y) + t(y),
+which is a sum of a convex function and a concave function, also known as a d.c. function (Horst & Tuy, 1996). Using this property, it is easy to construct a program such that
+g(y) will be convex on one part of Y and concave on another part of Y , as the following
+example shows. Note that in semi-compact bilinear programs t(y) = 0, which guarantees
+the convexity of g(y).
+Example 23. Consider the following bilinear program:
+maximize
+x,y,z
+
+−x + xy − 2z
+
+subject to −1 ≤ x ≤ 1
+y−z ≤2
+z≥0
+A plot of the best response function for this program is shown in Figure 13.
+
+271
+
+(27)
+
+Petrik & Zilberstein
+
+2
+
+maxx f(x,y)
+
+1.5
+1
+0.5
+0
+−0.5
+−1
+−1
+
+0
+
+1
+
+2
+
+3
+
+4
+
+y
+
+Figure 13: A plot of a non-convex best-response function g for a bilinear program, which is
+not in a semi-compact form.
+
+References
+Allen, M., Petrik, M., & Zilberstein, S. (2008a). Interaction structure and dimensionality in
+decentralized problem solving. In Conference on Artificial Intelligence (AAAI), pp.
+1440–1441.
+Allen, M., Petrik, M., & Zilberstein, S. (2008b). Interaction structure and dimensionality
+in decentralized problem solving. Tech. rep. 08-11, Computer Science Department,
+University of Massachussetts.
+Aras, R. (2008). Mathematical programming methods for decentralized POMDPs. Ph.D.
+thesis, Université Henri Poincaré, Nancy, France.
+Aras, R., & Charpillet, F. (2007). A mixed integer linear programming method for the finitehorizon Dec-POMDP problem. In International Conference on Automated Planning
+and Scheduling (ICAPS), pp. 18–25.
+Becker, R. (2006). Exploiting Structure in Decentralized Markov Decision Processes. Ph.D.
+thesis, University of Massachusetts Amherst.
+Becker, R., Lesser, V., & Zilberstein, S. (2004). Decentralized Markov decision processes
+with event-driven interactions. In International Joint Conference on Autonomous
+Agents and Multi Agent Systems (AAMAS), pp. 302–309.
+Becker, R., Zilberstein, S., & Lesser, V. (2003). Transition-independent decentralized
+Markov decision processes. In International Joint Conference on Autonomous Agents
+and Multi Agent Systems (AAMAS), pp. 41–48.
+Becker, R., Zilberstein, S., Lesser, V., & Goldman, C. V. (2004). Solving transition independent decentralized Markov decision processes. Journal of Artificial Intelligence
+Research, 22, 423–455.
+Bennett, K. P., & Mangasarian, O. L. (1992). Bilinear separation of two sets in n-space.
+Tech. rep., Computer Science Department, University of Wisconsin.
+Bernstein, D. S., Zilberstein, S., & Immerman, N. (2000). The complexity of decentralized control of Markov decision processes. In Conference on Uncertainty in Artificial
+Intelligence (UAI), pp. 32–37.
+272
+
+A Bilinear Programming Approach for Multiagent Planning
+
+Bertsekas, D. P., & Tsitsiklis, J. N. (1996). Neuro-dynamic programming. Athena Scientific.
+Boutilier, C. (1999). Sequential optimality and coordination in multiagent systems. In
+International Joint Conference on Artificial Intelligence, pp. 478–485.
+Bresina, J. L., Golden, K., Smith, D. E., & Washington, R. (1999). Increased fexibility
+and robustness of Mars rovers. In International Symposium on AI, Robotics, and
+Automation in Space, pp. 167–173.
+Cheng, H. T. (1988). Algorithms for Partially Observable Markov Decision Processes. Ph.D.
+thesis, University of British Columbia.
+Cottle, R. W., Pang, J.-S., & Stone, R. E. (1992). The Linear Complementarity Problem.
+Academic Press.
+Emery-Montemerlo, R., Gordon, G., Schneider, J., & Thrun, S. (2004). Approximate solutions for partially observable stochastic games with common payoffs. In International
+Joint Conference on Autonomous Agents and Multiagent Systems (AAMAS), pp. 136–
+143.
+Gabriel, S. A., Garca-Bertrand, R., Sahakij, P., & Conejo, A. J. (2005). A practical approach
+to approximate bilinear functions in mathematical programming problems by using
+Schurs decomposition and SOS type 2 variables. Journal of the Operational Research
+Society, 57, 995–1004.
+Goldman, C. V., & Zilberstein, S. (2008). Communication-based decomposition mechanisms
+for decentralized MDPs. Journal of Artificial Intelligence Research, 32, 169–202.
+Horst, R., & Tuy, H. (1996). Global optimization: Deterministic approaches. Springer.
+Kim, Y., Nair, R., Varakantham, P., Tambe, M., & Yokoo, M. (2006). Exploiting locality
+of interaction in networked distributed POMDPs. In AAAI Spring Symposium on
+Distributed Planning and Scheduling, pp. 41–48.
+Koller, D., Megiddo, N., & von Stengel, B. (1994). Fast algorithms for finding randomized
+strategies in game trees. In ACM Symposium on the Theory of Computing, pp. 750–
+759.
+Mangasarian, O. L. (1995). The linear complementarity problem as a separable bilinear
+program. Journal of Global Optimization, 12, 1–7.
+Murty, K. G. (1988).
+Helderman-Verlag.
+
+Linear complementarity, linear and nonlinear programming.
+
+Nair, R., Tambe, M., Yokoo, M., Pynadath, D., & Marsella, S. (2003). Taming decentralized POMDPs: Towards efficient policy computation for multiagent settings.. In
+International Joint Conference on Artificial Inteligence, pp. 705–711.
+Nair, R., Roth, M., Yokoo, M., & Tambe, M. (2004). Communication for improving policy
+computation in distributed pomdps. In International Joint Conference on Agents and
+Multiagent Systems (AAMAS), pp. 1098–1105.
+Ooi, J. M., & Wornell, G. W. (1996). Decentralized control of a multiple access broadcast
+channel: performance bounds. In Proceeding of the IEEE Conference on Decision and
+Control, Vol. 1, pp. 293–298.
+273
+
+Petrik & Zilberstein
+
+Osborne, M. J., & Rubinstein, A. (1994). A course in game theory. The MIT Press.
+Pang, J.-S., Trinkle, J. C., & Lo, G. (1996). A complementarity approach to a quasistatic
+rigid body motion problem. Journal of Computational Optimization and Applications,
+5 (2), 139–154.
+Petrik, M., & Zilberstein, S. (2007a). Anytime coordination using separable bilinear programs. In Conference on Artificial Intelligence, pp. 750–755.
+Petrik, M., & Zilberstein, S. (2007b). Average reward decentralized Markov decision processes. In International Joint Conference on Artificial Intelligence, pp. 1997–2002.
+Puterman, M. L. (2005). Markov decision processes: Discrete stochastic dynamic programming. John Wiley & Sons, Inc.
+Rosberg, Z. (1983). Optimal decentralized control in a multiaccess channel with partial
+information. IEEE Transactions on Automatic Control, 28, 187–193.
+Rosen, J. B. (1986). Solution of general LCP by 0-1 mixed integer programming. Tech. rep.
+Computer Science Tech. Report 8623, University of Minnesota, Minneapolis.
+Rubinstein, A. (1997). Modeling bounded rationality. MIT Press.
+Seuken, S., & Zilberstein, S. (2007). Memory bounded dynamic programming for DECPOMDPs. In International Joint Conference on Artificial Intelligence, pp. 2009–2016.
+Seuken, S., & Zilberstein, S. (2008). Formal models and algorithms for decentralized decision
+making under uncertainty. Autonomous Agents and Multiagent Systems, 17 (2), 190–
+250.
+Sherali, H. D., & Shetty, C. M. (1980). A finitely convergent algorithm for bilinear programming problems using polar cuts and disjunctive face cuts. Mathematical Programming,
+19 (1), 14–31.
+Vanderbei, R. J. (2001). Linear Programming: Foundations and Extensions (2nd edition).
+Springer.
+White, D. J. (1992). A linear programming approach to solving bilinear programmes.
+Mathematical Programming, 56 (1), 45–50.
+
+274
+
+

@@ -1,0 +1,1322 @@
+Often, we are interested in computing quantities involving
+large sums, such as expectations in uncertain, structured
+domains. For instance, belief inference in Bayesian net­
+works (BNs) requires that we sum or marginalize over the
+remaining variables that are not of interest. Similarly, in
+order to solve the problem of action selection in influence
+diagrams, we sum over the variables that are not observed
+at the time of the decision in order to compute the value of
+different action choices.
+We can represent the uncertainty in structured environ­
+ments using a BN. A BN allows us to compactly define
+a joint probability distribution over the relevant variables
+in a domain. It provides a graphical representation of the
+
+distribution by means of a directed acyclic graph (DAG).
+It defines locally a conditional probability distribution for
+each relevant variable, represented as a node in the graph,
+given the state of its parents in the graph. This decomposi­
+tion can help in the evaluation of the sums. However, due
+to factors regarding the connectivity of the graph, in gen­
+eral this is not sufficient to allow an efficient computation
+of the exact value of the sums of interest.
+Sampling provides an alternative tool for approximately
+computing these sums. Sampling methods have been pro­
+posed as an alternative to exact methods for such problems.
+In particular, importance sampling (see Geweke [ 1989],
+and the references therein) has been applied to the prob­
+lem of belief inference in BNs [Fung and Chang, 1989,
+Shachter and Peot, 1989] and action selection in IDs (see
+Charnes and Shenoy [ 1999] and the references therein,
+and Ortiz and Kaelbling [2000]). In its simpler form, the
+importance-sampling distribution used is the "prior" dis­
+tribution of the BN resulting from setting the value of the
+evidence. It has been noted early on that this sampling dis­
+tribution is far from optimal in the sense that it provides es­
+timates with larger variance than necessary [Shachter and
+Peot, 1989]. For instance, the optimal sampling distribu­
+tion in the case of belief inference is to sample the unob­
+served variables from the posterior distribution over them
+given the observed evidence. If we knew this distribution
+we would know the answer to the belief inference problem.
+Several modifications have been proposed to improve the
+estimation of the simple importance sampling distribu­
+tion discussed above, based on information obtained from
+the samples [Fung and Chang, 1989, Shachter and Peot,
+1989, Shwe and Cooper, 199 1]. In this paper, we pro­
+pose methods to systematically and sequentially update the
+importance-sampling distribution. We view the updating
+process as one of learning a separate BN just for sampling.
+The learning objective is to minimize some error criterion.
+A stochastic-gradient method results from the direct min­
+imization of the variance of the estimator with respect to
+the importance sampling distribution as an error function.
+Other stochastic-gradient methods result from minimizing
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS 2000
+
+447
+
+error functions based on typical measures of the notion of
+distance between the current sampling distribution and ap­
+proximations of the optimal sampling distribution.
+
+2
+
+DEFINITIONS
+
+We begin by introducing some notation used throughout
+the paper. We denote one-dimensional random variables
+by capital letters and denote multi-dimensional random
+variables by bold capital letters. For instance, we de­
+note a multi-dimensional random variable by X and de­
+note all its components by
+where
+is the
+ith one-dimensional random variable. We use small let­
+ters to denote assignments to random variables. For in­
+stance, X = x means that for each component
+of X,
+=
+We denote the set of possible values that
+can
+take by Ox, and the set of possible values that X can take
+
+(X1, ... ,Xn)
+
+Xi
+
+Xi
+xi
+
+xi Xi.
+
+by Ox
+X :1 nx,. We also denote by capital letters the
+nodes in a graph. We denote by
+the parents of node
+in a directed graph.
+=
+
+Pa(Y)
+
+Y
+
+We now introduce notation that will become useful dur­
+ing the description of the methods presented in this pa­
+per.
+We denote by the operator Lz the sum over
+the possible values of the individual variables forming
+Z, Lz Lz . . Lz . For any function h with vari1
+
+2
+
+·
+
+n1
+
+abies Z and 0, the expression h(Z,O)lo=o stands for
+a function f' over variables Z that results from setting
+the values of 0 in h with assignment o while letting
+the values for Z remain unassigned. In other words,
+f'(Z) = h(Z,O)lo=o = h(Z, 0
+o) . The notation
+X = (Z, 0) means that the variable X is formed by
+all the variables that form Z and 0. That is, X =
+(Z,O),
+= (Z1, ... , Znp01, . . .
+(X1, . .
+where n = n1 + n2. Note that we are assuming that the set
+of variables forming Z and those forming 0are disjoint.
+The notation Z "" f means that the random variable Z is
+distributed according to probability distribution f.
+=
+
+. ,Xn)
+
+,On2)
+
+=
+
+A Bayesian network (BN) is a graphical probabilistic model
+used to represent uncertainty in structured domains. It com­
+pactly represents the joint probability distribution over the
+relevant variables of the system of interest. It uses a di­
+rected acyclic graph (DAG) to represent the relationship
+between the relevant variables. A node in the graph rep­
+resents a variable. The model defines a local conditional
+distribution
+for each node or variable
+I
+given its parents
+in the graph. The joint distribution
+is then
+
+P(Xi Pa(Xi))
+Pa(Xi)
+
+Xi
+
+For instance, we can define a BN on the graph given in
+Figure l (a).
+The inference problem in BNs is that of computing the pos­
+terior probability of an assignment to a subset of variables
+
+(b)
+Figure 1: Example of (a) Bayesian network and (b) influ­
+ence diagram.
+given evidence about another subset of variables in the sys­
+tem. Assume that the variables are discrete and their sam­
+ple spaces or the possible values each variable can take are
+finite. In general, let X = (Z, 0) where 0 is the set of
+variables of interest, o is an assignment to it and Z are the
+remaining variables. For this problem we want to compute
+probabilities of the kind
+
+P(O
+
+= o
+
+)
+
+=
+
+LzP(Z,O = o ) .
+
+Often, the local decomposition of the joint distribution still
+leads to the evaluation of sums over a large number of
+variables. In general, this problem is intractable [Cooper,
+1990].
+An influence diagram (ID) is a probabilistic model for
+decision-making under uncertainty. We can think of an ID
+as a BN with decision and utility nodes added. For instance,
+we can use our example BN to build an ID as shown in Fig­
+ure 1(b). The square is a decision node. The diamond is a
+utility node. We now have potentially different joint distri­
+butions over the variables, for each action choice available.
+Assume for simplicity that there is a single decision node
+in the graph. The joint distribution over the variables, given
+the action choice aassigned to the decision variable, is
+
+P(X I A= a) =
+
+TI�=l P(Xi I Pa(Xi))IA=a
+
+·
+
+The decision associated with a decision node is a function
+of its parent nodes in the graph. We will have access to
+
+448
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS 2000
+
+the value of these variables at the time of making the deci­
+sion. Similarly, the utility associated with a utility node is
+a function of its parent nodes in the graph.
+Assume that we have a finite number of discrete action
+choices. Then, one problem is to select the best strategy or
+function 7r* mapping each possible value of the parents of
+the decision node to an action choice. The best strategy is
+the strategy with highest expected utility. Let X = (Z, 0)
+where the variables in 0are parents of the decision node
+and Z are the remaining variables. The problem of ob­
+taining an optimal strategy reduces to obtaining, for each
+assignment 0 = o, the action that maximizes the value
+associated with the action and the assignment:
+
+V0(a) =I::z P(Z , 0= o I A= a) U(Z , 0=o, A= a) .
+Note once again that computing this value requires the eval­
+uation of a sum. For the same reasons as in the previous
+problem of belief inference in BNs, the exact computation
+of this value is intractable in general.
+
+3
+
+to it the value given by the evidence assignment o. There­
+fore, the resulting samples will be assignments to those
+variables that are not in the evidence set according to the
+"prior" distribution of the BN. We call the method resulting
+from this importance-sampling distribution the traditional
+method. In the context of belief inference, this method is
+called likelihood-weighting (LW) since the weight function
+is a "likelihood" and thus each sample is weighted by its
+"likelihood."
+We can similarly apply this technique in the context of ac­
+tion selection in IDs to evaluate V0 (a) . In general, we let
+
+g(Z)
+f(Z)
+
+P(Z ,O = o I A=a) U(Z ,O =o, A= a) ,
+TI��l P(ZiI Pa(Zi) ) lo=o,A=a'
+
+w(Z)
+
+IJ?�1 P(OjI Pa(Oj) ) U(Z , 0, A)
+O=oA
+, =a
+
+=
+
+1'\' N
+(l)
+GA = N ul
+=lw( z ) .
+
+(1)
+
+We can apply this technique to the problem of belief infer­
+ence in BNs. Typically, we let
+
+g(Z) =P(Z , 0
+
+=
+
+o
+
+)
+
+I
+
+= TI��1P(ZiI Pa(Zi) ) IJ?�1P(Oj I Pa(Oj) ) = '
+O o
+f(Z)
+TI��1 P(ZiI Pa(Zi) ) lo=o, which implies
+w(Z)
+
+I
+
+TI?�1 P(OjI Pa(Oj) ) O=o.
+
+Note that we are defining the importance sampling distri­
+bution to be the "prior" distribution of the BN. We obtain
+samples from this distribution by sampling the variables
+in the (partial) order defined by the DAG and according
+to the local conditional distribution of the original BN for
+each variable. As we obtain samples from each variable by
+traversing the nodes in the graph and sampling the variable
+corresponding to it, if we get to a node or variable that is in
+the evidence set 0, we do not sample it. Instead, we assign
+
+·
+
+In particular, for our example,
+
+g(Z)
+
+IMPORTANCE SAMPLING
+
+Importance sampling provides an alternative to the exact
+methods for evaluating sums. Let the quantity of inter­
+est be G = I::z g( Z) for some real function g. We
+can turn the sum into an expectation by expressing G =
+I::z f(Z) (g(Z)/ f(Z)), where f is a probability distribu­
+tion over Z satisfying, for all Z, g(Z) =f 0 =? f(Z) =f 0.
+We call f the importance-sampling distribution. We de­
+fine the weight function w(Z) = g(Z)/ f(Z) which al­
+lows us to express G
+I::z f(Z)w(Z). Hence, we can
+obtain an unbiased estimate of G by obtaining N samples
+z<1l, . .. , z(N) from Z "' f and computing the estimate
+
+I
+
+f(Z)
+
+P(Xl) P(X2 I Xl) P(X3 I Xl) X
+P(X6 I x2, A= a) P(X7 I X3, X6) X
+P(X4 =X4 I X2) P(Xs =Xs I x2, X3)
+U(X1, A = a) ,
+P(Xl) P(X2 I Xl) P(X3 I Xl) X
+P(X6 I x2, A a) P(X7 I x3, X6) ,
+P(X4 X4 I X2) P(Xs =Xs I x2, X3)
+U(X1, A=a) .
+
+X
+
+=
+
+w(Z)
+
+=
+
+X
+
+An important property of the estimator G is the variance of
+the weights associated with the importance-sampling dis­
+tribution. This is
+
+Var[w(Z ) ] = I::z f(Z)w(Z)2- G 2•
+Recall that G = I::z g(Z) by definition and assume that
+g is a positive function. From this we can derive that the
+optimal or minimum-variance importance-sampling distri­
+bution is proportional to g(Z):
+
+f*(Z) = g(Z)/ I::z g(Z).
+
+(2)
+
+The weights will have zero variance in that case, since the
+weight function will always output our value of interest
+G. We also note that we need to avoid letting f(Z) be
+too small with respect to g(Z), since this will increase
+the variance. As a matter of fact, Var[w(Z ) ] --+ oo as
+f(Z) --+ 0 for at least one value of Z. This implies that
+we should use importance-sampling distributions with suf­
+ficiently "fat tails."
+
+4
+
+ADAPTIVE IMPORTANCE SAMPLING
+
+The traditional method presented above uses as the
+importance-sampling distribution the "prior" distribution
+
+449
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS 2000
+
+of the BN which can be far from optimal in the sense that
+it can have higher variance than necessary. In the case of
+evaluating actions in IDs, it also completely ignores poten­
+tially useful information about the utility values. Therefore,
+we try to learn the optimal importance-sampling distribu­
+tion by adapting the current sampling distribution as we
+obtain samples from it.
+We view the adaptive process as one of learning a distribu­
+tion over the variables the sum is over to use specifically as
+an importance-sampling distribution. In particular, we can
+view this process as learning BNs from the samples just for
+sampling. From the expression of the optimal importance­
+sampling distribution given in equation 2 (and, in particu­
+lar, from the factorization of the function g for the different
+estimation problems), we can deduce that in order to be
+able to represent this distribution graphically using a BN
+we need to add arcs that connect every pair of nodes that
+are parents of observations and/or utility nodes, if they are
+not already connected. However, doing so can increase the
+size of the model, particularly in cases where the local con­
+ditional probabilities and the utilities have a smaller, more
+compact parametric representation (i.e., noise-or's). In this
+paper, we do not deal with this issue and instead concen­
+trate on the problem of learning a BN with the same struc­
+ture as the original BN (or ID). Hence, we only need to
+update the local conditional probability distributions as we
+obtain samples.
+We can parameterize the importance-sampling distribution
+using a set of parameters E>. Let the indicator function
+I(Zi k, Pa(Zi) = j I Z) 1 if the condition zi = k
+and Pa(Zi) = j agrees with the value assigned to Z; 0
+otherwise. Then, we can express the importance-sampling
+distribution as
+=
+
+=
+
+n
+
+J (Z I
+
+E>) = II
+
+II elCkZ;=k,PaCZ;)=jiZ) '
+•J
+
+II
+
+(3)
+where for each i,j, k, eijk
+P(Zi k I Pa(Zi) = j, E>).
+Hence, for all i,j, L:k eijk
+1, and for all k, eijk > 0.
+Note that this representation uses the assumptions of global
+and local parameter independence typically used in BNs.
+The weight function is also parameterized and defined as
+=
+
+=
+
+=
+
+w(Z
+
+IE>) = g(Z)/ f(Z I E>).
+
+4.1
+
+LEARNING CRI TERIA AND UPDATE RULES
+
+In the following subsections we present different methods
+for updating the sampling distribution. The update rules
+are all based on gradient-descent. Hence, at each time t,
+we update the parameters as follows:
+
+(4)
+oCt+1) +-oCt)- a(t)\i'Pe(OCt)).
+In the update rule above, a(t) denotes the learning rate or
+the step size rule and \i'Pe(E>) denotes the gradient of error
+
+function e, appropriately projected to satisfy the constraints
+onE>. The methods differ in how they define \i'Pe(oCtl).
+
+In the discussion below we denote the N(t) i.i.d. samples
+as zCt,1), ... , zCt,NCt)) drawn according to Z
+f (Z I
+oCtJ). If we gather samples to estimate G using many dif­
+ferent sampling distributions, how can we combine them
+to get an unbiased estimate? It is sufficient to weight them
+using any weighting function that is independent of the sub­
+estimates obtained by using just the samples for one sam­
+pling distribution. For instance, the estimator
+""
+
+C;CT) = I::'{=1 W(t)G(oCtl),
+
+(5)
+
+I::'{=1 W(t) = 1 and W(t) ;:::: 0, for all t, and
+"NCt) w(zCt,l) I oCt))
+G(oCt)) = N_1Ct_) L...
+(6)
+l=1
+is unbiased as long as W(t) and G(oCt)) are independent
+for each t. Letting W(t)
+1/T will produce an unbi­
+where
+
+'
+
+=
+
+ased estimate. This is the weight we use in the experi­
+ments. In general, we would like to give more weight to
+importance-sampling distributions with smaller variances.
+Assuming that the variance decreases with t, we would like
+W(t) to be an increasing sequence oft. Note that using
+W(t) ex 1/ where is the sample variance at time t,
+though appealing, does not necessarily lead to an unbiased
+estimator since W(t) and G(oCt)) are not independent.
+
+&f,
+
+&f
+
+We will consider three general strategies: minimizing vari­
+ance directly, minimizing distance to global approxima­
+tions of the optimal sampling distribution, and minimizing
+distance to the empirical distribution of the optimal sam­
+pling distribution based on local approximations. For the
+first two strategies, we will find that we can express the
+partial derivatives that form the gradient as, for all i,j, k,
+
+8eCE>)
+8!Jijk
+
+= I: z J (Z
+
+aCZ;)=jiZ)
+IE>) [-JCZ;=k,P
+(Jijk
+<p(Z, E>)]'
+X
+
+where <p( Z, E>) is a function that depends on the error func­
+tions. Note that this is an expectation. Then, the methods
+update the parameters by estimating the value of the partial
+derivatives evaluated at the current setting of the parame­
+ters oCt) as
+
+ae.co<'))
+8!J;jk
+
+4.1.1
+
+=
+
+__
+1 "r-:.__C ) [-JCZ;=k,PaCZ;
+)=jiZ=z(t,l)) X
+(t)
+NCt) L...l-1t
+(Jijk
+<p(zCt,l), oCt))].
+
+Minimizing Variance Directly
+
+As we noted above, the optimal importance-sampling dis­
+tribution for estimating G is that which minimizes the
+variance of w. Using that as our objective, we derive a
+stochastic-gradient update rule for the parameters of the
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS 2000
+
+450
+
+importance-sampling distribution. Let the error function
+be
+
+evar(8)
+
+Var(w(Z I 8))
+Ez f(Z I e)w(Z I
+
+8)2.
+
+eKL2(8) = Ez f(Z I 8) log (f(Z I 8)/ f*(Z)).
+
+(7)
+
+The corresponding function for the gradient is
+
+4?KL2(Z, 8) =log (f*(Z)/ f(Z I 8)) - 1
+�log (w(z<t,t) 1 o<tJ)fGCtl\ - 1.
+
+8).
+
+Approximate Global Minimization
+
+Recall the optimal importance-sampling distribution f* for
+estimating G given in equation 2. The update rules of the
+following subsection are all motivated by the idea of reduc­
+ing some notion of distance between the current sampling
+distribution and this optimal sampling distribution. Note
+that we cannot really compute the values of the optimal dis­
+tribution since that requires knowing the normalizing con­
+stant Ez g(Z) = G which is exactly the value we want
+to estimate. We approximate the optimal distribution using
+the current estimate of G as follows
+(8)
+
+In the following, we will consider four error functions, one
+based on the sum-squared-error and three based on versions
+of the Kullback-Leibler divergence.
+
+eKL.(8)= ! eKL1(8) + !eKL2(8).
+We can obtain the partial derivatives for this error function
+and their approximation accordingly.
+
+4.1.3
+
+Heuristic Local Minimization Based on
+Empirical Distribution
+
+The update methods in this subsection are motivated by the
+idea of minimizing different notions of distance between
+the current sampling distribution and an empirical distribu­
+tion of the optimal importance-sampling distribution that
+we build from the samples. The hope is that the empirical
+distribution is a good approximation of the optimal sam­
+pling distribution. We define the empirical distribution, pa­
+rameterized by 8 locally as follows: for all i, j, k,
+
+z=[':_<;l I(Z;==k,Pa(Z;}==jiZ==z(t,l))w(z<t,l) l9(t))
+(t)
+Bijk
+z=[:<;) I(Pa(Z;)==jiZ==z(t,l))w(z(t,l) 19('))
+_
+
+If we use the 12 norm or sum-squared-error function as a
+notion of distance between the distributions, then the error
+function is
+
+f*(Z)- f(Z I 8)
+f(z(t,l} I o<t)) X
+(w(z<t,t> 1 o<t>);c<t> - 1\,
+
+(9)
+
+where the approximation results from using ]t(Z) as de­
+fined in equation 8 as an approximation to f*(Z).
+An alternative, commonly-used notion of distance between
+two probability distributions is given by the Kullback­
+Leibler (KL) divergence. This measure is not symmetric.
+One version of the KL divergence in this context is given
+by the error function
+
+eKL1(8) = Ez f*(Z) log (f*(Z)/f(Z I 8)).
+
+if
+
+L:{�g) I(Pa(Zi) = j
+
+I
+
+z=
+
+'
+
+(l2)
+
+z(t,l))w(z(t,l) I oCtl) of- 0;
+
+e;;� = e�� otherwise. We are essentially defining the em­
+
+pirical distribution using the samples if there are samples
+that can be used to define it; otherwise, we revert to the
+current distribution. We try to minimize the distance be­
+tween the current sampling distribution and the empirical
+distribution locally.
+
+The corresponding function for the gradient is
+
+�
+
+( 1 1)
+
+A "symmetrized" version of KL sometimes used is given
+by the error function
+
+Minimizing Variance Indirectly via
+
+]t(Z)= g(Z)jc<tl.
+
+( 10)
+
+Another version of the KL divergence is given by the error
+function
+
+Note that using this definition of <p yields an unbiased es­
+timate of the gradient. This is because the gradient is the
+expectation of a particular function and, in this case, we can
+always evaluate the function exactly. Hence, we can obtain
+an unbiased estimate by sampling from f(Z I
+
+4.1.2
+
+f*(Z)/ f(Z I 8)
+w(z(t,l) I (J(tl)jG(tJ .
+
+�
+
+8)2- G 2
+
+The corresponding function for the gradient is
+
+<t'Var(Z, e)= w(Z I
+
+The corresponding function for the gradient is
+
+Similar to the case of the previous strategies, we will find
+that we can express the partial derivatives that form the gra­
+dient of the error functions discussed in this subsection as,
+for all i, j, k,
+
+8e'(E>)
+80,3k
+
+'
+
+=
+
+1
+-cp (eijk, eijk),
+
+where cp'(Bijk. eijk) is a function that depends on the error
+functions. Then, the methods update the parameters by es­
+timating the value of the partial derivatives evaluated at the
+current setting of the parameters o< t) as
+ae' (9 < ') >
+ae,j k-=
+
+'C J
+
+' t
+<tJ
+-cp (eijk' eijk).
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS 2000
+
+el2,
+
+The local Lz error function,
+leads to an update rule
+for which the step size has a very intuitive interpretation
+as a weighting between the current importance-sampling
+distribution and the empirical distribution. In the case
+of
+, the update direction is proportional to the ratio
+of the empirical distribution with respect to the current
+importance-sampling distribution. On the other hand, for
+the update direction is proportional to the logarithm
+is not defined if at least
+of the same ratio. Note
+
+We define the local L2-norm error function as
+
+el2 (e) = ! �i,j,k (eijk- eijk I
+
+2
+
+,
+
+the error function for one version of KL as
+
+ekLl (8) = �i,j,k eijk log ( eijk/Bijk I
+
+ekL1
+
+'
+
+ekL2,
+
+and the other as
+
+ekL2(8) �i,j,k eijk log ( eijk/Bijk I .
+From this we obtain the corresponding functions for the
+gradient:
+
+v{2(eijk, eijk)
+'PkL1(Bijk, Bijk)
+'PkL2(Bijk, Bijk)
+
+DISCUSSION OF UPDATE RULES
+
+First, note that of all the update rules, only the one derived
+for
+clearly uses an unbiased estimate of the gradient. It
+is not immediately apparent whether the update rules based
+and
+on
+use unbiased estimates.
+
+evar
+
+eKL2
+
+Note also that the magnitude of the components of the re­
+sulting gradients are different, as suggested by their respec­
+tive functions. The function
+has magnitude propor­
+tional to the squares of the weights. The magnitudes of
+and
+are linear in the weights. However, the magni­
+tude of
+is potentially smaller since it has the probabil­
+ity of the sample as a factor. The magnitude of
+is
+logarithmic in the weights.
+
+<p
+
+<pvar
+
+<pL2
+
+'PKL1
+<pL2
+
+'PKL2
+
+Because we assume that g is positive, the weights are pos­
+itive. Hence,
+and
+are always positive. The
+function
+is positive if w(Z I
+> 1. Similarly,
+is positive if log(w(Z I
+the function
+> 1.
+If w(Z I
+>
+then the sampling distribution under­
+estimates the value of g while if w(Z I 0) <
+then it
+overestimates the value. Therefore, the sign of
+and
+depends on whether we under- or over-estimated the
+value of g. Similarly, the magnitudes of
+and
+are related to the amount of under- or over­
+the magnitude is larger
+estimation. For
+and
+when the sampling distribution underestimates than when it
+overestimates. For
+the logarithm brings the amount
+of over- and underestimation to the same scale. Note that
+for the approximations of
+and
+G can­
+not be zero, and in addition for
+w(Z I 0) cannot
+be zero. These conditions hold from the assumption that g
+is positive. Note that unless we constrain the importance­
+sampling distribution, all the functions
+and
+will be unbounded even if g is bounded.
+
+'PL2
+
+'PVar
+
+'PKL2
+8) G
+
+'PKL1
+
+8)/G
+
+'PKL2
+
+8)/G)
+
+G
+'PL2
+
+'PKL2
+
+'PVar, 'PL2, 'PKL1,
+
+'PVar, <pL2
+
+'PKL1
+
+'PKL2,
+
+'PL2, 'PKL1,
+'PKL2,
+
+'PKL2
+
+=
+
+_
+
+This is essentially imposing a Dirichlet prior with parame­
+ters equal to the current probability values on the empirical
+distribution parameters.
+
+eijk - eijk'
+eijk;eijk,
+log (eijk/Bijk I - 1.
+
+We can obtain an update rule based on the "symmetrized"
+version of KL accordingly.
+
+eL2, eKL1
+
+'PKL2
+
+eiJ� 0. We can fix this by letting, for each i, j, k,
+( z:;;;,<:> I(Z;=k,Pa(Z;)=jJZ=z(t,l))w(z<t,l) JO(tl)) +iii;�
+t)
+B(ijk - ( z:;;;.<;> I(Pa(Z;)=jJZ=z(t,l) )w(z(t,l) IO(t))) +1
+
+one
+
+=
+
+4.2
+
+451
+
+'PKL2,
+
+'PVar, 'PL2, 'PKL1
+
+We can interpret the update rules based on local KL­
+divergence as adding weights to the elements of the domain
+of the importance-sampling distribution and renormalizing.
+For the version of KL-divergence with respect to the em­
+pirical distribution, we are always adding weights. We add
+values relative to the amount we underestimated or over­
+estimated the magnitude of the distribution for a particu­
+lar state. If we underestimated, we add weights larger than
+one. If we overestimated, we add weights smaller than one.
+For the other version of KL-divergence, due to the loga­
+rithm function, we add weight if we underestimated while
+we subtract weight if we overestimated. Therefore, the log­
+arithm brings the amount of underestimation and overesti­
+mation to the same scale and adds or subtracts weight ac­
+cordingly.
+
+evar, eL2,
+
+Note that when approximating the gradients for
+and
+we can use as little as one sample to obtain
+1) . This is not ad­
+an estimate of the gradient (i.e., N(t)
+visable for the method based on the local heuristic since the
+empirical distribution of the optimal sampling distribution
+will be highly inaccurate. Hence, the update rules based on
+the empirical distribution will work better when we take a
+larger number of samples between updates. Finally, note
+that when t
+1 and N(t) 1,
+= 0, and therefore, the
+parameters will not change in the first iteration.
+
+eKL1
+
+eKL2,
+
+=
+
+=
+
+5
+
+=
+
+<pL2
+
+RELATED WORK
+
+Different variations of importance sampling have been used
+for the problems discussed in this paper (See Lin and
+Druzdzel [1999] and the references therein). Our methods
+belong to the class of forward samplers since they sam­
+ple from a distribution based on the original structure of
+the BN. Of these, self-importance sampling [Shachter and
+Peot, 1989, Shwe and Cooper, 1991] is the method closest
+to the methods proposed in this paper since it also updates
+the sampling distribution as it obtains information from the
+samples. This method has an update rule that is very sim­
+ilar to the one derived for
+It updates the distribution
+
+el2•
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS 2000
+
+452
+
+after obtaining the empirical distribution, but the update is
+a weighting between the empirical distribution and the first
+sampling distribution used [Shwe and Cooper, 199 1]. The
+update rule is
+
+eiJ t1
+
+)
+
+,__
+
+e
+
+(1- a(t))
+e<tlk-
+
+m + a(t)Bi�Z
+
+'1
+
+eiJ�
+iJ�
+a(t) e - (1- a(t))
+a(t) - Bijk .
+a(t)
+
+(
+
+(o))
+
+In our framework, we can think of this update rule as re­
+sulting from the error function
+
+esJs(E>, t)
+1
+
+"""
+
+(
+
+=
+
+(
+
+'
+
+(0)
+
+)) 2 .
+
+a(t))Bijk + a(t)Bijk
+2a(t) �k Bijk- (1'1
+
+Annealed importance sampling [Neal, 1998] is a related
+technique in that it tries to obtain samples from the opti­
+mal sampling distribution. As we understand it, the user
+sets up a sequence of distributions, the last distribution be­
+ing the optimal distribution, typically defined by Markov
+chains. We move from one distribution to another as we
+"anneal" and the sequence converges to the optimal sam­
+pling distribution. The hope is that we can get an inde­
+pendent sample from that distribution, then we restart the
+process to try to obtain another independent sample, and
+so on. Finally, it uses those independent samples to obtain
+an estimate. Notice that each "traversal" of the sequence
+of distributions (or Markov chains) produces a single sam­
+ple. The technique is very general and we are unaware of
+whether it has been applied to the problems considered in
+this paper. We are currently investigating possible connec­
+tions between our methods and this technique.
+
+6
+
+EMPIRICAL RESULTS
+
+We implemented all of the adaptive importance-sampling
+methods described above. We Jet the learning rate a(t) =
+(3jt, where (3 is a value that depends on the updating
+method. We need different values of (3 for the different
+methods because of the differences in magnitude of their
+gradients. We impose an additional constraint on the pa­
+rameters which we call the €-boundary. We require that for
+all i, j, k, Bijk 2: E(IDx,l)
+"!/ IDx,l, where"( is a con­
+stant factor. In our experiments, we Jet"(
+0.1. We do
+this so that our sampling distribution has "fat tails", avoid­
+ing extrema in probability and hence the possibility of in­
+finite variance. We initialize the parameters o<O) such that
+the starting importance-sampling distribution is the "prior"
+probability distribution of the original BN. However, if one
+of the local conditional probability values does not satisfy
+the E-boundary constraint, we change the distribution so
+that it does.
+=
+
+=
+
+Figure 2: Graphical representation of the ID for the com­
+puter mouse problem.
+In order to satisfy the constraint that for all i, j, Lk Bijk
+1, we project the approximation of the gradients onto the
+
+=
+
+simplex of the local conditional probability distribution.
+We do so by Jetting, for all i, j, k,
+
+8Pe(&)
+ao,jk
+
+,__
+
+8e(&)
+ao,jk
+
+_
+
+1 "'lnx , I ae(&)
+Jnx, 1 L....k=l ao,jk
+
+·
+
+( 13)
+
+Note that this is not enough to guarantee that after taking a
+step in the projected direction, the parameters will remain
+in the constraint space. If, when updating a local condi­
+tional probability distribution, its respective parameters do
+not satisfy the constraint, we find the minimum step a' that
+will allow them to remain inside the constraint space and
+take a step of size a' /2 along the gradient direction (i.e.,
+half the distance between the current position of the param­
+eter we are updating in the simplex and the closest point on
+the €-boundary along the gradient direction).
+We tested the methods on the computer mouse prob­
+lem [Ortiz and Kaelbling, 2000], a simple made-up ID
+shown in Figure 2. We added one to all the utility val­
+ues presented in Ortiz and Kaelbling [2000] to make g
+positive. We will consider the problem of obtaining the
+value VMP, (A) for the action A = 2 and the observation
+
+MPt = l.
+
+We evaluated each method by computing the mean­
+squared-error (MSE) between the true value of the expec­
+tation of interest (VM p, (A)) and the estimate generated us­
+ing the adaptive sampling method. The first results show
+how the methods achieve better MSEs with fewer samples
+for this problem. We only show results for those methods
+that were the most competitive. We denote by "Var" the
+method based on the minimization of the variance, and by
+"L2 " "KL1", and "KLS" the methods based on the global
+minimization of 12, KL1 and KLs respectively. For the
+1 for all t. We take into
+update methods we use N(t)
+,
+
+=
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS 2000
+
+453
+
+LW--->Var ···)(···
+L2 ........
+Kl1 ......(;)..M..
+KLS -·-•·-·
+
+LW--->Var ···)(···
+L2 ........
+KL1 ......oEJ......
+KLS -·-•·-·
+
+\
+
+\
+
+50
+
+100
+
+150
+
+200
+
+250
+
+50
+
+100
+
+number of samples
+
+Figure 3: Average mean squared error, over 40 runs, as a
+function of the number of samples taken. We allow LW
+twice as many samples.
+
+account that the update methods have to traverse the graph
+once every iteration to update the parameters relevant to the
+sample taken. To compensate for this time, we allow the es­
+timate based on LW to use twice as many samples. Figure 3
+shows the results. The graph shows the average MSE over
+40 runs as a function of the total number of samples taken
+(times 2 for LW) by the methods. We note that Var and L2
+achieve better MSEs than LW and converge to them faster.
+With significance level 0.005 we can state (individually)
+for each total number of samples N = 50, 150, 250, that
+Var and L2 (individually) are better with respect to MSE
+than LW. Also, for N = 250, KLS is better than LW.
+We also ran the methods with N(t) = 50, including the
+local heuristic methods. They were only competitive after
+a larger total number of samples (N > 150). Although fur­
+ther analysis is necessary, we would like to convey some
+general observations. We believe that in general there is a
+tradeoff in the setting of N(t) and (3. We note that, of the
+updates based on the two KL versions, KLl typically per­
+forms better than KL2. We believe this is because the error
+function eKL1 is defined with respect to the optimal sam­
+pling distribution while eKL2 is with respect to the current
+sampling distribution. KLS seems to perform better than
+both. L2 is more stable than any of the other methods, sug­
+gesting further theoretical analysis which we are currently
+undertaking. Several possible reasons for this behavior are
+(1) the variance of the gradient might be smaller than in
+other cases, (2) the error function is bounded, and/or (3)
+the error surface might be smoother than in other cases. We
+conjecture that L2 converges to a stationary point of eL2•
+The second result shows that the update methods indeed
+lead to importance-sampling distributions with smaller
+variance relatively quickly for this problem. Figure 4
+
+150
+
+200
+
+250
+
+300
+
+350
+
+400
+
+450
+
+number of samples
+
+Figure 4: Average of the true variance of the weight func­
+tion, over 40 runs, as a function of the total number of sam­
+ples taken.
+
+shows a graph of the true variance of the sampling distribu­
+tion learned using the different update methods as a func­
+tion of the total number of samples used. The horizontal
+line shows the variance associated with the sampling dis­
+tribution used by LW (i.e., the "prior" distribution of the
+original BN).
+These experiments are all carried out on a single prob­
+lem. Although they must clearly be extended to a variety
+of larger problems, they indicate that adaptive importance­
+sampling methods, particularly those that minimize vari­
+ance and the 12 norm, can lead to significant improvements
+in the efficiency of sampling as a method for computing
+large expectations.
+Acknowledgments
+
+The dynamic weighting scheme and the 1/ CJ2 recommen­
+dation in Section 4.1 and the E-boundary in Section 6
+were independently developed by Jian Cheng and Marek
+Druzdzel. Both heuristics are reported in a manuscript that
+the first author saw while he was working on this paper.
+We would like to thank Milos Hauskrecht, Thomas Hof­
+mann, Kee-Eung Kim and Thomas Dean for many discus­
+sions and feedback. Also, our implementation uses some of
+the functionality of the Bayes Net Toolboxfor Matlab [Mur­
+phy, 1999], for which we thank Kevin Murphy. We would
+also like to thank the anonymous reviewers for their in­
+sightful comments.
+Luis E. Ortiz was supported in part by an NSF Gradu­
+ate Fellowship and in part by NSF IGERT award SBR
+9870676. Leslie Pack Kaelbling was supported in part by
+a grant from NTT and in part by DARPA Contract #DABT
+63-99-1-0012.
+
+500
+
+454
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS 2000
+
+References
+John M. Charnes and Prakash P. Shenoy. A forward Monte
+Carlo method for solving influence diagrams using local
+computation. School of Business, University of Kansas,
+Working Paper No. 273, August 1999.
+Gregory F. Cooper. The computational complexity of prob­
+abilistic inference using Bayesian belief networks. Arti­
+ficial Intelligence, 42:393-405, 1990.
+Robert Fung and Kuo-Chu Chang. Weighting and integrat­
+ing evidence for stochastic simulation in Bayesian net­
+works. In Proceedings of the Fifth Workshop on Uncer­
+tainty in Artificial Intelligence, pages 112- 1 17, 1989.
+John Geweke. Bayesian inference in econometric mod­
+els using Monte Carlo integration. Econometrica, 57(6):
+13 17-1339, November 1989.
+Yan Lin and Marek Druzdzel. Stochastic sampling and
+search in belief updating algorithms for very large
+Bayesian networks. In Working Notes of the AAAI Spring
+Symposium on Search Techniques for Problem Solving
+Under Uncertainty and Incomplete Information, pages
+77-82, Stanford, California, March 1999. Stanford Uni­
+versity. Available from http: I lwww.pitt. edul
+-druzdzellpubl .html.
+Kevin P. Murphy. Bayes net toolbox for Matlab, 1999.
+Available from http: I lwww . cs. berkeley. edul
+-murphykiBayeslbnt.html.
+Radford M. Neal. Annealed importance sampling. Tech­
+nical Report 9805, Department of Statistics, Univer­
+sity of Toronto, Toronto, Ontario, Canada, September
+1998. Available from http: I lwww. cs. utoronto.
+carradfordl.
+Luis E. Ortiz and Leslie Pack Kaelbling. Sampling meth­
+ods for action selection in influence diagrams. In Pro­
+ceedings of the Seventeenth National Conference on Ar­
+tificial Intelligence, 2000. Forthcomming.
+Ross D. Shachter and Mark A. Peot. Simulation approaches
+to general probabilistic inference on belief networks. In
+Proceedings of the Fifth Workshop on Uncertainty in Ar­
+tificial Intelligence, pages 311-318, 1989.
+Michael Shwe and Gregory Cooper. An empirical analy­
+sis of likelihood-weighting simulation on a large, multi­
+ply connected medical belief network. Computers and
+Biomedical Research, 24:453-475, 1991.
+
+

@@ -1,0 +1,2565 @@
+In the past few decades, many computational efforts have been devoted to simulate Euler
+or Navier-Stokes equations in the field of computational fluid dynamics (CFD). Many of classical numerical methods for Navier-Stokes equations involve solving convection and viscous
+terms separately on one set of computational grid. For the nonlinear convection term, the
+design of numerical fluxes at element interfaces is crucial to the success of numerical algorithms. Various approximate Riemann solvers have been proposed to approximate the wave
+structure of exact Riemann solutions, e.g. Godunov scheme [9], the approximate Riemann
+solvers due to Roe [30], Osher [29], Harten, Lax and van Leer [11], etc. For a summary on this
+topic, see [33]. For the viscous diffusion term, central difference method is often used. Another approach is to design fluxes at cell interfaces based on integrating particle distribution
+function in the phase space at kinetic scale. The kinetic flux vector splitting method for the
+Euler equations (KFVS-Euler) based on the collisionless Boltzmann equation is introduced
+in [25]. When viscous effect is considered, the particle distribution function contains both
+equilibrium (Maxwellian) and nonequilibrium parts of the gas flow; the inviscid and viscous
+terms can be treated simultaneously. For example, the kinetic flux vector splitting method
+for Navier-Stokes equations (KFVS-NS) was developed by introducing the nonequilibrium
+term in particle distribution obtained by Chapman-Enskog expansion in [4]; the gas-kinetic
+BGK method for Navier-Stokes equations (BGK-NS) was introduced in [40, 36].
+To improve the performance of numerical schemes, high order schemes are introduced
+in 80’s and underwent great development since then. For example, in the finite volume or
+finite difference framework, there are the second order MUSCL scheme [34], the essentially
+2
+
+non-oscillatory (ENO) scheme [10] and the weighted ENO (WENO) scheme [19, 12]. The
+discontinuous Galerkin (DG) method, as a class of finite element methods, has been very
+popular in the CFD community [7, 1, 8]. The high-order accuracy of DG is achieved by using
+high-order polynomial approximations within each element, where more than one degrees of
+freedom per element are stored and updated. The DG method has been well-known for its
+flexibility, h-p adaptivity, compactness and high parallel efficiency [5]. There have been many
+work in existing literatures in improving the BGK-NS method to be of high order accurate by
+interpolations or reconstructions such as WENO [24], by piecewise parabolic reconstruction
+of high order BGK fluxes [16], and by the DG framework [37, 18, 28]. These methods have
+been successfully applied in many engineering problems, such as the hypersonic viscous and
+heat conducting flows [15, 39, 17], 3D transonic flow [26], among many others. Comparisons between the schemes with approximate Riemann solvers and the particle distribution
+functions of the Boltzmann equation are provided in [24, 14].
+The central scheme uses staggered meshes to avoid solving Riemann problems at cell interfaces and provides a black box solution to nonlinear hyperbolic conservation laws [27, 13].
+Liu [20] introduced central schemes based on two sets of overlapping meshes. Taking advantages of the redundant representation of the solution on overlapping meshes, approximate
+Riemann solvers are not needed at cell interfaces, and the high order total variation diminishing (TVD) Runge-Kutta (RK) methods can be directly applied by the method of lines
+approach. Following similar spirit, central DG (CDG) methods are proposed and developed
+for hyperbolic equations in [21], and central local DG methods are proposed for diffusion
+equations in [23].
+We propose to couple the CDG framework [21] with the BGK-NS method [36] for NavierStokes simulations. Compared with the DG BGK methods [37, 18, 28], CDG methods
+evolve two pieces of approximate solutions defined on two sets of overlapping meshes. Such
+redundant representation of numerical solution offers great convenience in the design of
+gas-kinetic BGK fluxes. Specifically, the evaluation of fluxes at cell interfaces of one set of
+computational mesh is right inside a cell of the staggered mesh (i.e. continuous regions of the
+solution at the staggered mesh). Hence, the particle distribution function, without involving
+two different Maxwellian distributions from the left and right states and the corresponding
+
+3
+
+equilibrium state, is much simpler than existing gas-kinetic BGK methods [36, 37, 18, 28].
+One of the key components that contributes to the success of the gas-kinetic BGK scheme [36]
+is the exact time evolution of the BGK equation along characteristics; such mechanism,
+despite its rather complicated formulation, brings the distribution function at cell interfaces
+to the equilibrium state in a very effective way. In the CDG framework, since the distribution
+function is continuous (at the interior of the other set of solution), such exact evolution is
+not as crucial. In our scheme, the method of lines approach is adopted; a third-order TVD
+RK method is used for temporal discretization. As the central scheme, the proposed CDGBGK has doubled the memory requirement, since two sets of solutions have to be stored
+and updated simultaneously; on the other hand, for the convection part, the CFL time step
+constraint of the CDG method for numerical stability is relatively large compared with that
+for the DG method. The numerical boundary conditions have to be treated with special care.
+For example, a class of DG basis functions that preserves the given boundary condition, in
+the spirit of [6], are proposed for the wall boundary condition.
+The paper is organized as follows. In Section 2, we propose the CDG-BGK method
+for one and two dimensional problems. The BGK fluxes, as well as numerical boundary
+conditions are discussed in details. In Section 3, following the pioneering work of [36, 18],
+extensive numerical results are demonstrated to showcase the effectiveness of the proposed
+approach. We conclude the paper in Section 4.
+
+2
+
+CDG-BGK method for compressible Navier-Stokes
+equations
+
+In this section, we first introduce a 1D BGK model and the corresponding macroscopic
+conservative Navier-Stokes equations in Section 2.1. We propose to use the central discontinuous Galerkin (CDG) spatial discretization [20] coupled with a third-order total variation
+diminishing (TVD) Runge-Kutta (RK) temporal discretization [32] for solving the 1D NavierStokes equations in Section 2.2. The BGK type flux for both convection and viscous terms
+will be described in Section 2.3 and extension to two-dimensional cases will be presented in
+Section 2.4. Finally we discuss the numerical boundary conditions in Section 2.5.
+
+4
+
+2.1
+
+The 1D BGK model and Navier-Stokes equations
+
+The integro-differential kinetic Boltzmann equation is commonly used to describe the evolution of the particle distribution function. To avoid the complicated bilinear collisional
+operator of the Boltzmann equation, a simplified BGK model was proposed by Bhatnagar et
+al. [2]. The BGK collisional operator is known to preserve the collisional invariant properties
+of mass, momentum and energy, as well as the entropy dissipation property.
+For a 1D flow, the BGK model can be written as [36]
+ft + ufx =
+
+g−f
+,
+τ
+
+(2.1)
+
+where τ is the particle collision time, f (x, t, u, ξ) is an unknown function of space variable
+x, time variable t, particle velocity u and internal variables ξ. ξ is taking into account
+to describe the internal motions, such as rotation and vibration [35]. g(x, t, u, ξ) is the
+Maxwellian distribution given by
+  K+1
+λ 2 −λ[(u−U )2 +|ξ|2 ]
+g=ρ
+e
+,
+π
+
+(2.2)
+
+where ρ is the macroscopic density, U is the macroscopic velocity in the x direction, λ is
+2
+with K being the
+related to the gas temperature T by λ = 1/T , |ξ|2 = ξ12 + ξ22 + . . . + ξK
+
+total number of degrees of freedom in ξ.
+The relation between the macroscopic conservative variables and the microscopic distribution function f is
+T
+
+Z
+
+W = (ρ, ρU, E) =
+
+Z
+ψf dΞ =
+
+ψg dΞ,
+
+(2.3)
+
+where E = 21 ρU 2 + p/(γ − 1) is the total energy, with p = 12 ρT = ρ/(2λ) to be the pressure,
+and γ = (K + 3)/(K + 1) is the ratio of specific heats.
+T
+
+1 2
+T
+2
+ψ = (ψ1 , ψ2 , ψ3 ) = 1, u, (u + |ξ| ) ,
+2
+
+(2.4)
+
+and dΞ = dudξ is the volume element in the phase space with dξ = dξ1 dξ2 . . . dξK . The
+second equality in equation (2.3) is due to the fact that the BGK collisional term conserves
+mass, momentum and energy. In other words, f and g satisfy the conservation constraint
+Z
+g−f
+dΞ = 0,
+(2.5)
+ψ
+τ
+5
+
+at any point in space and time. By taking moments of ψ to the BGK model (2.1), due to
+equation (2.5), we get
+Z
+
+Z
+ψft dΞ +
+
+uψfx dΞ = 0,
+
+(2.6)
+
+or
+Wt + Gx = 0,
+
+(2.7)
+
+where W is the vector of the macroscopic conservative variables in equation (2.3). G =
+R
+uψf dΞ is the flux function from the kinetic formulation. Specifically,
+
+
+
+
+1
+Gρ
+
+Z 
+
+
+
+
+u
+
+
+
+ f dΞ,
+(2.8)
+G =  Gm  = u 
+
+ 1
+
+GE
+(u2 + |ξ|2 )
+2
+where Gρ is the density flux, Gm is the momentum flux, GE is the energy flux.
+Based on the Chapman-Enskog expansion [3] with
+f = g − τ (gt + ugx ) + O(τ 2 ),
+
+(2.9)
+
+from the BGK model (2.1), the compressible Navier-Stokes equations on macroscopic variables can be obtained by omitting O(τ 2 ) terms (for details see [35])
+
+
+ρ
+
+
+
+
+
+ρU
+
+
+
+
+
+0
+
+
+
+
+
+
+ ρU  +  ρU 2 + p  = 
+ s1x
+
+
+
+
+
+s2x
+E
+U
+(E
++
+p)
+t
+x
+2K
+where s1x = µ[ K+1
+Ux ], s2x = µ[ K+3
+Tx +
+4
+
+2K
+U Ux ]
+K+1
+
+
+
+
+ ,
+
+
+(2.10)
+
+x
+
+are the viscous terms, µ = τ p is the
+
+dynamic viscousity coefficient. For a monatomic gas, K = 2, γ = 5/3, the above NavierStokes equations become,
+
+
+
+
+
+
+
+
+
+0
+
+ρ
+ρU
+
+
+4
+
+
+
+
+µUx
+ ρU  +  ρU 2 + p  = 
+
+3
+
+
+
+
+
+ 5
+4
+E
+U
+(E
++
+p)
+µTx + µU Ux
+t
+x
+4
+3
+
+6
+
+
+
+
+
+ .
+
+
+x
+
+(2.11)
+
+Remark 2.1. The kinetic flux function G in equation (2.8) encompasses both the convection
+and diffusion terms in the macroscopic Navier-Stokes system (2.10) with the approximation
+to the f function by equation (2.9). The convection term in the Navier-Stokes system (2.10)
+is due to the contribution from the Maxwellian function g in (2.9), while the diffusion term
+is due to the O(τ ) term in equation (2.9).
+
+2.2
+
+The RK CDG method
+
+We propose to use the RK CDG method [21] to solve equation (2.7). The CDG method
+evolves two sets of approximate solutions defined on overlapping cells. Compared with the
+DG method, the CDG method does not need a numerical flux at the cell interface. The
+evaluation of the flux at the interface of one cell is right inside a cell of the other staggered
+cells. The CDG method uses the flux function of the solution at the staggered cells, which
+has no ambiguous values there. This is convenient for us to define the BGK flux in the next
+subsection. In the following, we first follow [21] to describe the CDG method.
+i=N
+We first consider a 1D domain [0, L] with a partition of {xi }i=1
+. Denote xi+ 1 = 12 (xi +
+2
+
+xi+1 ), and let Ii = [xi− 1 , xi+ 1 ] and Ii+ 1 = [xi , xi+1 ] be two sets of overlapping cells. Two
+2
+
+2
+
+2
+
+discrete spaces associated with the overlapping cells Ii and Ii+ 1 are defined as
+2
+
+Zh = Zkh = {z : each of its 3 components z|Ii ∈ P k (Ii ), ∀i},
+Wh = Whk = {z : each of its 3 components z|Ii+ 1 ∈ P k (Ii+ 1 ), ∀i},
+2
+
+2
+
+where the local space P k (I) consists of polynomials of degree at most k on I.
+The semi-discrete CDG method for solving (2.7) is given as follows: find two sets of
+approximate solutions WhZ ∈ Zh and WhW ∈ Wh , such that for any ηh ∈ Zh , ζh ∈ Wh and
+for all i,
+d
+dt
+
+Z
+
+WhZ ηh
+
+Ii
+
+1
+dx =
+∆τ n
+
+Z
+
+(WhW
+
+−
+
+WhZ )ηh
+
+Z
+dx +
+
+Ii
+
+G(WhW )
+
+Ii
+
+d
+ηh dx
+dx
+
+(2.12)
+
+− G(WhW (xi+ 1 , t))ηh (x−
+) + G(WhW (xi− 1 , t))ηh (x+
+),
+i+ 1
+i− 1
+2
+
+d
+dt
+
+Z
+
+WhW ζh dx =
+
+Ii+ 1
+2
+
+1
+∆τ n
+
+Z
+
+2
+
+2
+
+(WhZ − WhW )ζh dx +
+
+Ii+ 1
+
+G(WhZ )
+
+Ii+ 1
+
+2
+
+−
+
+Z
+
+2
+
+d
+ζh dx
+dx
+
+2
+
+G(WhZ (xi+1 , t))ζh (x−
+i+1 )
+
+7
+
++
+
+G(WhZ (xi , t))ζh (x+
+i ),
+
+(2.13)
+
+where x±
+i are the right and left limits at the point xi . Here, the operations for vectors
+are in the component-wise sense [7]. ∆τ n is the maximum time step determined by the
+CFL condition, the specification of which can be found at the beginning of Section 3. The
+first terms on the right side of equations (2.12) and (2.13) are used to remove its O(1/∆t)
+dependency of numerical dissipation [21].
+We focus our discussions on the approximate solution WhZ on cell Ii . It can be expressed
+as
+WhZ (x, t)
+
+=
+
+k
+X
+
+WiZ,l (t)ηil (x),
+
+(2.14)
+
+l=0
+
+where {ηil } is a basis function of P k (Ii ). For example, the Legendre polynomials are a local
+x−xi
+x−xi 2
+orthogonal basis of P k (Ii ). In the 1D case, ηi0 = 1, ηi1 = ( ∆x
+), ηi2 = ( ∆x
+) − 13 ,. . ., where
+i /2
+i /2
+
+∆xi = xi+1/2 − xi−1/2 . The approximate solution WhW on cell Ii+ 1 can be defined similarly.
+2
+
+The fluxes G at the cell interfaces and the integrals on the right side of equations (2.12) and
+(2.13) are calculated by the gas-kinetic formulation presented in next section. The integrals
+on the right side of equation (2.12) contain solutions WhW , WhZ , which are continuous over two
+subintervals [xi− 1 , xi ] and [xi , xi+ 1 ]. These integrals are computed by Gaussian quadrature
+2
+
+2
+
+rules on each of the subinterval. Similar comments apply for the integral on the right hand
+side of equation (2.13). If the solutions are discontinuous, the TVB limiter proposed by
+Cockburn and Shu [7] will be used to eliminate spurious oscillations and enforce the stability.
+In this paper, we use a method of lines RK method for temporal discretization. Let
+Wh = (WhZ , WhW ), the third order TVD RK time discretization [31] for equations (2.12)
+and (2.13) is the following,
+(1)
+
+Wh = Whn + ∆tn Lh (Whn ),
+3
+1 (1) 1
+(2)
+(1)
+Wh = Whn + Wh + ∆tn Lh (Wh ),
+4
+4
+4
+1 n 2 (2) 2 n
+(2)
+n+1
+Wh = Wh + Wh + ∆t Lh (Wh ),
+3
+3
+3
+
+(2.15)
+
+where ∆tn = θ∆τ n is the current time step with θ ∈ (0, 1] and Lh (Wh ) is the spatial
+operators on the right side of the semi-discrete equations (2.12) and (2.13).
+Remark 2.2. For the third-order TVD RK method (2.15), the CDG method has a little
+larger CFL number than the DG method for convection part, e.g., the CFL numbers of the
+8
+
+CDG method are 0.58, 0.33, 0.22, while the CFL numbers of the DG method are 0.4, 0.2, 0.13,
+for P 1 , P 2 , P 3 respectively [22].
+
+2.3
+
+The BGK flux
+
+In this section, we describe how to evaluate the vector G from the BGK model for the
+CDG method in equations (2.12)-(2.13). As pointed out in Remark 2.1, both convection and
+viscous terms in Navier-Stokes equations (2.10) comes from the vector G, the evaluation of
+which mimics the Chapman-Enskog expansion [3]. Below, we provide a brief review of the
+existing algorithm in numerically approximating the BGK flux for the gas-kinetic scheme
+in the finite volume framework [36], with some of the ideas originally developed in [40, 35].
+Further development of such schemes in the DG framework could be found in [37, 18, 28].
+We note that it is very difficult to completely describe the BGK gas-kinetic scheme, hence
+we only outline main steps with intuition below, but refer readers to the original manuscript
+[36] for technical details.
+Gas-kinetic scheme in finite volume framework [36]. The gas-kinetic BGK scheme updates the macroscopic conservative variables based on integrating equation (2.7) from tn
+to tn+1 ,
+n+1
+
+Wj
+
+n
+
+= Wj +
+
+∆tn b n
+b n 1 ),
+(G 1 − G
+j+ 2
+∆xj j− 2
+
+(2.16)
+
+n
+
+where Wj are cell averages of the macroscopic conservative variables, ∆tn = tn+1 − tn is
+current time step, ∆xj = xj+ 1 − xj− 1 and
+2
+
+bn 1 = 1
+G
+j+ 2
+∆tn
+
+2
+
+Z
+
+∆tn
+
+Z
+
+ψuf (xj+ 1 , tn + t, u, ξ) dΞdt.
+2
+
+0
+
+(2.17)
+
+Here f is to be obtained from analytically solving the BGK model (2.1) via characteristically
+tracing with a source term. Specifically,
+Z
+1 t
+n
+0
+n
+f (xj+1/2 , t +t, u, ξ) =
+g(x0 , t0 , u, ξ)e−(t +t−t )/τ dt0 +e−t/τ f0 (xj+1/2 −ut, tn , u, ξ), (2.18)
+τ 0
+where x0 = xj+1/2 −u(tn +t−t0 ) is the particle trajectory, f0 is the distribution function at tn ,
+g is the Maxwellian distribution function. Based on the framework outlined above, to update
+n+1
+
+the macroscopic conservative variable Wj
+
+, we need to specify procedures to approximate
+
+f0 and g in equation (2.18) and to evaluate the temporal integration in equation (2.17).
+9
+
+Approximation of f0 . The initial distribution function is approximated based on equation (2.9) as well as a first order Taylor expansion in space around xj+ 1 . We use superscripts
+2
+
+l and r to indicate the left and right limits of the solutions respectively. In particular,
+( 
+
+g l 1 − τ (al u + Al ) + al (x − xj+1/2 ) , if x ≤ xj+1/2 ,
+n
+
+
+f0 (x, t , u, ξ) =
+(2.19)
+g r 1 − τ (ar u + Ar ) + ar (x − xj+1/2 ) , if x > xj+1/2 ,
+where
+ K+1
+l
+2
+λ
+l
+l 2
+2
+n
+l
+e−λ [(u−U ) +|ξ| ] ,
+g l = g(x−
+,
+t
+,
+u,
+ξ)
+=
+ρ
+j+1/2
+π
+ r  K+1
+2
+λ
+r
+r 2
+2
+n
+r
+g r = g(x+
+,
+t
+,
+u,
+ξ)
+=
+ρ
+e−λ [(u−U ) +|ξ| ] ,
+j+1/2
+π
+
+
+(2.20)
+
+are the Maxwellian distribution functions based on macroscopic variables (ρl , U l , λl ) and
++
+l
+l
+(ρr , U r , λr ) at the left limit x−
+j+1/2 and the right limit xj+1/2 respectively. a , A are related
+
+to the spatial and temporal slopes of g at the left limit x−
+j+1/2 , which are simply denoted as
+∂x g l and ∂t g l with l denoting the left limit. Similarly for ρlx , λlx and Uxl . Specifically, for al
+we have
+∂x g l
+ρlx K + 1 l
+=
++
+λ − λlx [(u − U l )2 + |ξ|2 ] − 2λl (U l − u)Uxl ,
+(2.21)
+gl
+ρl
+2λl x
+which is a quadratic function of u and ξ. In terms of implementation, it was suggested in [36]
+al =
+
+to express al in the following quadratic form of u and ξ
+1
+al = al1 + al2 u + al3 (u2 + |ξ|2 ),
+2
+
+(2.22)
+
+with the coefficients al1 , al2 , al3 to be determined in a similar fashion as equations (2.28)-(2.31)
+below. Al can also be expressed in the form of
+Al =
+
+1
+∂t g l
+= Al1 + Al2 u + Al3 (u2 + |ξ|2 ),
+l
+g
+2
+
+whose coefficients can be determined by the compatibility condition as in equations (2.33)(2.34) below. Similar notations and comments apply to ar , Ar . More details can be found
+in [36].
+Approximation of the equilibrium state g. In order to get the Maxwellian function g at
+(x0 , t0 ) in equation (2.18), let g be approximated by the following gf function based on a
+Taylor expansion of the Maxwellian function around (xj+ 1 , tn ) both in space and in time.
+2
+( 
+
+g0 1 + āl (x − xj+1/2 ) + Ā(t − tn ) , if x ≤ xj+1/2 ,
+
+
+gf (x, t, u, ξ) =
+(2.23)
+g0 1 + ār (x − xj+1/2 ) + Ā(t − tn ) , if x > xj+1/2 ,
+10
+
+where g0 is the Maxwellian distribution function at (xj+ 1 , tn ) with
+2
+
+
+
+n
+
+g0 = g0 (xj+1/2 , t , u, ξ) = ρ0
+
+λ0
+π
+
+ K+1
+2
+
+e−λ0 [(u−U0 )
+
+2 +|ξ|2
+
+].
+
+(2.24)
+
+Here the macroscopic variables (ρ0 , (ρU )0 , E0 ) at the cell interface xj+1/2 and time tn are
+obtained by
+T
+
+Z
+
+Z
+
+(ρ0 , (ρU )0 , E0 ) =
+
+Z
+
+l
+
+Z
+
+g ψdΞ +
+u≥0
+
+g r ψdΞ,
+
+(2.25)
+
+u<0
+
+where g l , g r are specified in equation (2.20). It can be observed that gf has discontinuous
+spatial slope and continuous temporal slope around (xj+ 1 , tn ): āl , ār are related to the spatial
+2
+
+slopes of g0 from the left and right sides of xj+1/2 and Ā is the temporal slope of g0 . They can
+be determined by a similar process as that for al , ar and Al , Ar . The only difference is that
+we use the ‘after-collision’ Maxwellian g0 here, while we use the ‘before-collision’ equilibrium
+state g l and g r previously.
+Analytical evaluation of the integration in equation (2.17). After f is determined, we can
+get
+bn 1 = 1
+G
+j+ 2
+∆tn
+
+Z
+
+∆tn
+
+h
+
+i
+hψuf (xj+ 1 , tn + t, u, ξ)iu≥0 + hψuf (xj+ 1 , tn + t, u, ξ)iu<0 dt.
+2
+
+0
+
+2
+
+where
+n
+
+Z
+
+Z
+
+hψuf (xj+ 1 , t + t, u, ξ)iu≥0 =
+2
+
+u≥0
+
+ψuf (xj+ 1 , tn + t, u, ξ) dΞ.
+2
+
+Similarly for the u < 0 integral. The details of the moments evaluation of such integration
+can be found in Appendix A of [36]. The temporal integration in equation (2.17) can also
+be performed analytically.
+Proposed CDG-BGK method. We propose to use the CDG method for spatial discretization with the BGK flux for convection and diffusion terms in the Navier-Stokes system. In
+the CDG framework, two pieces of approximate solutions defined on overlapping cells are
+evolved. Since the cell interface on one set of cell is right inside a cell of the staggered cells,
+the solution at the staggered cell is continuous for flux evaluation without ambiguity, and
+we have
+g l = g r = g0 ,
+
+al = ar = a,
+
+Al = Ar = A,
+
+(2.26)
+
+in equation (2.19). In other words, the before-collision and after-collision equilibrium states
+are the same. Due to this fact, the use of exact time evolution formula (2.18) is not as crucial.
+11
+
+Therefore, we propose to use the third-order explicit TVD RK method for time evolution by
+the method of lines approach. Below we describe in details several numerical approximations
+needed for the proposed CDG-BGK method. They are, in some sense, special cases for the
+BGK scheme reviewed above.
+Approximation of the distribution function f . The particle distribution function f at any
+spatial location x and time t is approximated by
+f (x, t, u, ξ) = g [1 − τ (au + A)] .
+
+(2.27)
+
+where g = g(x, t, u, ξ) is the Maxwellian distribution (2.2) at time t. Similar to equations
+(2.21) and (2.22), a is related to the spatial slope of g in the form of
+∂x g .
+1
+= a = a1 + a2 u + a3 (u2 + |ξ|2 ).
+g
+2
+
+(2.28)
+
+The coefficients a1 , a2 and a3 are determined by taking the spatial derivatives on the components of W in equation (2.3),
+Z
+Z
+∂ρ
+∂(ρU )
+ag dΞ =
+,
+aug dΞ =
+,
+∂x
+∂x
+
+Z
+
+1
+∂E
+a (u2 + |ξ|2 )g dΞ =
+,
+2
+∂x
+
+(2.29)
+
+where the slopes of the macroscopic conservative variables can be obtained by directly taking
+derivatives of the CDG polynomials. Equation (2.29) can be rewritten in a matrix-vector
+form as
+1
+Γ(a1 , a2 , a3 ) =
+ρ
+T
+
+
+
+∂ρ ∂(ρU ) ∂E
+,
+,
+∂x ∂x ∂x
+
+T
+,
+
+(2.30)
+
+α, β = 1, 2, 3,
+
+(2.31)
+
+where
+
+Z
+(Γαβ ) =
+
+
+gψα ψβ dΞ/ρ
+
+1
+
+U
+
+
+=
+ U
+
+U2 +
+
+Φ1
+
+Φ2
+
+Φ1
+1
+2λ
+
+
+
+
+Φ2 
+,
+Φ3
+
+with
+
+
+
+
+1
+K +1
+1
+(K + 3)U
+2
+3
+Φ1 =
+U +
+, Φ2 =
+U +
+,
+2
+2λ
+2
+2λ
+
+
+1
+K 2 + 4K + 3 (2K + 6)U 2
+4
+Φ3 =
+U +
++
+.
+4
+4λ2
+2λ
+A is the temporal slope of g with the following form,
+∂t g .
+1
+= A = A1 + A2 u + A3 (u2 + |ξ|2 ),
+g
+2
+12
+
+(2.32)
+
+where A1 , A2 , A3 are uniquely determined by the compatibility condition
+Z
+(au + A)ψg dΞ = 0,
+
+(2.33)
+
+that is
+1
+Γ(A1 , A2 , A3 ) = −
+ρ
+T
+
+Z
+auψg dΞ,
+
+(2.34)
+
+where Γ is the same as equation (2.31). The matrix Γ is symmetric and can be efficiently
+inverted to determine the components of a in equation (2.28) and A in equation (2.32).
+Integration in the phase space to obtain G. After a, A are determined, we can get the
+fluxes in equations (2.12) and (2.13) by taking the moments of uψ to the distribution function
+f given by equation (2.27),
+Z
+
+
+G = uψf dΞ = ρ huψi − τ hau2 ψi − τ hAuψi .
+
+(2.35)
+
+The moments evaluation of the Maxwellian distribution function are provided in Appendix A.1.
+Remark 2.3. Although the derivation of the numerical flux functions G comes from the
+kinetic BGK formulation, the integration in the phase space is done analytically as in Appendix A.1. The actual implementation is at the level of macroscopic variables. Hence, the
+computational cost is on the same scale of other existing Navier-Stokes solvers. The same
+comments apply to the gas-kinetic BGK scheme in [36].
+Remark 2.4. The BGK model corresponds to a unit Prandtl number P r. For a variable
+Prandtl number, we modify the energy flux by [36]
+Gnew
+= GE + (
+E
+
+1
+− 1)q.
+Pr
+
+(2.36)
+
+The heat flux q can be evaluated precisely,
+
+
+Z
+Z
+
+1
+1 2
+2
+2
+q=
+(u − U ) (u − U ) + ξ f dΞ = −τ g (u − U ) ψ3 − ψ2 U + U (au + A) dΞ.
+2
+2
+(2.37)
+Remark 2.5. In equation (2.29), the spatial derivative is directly taken on the CDG polynomials. It would lead to a k th order scheme with P k polynomial space for viscous flow
+simulations (not the optimal (k + 1)th order). For convection dominated problems, the accuracy would still be (k + 1)th order. Such fact is verified in our numerical results in Section 3.
+13
+
+2.4
+
+Extension to two-dimensional cases
+
+In this subsection, we extend the proposed CDG-BGK method in previous subsections to
+two-dimensional cases. The 2D BGK model can be written as
+ft + ufx + vfy =
+
+g−f
+,
+τ
+
+(2.38)
+
+where f (x, y, t, u, v, ξ) is the particle distribution function of space variables x, y, time
+variable t, particle velocities u, v and internal variables ξ. While g(x, y, t, u, v, ξ) is the
+Maxwellian distribution given by
+  K+2
+λ 2 −λ[(u−U )2 +(v−V )2 +|ξ|2 ]
+g=ρ
+e
+,
+π
+
+(2.39)
+
+where ρ is the macroscopic density, λ = 1/(2RT ), U, V are the macroscopic velocities in
+2
+x, y directions, |ξ|2 = ξ12 + ξ22 + . . . + ξK
+with K being the total number of degrees of
+
+freedom in ξ. Based on the conservative constraint condition (2.5), taking the moments
+of ψ = (ψ1 , ψ2 , ψ3 , ψ4 )T = (1, u, v, 21 (u2 + v 2 + |ξ|2 ))T to equation (2.38), we can get the
+following system of macroscopic conservative equation
+Z
+Z
+Z
+ψft dΞ + uψfx dΞ + vψfy dΞ = 0,
+
+(2.40)
+
+or
+Wt + Gx + Hy = 0.
+
+(2.41)
+
+R
+Here W = (ρ, ρU, ρV, E)T is the vector of macroscopic conservative variables, G = uψf dΞ
+R
+and H = vψf dΞ are the flux functions in x, y directions respectively. The ChapmanEnskog expansion with f = g − τ (gt + ugx + vgy ) + O(τ 2 ), and from equation (2.40) gives a
+2D compressible Navier-Stokes equations [35],
+
+
+ρ
+
+
+
+
+
+ρU
+
+
+
+
+ ρU 
+ ρU 2 + p
+
+
+
+
+ +
+ ρV 
+ ρU V
+
+
+
+E
+
+t
+
+U (E + p)
+
+
+
+
+
+ρV
+
+
+
+
+ ρU V
+
+
++
+
+
+
+ ρV 2 + p
+
+
+x
+
+V (E + p)
+
+14
+
+
+
+
+
+0
+
+
+
+
+ s1x
+
+
+=
+
+
+
+ s2x
+
+
+y
+
+s3x
+
+
+
+
+
+0
+
+
+
+
+ s1y
+
+
++
+
+
+
+ s2y
+
+
+x
+
+s3y
+
+
+
+
+
+ ,
+
+
+y
+
+(2.42)
+
+where
+
+= µ 2Ux −
+
+
+2
+S1x
+(Ux + Vy ) , S1y = µ(Uy + Vx ),
+K +2
+
+
+2
+S2x = µ(Vx + Uy ), S2y = µ 2Vy −
+(Ux + Vy ) ,
+K +2
+
+
+K +4
+2
+U (Ux + Vy ) +
+Tx ,
+S3x = µ 2U Ux + V (Vx + Uy ) −
+K +2
+4
+
+
+2
+K +4
+S3y = µ U (Uy + Vx ) + 2V Vy −
+V (Ux + Vy ) +
+Ty .
+K +2
+4
+1
+ρ(U 2
+2
+
+The total energy E =
+
++ V 2 ) + p/(γ − 1) with the pressure p = ρ/(2λ) and γ =
+
+(K + 4)/(K + 2). For monatomic gas K = 1 and γ = 5/3, while for diatomic gas K = 3
+and γ = 7/5. Similarly, the kinetic flux functions G, H in equation (2.41) are represented by
+both convection and diffusion terms in the 2D macroscopic Navier-Stokes equations (2.42)
+in x, y directions respectively.
+We consider the following numerical discretization of a 2D rectangular domain Ω =
+j=N
+
+x
+[0, Lx ] × [0, Ly ]. Let {xi }i=N
+and {yj }j=1 y be partitions of [0, Lx ] and [0, Ly ] respectively,
+i=1
+
+with xi+ 1 = 21 (xi + xi+1 ), yj+ 1 = 12 (yj + yj+1 ). Let Ii = [xi− 1 , xi+ 1 ], Jj = [yj− 1 , yj+ 1 ], Ii+ 1 =
+2
+
+2
+
+2
+
+2
+
+2
+
+2
+
+2
+
+[xi , xi+1 ], Jj+ 1 = [yj , yj+1 ]. Denote {Di,j }i,j and {Di+ 1 ,j+ 1 }i,j be two sets of overlapping
+2
+
+2
+
+2
+
+meshes for Ω, with Di,j = Ii × Jj and Di+ 1 ,j+ 1 = Ii+ 1 × Jj+ 1 , see Fig. 2.1. Two discrete
+2
+
+2
+
+2
+
+2
+
+spaces associated with the overlapping cells {Di,j }i,j and {Di+ 1 ,j+ 1 }i,j are defined as
+2
+
+2
+
+Zh = Zkh = {z : each of its 4 components z|Di,j ∈ P k (Di,j ), ∀i, j},
+Wh = Whk = {z : each of its 4 components z|Di+ 1 ,j+ 1 ∈ P k (Di+ 1 ,j+ 1 ), ∀i, j},
+2
+
+2
+
+2
+
+2
+
+where the local space P k (D) consists of polynomials of degree at most k on D. Similar to
+the 1D case, the semi-discrete CDG scheme for solving equation (2.41) is given as follows:
+find two sets of approximate solutions WhZ ∈ Zh and WhW ∈ Wh , such that for any ηh ∈ Zh ,
+ζh ∈ Wh and for all i and j,
+Z
+Z
+Z
+d
+d
+1
+d
+Z
+Z
+W
+Wh ηh dxdy =
+(Wh − Wh )ηh dxdy +
+(G(WhW ) ηh + H(WhW ) ηh ) dxdy
+n
+dt Di,j
+∆τ D
+dx
+dy
+Di,j
+Z yj+1/2 i,j
+−
+(G(WhW (xi+ 1 , y, t))ηh (x−
+, y) − G(WhW (xi− 1 , y, t))ηh (x+
+, y))dy
+i+ 1
+i− 1
+yj−1/2
+xi+1/2
+
+Z
+−
+
+xi−1/2
+
+2
+
+2
+
+2
+
+2
+
+−
++
+W
+))dx,
+(H(WhW (x, yj+ 1 , t))ηh (x, yj+
+1 ) − H(Wh (x, yj− 1 , t))ηh (x, y
+j− 1
+2
+
+2
+
+2
+
+2
+
+(2.43)
+15
+
+d
+dt
+
+Z
+Di+ 1 ,j+ 1
+2
+
+2
+
+Figure 2.1: 2D overlapping meshes.
+Z
+1
+W
+Wh ζh dxdy =
+(WhZ − WhW )ζh dxdy
+n
+∆τ D 1 1
+i+ 2 ,j+ 2
+Z
+d
+d
++
+(G(WhZ ) ζh + H(WhZ ) ζh ) dxdy
+dx
+dy
+Di+ 1 ,j+ 1
+Z yj+12 2
++
+Z
+−
+(G(WhZ (xi+1 , y, t))ζh (x−
+i+1 , y) − G(Wh (xi , y, t))ζh (xi , y))dy
+y
+Z jxi+1
+−
+(H(WhZ (x, yj+1 , t))ζh (x, yj+1
+) − H(WhZ (x, yj , t))ζh (x, yj+ ))dx.
+−
+xi
+
+(2.44)
+Here vectors operations are component-wise operations. The semi-discrete scheme of equations (2.43)-(2.44) will be evolved in time by the third-order TVD RK time method (2.15).
+The approximate solution WhZ on the element Di,j can be expressed as
+WhZ (x, y, t)
+
+=
+
+2k+1
+X
+
+Z,l
+l
+Wi,j
+(t)ηi,j
+(x, y),
+
+for x, y ∈ Di,j .
+
+(2.45)
+
+l=0
+l
+The 2D Legendre polynomials ηi,j
+are taken as a local orthogonal basis on Di,j ,
+0
+(x, y) = 1,
+ηi,j
+
+1
+ηi,j
+(x, y) =
+
+(x − xi )
+,
+∆xi /2
+
+1
+4
+1
+ηi,j
+(x, y) = (ηi,j
+(x, y))2 − ,
+3
+
+(y − yj )
+2
+3
+1
+(x, y) = ηi,j
+(x, y)ηi,j
+(x, y),
+, ηi,j
+∆yj /2
+1
+5
+2
+ηi,j
+(x, y) = (ηi,j
+(x, y))2 − , . . . ,
+3
+2
+(x, y) =
+ηi,j
+
+where ∆xi = xi+ 1 − xi− 1 , ∆yj = yj+ 1 − yj− 1 . The approximate solution WhW can be
+2
+
+2
+
+2
+
+2
+
+obtained similarly. The fluxes G(x, y, t) and H(x, y, t) on the right side of equations (2.43)
+16
+
+and (2.44) are calculated by the gas-kinetic formulation presented below. Note that in 2D
+case, the first two integrals on the right side of equation (2.43) contain four pieces of solutions
+on four subcells, each of which is calculated by a 2D Gaussian quadrature rule. The rest
+two integrals on the right side of equation (2.43) are associated with two pieces of solutions,
+each of which is determined by a 1D Gaussian quadrature rule. Similar comments apply for
+the integrals on the right side of equation (2.44).
+In the following, we follow the spirit of 1D BGK scheme to propose the 2D strategy
+for computing the fluxes G and H. The distribution function f in equation (2.38) can be
+expressed as
+f (x, y, tn , u, v, ξ) = g [1 − τ (au + bv + A)] ,
+
+(2.46)
+
+up to the first order of τ , where g = g(x, y, tn , u, v, ξ) is the Maxwellian distribution function (2.39) associated with the macroscopic variables (ρ, U, V, λ) at (x, y) on the dual mesh.
+Similar to the 1D case, a, b are related to the spatial slopes of g in x, y directions respectively,
+and are taken to be in the form of
+∂x g .
+1
+= a = a1 +a2 u+a3 v +a4 (u2 +v 2 +|ξ|2 ),
+g
+2
+
+∂y g .
+1
+= b = b1 +b2 u+b3 v +b4 (u2 +v 2 +|ξ|2 ).
+g
+2
+
+The components of a and b can be uniquely determined from the partial derivatives of the
+macroscopic conservative variables with respect to x, y
+Z
+Z
+∂ρ
+∂ρ
+ag dΞ =
+,
+bg dΞ =
+,
+∂x
+∂y
+Z
+Z
+∂(ρU )
+∂(ρU )
+aug dΞ =
+,
+bug dΞ =
+,
+∂x
+∂y
+Z
+Z
+∂(ρV )
+∂(ρV )
+avg dΞ =
+,
+bvg dΞ =
+,
+∂x
+∂y
+Z
+Z
+1 2
+∂E
+1
+∂E
+2
+2
+a (u + v + |ξ| )g dΞ =
+,
+b (u2 + v 2 + |ξ|2 )g dΞ =
+.
+2
+∂x
+2
+∂y
+The above equations can be written in a matrix-vector form as
+
+T
+1 ∂ρ ∂(ρU ) ∂(ρV ) ∂E
+T
+Γ(a1 , a2 , a3 , a4 ) =
+,
+,
+,
+,
+ρ ∂x ∂x
+∂x
+∂x
+
+(2.47)
+
+(2.48)
+
+where
+1
+
+U
+
+
+ U
+
+=
+ V
+
+
+U2 +
+UV
+
+V2+
+
+Φ1
+
+Φ2
+
+Φ3
+
+
+Z
+(Γαβ ) =
+
+
+gψα ψβ dΞ/ρ
+
+17
+
+V
+1
+2λ
+
+Φ1
+
+UV
+1
+2λ
+
+
+
+
+Φ2 
+
+,
+Φ3 
+
+Φ4
+
+(2.49)
+
+with
+
+
+
+
+1
+K +2
+1
+(K + 4)U
+2
+2
+3
+2
+Φ1 =
+U +V +
+, Φ2 =
+U + UV +
+,
+2
+2λ
+2
+2λ
+
+
+
+
+1
+(K + 4)V
+1
+(K + 4)(U 2 + V 2 ) K 2 + 6K + 8
+3
+2
+2
+2 2
+Φ3 =
+U +U V +
+, Φ4 =
+(U + V ) +
++
+.
+2
+2λ
+4
+λ
+4λ2
+Thus, a can be obtained by solving the linear system (2.48). Similar procedures can be used
+to get b. A is related to the temporal slope of g with the following form
+∂t g .
+1
+= A = A1 + A2 u + A3 v + A4 (u2 + v 2 + |ξ|2 ),
+g
+2
+where A1 , A2 , A3 , A4 are uniquely determined by the compatibility condition
+Z
+(au + bv + A)ψg dΞ = 0.
+After a and b are determined, A1 , A2 , A3 , A4 can be obtained by solving the following linear
+system
+1
+Γ(A1 , A2 , A3 , A4 ) = −
+ρ
+T
+
+Z
+(au + bv)ψg dΞ,
+
+(2.50)
+
+with Γ specified in equation (2.49).
+After the distribution function f in equation (2.46) is determined, we can get the fluxes
+G and H in equations (2.43) and (2.44) by taking the moments of uψ and vψ, they are
+Z
+
+
+G = uψf dΞ = ρ huψi − τ hau2 ψi − τ hbuvψi − τ hAuψi ,
+Z
+
+
+H = vψf dΞ = ρ hvψi − τ hauvψi − τ hbv 2 ψi − τ hAvψi ,
+where the evaluation of the moments for the 2D Maxwellian distribution function are organized in Appendix A.1.
+
+2.5
+
+Numerical boundary conditions
+
+For the numerical tests in this paper, we follow closely the examples in [36, 18], with similar
+boundary conditions, e.g. inflow, outflow and wall boundary conditions. In the CDG method,
+two sets of approximate solutions on overlapping cells are updated; thus numerical boundary
+conditions are needed for both solutions. The inflow and outflow conditions can be treated,
+in a similar manner as those in DG, for both solutions in the CDG method. The more
+challenging case is the wall boundary conditions.
+18
+
+In the following, we take the Couette flow in a channel with the bottom wall fixed and
+the top wall moving (see Section 3.2) as an example to describe the proposed numerical
+no-slip boundary condition at both walls. Although the Couette flow is a 2D problem, it
+can be implemented as a 1D problem since the solutions do not depend on x. We assume
+the overlapping cells in the y-direction as plotted in Fig. 2.2 with the walls located at y0 and
+y5 with y0 = 0, y5 = 5. Cells J0 = [y− 1 , y 1 ] and J5 = [y 9 , y 11 ] are cut through by the walls.
+2
+
+2
+
+2
+
+2
+
+For the no-slip boundary condition at wall, the physical macroscopic velocities U, V are zero
+on the wall. However, the numerical ones might not be zero due to numerical errors; such
+non-zero errors might accumulated during long time evolution and eventually impact the
+effectiveness of the proposed scheme. We propose to enforce zero velocities at the numerical
+level. For example, in cell J0 at the bottom wall, we adopt the following basis functions
+
+
+
+2
+y − y0
+y − y0
+0
+1
+2
+η0 = 1, η0 =
+, η0 =
+,
+∆y0 /2
+∆y0 /2
+with
+Z,1 1
+Z,2 2
+0
+(ρU )Zh = (ρU )Z,0
+0 η0 + (ρU )0 η0 + (ρU )0 η0 ,
+
+Z,1 1
+Z,2 2
+0
+(ρV )Zh = (ρV )Z,0
+0 η0 + (ρV )0 η0 + (ρV )0 η0 ,
+
+Z
+l
+where ∆y0 = y 1 − y− 1 , (ρU )Z,l
+0 are the coefficients of (ρU )h for the basis η0 with l = 0, 1, 2,
+2
+
+similarly for (ρV
+
+2
+
+)Z,l
+0 .
+
+= (ρV )Z,0
+=0
+Since η01 = η02 = 0 at y0 , we only need to enforce (ρU )Z,0
+0
+0
+
+to get (ρU )y0 = (ρV )y0 = 0. Similarly for another set of solutions in cell J 1 . The approximate
+2
+
+solution in the ghost cell J− 1 is obtained in a mirror-symmetric manner with respect to the
+2
+
+solution on cell J 1 . Similar ideas of using a special set of basis to preserve the solution
+2
+
+structure in DG methods can also be found in [6]. Boundary conditions on the top wall
+y = 5 can be set similarly.
+
+Figure 2.2: The 1D overlapping cells for the Couette flow.
+
+19
+
+3
+
+Numerical examples
+
+In this section, we present simulation results of the proposed CDG-BGK method for several
+1D and 2D viscous flow problems. For comparison, most of the examples are taken from [36,
+18]. The maximum time step ∆τ n in equations. (2.12), (2.13), (2.43) and (2.44) is chosen
+based on the CFL condition, while the time step in evolution is taken to be ∆tn = 0.9∆τ n
+unless otherwise specified.
+We define, in 1D cases,
+
+
+n
+
+∆τ = min
+
+CFLc hx CFLd h2x
+,
+Emx
+µ
+
+
+,
+
+and in 2D cases,
+
+
+
+.  Em
+. µ
+Emy
+µ
+x
++
++
+∆τ = min CFLc
+, CFLd
+,
+hx
+hy
+h2x h2y
+
+
+
+
+where hx = mini min(∆xi , ∆xi+ 1 ) and hy = minj min(∆yj , ∆yj+ 1 ) , with ∆xi = xi+ 1 −
+n
+
+2
+
+2
+
+2
+
+xi− 1 and ∆xi+ 1 = xi+1 − xi , similarly for ∆yj and ∆yj+ 1 . Emx , Emy are the maximum
+2
+
+2
+
+2
+
+eigenvalues in x and y directions respectively. The eigenvalues are U − C, U, U, U + C
+in the x direction and V − C, V, V, V + C in the y direction for convection part, where
+p
+C = γp/ρ is the speed of sound. CFLc and CFLd are the CFL numbers for the convection
+and diffusion parts. In our numerical examples, for the third-order TVD Runge-Kutta
+method (2.15), we take CFLc = 0.58, 0.33, 0.22 [22] and CFLd = 0.06, 0.01, 0.005 for P 1 ,
+P 2 and P 3 solution spaces respectively. Our CFLd numbers are larger than those taken
+in [23] for the central local DG method, yet they are working properly for all our numerical
+examples. The Prandtl number modification (2.36) will be used in all numerical examples
+except the laminar boundary layer case.
+
+3.1
+
+Accuracy test
+
+We first solve the Navier-Stokes equations (2.7) with smooth solutions, where the initial
+conditions are given by
+ρ(x, t = 0) = 1 + 0.2 sin(πx),
+
+U (x, t = 0) = 1,
+
+p(x, t = 0) = 1.
+
+(3.1)
+
+The computational domain is [0, 2] with periodic boundary condition. Two different viscosity
+coefficients are tested, µ = 0.00001 and µ = 0.1, corresponding to a convection-dominated
+20
+
+flow and a viscous flow, respectively. For this example, the Prandtl number is P r = 2/3
+and the ratio of specific heats is γ = 5/3. We compute the solutions up to time t = 2.
+TVB limiter is not used for this case. Since the exact solution is not available for this
+problem, the numerical errors and orders of density ρ are computed by comparing to the
+reference solution
+which is obtained
+by the P 3 solution space with 1280 cells. Here we take
+
+
+4
+3
+CFLd h2x for the P 3 case so that the temporal error is not dominated.
+c hx
+∆τ n = min CFL
+,
+µ
+Emx
+The results are shown in Table 3.1. (k + 1)th -order convergent rate can be observed for the
+proposed CDG-BGK scheme with µ = 0.00001 and P k solution spaces, while k th -order
+convergent rate for even k and (k + 1)th -order convergent rate for odd k can be observed for
+the solution with µ = 0.1 and P k solution spaces.
+
+3.2
+
+Couette flow
+
+In the second example, we consider the couette flow in a channel of height H, with the bottom
+wall fixed and the top wall moving at a constant speed U1 in the horizontal direction. We
+assume isothermal boundary condition at the bottom and top walls with temperature being
+T0 and T1 respectively. If the viscosity and heat conduction coefficients µ and κq are constant,
+an analytical solution for the steady state temperature distribution can be obtained, that is
+y
+P rEc y
+y
+T − T0
+=
++
+(1 − ),
+T1 − T0
+H
+2 H
+H
+
+(3.2)
+
+where the Eckert number is Ec = U12 /(Cp (T1 − T0 )). Cp is the heat capacity at a constant
+pressure, for a monatomic gas Cp = 25 R and for a diatomic gas Cp = 72 R.
+The solution of this problem does not depend on x, hence we solve it as a reduced 1D
+problem from equation (2.41) in the y direction, that is,
+Wt + Hy = 0,
+i.e. the compressible Navier-Stokes equations (2.42) without the x-derivative term.
+We take the computational domain to be [0, 5] (H = 5) and divided by 5 cells with cell
+size ∆y = 1. The isothermal no-slip boundary condition with pressure gradient being zero
+in y direction is used on the bottom and top walls [36]. Here we consider the temperature λ0
+and λ1 at the boundaries with different ratios of specific heats γ = 5/3, 7/5, different Prandtl
+21
+
+Table 3.1: Accuracy test, L1 and L∞
+P 1 , P 2 and P 3 solution spaces.
+N
+10
+20
+1
+µ = 0.00001, P
+40
+80
+160
+10
+20
+2
+µ = 0.00001, P
+40
+80
+160
+10
+20
+3
+µ = 0.00001, P
+40
+80
+160
+10
+20
+1
+µ = 0.1, P
+40
+80
+160
+10
+20
+µ = 0.1, P 2
+40
+80
+160
+10
+20
+µ = 0.1, P 3
+40
+80
+160
+
+errors and orders for the initial condition (3.1) with
+L1 error order L∞ error order
+0.21E-02
+–
+0.34E-02
+–
+0.78E-03 1.45 0.12E-02 1.50
+0.24E-03 1.72 0.36E-03 1.70
+0.65E-04 1.88 0.10E-03 1.86
+0.17E-04 1.94 0.26E-04 1.93
+0.28E-03
+–
+0.46E-03
+–
+0.36E-04 2.94 0.58E-04 2.98
+0.46E-05 2.98 0.73E-05 3.00
+0.58E-06 2.99 0.92E-06 3.00
+0.73E-07 2.99 0.12E-06 2.99
+0.27E-04
+–
+0.38E-04
+–
+0.16E-05 4.04 0.25E-05 3.95
+0.10E-06 4.02 0.15E-06 3.99
+0.63E-08 4.01 0.97E-08 3.99
+0.39E-09 4.00 0.61E-09 3.99
+0.10E-02
+–
+0.19E-02
+–
+0.27E-03 1.93 0.52E-03 1.89
+0.68E-04 1.98 0.13E-03 1.97
+0.17E-04 2.00 0.33E-04 1.99
+0.42E-05 2.02 0.84E-05 2.00
+0.13E-03
+–
+0.22E-03
+–
+0.35E-04 1.95 0.56E-04 1.94
+0.87E-05 1.99 0.14E-04 1.99
+0.22E-05 2.00 0.35E-05 2.00
+0.55E-06 2.00 0.89E-06 2.00
+0.93E-05
+–
+0.17E-04
+–
+0.74E-06 3.65 0.14E-05 3.61
+0.49E-07 3.92 0.90E-07 3.93
+0.31E-08 3.99 0.56E-08 4.02
+0.19E-09 4.03 0.38E-09 3.89
+
+22
+
+Table 3.2: Boundary settings of λ0 and
+Pr
+γ
+Ec
+λ0
+0.72,1.0 5/3 10 1/1.19960
+0.72,1.0 5/3 50 1/1.19992
+0.72,1.0 7/5 10 1/1.42851
+0.72,1.0 7/5 50 1/1.42829
+
+λ1 for Couette flow.
+λ1
+1/1.20040
+1/1.20008
+1/1.42863
+1/1.42886
+
+Table 3.3: Couette flow, L1 and L∞ errors and orders for P 1 , P 2 and P 3 solution spaces.
+N L1 error order L∞ error order
+5 0.61E+00
+–
+0.66E+00
+–
+10 0.19E+00 1.66 0.22E+00 1.60
+P1
+20 0.61E-01 1.65 0.74E-01 1.55
+5 0.13E-03
+–
+0.16E-03
+–
+10 0.30E-04 2.14 0.41E-04 1.96
+P2
+20 0.74E-05 2.04 0.11E-04 1.96
+5 0.22E-04
+–
+0.28E-04
+–
+10 0.35E-05 2.63 0.45E-05 2.62
+P3
+20 0.61E-06 2.51 0.82E-06 2.46
+numbers P r = 0.72, 1.0 and different Eckert numbers Ec = 10, 50. For specific settings, see
+Table 3.2. We take U1 = 0.1 and µ = 0.1. The initial conditions are
+ρ(y, t = 0) = 1,
+
+U (y, t = 0) = 0.1,
+
+V (y, t = 0) = 0,
+
+M (y, t = 0) = 0.1,
+
+where M = U/C is the Mach number.
+The results with different boundary settings are shown in Figs. 3.1 and 3.2. The Prandtl
+number modification (2.36) is used in P r = 0.72 cases. From the figures, we can see that: (1)
+numerical results match the analytical solutions very well with different parameters even on
+such a coarse numerical cell; (2) the implementation of the Prandtl number modification is
+needed compared with the analytical solutions and (3) P 2 solution space gives more accurate
+results than P 1 solution space with the same cell size. Numerical errors and orders of convergence to analytical solutions are summarized in Table 3.3. Roughly k th order convergent
+rate is observed for the method with P k polynomial space.
+
+3.3
+
+Navier-Stokes shock structure
+
+Now we consider the shock structure problem for a monatomic gas by solving the NavierStokes equations (2.7). γ = 5/3 and the dynamical viscosity coefficient is µ = µ−∞ (T /T−∞ )0.8 ,
+23
+
+Figure 3.1: Temperature ratio (T − T0 )/(T1 − T0 ) in the Couette flow with γ = 5/3. Left:
+Ec = 10. Right: Ec = 50.
+−∞ and ∞ denote the values at the upstream and downsteam respectively. The dynamical
+viscosity coefficient at the upstream keeps to be a constant µ−∞ = 0.0005. The collision time
+τ in the BGK model is local via the relationship τ = µ/p in each cell. The Mach number
+M = 1.5 at the upstream and the Prandtl number P r = 2/3. The initial conditions are
+
+
+
+
+(γ + 1)M 2
+
+
+
+
+1
+
+
+ρ
+ρ
+2 + (γ − 1)M 2
+
+
+
+
+
+
+ 1 
+
+
+
+
+γ
+−
+1
+2
+ U 
+
+.
+,  U  = 
++
+=
+2
+
+
+
+
+
+
+
+
+γ
++
+1
+(γ
++
+1)M
+ 
+
+ 1 
+
+
+
+γ
+−
+1
+2γ
+1
+p −∞
+p
+2
+∞
+M −
+γM 2
+γ+1
+γ + 1 γM 2
+For this problem, the shock would not arrive at the left or right boundary. Hence, we
+can impose the boundary condition as the constant left and right states. The reference
+solution can be obtained by integrating the steady state Navier-Stokes equations, with the
+corresponding Matlab programs available in Appendix C of [36].
+The computational domain is [−0.1, 0.1] and the cell size ∆x = 1/800 for both P 1 and
+P 2 cases. TVB limiter is used for this example. The results are presented in Fig. 3.3. In the
+figures, the normal stress and the heat flux are defined to be
+4 Ux
+τnn = µ ,
+3 2p
+
+qx = −
+
+5 µ Tx
+.
+4 P r pC
+
+From these results, we can see that the shock structure is captured well with a reasonable
+24
+
+Figure 3.2: Temperature ratio (T − T0 )/(T1 − T0 ) in the Couette flow with γ = 7/5. Left:
+Ec = 10. Right: Ec = 50.
+number of grid points. The difference between the results from P 1 and P 2 cases are very
+small.
+
+3.4
+
+Shock tube problem
+
+In the fourth example, the Sod problem is tested by solving the Navier-Stokes equations (2.7)
+with γ = 1.4 and P r = 2/3. The computational domain is [−0.5, 0.5] with the cell size
+∆x = 1/200, and ∆tn = 0.5∆τ n in this case. TVB limiter is used for this example. The
+initial conditions are
+
+(
+(1, 0, 1),
+(ρ, U, p) =
+(0.125, 0, 0.1),
+
+x ≤ 0,
+x > 0.
+
+(3.3)
+
+We compute the solutions up to time t = 0.2. Similar to shock structure case, we can impose
+the boundary condition as the constant left and right states. In Fig. 3.4, we show the results
+√
+with a kinematic viscosity coefficient ν = µ/ρ = 0.0005/(ρ λ). The solid lines are the
+reference solutions computed on a much refined cell size ∆x = 1/1200 with P 2 solution
+space. Both the shock and the contact discontinuity are captured well. From the zoom-in
+Fig. 3.5, we can see the P 2 case gives slightly better results than the P 1 case. The results
+√
+with a smaller viscosity coefficient ν = µ/ρ = 0.00005/(ρ λ) are presented in Fig. 3.6. The
+CDG-BGK method can capture the sharp discontinuity.
+
+25
+
+3.5
+
+Laminar boundary layer
+
+The last example is the 2D laminar boundary layer problem over a flat plate and we solve
+the 2D Navier-Stokes equations (2.41). The wall starts from x = 0 with a length of L = 3
+at y = 0. A uniform rectangular mesh with 480 × 120 cells is used on the computational
+domain [−1, 3] × [0, 1]. The initial conditions are set to be
+ρ−∞ = ρ(x, y, t = 0) = 1,
+
+U−∞ = U (x, y, t = 0) = 1,
+
+V (x, y, t = 0) = 0,
+
+M (x, y, t = 0) = 0.2.
+
+We take γ = 1.4, P r = 1, and λ−∞ = λ(x, y, t = 0) = γM 2 /2. The kinematic viscosity
+coefficient is ν = 3 × 10−4 . The Reynolds number based on the upstream flow states and the
+length L is Re =
+
+LU−∞
+ν
+
+= 104 . No limiter is used in this case. The no-slip adiabatic boundary
+
+condition is imposed on the flat plate. Mirror-symmetric boundary condition is used for the
+other part of the bottom boundary. On the left and top boundaries, the non-reflective
+boundary condition is used, which is based on the Riemann invariants. For example, on the
+left boundary, let (ρ1 , U1 , p1 ) be the macroscopic density, velocity and pressure right inside
+the computation domain adjacent to the left boundary and (ρ0 , U0 , p0 ) be the values on the
+ghost cell correspondingly, we have
+ρ0 = (
+
+1
+C02 γ−1
+) ,
+γ S0
+
+1
+U0 = (R1 + R2 ),
+2
+
+p0 =
+
+C02 ρ0
+,
+γ
+
+(3.4)
+
+2C1
+−∞
+and R2 = U1 − γ−1
+are two Riemann invariants, S−∞ = ρp−∞
+is the
+where R1 = U−∞ + 2C
+γ
+γ−1
+−∞
+p
+p
+entropy from the initial condition, C1 = γ/(2λ1 ) and C−∞ = γ/(2λ−∞ ) are speeds of
+
+sound. U0 = 12 (R1 +R2 ), C0 =
+U0 +
+
+2C0
+γ−1
+
+= R1 , U0 −
+
+2C0
+γ−1
+
+γ−1
+(R1 −R2 ), S0
+4
+
+=
+
+p0
+ργ0
+
+in (3.4) are obtained from the conditions
+
+= R2 and S0 = S−∞ . For details, see [38]. Similar treatments on
+
+the top boundary. A first order extrapolation of cell average of the conservative variables is
+used at the right boundary.
+In Fig. 3.7, we show the P 1 solution of the velocity U in the x direction. The nondimensional velocity U/U−∞ at location x = 0.5 and x = 1 for both P 1 and P 2 cases
+are shown in Fig. 3.8, which are compared to the Blasius solution. In the plots, η =
+p
+y U−∞ /(νx), and we can see that the scheme with the P 2 solution space performs slightly
+better than that with the P 1 solution space.
+
+26
+
+4
+
+Conclusion
+
+In this paper, a novel CDG-BGK method for viscous flow simulations is proposed. The
+new scheme inherits several merits from both the CDG framework and the gas-kinetic BGK
+schemes. The fluxes in the BGK method is based on the particle transport and collisional
+mechanism via the gas-kinetic BGK model. Such fluxes take into account of both the convective and viscous terms, due to the intrinsic connection between the gas-kinetic BGK model
+and the Navier-Stokes equations. The CDG method evolves two pieces of approximate solutions defined on overlapping meshes. The cell interfaces of one computational mesh are
+inside the staggered mesh, hence the fluxes are in the continuous region of the staggered
+solution. For the CDG-BGK method, the distribution function in the interior of elements
+is continuous and is much easier to evaluate than existing finite volume or DG BGK methods. Numerical results in 1D and 2D illustrate the accuracy and robustness of the proposed
+CDG-BGK scheme.
+Acknowledgement. Research of the first author is partly supported by the scholarship from
+China Scholarship Council (CSC) under the Grant CSC No. 201206030032. The first, third
+and fourth authors are partially supported by Air Force Office of Scientific Computing YIP
+grant FA9550-12-0318, NSF grant DMS-1217008 and University of Houston. The authors
+would like to thank F.-Y. Li, H.-W. Liu and C.-W. Shu for helpful discussions about boundary
+conditions.
+
+A
+A.1
+
+Appendix
+1D and 2D moments
+
+The evaluation of the Maxwellian is given in this section, the details can be found in [36].
+For the 1D flow, the moments of Maxwellian g with respect to Q is introduced as,
+Z
+ρhQi = Qgdudξ,
+and the general moment formula is
+hun ξ l i = hun ihξ l i,
+27
+
+where n is integer, and l is an even integer. The moments of hξ l i are
+hξ 0 i = 1,
+
+hξ 2 i =
+
+K
+,
+2λ
+
+hξ 4 i =
+
+K(K + 2)
+,
+4λ2
+
+(A.1)
+
+and
+hu0 i = 1,
+
+hu1 i = U, . . . , hun+2 i = U hun+1 i +
+
+n+1 n
+hu i.
+2λ
+
+(A.2)
+
+For the 2D flow,
+Z
+ρhQi =
+
+Qgdudvdξ,
+
+and the general moment formula is
+hun v m ξ l i = hun ihv m ihξ l i,
+where n, m are integers, and l is an even integer. Here the moments hun i and hξ l i are the
+same as the 1D flow. The moments of v are
+hv 0 i = 1,
+
+hv 1 i = V, . . . , hv n+2 i = V hv n+1 i +
+
+n+1 n
+hv i.
+2λ
+
+(A.3)
+
+References
+[1] F. Bassi and S. Rebay, A high-order accurate discontinuous finite element method
+for the numerical solution of the compressible Navier–Stokes equations, Journal of Computational Physics, 131 (1997), pp. 267–279.
+[2] P. L. Bhatnagar, E. P. Gross, and M. Krook, A model for collision processes
+in gases. I. Small amplitude processes in charged and neutral one-component systems,
+Physical Review, 94 (1954), pp. 511–525.
+[3] S. Chapman and T. G. Cowling, The mathematical theory of non-uniform gases:
+an account of the kinetic theory of viscosity, thermal conduction and diffusion in gases,
+Cambridge University Press, 1991.
+[4] S.-Y. Chou and D. Baganoff, Kinetic flux–vector splitting for the Navier–Stokes
+equations, Journal of Computational Physics, 130 (1997), pp. 217–230.
+[5] B. Cockburn, G. E. Karniadakis, and C.-W. Shu, The development of discontinuous Galerkin methods, Springer, 2000.
+28
+
+[6] B. Cockburn, F. Li, and C.-W. Shu, Locally divergence-free discontinuous Galerkin
+methods for the Maxwell equations, Journal of Computational Physics, 194 (2004),
+pp. 588–610.
+[7] B. Cockburn, S.-Y. Lin, and C.-W. Shu, TVB Runge-Kutta local projection discontinuous Galerkin finite element method for conservation laws III: one-dimensional
+systems, Journal of Computational Physics, 84 (1989), pp. 90–113.
+[8] B. Cockburn and C.-W. Shu, Runge–Kutta discontinuous Galerkin methods for
+convection-dominated problems, Journal of Scientific Computing, 16 (2001), pp. 173–
+261.
+[9] S. Godunov, A finite difference scheme for numerical computation of the discontinuous
+wave solutions of equations of fluid dynamics, Math. Sb., 47 (1959), pp. 271–306.
+[10] A. Harten, B. Engquist, S. Osher, and S. R. Chakravarthy, Uniformly
+high order accurate essentially non-oscillatory schemes, III, Journal of Computational
+Physics, 71 (1987), pp. 231–303.
+[11] A. Harten, P. D. Lax, and B. v. Leer, On upstream differencing and Godunov-type
+schemes for hyperbolic conservation laws, SIAM review, 25 (1983), pp. 35–61.
+[12] G.-S. Jiang and C.-W. Shu, Efficient Implementation of Weighted ENO Schemes,
+Journal of Computational Physics, 126 (1996), pp. 202–228.
+[13] A. Kurganov and E. Tadmor, New high-resolution central schemes for nonlinear conservation laws and convection–diffusion equations, Journal of Computational
+Physics, 160 (2000), pp. 241–282.
+[14] J. Li, Q. Li, and K. Xu, Comparison of the generalized Riemann solver and the gaskinetic scheme for inviscid compressible flow simulations, Journal of Computational
+Physics, 230 (2011), pp. 5080–5099.
+[15] Q. Li, S. Fu, and K. Xu, Application of gas-kinetic scheme with kinetic boundary
+conditions in hypersonic flow, AIAA Journal, 43 (2005), pp. 2170–2176.
+29
+
+[16] Q. Li, K. Xu, and S. Fu, A high-order gas-kinetic Navier–Stokes flow solver, Journal
+of Computational Physics, 229 (2010), pp. 6715–6731.
+[17] W. Liao, L.-S. Luo, and K. Xu, Gas-kinetic scheme for continuum and nearcontinuum hypersonic flows, Journal of Spacecraft and Rockets, 44 (2007), pp. 1232–
+1240.
+[18] H. Liu and K. Xu, A Runge–Kutta discontinuous Galerkin method for viscous flow
+equations, Journal of Computational Physics, 224 (2007), pp. 1223–1242.
+[19] X.-D. Liu, S. Osher, and T. Chan, Weighted essentially non-oscillatory schemes,
+Journal of Computational Physics, 115 (1994), pp. 200–212.
+[20] Y. Liu, Central schemes on overlapping cells, Journal of Computational Physics, 209
+(2005), pp. 82–104.
+[21] Y. Liu, C.-W. Shu, E. Tadmor, and M. Zhang, Central discontinuous Galerkin
+methods on overlapping cells with a nonoscillatory hierarchical reconstruction, SIAM
+Journal on Numerical Analysis, 45 (2007), pp. 2442–2467.
+[22]
+
+, L2 stability analysis of the central discontinuous Galerkin method and a comparison between the central and regular discontinuous Galerkin methods, ESAIM: Mathematical Modelling and Numerical Analysis, 42 (2008), pp. 593–607.
+
+[23]
+
+, Central local discontinuous Galerkin methods on overlapping cells for diffusion equations, ESAIM-Mathematical Modelling and NumericalAnalysis, 45 (2011),
+pp. 1009–1032.
+
+[24] J. Luo, L. Xuan, and K. Xu, Comparison of Fifth-Order WENO Scheme and Finite Volume WENO-Gas-Kinetic Scheme for Inviscid and Viscous Flow Simulation,
+Communications in Computational Physics, 14 (2013), pp. 599–620.
+[25] J. Mandal and S. Deshpande, Kinetic flux vector splitting for Euler equations,
+Computers & Fluids, 23 (1994), pp. 447–478.
+
+30
+
+[26] G. May, B. Srinivasan, and A. Jameson, An improved gas-kinetic BGK finitevolume method for three-dimensional transonic flow, Journal of Computational Physics,
+220 (2007), pp. 856–878.
+[27] H. Nessyahu and E. Tadmor, Non-oscillatory central differencing for hyperbolic
+conservation laws, Journal of Computational Physics, 87 (1990), pp. 408–463.
+[28] G. Ni, S. Jiang, and K. Xu, A DGBGK scheme based on WENO limiters for viscous
+and inviscid flows, Journal of Computational Physics, 227 (2008), pp. 5799–5815.
+[29] S. Osher and F. Solomon, Upwind difference schemes for hyperbolic systems of
+conservation laws, Mathematics of computation, 38 (1982), pp. 339–374.
+[30] P. L. Roe, Approximate Riemann solvers, parameter vectors, and difference schemes,
+Journal of Computational Physics, 43 (1981), pp. 357–372.
+[31] C.-W. Shu, Total-variation-diminishing time discretizations, SIAM Journal on Scientific and Statistical Computing, 9 (1988), pp. 1073–1084.
+[32] C.-W. Shu and S. Osher, Efficient implementation of essentially non-oscillatory
+shock-capturing schemes, Journal of Computational Physics, 77 (1988), pp. 439–471.
+[33] E. F. Toro, Riemann solvers and numerical methods for fluid dynamics: a practical
+introduction, Springer, 2009.
+[34] B. Van Leer, Towards the ultimate conservative difference scheme. V. A second-order
+sequel to Godunov’s method, Journal of Computational Physics, 32 (1979), pp. 101–136.
+[35] K. Xu, Gas-kinetic schemes for unsteady compressible flow simulations, Lecture seriesvan Kareman Institute for fluid dynamics, 3 (1998), pp. C1–C202.
+[36]
+
+, A gas-kinetic BGK scheme for the Navier–Stokes equations and its connection
+with artificial dissipation and Godunov method, Journal of Computational Physics, 171
+(2001), pp. 289–335.
+
+[37]
+
+, Discontinuous Galerkin BGK method for viscous flow equations: one-dimensional
+systems, SIAM Journal on Scientific Computing, 25 (2004), pp. 1941–1963.
+31
+
+[38] K. Xu and Z. Li, Dissipative mechanism in Godunov-type schemes, International
+Journal for Numerical Methods in Fluids, 37 (2001), pp. 1–22.
+[39] K. Xu, M. Mao, and L. Tang, A multidimensional gas-kinetic BGK scheme for
+hypersonic viscous flow, Journal of Computational Physics, 203 (2005), pp. 405–421.
+[40] K. Xu and K. H. Prendergast, Numerical Navier-Stokes solutions from gas kinetic
+theory, Journal of Computational Physics, 114 (1994), pp. 9–17.
+
+32
+
+Figure 3.3: Navier-Stokes shock structure calculation, P 1 and P 2 cases.
+
+33
+
+Figure 3.4: Shock tube √
+problem for the Navier-Stokes equations with kinematic viscosity
+coefficient ν = 0.0005/(ρ λ).
+
+Figure 3.5: The zoom-in view
+√ of the density distribution around the shock wave in shock
+tube test with ν = 0.0005/(ρ λ).
+
+34
+
+Figure 3.6: Shock tube problem
+for the Navier-Stokes equations with kinematic viscosity
+√
+coefficient ν = 0.00005/(ρ λ).
+
+Figure 3.7: Laminar boundary layer, contour of velocity obtained by P 1 case. The right plot
+is the zoom-in plot of the interesting region in the left plot.
+
+Figure 3.8: Laminar boundary layer, U velocity distribution along two vertical lines benchmarked with the Blasius solution. CDG solutions with P 1 and P 2 solution spaces.
+
+35
+
+

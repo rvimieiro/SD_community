@@ -1,0 +1,2973 @@
+Journal of Artificial Intelligence Research 34 (2009) 391–442
+
+Submitted 07/08; published 03/09
+
+Solving #S AT and Bayesian Inference with Backtracking Search
+Fahiem Bacchus
+Shannon Dalmao
+Toniann Pitassi
+
+FBACCHUS @ CS . TORONTO . EDU
+TONI @ CS . TORONTO . EDU
+
+Department of Computer Science
+University of Toronto
+Toronto, Ontario
+Canada, M5S 3G4
+
+Abstract
+Inference in Bayes Nets (BAYES) is an important problem with numerous applications in probabilistic reasoning. Counting the number of satisfying assignments of a propositional formula
+(#S AT) is a closely related problem of fundamental theoretical importance. Both these problems,
+and others, are members of the class of sum-of-products (S UM P ROD) problems. In this paper
+we show that standard backtracking search when augmented with a simple memoization scheme
+(caching) can solve any sum-of-products problem with time complexity that is at least as good
+any other state-of-the-art exact algorithm, and that it can also achieve the best known time-space
+tradeoff. Furthermore, backtracking’s ability to utilize more flexible variable orderings allows us to
+prove that it can achieve an exponential speedup over other standard algorithms for S UM P ROD on
+some instances.
+The ideas presented here have been utilized in a number of solvers that have been applied to
+various types of sum-of-product problems. These system’s have exploited the fact that backtracking
+can naturally exploit more of the problem’s structure to achieve improved performance on a range
+of problem instances. Empirical evidence of this performance gain has appeared in published works
+describing these solvers, and we provide references to these works.
+
+1. Introduction
+Probabilistic inference in Bayesian Networks (BAYES) is an important and well-studied problem
+with numerous practical applications in probabilistic reasoning (Pearl, 1988). Counting the number
+of satisfying assignments of a propositional formula (#S AT) is also a well-studied problem that is
+of fundamental theoretical importance. These two problems are known to be closely related. In
+particular, the decision versions of both #S AT and BAYES are #P-complete (Valiant, 1979b, 1979a;
+Roth, 1996), and there are natural polynomial-time reductions from each problem to the other
+(Darwiche, 2002; Sang, Beame, & Kautz, 2005b; Chavira, Darwiche, & Jaeger, 2006).
+A more direct relationship between these two problems arises from the observation that they
+are both instances of the more general “sum of products” problem (S UM P ROD). Perhaps the most
+fundamental algorithm for S UM P ROD (developed in a general way by Dechter 1999) is based on
+the idea of eliminating the variables of the problem one by one following some fixed order. This
+algorithm is called variable elimination (VE), and it is the core notion in many state-of-the-art exact
+algorithms for S UM P ROD (and BAYES).
+SAT, the problem of determining whether or not a propositional formula has any satisfying
+assignments, is also an instance of S UM P ROD, and the original Davis-Putnam algorithm (DP) for
+determining satisfiability (Davis & Putnam, 1960) which uses ordered resolution is a version of
+c 2009 AI Access Foundation. All rights reserved.
+
+BACCHUS , DALMAO , & P ITASSI
+
+variable elimination. However, DP is never used in practice as its performance is far inferior to
+modern versions of the backtracking search based DPLL algorithm (Davis, Logemann, & Loveland,
+1962). In fact DP is provably less powerful than modern versions of DPLL equipped with clause
+learning (Hertel, Bacchus, Pitassi, & van Gelder, 2008).
+This performance gap naturally raises the question of whether or not backtracking search could
+be used to solve other types of S UM P ROD problems more efficiently than variable elimination. In
+this paper, we present a general algorithmic framework for using backtrack search methods (specifically DPLL) to solve S UM P ROD and related problems.1 We first show that a straightforward adaptation of backtracking for solving S UM P ROD is insufficient. However, by examining the sources
+of inefficiency we are able to develop some simple caching schemes that allow our backtracking
+algorithm, #DPLL-Cache, to achieve the same performance guarantees as state-of-the-art exact algorithms for S UM P ROD, in terms of both time and space. Furthermore, we prove that backtracking’s
+natural additional flexibility allows it to sometimes achieve an exponential speedup over other existing algorithms. Specifically, we present a family of S UM P ROD instances where #DPLL-Cache
+achieves an exponential speedup over the original versions of three prominent algorithms for S UM P ROD.
+Besides these theoretical results, there are also good reasons to believe that backtracking based
+algorithms have the potential to perform much better than their worst case guarantees on problems
+that arise from real domains. In fact, subsequent work has investigated the practical application of
+the ideas presented here to the problem of counting satisfying assignments, BAYES, and constraint
+optimization with very successful results (Sang, Bacchus, Beame, Kautz, & Pitassi, 2004; Sang
+et al., 2005b; Sang, Beame, & Kautz, 2005a, 2007; Davies & Bacchus, 2007; Kitching & Bacchus,
+2008).
+An outline of the paper follows. In Section 2, we define S UM P ROD ; demonstrate that #S AT ,
+BAYES, and other important problems are instances of this class of problems; discuss various graphtheoretic notions of width that can be used to characterize the complexity of algorithms for S UM P ROD; and review some core state-of-the-art exact algorithms for S UM P ROD. In Section 3, we
+discuss DPLL-based algorithms with caching for solving #S AT and S UM P ROD and provide worst
+case complexity bounds for these algorithms. These bounds are the same as the best time and space
+guarantees achieved by currently known algorithms. In Section 4, we provide a framework for
+comparing our algorithms with other algorithms for S UM P ROD and prove that with caching DPLL
+can efficiently simulate known exact algorithms while sometimes achieving super-polynomially
+superior performance. In Section 5 we discuss some of the work that has used our algorithmic
+ideas to build practical solvers for various problems. Finally, we provide some closing remarks in
+Section 6.
+
+2. Background
+In this section, we first define the sum-of-products (S UM P ROD) class of problems, and then illustrate how BAYES, #S AT, and some other important problems are instances of S UM P ROD. As we
+will show in the rest of the paper, backtracking search equipped with different caching schemes is
+1. The notion of “backtracking” over a previous set of commitments can be utilized in other contexts, including in other
+algorithms for S UM P ROD. However, here we are referring to the standard algorithmic paradigm of backtracking
+search that explores a single tree of partial variable assignments in a depth-first manner. This algorithm has an
+extensive history that stretches back over a hundred years (Bitner & Reingold, 1975).
+
+392
+
+BACKTRACKING S EARCH
+
+FOR
+
+#SAT AND BAYES
+
+well suited for solving S UM P ROD. The key computational structure that is exploited by all algorithms for S UM P ROD is then explained and the graph theoretic notion of width that captures this
+structure is identified. Different notions of “width” exist, and we present three different definitions
+and show that they all yield essentially equivalent measures of complexity. The different definitions
+are however very useful in that different algorithms are most easily analyzed using different definitions of width. Finally, we briefly review some of the most important exact algorithms for solving
+S UM P ROD and related problems.
+2.1 Sum-of-Products
+Dechter (1999) has been shown that BAYES and many other problems are instances of a more
+general problem called S UM P ROD (sum-of-products). An instance of S UM P ROD is defined by
+the tuple hV, F, ⊕, ⊗i, where V is a set of discrete valued variables {X1 , . . . , Xn }, F is a set of
+functions {f1 , . . . , fm } with each fi defined over some set of variables Ei ⊆ V, ⊕ is an addition
+operator, and ⊗ is a multiplication operator. The range of the functions in F depends on the problem,
+with ⊕ and ⊗ being operators over that range such that both are commutative, associative, and ⊗
+distributes over ⊕. Typical examples involve functions that range over the boolean domain, with
+⊕ being disjunction ∨ and ⊗ being conjunction ∧, or over the reals, with ⊕ and ⊗ being ordinary
+addition and multiplication.
+Definition 1 (S UM P ROD) Given hV, F, ⊕, ⊗i the S UM P ROD problem is to compute
+MM
+X1 X2
+
+···
+
+m
+MO
+
+fi (Ei ),
+
+Xn i=1
+
+i.e., the sum (⊕) over all values (assignments) of the variables V of the product (⊗) of the functions
+F evaluated at those assignments.
+A number of well known problems are instances of S UM P ROD. We describe some of them
+below.
+2.1.1 BAYES :
+BAYES is the problem of computing probabilities in a Bayesian Network (BN). Developed by Pearl
+(1988), a Bayesian network is a triple (V, E, P) where (V, E) describes a directed acyclic graph,
+in which the nodes V = {X1 , . . . , Xn } represent discrete random variables, edges represent direct
+correlations between the variables, and associated with each random variable Xi is a conditional
+probability table CPT (or function), fi (Xi , π(Xi )) ∈ P, that specifies the conditional distribution of
+Xi given assignments of values to its parents π(Xi ) in (V, E). A BN represents a joint distribution
+over the random variables V in which the probability of any assignment (x1 , . . . , xn ) to the variables
+Q
+is given by the equation Pr (x1 , . . . , xn ) = ni=1 fi (xi , π(xi )), where fi (xi , π(xi )) is fi evaluated
+at this particular assignment.
+The generic BAYES problem is to compute the posterior distribution of a variable Xi given a
+particular assignment to some of the other variables α: i.e., Pr (Xi |α). Since Xi has only a finite set
+of k values, this problem can be further reduced to that of computing the k values Pr (Xi = dj ∧ α),
+j = 1, . . . , k and then normalizing them so that they sum to 1. The values Pr (Xi = dj ∧ α) can
+be computed by making all of the assignments in α as well as Xi = dj , and then summing out the
+393
+
+BACCHUS , DALMAO , & P ITASSI
+
+other variables from the joint distribution Pr (x1 , . . . , xn ). Given the above product decomposition
+of Pr (x1 , . . . , xn ), this is equivalent to reducing the functions fi ∈ P by setting the variables
+assigned in α and Xi = dj , and then summing their product over the remaining variables; i.e., it is
+an instance of S UM P ROD.
+Computing all Marginals It is common when solving BAYES to want to compute all marginals.
+That is, instead of wanting to compute just the marginal Pr(Xi |α) for one particular variable Xi ,
+we want to compute the marginal for all variables not instantiated by α.
+2.1.2 M ARKOV R ANDOM F IELDS
+Markov Random Fields or Markov Networks (MN) (Preston, 1974; Spitzer, 1971) are similar to
+Bayesian Networks in that they also define a joint probability distribution over a set of discrete
+random variables V = {X1 , . . . , Xn } using a set of functions fi , called potentials, each over some
+set of variables Ei ⊆ V. In particular, the probability of any assignment (x1 , . . . , xn ) to the variables
+is given by the normalized product of the fi evaluated at the values specified by the assignment:
+Q
+i fi (Ei [x1 , . . . , xn ]). The difficulty is to compute the partition function, or normalizing constant:
+Z=
+
+X
+
+···
+
+m
+XY
+
+fi (Ei ).
+
+Xn i=1
+
+X1
+
+Computing the partition function is thus an instance of S UM P ROD.
+2.1.3 M OST P ROBABLE E XPLANATION
+Most Probable Explanation (MPE) is the problem of finding the most probable complete assignment
+to the variables in a Bayes net (or Markov net) that agrees with a fixed assignment to a subset of the
+variables (the evidence). If the evidence, α, is an instantiation of the variables in E ⊂ V, then MPE
+is the problem of computing
+max
+V −E
+
+m
+Y
+
+fi |α (Ei − E),
+
+i=1
+
+where fi |α is the reduction of the function fi by the instantiations α to the variables in E (yielding
+a function over the variables Ei − E).
+2.1.4 S AT
+Let V = {X1 , X2 , . . . , Xn } be a collection of n Boolean variables, and let φ(V) be a k-CNF
+Boolean formula on these variables with m clauses {c1 , . . . , cm }. An assignment α to the Boolean
+variables V is satisfying if it makes the formula True (i.e., φ(α) = 1). S AT asks, given a Boolean
+formula φ(V) in k-CNF, does it have a satisfying assignment? By viewing each clause ci as being a
+function of its variables Ei (i.e., it maps an assignment to these variables to TRUE if that assignment
+satisfies the clause and to FALSE otherwise), we can see that S AT is equivalent to the instance of
+S UM P ROD hV, {c1 , . . . , cm }, ∨, ∧i:
+_
+X1
+
+···
+
+m
+_^
+
+Xn i=1
+
+394
+
+ci (Ei ).
+
+BACKTRACKING S EARCH
+
+FOR
+
+#SAT AND BAYES
+
+2.1.5 #S AT
+Given a k-CNF formula φ(V) on the boolean variables V = {X1 , . . . , Xn }, as above, #S AT is
+the problem of determining the number of satisfying assignments for φ. By viewing each clause
+ci as being a function from its variables Ei to {0, 1} (i.e., it maps satisfying assignments to 1
+and falsifying assignments to 0), we can see that #S AT is equivalent to the instance of S UM P ROD
+hV, {c1 , . . . , cm }, +, ×i:
+X
+
+···
+
+X1
+
+2.1.6 O PTIMIZATION
+
+WITH
+
+m
+XY
+
+ci (Ei ).
+
+Xn i=1
+
+D ECOMPOSED O BJECTIVE F UNCTIONS
+
+Let V = {X1 , . . . , Xn } be a collection of finite valued variables, the optimization task is to find
+an assignment of values to these variables that maximizes some objective function O(V) (i.e., a
+function that maps every complete assignment to the variables to a real value). In many problems
+O can be decomposed into a sum of sub-objective functions {f1 , . . . , fm } with each fi being a
+function of some subset of the variables Ei . This problem can then be cast as the S UM P ROD
+instance hV, {f1 , . . . , fm }, max, +i
+max · · · max
+X1
+
+Xn
+
+m
+X
+
+fi (Ei ).
+
+i=1
+
+2.2 The Computational Complexity of S UM P ROD
+S UM P ROD is a computationally difficult problem. For example, #S AT is known to be complete for
+the complexity class #P (Valiant, 1979b, 1979a) as is BAYES (Roth, 1996). Many special cases that
+are easy for S AT remain hard for #S AT, e.g., Valiant showed that the decision version of #S AT is #P
+hard even when the clause size, k, is 2, and Roth (1996) showed that the problem is hard to even
+approximate in many cases where S AT is easy, e.g., when φ(V) is monotone, or Horn, or 2-CNF.
+Despite this worst case intractability, algorithms for S UM P ROD, e.g., the variable elimination
+algorithm presented by Dechter (1999), can be successful in practice. The key structure exploited
+by this algorithm, and by most algorithms, is that the functions fi of many S UM P ROD problems are
+often relatively local and fairly independent. That is, it is often the case that the sets of variables
+Ei that each function fi depends on are small, so that each function is dependent only on a small
+“local” set of the variables, and that these sets share only a few variables with each other, so that the
+functions fi are fairly independent of each other. The graph theoretic notion of Tree Width is used
+to make these intuitions precise.
+2.3 Complexity Measures and Tree width
+There is a natural hypergraph, H = (V, E), corresponding to any instance hV, F, ⊕, ⊗i of S UM P ROD. In the hypergraph, V corresponds to the set V of variables, and for every function fi with
+domain set Ei , there is a corresponding hyperedge, Ei .
+The “width” of this hypergraph is the critical measure of complexity for essentially all state-ofthe-art algorithms for #S AT , BAYES, and S UM P ROD. There are three different (and well known)
+notions of width that we will define in this section. We will also show that these different notions of
+width are basically equivalent. These equivalences are known, although we need to state them and
+395
+
+BACCHUS , DALMAO , & P ITASSI
+
+prove some basic properties, in order to analyze our new algorithms, and to relate them to standard
+algorithms.
+Definition 2 (Branch width) Let H = (V, E) be a hypergraph. A branch decomposition of H is
+a binary tree T such that each node of T is labelled with a subset of V . There are |E| many leaves
+of T , and their labels are in one-to-one correspondence with the hyperedges E. For any other node
+n in T , let A denote the union of the leaf labeling of the subtree rooted at n, and let B denote the
+union of the labelings of the rest of the leaves. Then the label for n is the set of all vertices v that
+are in the intersection of A and B. The branch width of a branch decomposition T for H is the
+maximum size of any labeling in T . The branch width of H is the minimum branch width over all
+branch decompositions of H.
+Example 1 Figure 1 shows a particular branch decomposition Tbd for the hypergraph H = (V, E)
+where V = {1, 2, 3, 4, 5} and E = {{1, 2, 3}, {1, 4}, {2, 5}, {3, 5}, {4, 5}}. Tbd has branch width
+3.
+{}
+H
+ HH
+HH
+
+
+
+{3, 4, 5}
+
+{3, 4, 5}
+
+H
+ H
+
+H
+
+HH
+
+{2, 3, 4}
+
+{2, 5}
+
+{3, 5}
+
+{4, 5}
+
+H
+
+H
+
+H
+
+{1, 2, 3}
+
+{1, 4}
+
+Figure 1: A branch decomposition of branch width 3 for H = {(1, 2, 3), (1, 4), (2, 5), (3, 5),
+(4, 5)}.
+
+Definition 3 (Elimination width) Let H = (V, E) be a hypergraph, and let π = v1π , . . . , vnπ be an
+ordering of the vertices in V , where viπ is the ith element in the ordering. This induces a sequence
+of hypergraphs Hn , Hn−1 , . . . , H1 where H = Hn and Hi−1 is obtained from Hi as follows. All
+edges in Hi containing viπ are merged into one edge and then viπ is removed. Thus the underlying
+π . The induced width of H under π is the size of the largest edge in
+vertices of Hi are v1π , . . . vi−1
+all the hypergraphs Hn , . . . , H1 . The elimination width of H is the minimum induced width over
+all orderings π.
+Example 2 Under the ordering π = h1, 2, 3, 4, 5i the hypergraph H of Example 1 produces the
+following sequence of hypergraphs:
+H5 = {(1, 2, 3), (1, 4), (2, 5), (3, 5), (4, 5)}
+H4 = {(2, 3, 4), (2, 5), (3, 5), (4, 5)}
+H3 = {(3, 4, 5), (3, 5), (4, 5)}
+H2 = {(4, 5), (4, 5)}
+H1 = {(5)}
+396
+
+BACKTRACKING S EARCH
+
+FOR
+
+#SAT AND BAYES
+
+The induced width of H under π is 3—the edges (1, 2, 3) ∈ H1 , (2, 3, 4) ∈ H2 and (3, 4, 5) ∈ H3
+all achieve this size.
+Tree width is the third notion of width.
+Definition 4 (Tree width) Let H = (V, E) be a hypergraph. A tree decomposition of H is a
+binary tree T such that each node of T is labelled with a subset of V in the following way. First,
+for every hyperedge e ∈ E, some leaf node in T must have a label that contains e. Secondly, given
+labels for the leaf nodes every internal node n contains v ∈ V in its label if and only if n is on a path
+between two leaf nodes l1 and l2 whose labels contain v.2 The tree width of a tree decomposition
+T for H is the maximum size of any labeling in T minus 1, and the tree width of H is the minimum
+tree width over all tree decompositions of H.
+Example 3 Figure 2 shows Ttd a tree decomposition for H of Example 1. Ttd has tree width 3.
+{3, 4, 5}
+H
+ HH
+HH
+
+
+
+{2, 3, 4, 5}
+H
+HH
+
+
+{1, 2, 3, 4}
+
+{2, 5}
+
+{3, 4, 5}
+HH
+
+{3, 5}
+
+{4, 5}
+
+H
+
+H
+
+H
+
+{1, 2, 3}
+
+{1, 4}
+
+Figure 2: Tree decomposition of tree width for 3 for H of Example 1.
+The next three lemmas show that these three notions are basically equivalent. The proofs of
+Lemmas 2 and 3 are given in the appendix.
+Lemma 1 (Robertson & Seymour, 1991) Let H be a hypergraph. Then the branch width of H is
+at most the tree width of H plus 1, and the tree width of H is at most 2 times the branch width of H.
+Lemma 2 Let H = (V, E) be a hypergraph with a tree decomposition of width w. Then there is an
+elimination ordering π of the vertices V such that the induced width of H under π is at most w.
+Lemma 3 Let H be a hypergraph with elimination width at most w. Then H has a tree decomposition of tree width at most w.
+Letting TW (H), BW (H), and EW (H) represent the tree width, branch width and elimination
+width of the hypergraph H, the above lemmas give the following relationship between these three
+notions of width: for all hypergraphs H
+BW (H) − 1 ≤ TW (H) = EW (H) ≤ 2BW (H).
+2. Since the labels of internal nodes are determined by the labels of the leaf nodes in this way, it can be seen that for any
+pair of nodes n1 and n2 in the tree decomposition every node lying on the path between them must contain v in its
+label if v appears in both n1 ’s and n2 ’s labels. This is commonly known as the running intersection property of tree
+decompositions.
+
+397
+
+BACCHUS , DALMAO , & P ITASSI
+
+{4, 5}
+H
+ HH
+H
+
+
+{3, 4, 5}
+
+{4, 5}
+
+H
+H
+
+HH
+
+
+{2, 3, 4, 5}
+
+{3, 5}
+
+H
+ H
+
+H
+
+{1, 2, 3, 4}
+
+{2, 5}
+
+H
+
+H
+
+H
+
+{1, 2, 3}
+
+{1, 4}
+
+Figure 3: Tree decomposition of the hypergraph H of Example 1 that has been constructed from
+the ordering π = h1, 2, 3, 4, 5i.
+
+Example 4 The tree decomposition Ttd of H = {(1, 2, 3), (1, 4), (2, 5), (3, 5), (4, 5)} given in Figure 2 has the property that it has tree width no more than twice the branch width of the branch
+decomposition Tbd of H given in Figure 1. From Ttd we can obtain the ordering π = h1, 2, 3, 4, 5i
+that was used in Example 2. (The proof of Lemma 2, given in the appendix, shows how a elimination ordering can be constructed from a tree-decomposition.) As shown in Example 2, π has
+induced width 3, equal to the tree width of tree decomposition Ttd from which it was constructed.
+Finally, from the ordering π we can construct a new tree decomposition for H shown in Figure 3.
+(The proof of Lemma 3 shows how a tree decomposition can be constructed from an elimination
+ordering). π has induced width 3 and, as indicated by Lemma 3 the tree decomposition constructed
+from it has equal tree width of 3.
+It can be noted that our definition of tree decompositions varies slightly from other definitions
+that appear in the literature, e.g., (Bodlaender, 1993). Following Robertson and Seymour (1991)
+we have defined tree decompositions over hypergraphs, rather than over graphs, and we have made
+two extra restrictions so as to simplify the proofs of our results. First, we have restricted tree
+decompositions to be binary trees, and second we have required that each hyperedge be contained
+in the label of some leaf node of the tree decomposition. Usually tree decompositions are not
+restricted to be binary trees, and only require that each hyperedge be contained in some node’s label
+(not necessarily a leaf node).
+It is not difficult to show that any tree decomposition that fails to satisfy our two restrictions
+can be converted to a tree decomposition satisfying these restrictions without changing its width.
+However, it is more straight forward to observe that with or without these two restrictions tree width
+is equal to elimination width. Hence, our restrictions do not change the tree width.
+2.4 Exact Algorithms for S UM P ROD
+Next we briefly review three prominent exact algorithms for BAYES. These algorithms solve the
+more general problem S UM P ROD. All of these algorithms are in fact nondeterministic algorithms
+that should be considered to be families of procedures, each member of which is a particular deterministic realization.
+398
+
+BACKTRACKING S EARCH
+
+FOR
+
+#SAT AND BAYES
+
+2.4.1 VARIABLE E LIMINATION :
+Variable or bucket elimination (VE) (Dechter, 1999) is a fundamental algorithm for S UM P ROD.
+Variable elimination begins by choosing an elimination ordering, π for the variables V = {X1 ,
+. . ., Xn }: Xπ(1) , . . ., Xπ(n) . (This is the nondeterministic part of the computation). In the first
+phase, all functions involving Xπ(1) , are collected together in the set FXπ(1) , and a new function,
+F1 is computed by “summing out” Xπ(1) . The new function sums the product of all the functions in
+FXπ(1) over all of Xπ(1) ’s values. Specifically, F1 is a function of all of the variables of the functions
+in FXπ(1) except for Xπ(1) , and its value on any assignment α to these variables is
+F1 (α) =
+
+X
+
+Y
+
+f (α, Xπ(1) = d).
+
+d∈vals(Xπ(1) ) f ∈FXπ(1)
+
+Summing out Xπ(1) induces a new hypergraph, H1 , where the hyperedges corresponding to the set
+of functions FXπ(1) are replaced by a single hyperedge corresponding to the new function F1 . The
+process then continues to sum out Xπ(2) from H1 and so on until all n variables are summed out.
+Note that the sequence of hypergraphs generated by summing out the variables according to π is the
+same the sequence of hypergraphs that defines the induced width of π (Definition 3).
+The original Davis-Putnam algorithm (Davis & Putnam, 1960) based on ordered resolution is an
+instance of variable elimination. Consider applying variable elimination to the formulation of S AT
+given above. For S AT, the new functions Fi computed at each stage need only preserve whether or
+not the product of the functions in FXπ(i) is 0 or 1, the exact number of satisfying assignments need
+not remembered. This can be accomplished by representing the Fi symbolically as a set of clauses.
+Furthermore, this set of clauses can be computed by generating all clauses that can be obtained
+by resolving on Xπ(i) , and then discarding all old clauses containing Xπ(i) . This resolution step
+corresponds to the summing out operation, and yields precisely the Davis-Putnam (DP) algorithm
+for satisfiability.3
+2.4.2 R ECURSIVE C ONDITIONING :
+Recursive conditioning (RC) (Darwiche, 2001) is another type of algorithm for S UM P ROD. Let
+S = hV, F, ⊕, ⊗i be an instance of S UM P ROD and H be its underlying hypergraph. RC is a
+divide and conquer algorithm that instantiates the variables of V so as to break the problem into
+disjoint components. It then proceeds to solve these components independently. The original spaceefficient version of recursive conditioning, as specified by Darwiche (2001), begins with a branch
+decomposition T of H of width w and depth d, and an initially empty set of instantiated variables
+ρ. (Choosing T is the nondeterministic part of the computation.) We call this algorithm RC-Space
+and show it in Algorithm 1.
+The branch decomposition T specifies a recursive decomposition of the problem and is used by
+RC-Space as follows. Let label (n) be the label of a node in T , and let ST be the S UM P ROD problem
+defined by the variables and functions contained in T . (In the initial call T is the complete branch
+decomposition containing all variables and functions of S, so that initially ST = S). Starting at r,
+the root of T , RC-Space solves the reduced S UM P ROD ST |ρ∪α for all assignments α to the variables
+3. Rish and Dechter (2000) have previously made a connection between DP and variable elimination. They were thus
+able to show, that DP runs in time nO(1) 2O(w) , where w is the branch width of the underlying hypergraph of the SAT
+instance.
+
+399
+
+BACCHUS , DALMAO , & P ITASSI
+
+in label (left(r)) ∩ label (right(r)) not yet instantiated by ρ, where left(r) and right (r) are the left
+and right children of r. The sum over all such α is the solution to the inputed instance ST |ρ .
+Each α renders the set of functions in the subtree below leftChild (r) (i.e., the leaf labels) disjoint
+from the functions below rightChild (r). Thus for each α, RC-Space can independently solve the
+subproblems specified by leftChild (r)|ρ∪α and rightChild (r)|ρ∪α (i.e., the sum of the products
+of all of the functions below the left/right subtree conditioned on the instantiations in ρ ∪ α) and
+multiply their answers to obtain the solution to ST |ρ∪α . At the leaf nodes, the function fi associated
+with that node has had all of its variables instantiated, so the algorithm can simply “LOOKUP” fi ’s
+current value.
+Algorithm 1: RC-Space—Linear Space Recursive Conditioning
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+
+RC-Space (T, ρ)
+begin
+if T is a leaf node then
+return LOOKUP(value of function labeling the leaf node)
+p = 0; r = root (T )
+~x = variables in label (left(r)) ∩ label (right(r)) uninstantiated by ρ
+forall α ∈ {instantiations of ~x} do
+p = p + RC-Space (leftChild (T ), ρ ∪ α) × RC-Space (rightChild (T ), ρ ∪ α)
+end
+return p
+end
+
+A less space-efficient but more time-efficient version of recursive conditioning, called RCCache, caches intermediate values that can be reused to reduce the computation. Algorithm 2
+shows the RC-Cache algorithm. Like RC-Space, each invocation of RC-Cache solves the subproblem specified by the variables and functions contained in the passed subtree T . Since the functions
+below T only share the variables in label (root(T )) with variables outside of T , only the instantiations in the subset, y, of ρ intersecting label (root(T )) can affect the form of this subproblem.
+Hence, RC-Cache will return the same answer if invoked with the same T and same y, even if other
+assignments in ρ have changed. RC-Cache, can thus use T and y to index a cache, storing the computed result in the cache (line 13) and returning immediately if the answer is already in the cache
+(line 7).
+Propagation Since RC instantiates the problem’s variables, propagation can be employed. That
+is, RC can perform additional inference to compute some of the implicit effects each assignment
+has on the remaining problem ST |ρ∪α . For example, if the functions of the S UM P ROD problem
+are all clauses (e.g., when solving #S AT) unit propagation can be performed. Propagation can
+make recursive conditioning more effective. For example, if one of the remaining clauses becomes
+falsified through unit propagation, recursive conditioning can immediately move on to the next
+instantiation of the variables ~x. Similarly, unit propagation can force the value of variables that will
+be encountered in subsequent recursive calls, thus reducing the number of different instantiations α
+that must be attempted in that recursive call. It can be noted that propagation does not reduce the
+worst case complexity of the algorithm, as on some S UM P ROD problems propagation is ineffective.
+It can however improve the algorithm’s efficiency on some families of problems.
+400
+
+BACKTRACKING S EARCH
+
+FOR
+
+#SAT AND BAYES
+
+Algorithm 2: RC-Cache—Recursive Conditioning with caching
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+
+RC-Cache (T, ρ)
+begin
+if T is a leaf node then
+return LOOKUP(value of function labeling the leaf node)
+y = ρ ∩ label (root(T ))
+if InCache(T, y) then
+return GetValue(T, y)
+p = 0; r = root (T )
+~x = variables in label (left(r)) ∩ label (right(r)) uninstantiated by ρ
+forall α ∈ {instantiations of ~x} do
+p = p + RC-Cache (leftChild (T ), ρ ∪ α) × RC-Cache (rightChild (T ), ρ ∪ α)
+end
+AddToCache((T ,y), p)
+return p
+end
+
+RC-Cache+ A simple extension of RC that is used in practice is to set the variables ~x ⊆
+label (left(r) ∩ label (right (r)) (line 10 of Algorithm 2) iteratively rather than all at once. That
+is, rather than iterate over all complete assignments α to ~x we can instantiate these variables one at
+a time, performing propagation after each assignment. This can make propagation more effective,
+since, e.g., an empty clause might be detected after instantiating only a subset of the variables in ~x
+and thus the number of iterations of the for loop might be reduced.
+Once the variables of ~x are being set iteratively the order in which they are assigned can vary.
+Furthermore, the order of assignment can vary dynamically. That is, depending on how the values assigned to the first k variables of ~x, the algorithm can make different choices as to which
+unassigned variable of ~x to assign next.
+We call the extension of RC-Cache that uses incremental assignments and dynamic variable ordering within set ~x, RC-Cache+ . That is RC-Cache+ uses the same caching scheme as RC-Cache,
+but has more flexibility in its variable ordering. It should be noted however, that RC-Cache+ does
+not have complete freedom in its variable ordering. It must still follow the inputed branch decomposition T . That is, the variable chosen must come from the set ~x ⊆ label (left(r)) ∩ label (right (r)).
+This is in contrast with the DPLL based algorithms we present in the next section, which are always
+free to choose any remaining unassigned variable as the next variable to assign.
+Space-Time Tradeoff RC has the attractive feature that it can achieve a non-trivial space-time
+tradeoff, taking less time if it caches its recursively computed values (RC-Cache), or taking less
+space without caching (RC-Space). In fact, Darwiche and Allen (2002) show that there is a smooth
+tradeoff that can be achieved, with RC-Space and RC-Cache at the two extremes.
+The DPLL based algorithms presented here share a number of features with RC; they also reduce
+and decompose the input problem by making instantiations, gain efficiency by caching, and achieve
+a similar space-time tradeoff. However, our algorithms are based on the paradigm of backtracking,
+rather than divide and conquer. In particular, they explore a single backtracking tree in which
+the decomposed subproblems are not solved separately but rather can be solved in any interleaved
+401
+
+BACCHUS , DALMAO , & P ITASSI
+
+fashion. As a result, they are not limited to following the decomposition scheme specified by a fixed
+branch decomposition. As we will see, the limitation of a static decomposition scheme means that
+RC-Space and RC-Cache must perform exponentially worse than our algorithms on some instances.
+2.4.3 AND/OR S EARCH :
+In more recent work Dechter and Mateescu (2007) have shown that the notion of AND/OR search
+spaces (Nilsson, 1980) can be applied to formalize the divide and conquer approach to S UM P ROD
+problems utilized by RC. In this formulation the structure that guides the AND/OR search algorithm
+is a pseudo tree. (Choosing the pseudo tree is the nondeterministic part of the computation.)
+Definition 5 (Primal Graph) The primal graph of a hypergraph H is an undirected graph G that
+has the same vertices as H and has an edge connecting two vertices if and only if those two vertices
+appear together in some hyperedge of H.
+Definition 6 (Pseudo Tree) Given an undirected graph G with vertices and edges (V, EG ), a pseudo
+tree for G is a directed rooted tree T with vertices and edges (V, ET ) (i.e., the same set of vertices as
+G), such that any edge e that is in G but not in T must connect a vertex in T to one of its ancestors.
+That is, e = (v1 , v2 ) ∧ e ∈ EG ∧ e 6∈ ET implies that either v1 is an ancestor of v2 in T or v2 is an
+ancestor of v1 in T .
+This implies that there is no edge of G connecting vertices lying in different subtrees of T .
+Given a S UM P ROD problem S = hV, F, ⊕, ⊗i with underlying hypergraph H, we can form G, the
+primal graph of H. The vertices of G are the variables of the problem V and any pair of variables
+that appear together in some function of F will be connected by an edge in G. A pseudo tree T for
+G will then have the property that two vertices of T (variables of S) can only appear in functions of
+F with their ancestors or their descendants, they cannot appear in functions with their siblings nor
+with their ancestor’s siblings nor with the descendants of such siblings.
+This implies that once a variable v and all of its ancestors in T have been instantiated, the variables contained in its children subtrees become disconnected. That is, the variables in these subtrees
+no longer appear in functions together, and the resulting subproblems can be solved independently.
+The AND/OR search algorithm utilizes this fact to solve these subproblems independently, just like
+recursive conditioning.
+Example 5 Given the hypergraph H = (V, E) where V = {1, 2, 3, 4, 5} and E = {{1, 2, 3},
+{1, 4},{2, 5}, {3, 5}}, the primal graph of H is G = (V, EG ) where EG = {(1, 2), (1, 3), (2, 3),
+(1, 4), (2, 5), (3, 5)}. H, its primal graph G, and a pseudo tree for G are shown in Figure 4. The
+dotted lines shown on the pseudo tree are the edges of G that are not in the pseudo tree. As can be
+seen from the diagram these edges connect nodes only with their ancestors.
+The space efficient version of the AND/OR-Space search algorithm (Dechter & Mateescu,
+2007) is shown in Algorithm 3. It solves the S UM P ROD instance S = hV, F, ⊕, ⊗i, taking as
+input a pseudo tree for the problem T (i.e., the hypergraph for S is converted to a primal graph
+G, and T is a pseudo tree for G), and an initially empty set of instantiated variables ρ. The algorithm solves a sub-problem of the original instance S reduced by the instantiations ρ, S|ρ . The
+sub-problem being solved is defined by the functions of S|ρ that are over the variables contained in
+the passed sub-tree T . Initially, with ρ being empty and T being the original pseudo tree containing
+all variables, the algorithm solves the original problem S.
+402
+
+BACKTRACKING S EARCH
+
+FOR
+
+#SAT AND BAYES
+
+1
+1
+
+2
+
+3
+
+1
+
+2
+
+3
+4
+
+4
+
+5
+
+Hypergraph
+
+4
+
+5
+
+2
+3
+5
+
+Primal Graph
+Pseudo Tree
+
+Figure 4: The hypergraph, primal graph, and a pseudo tree for Example 5.
+
+The nodes of the pseudo tree T are variables of the problem S, and we also attach to each node
+n of T a set of functions fns(n). A function f of F is in fns(n) if and only if (a) n is in the scope of
+f and (b) all other variables in the scope of f are ancestors of n in T . This means that f will have a
+fully instantiated set of arguments when AND/OR search instantiates the node (variable) n.
+Algorithm 3: AND/OR-Space—Linear Space AND/OR search
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+
+AND/OR-Space (T, ρ)
+begin
+p = 0; r = root (T )
+STr = set of subtrees below r
+forall d ∈ {instantiations of r} do
+Q
+α = f ∈fns(r) LOOKUP(value of f on ρ ∪ {r = d})
+Q
+p = p + α × T ′ ∈STr AND/OR-Space (T ′ , ρ ∪ {r = d})
+end
+return p
+end
+
+The algorithm operates on the variable r that is the root of the pseudo tree T . For each instantiation of r the algorithm computes α, the product of the functions in F that have now become fully
+instantiated by the assignment to r, i.e., those in fns(r). It then invokes a separate recursion for each
+child of r passing the subtree rooted by that child to the recursive call. AND/OR search exploits
+decomposition through these separate recursions. If r has only one child, then the problem is not
+decomposed—there is only the single reduced subproblem that has resulted from instantiating r.
+Like RC, AND/OR search can be made more time efficient at the expense of using more space.
+Algorithm 4 shows the caching version AND/OR-Cache (called AND/OR graph search by Dechter
+and Mateescu (2007)). Let label (n) for any node n in the pseudo tree T be the set of ancestors
+of n that appear in some function with n or with some descendant of n in T . It is only the instantiations to label (n) that can affect the functions over the variables in the subtree rooted by n.
+Hence, label (n) plays the same role as the root label of the passed branch decomposition in RCCache: only instantiations to these variables can affect the subproblem currently being computed.
+403
+
+BACCHUS , DALMAO , & P ITASSI
+
+Hence, like RC-Cache, AND/OR-Cache can use the instantiations in the subset, y, of ρ intersecting
+label (root(T )) along with T to index a cache.
+Finally, as with RC-Cache+ , propagation can be used to decrease the number of branches that
+AND/OR search needs to explore. For example, the recursive calls over the children of r can be
+terminated when one of these calls returns the value zero.
+Algorithm 4: AND/OR-Cache—AND/OR search with caching
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+
+AND/OR-Cache (T, ρ)
+begin
+p = 0; r = root (T )
+y = ρ ∩ label (root (T ))
+if InCache(T, y) then
+return GetValue(T, y)
+STr = set of subtrees below r
+forall d ∈ {instantiations of r} do
+Q
+α = f ∈fns(r) LOOKUP(value of f on ρ ∪ {r = d})
+Q
+p = p + α × T ′ ∈STr AND/OR-Cache (T ′ , ρ ∪ {r = d})
+end
+return p
+end
+
+AND/OR-Cache+ Some variable order dynamism can be employed during AND/OR search. In
+particular, the variables along any chain in the pseudo tree T can be reordered without affecting
+the decompositions specified by T . A chain is a sub-path of T such that none of its nodes, except
+perhaps the last, have more than one child. In Figure 4 nodes 2, 3, and 5 form a chain. The resultant
+extension, AND/OR-Cache+ , can dynamically chose to next instantiate any of the variables in
+the chain that starts at the root of its passed pseudo tree T . (Marinescu and Dechter (2006) refer
+to AND/OR-Cache+ as “AND/OR with partial variable ordering”. However they did not utilize
+caching in their version of the algorithm.)
+It will then pass the rest of the chain (and the nodes below) to its next recursive call, or if the
+chosen variable was the last in the chain it will invoke a separate recursive call for each child. Like
+RC-Cache+ , AND/OR-Cache+ does not have complete freedom in its choice of variable—it must
+chose a variable from the top most chain. Furthermore, AND/OR-Cache+ can only use its caching
+scheme at the bottom of each chain (i.e., after all variables in the chain have been instantiated) since
+its cache requires that the same set of variables be instantiated. This makes AND/OR-Cache+ very
+similar to RC-Cache+ .
+2.4.4 OTHER E XACT A LGORITHMS
+The algorithm most commonly used for BAYES is the join tree algorithm (Lauritzen & Spiegelhalter, 1988), which can also be adapted to solve other kinds of S UM P ROD problems. The join-tree
+algorithm first organizes the primal graph of the S UM P ROD problem into a tree by clustering the
+variables, and it then performs message passing on the tree where the messages are computed by a
+variable elimination process. In the context of BAYES the main advantage of join-tree algorithms is
+404
+
+BACKTRACKING S EARCH
+
+FOR
+
+#SAT AND BAYES
+
+that they compute all marginals. That is they compute the posterior probability of all of the variables
+given some evidence.
+In contrast, the default version of variable elimination computes only the posterior distribution
+for a single variable. However, Kask et al. (2005) show how the join-tree algorithm can be reduced
+to a version of VE that remembers some of its intermediate results and runs in the same time and
+space as VE. Hence, all of the results we state here comparing VE with our new backtracking based
+algorithms also hold for the join tree algorithm.
+Computing all Marginals All of the algorithms described above, i.e., VE, RC, and AND/OR
+search, can be modified to compute all marginals when solving BAYES without any change to their
+worst case complexity. In particular, besides the results of Kask et al. (2005), Darwiche (2001) has
+shown that RC can compute all marginals on BAYES problems with an extra bottom up traversal
+of its search tree—at most doubling its run time. The same technique can be applied to AND/OR
+search algorithms. For the DPLL algorithms we present here, Sang et al. (2005b) have given an
+even simpler scheme for modifying them so that they can computing all marginals. Sang et al.’s
+scheme involves maintaining some extra information during search and does not require an extra
+traversal of the search tree.
+Another algorithm that has now been mostly superseded is cut-set conditioning (Pearl, 1988).
+Here the idea is to identify a subset of variables which when set reduce the underlying hypergraph
+of the S UM P ROD into a tree. The reduced S UM P ROD can then be easily solved. However, the
+approach requires trying all possible instantiations of the cut-set yielding a runtime that is usually
+worse than RC-Cache. Nevertheless, cutset conditioning can potentially be applied in conjunction
+with other exact algorithms (Mateescu & Dechter, 2005).
+Finally, an important early algorithm called DDP was presented by Bayardo and Pehoushek
+(2000). This was a version of DPLL that utilized dynamic decomposition for solving #S AT. In
+terms of the algorithms discussed above, AND/OR-Space can be viewed as being an version of
+DDP that utilizes a pseudo tree to guide its variable ordering. In the original presentation of DDP,
+any variable ordering could be used including dynamic variable orderings. The search continued
+until the problem was decomposed into independent components (tested for during search) at which
+point a separate recursion was used to solve each component. Hence, the DDP explored an AND/OR
+search tree, however this tree need not correspond to any pseudo tree over the original problem.
+(The DVO and DSO AND/OR search schemes presented by Mateescu and Dechter (2005) are also
+versions of DDP run with particular variable ordering heuristics). In comparison with the algorithms
+we present in the next section, Bayardo and Pehoushek (2000) did not provide a complexity analysis
+of DDP, DDP did not use caching to enhance its performance, and DDP still has less flexibility in its
+variable ordering. In particular, once the problem has been split into independent components the
+search must solve these components sequentially in separate recursions. Inside each recursion the
+search can only branch on the variables of the current component. That is, DDP cannot interleave
+the solution of these components like the DPLL algorithms we present here.
+2.5 Complexity Analysis
+All known algorithms for BAYES, #S AT and S UM P ROD run in exponential-time in the worst case.
+However, when the branch width of the underlying hypergraph of the instance, w, is small, the
+some of the above algorithms are much more efficient. It can be shown that the algorithms VE, RCCache and AND/OR-Cache discussed above run in time and space nO(1) 2O(w) . We note that the
+405
+
+BACCHUS , DALMAO , & P ITASSI
+
+complexity of these algorithms is usually given in terms of tree width or elimination width, and not
+branch width. However, by Lemmas 1, 2, and 3, these concepts are equivalent to within a factor of
+2, and therefore the asymptotic complexity can equivalently be stated in terms of any of these three
+notions of width (tree width, branch width, or elimination width). For analyzing our backtracking
+algorithms, branch width is be somewhat more natural, and for this reason we have chosen to state
+all complexity results in terms of branch width.
+The runtime of the variable elimination algorithm is easily seen to be at most nO(1) 2O(w) . To
+see this, notice that the algorithm proceeds in n stages, removing one variable at each stage. Suppose that the algorithm is run on some variable ordering that has elimination width v. The algorithm
+removes the ith variable during the ith stage. At the ith stage, all functions involving this variable
+are merged to obtain a new function. As indicated in Section 2.4.1, computing the new function
+involves iterating overall possible instantiations of its variables. The runtime of this stage is therefore exponential in the number of underlying variables of the new function, which is bounded by v.
+Thus, the runtime of the algorithm is bounded by nO(1) 2O(v) . Now by Lemmas 1 and 2 and 3, if the
+elimination width is v, then the branch width is at most v + 1, and therefore the overall runtime is
+as claimed. It can also be noted that since the new function must be stored, the space complexity of
+variable elimination is the same as its time complexity, i.e., nO(1) 2O(w) .
+It has also been shown that the run times of RC-Cache and RC-Cache+ are bounded by nO(1) 2O(w)
+(Darwiche, 2001). Further, there is a nice time-space tradeoff. That is, the space-efficient implementation of RC, RC-Space, runs in time 2O(w log n) but needs only space linear in the size of the
+input, where as RC-Cache has space complexity equal to its time complexity, nO(1) 2O(w) . We will
+present proofs showing that our DPLL based algorithms can achieve the same time and time/space
+bounds; our proofs give the bounds for RC-Space, RC-Cache, and RC-Cache+ as special cases.
+Finally, it has been shown that AND/OR-Space runs in time 2O(w log n) (Dechter & Mateescu,
+2007). Specifically, Dechter and Mateescu show that AND/OR-Space runs in time exponential in the
+height of its inputed pseudo tree, and Bayardo and Miranker (1995) show that this height is bounded
+w log n. Lemma 1 then shows that the bound also holds for branch width. Similarly, Dechter and
+Mateescu (2007) show that AND/OR-Cache runs in time and space bounded by nO(1) 2O(w) by
+exploiting the very close relationship between pseudo trees and elimination orders.
+Making the algorithms deterministic. As stated above, all of these algorithms are in fact nondeterministic algorithms each requiring a different nondeterministically determined input. Hence, the
+stated complexity bounds mean that there exists some choice of nondeterministic input (i.e., some
+variable ordering for VE, some branch decomposition for RC, and some pseudo tree for AND/OR
+search) with which the algorithm can achieve the stated complexity bound.
+However, to achieve this runtime in practice, we will need to be able to find such a good branch
+decomposition (variable ordering, pseudo tree) efficiently. Unfortunately, the general problem of
+computing an optimal branch decomposition (i.e., one that has width equal to the branch width of
+H) is NP-complete. However, Robertson and Seymour (1995) present an algorithm for computing
+a branch decomposition with branch width that is within a factor of 2 of optimal and that runs in
+time nO(1) 2O(w) , where w is the branch width of H. By first running this deterministic algorithm
+to compute a good branch decomposition, one can obtain deterministic versions of RC-Cache and
+RC-Cache+ that run in time and space nO(1) 2O(w) , as well as a deterministic version of RC-Space
+that runs in linear space and time 2O(w log n) . These deterministic versions no longer require access
+to a nondeterministically determined choice to achieve their stated runtimes.
+406
+
+BACKTRACKING S EARCH
+
+FOR
+
+#SAT AND BAYES
+
+Algorithm 5: DPLL for SAT
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+
+DPLL (φ)
+begin
+if φ has no clauses then
+return TRUE
+else if φ contains an empty clause then
+return FALSE
+else
+choose a variable x that appears in φ
+return (DPLL(φ|x=0 ) ∨ DPLL(φ|x=1 ))
+end
+
+Similarly with a nearly optimal branch decomposition, we can use Lemmas 1-3 to find a nearly
+optimal elimination ordering, and thus can obtain a deterministic version of the variable elimination
+algorithm that runs in time and space nO(1) 2O(w) . And finally, from that nearly optimal elimination
+ordering the bucket-tree construction of Dechter and Mateescu (2007) can be used to construct a
+nearly optimal pseudo tree, and thus we can obtain a deterministic version of AND/OR-Space that
+runs in linear space and time 2O(w log n) , and a deterministic version of AND/OR-Cache that runs in
+time and space nO(1) 2O(w) .
+
+3. Using DPLL for #S AT and S UM P ROD
+Now we present our methods for augmenting backtracking search with different caching schemes
+so that it can solve S UM P ROD with time and space guarantees at least as good as the other exact
+algorithm for S UM P ROD. For ease in presentation we present DPLL-based algorithms for solving
+#S AT, and derive complexity results for these algorithms. Later we will discuss how the algorithms
+and complexity results can be applied to other instances of S UM P ROD (like BAYES).
+3.1 DPLL and #DPLL:
+DPLL is a nondeterministic algorithm for S AT, that has also been used to solve various generalizations of S AT, including #S AT (Dubois, 1991; Zhang, 1996; Birnbaum & Lozinskii, 1999; Littman,
+Majercik, & Pitassi, 2001). DPLL solves S AT by performing a depth-first search in the space of
+partial instantiations (i.e., it is a standard backtracking search algorithm). The nondeterministic part
+of the computation is lies in the choice of which variable to query (i.e., instantiate) next during its
+search. It operates on S AT problems encoded in clause form (CNF).
+The standard DPLL algorithm for solving S AT is given in Algorithm 5. We use the notation
+φ|x=0 or φ|x=1 to denote the new CNF formula obtained from reducing φ by setting the variable x
+to 0 or 1. Reducing φ by x = 1 (x = 0) involves removing from φ all clauses containing x (¬x)
+and removing the falsified ¬x (x) from all remaining clauses.
+DPLL is a nondeterministic procedure that generates a decision tree representing the underlying
+CNF formula. For solving S AT, the decision tree is traversed in a depth-first manner until either a
+satisfying path is encountered, or until the whole tree is traversed (and all paths falsify the formula).
+The nondeterminism of the algorithm occurs in the choice of variable on line 8. In practice this
+407
+
+BACCHUS , DALMAO , & P ITASSI
+
+Algorithm 6: #DPLL for #S AT (no caching)
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+
+#DPLL (φ)
+// Returns the probability of φ
+begin
+if φ has no clauses then
+return 1
+else if φ contains an empty clause then
+return 0
+else
+choose a variable x that appears in φ
+return ( 12 #DPLL(φ|x=0 ) + 21 #DPLL(φ|x=1 ))
+end
+
+nondeterminism is typically resolved via some heuristic choice. Also, the algorithm utilizes early
+termination of the disjunctive test on line 9; i.e., if the first test returns TRUE the second recursive
+call is not made. Thus, the algorithm stops on finding the first satisfying path.
+Note that we do not require that DPLL perform unit propagation. In particular, unit propagation
+can always be realized through the choice of variable at line 8. In particular, if we force DPLL to
+always chose a variable that appears in a unit clause of φ whenever one exists, this will have the
+same effect as forcing DPLL to perform unit propagation after every variable instantiation. That is,
+after a variable is chosen, and instantiated to one of its values, the input CNF φ will be reduced. The
+reduced formula, φ|x=0 or φ|x=1 , passed to the next recursive call may contain unit clauses. With
+unit propagation, the variables in these clauses would be instantiated so as to satisfy the unit clauses.
+If instead, we force one of these variable to be chosen next, one instantiation would immediately
+fail due to the generation of an empty clause, while the other would instantiate the variable to the
+same value as unit propagation. Hence, since we analyze DPLL as a nondeterministic algorithm,
+this includes those deterministic realizations that perform unit propagation.
+A simple modification of DPLL allows it to count all satisfying assignments. Algorithm 6 gives
+the #DPLL algorithm for counting. The algorithm actually computes the probability of the set of
+satisfying assignments under the uniform distribution. Hence, the number of satisfying assignments
+can be obtained by multiplying this probability by 2n , where n is the number of variables in φ. The
+alternative would be to return 2 raised to the number of unset variables whenever φ has no clauses
+(line 4) and not multiply the recursively computed counts by 21 (line 9).
+Known exponential worst-case time bounds for DPLL also apply to #DPLL: for unsatisfiable
+formulas, both algorithms have to traverse an entire decision tree before terminating. Although this
+decision tree can be small (e.g., when an immediate contradiction is detected), for some families of
+formulas the decision tree must be large. In particular, it is implicit in the results of Haken (1985)
+that any decision tree for the formulas encoding the (negation of the) propositional pigeonhole
+principle has exponential size, and thus DPLL and #DPLL must take exponential-time on these
+examples. This lower bound does not, however, help us discriminate between algorithms since
+all known algorithms for #S AT and BAYES take exponential-time in the worst-case. Nevertheless,
+#DPLL requires exponential time even on instances that can be efficiently solved by competing
+algorithms for S UM P ROD. To see this, consider a 3CNF formula over 3n variables consisting of
+408
+
+BACKTRACKING S EARCH
+
+FOR
+
+#SAT AND BAYES
+
+n clauses that share no variables. Any complete decision tree has exponential size, and therefore
+#DPLL will require exponential time. In contrast, since this formula has low tree width it can be
+solved in polynomial time by VE, RC, or AND/OR search.
+3.2 DPLL with Caching:
+Given that the obvious application of DPLL to solve S UM P ROD can give exponentially worse
+performance than the standard algorithms, we now examine ways of modifying DPLL so that it
+can solve #S AT (and thus BAYES and S UM P ROD) more efficiently. To understand the source of
+#DPLL’s inefficiency consider the following example.
+Example 6 The following diagram shows a run of #DPLL on φ = {(w ∨ x)(y ∨ z)}. Each node
+shows the variable to be branched on, and the current formula #DPLL is working on. The left hand
+branches correspond to setting the branch variable to FALSE, while on the right the variable is set
+to TRUE. The empty formula is indicated by {}, while a formula containing the empty clause is
+indicated by {()}. The diagram shows that #DPLL encounters and solves the subproblem {(y ∨ z)}
+twice: once along the path (w = 0, x = 1) and again along the path (w = 1). Note that in this
+example unit propagation is realized by the choice of variable ordering—after w is set to FALSE,
+#DPLL chooses to instantiate the variable x since that variable appears in a unit clause.
+w:{(x ∨ w))(y ∨ z)}
+H
+ HH
+
+HH
+
+HH
+
+
+H
+
+x:{(x)(y ∨ z)}
+
+y:{(y ∨ z)}
+
+H
+ HH
+
+HH
+
+
+H
+ HH
+
+0:{()}
+
+y:{(y ∨ z)}
+H
+
+H
+
+H
+
+z:{(z)}
+
+z:{(z)}
+
+1:{}
+
+HH
+
+0:{()}
+
+1:{}
+
+1:{}
+
+HH
+
+0:{()}
+
+1:{}
+
+If one considers the above example of applying #DPLL to disjoint sets of clauses, it becomes
+clear that in some formulas #DPLL can encounter the same subproblem an exponential number of
+times.
+3.2.1 DPLL
+
+WITH
+
+S IMPLE C ACHING (#DPLL-S IMPLE C ACHE )
+
+One way to prevent this duplication is to apply memoization. As indicated in Example 6, associated
+with every node in the DPLL tree is a formula f such that the subtree rooted at this node is trying
+to compute the number of satisfying assignments to f . When performing a depth-first search of
+the tree, we can keep a cache that contains all formulas f that have already been solved, and upon
+reaching a new node of the tree we can avoid traversing its subtree if the value of its corresponding
+formula is already stored in the cache.
+In Example 6 we would cache {(y ∨ z)}, when we solve it along the path (w = 0, x = 1)
+thereby avoid traversing the subtree below (w = 1).
+409
+
+BACCHUS , DALMAO , & P ITASSI
+
+Algorithm 7: #DPLL algorithm with simple caching (#DPLL-SimpleCache)
+1
+2
+3
+
+4
+5
+6
+7
+8
+9
+10
+
+#DPLL-SimpleCache (φ)
+// Returns the probability of φ
+begin
+if InCache(φ) then
+// Also detects obvious formulas.
+return GetValue(φ)
+else
+choose a variable x that appears in φ
+val = 12 #DPLL-SimpleCache (φ|x=0 ) + 21 #DPLL-SimpleCache (φ|x=1 )
+AddToCache(φ,val )
+return val
+end
+
+The above form of caching, which we will call simple caching (#DPLL-SimpleCache) can be
+easily implemented as shown in Algorithm 7.4 As with #DPLL, #DPLL-SimpleCache returns the
+probability of its input formula φ; multiplying this by 2n gives the number of satisfying assignments.
+In addition to formulas stored in the cache there are also the following obvious formulas whose
+value is easy to compute. (1) The empty formula {} containing no clauses has value 1. (2) Any
+formula containing the empty clause has value 0. Obvious formulas can be treated as if they are
+implicitly stored in the cache (they need not be explicitly stored in the cache, rather their values can
+be computed as required).
+The following (low complexity) subroutines are used to access the cache. (1) AddToCache(φ, r):
+adds to the cache the fact that formula φ has value r. (2) InCache(φ): takes as input a formula φ
+and returns true if φ is in the cache. (3) GetValue(φ): takes as input a formula φ known to be in the
+cache and returns its stored value. There are various ways of computing a cache key from φ. For
+example, φ can be maintained as a sorted set of sorted clauses, and then cached as if it was a text
+string. Such a caching scheme has nO(1) complexity.
+Surprisingly, simple caching, does reasonably well. The following theorem shows that simple
+caching achieves runtime bounded by 2O(w log n) , where w is the underlying branch width. As with
+our complexity analysis of earlier algorithms presented in Section 2.5, the simple caching algorithm
+can also be made deterministic by first computing a branch decomposition that is within a factor
+of 2 of optimal (using the Robertson-Seymour algorithm), and then running #DPLL-SimpleCache
+with a variable ordering determined by this branch decomposition.
+Theorem 1 For solving #S AT with n variables, there is an execution of #DPLL-SimpleCache that
+runs in time bounded by 2O(w log n) where w is the underlying branch width of the instance. Furthermore, the algorithm can be made deterministic with the same time guarantees.
+Although the theorem shows that #DPLL-SimpleCache does fairly well, its performance is not
+quite as good as the best S UM P ROD algorithms (which run in time nO(1) 2O(w) ).
+4. Simple caching has been utilized before (Majercik & Littman, 1998), but without theoretical analysis.
+
+410
+
+BACKTRACKING S EARCH
+
+FOR
+
+#SAT AND BAYES
+
+Algorithm 8: #DPLL algorithm with component caching (#DPLL-Cache)
+1
+2
+3
+
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+
+#DPLL-Cache (Φ)
+// Returns the probability of the set of disjoint formulas Φ
+begin
+if InCache(Φ) then
+// Also detects obvious formulas.
+return GetValue(Φ)
+else
+Ψ = RemoveCachedComponents(Φ)
+choose a variable x that appears in some component φ ∈ Ψ
+Ψ− = ToComponents(φ|v=0 )
+#DPLL-Cache (Ψ − {φ} ∪ Ψ− )
+Ψ+ = ToComponents(φ|v=1 )
+#DPLL-Cache (Ψ − {φ} ∪ Ψ+ )
+AddToCache(φ, 21 GetValue(Ψ− ) + 12 GetValue(Ψ+ ))
+if #DPLL-Space then
+RemoveFromCache(Ψ− ∪ Ψ+ )
+return GetValue(Φ)
+end
+
+3.2.2 DPLL
+
+WITH
+
+C OMPONENT C ACHING (#DPLL-C ACHE )
+
+Now we show that a more sophisticated caching scheme allows #DPLL to perform as well as the
+best known algorithms. We call the new algorithm #DPLL-Cache, and its implementation is given
+in Algorithm 8.
+In the algorithm we generalize the cache to deal with sets of formulas. First, we say that a
+(single) formula φ is known if its value is stored in the cache or it is an obvious formula (and its
+value is implicitly stored in the cache). Given a set of formulas Φ we say that the set is known if
+either every φ ∈ Φ is known, or there is some φ ∈ Φ whose value is known to be zero. In both cases
+we say that Φ’s value is equal to the product of the values of the φ ∈ Φ.
+Now we generalize some of the cache access subroutines. (1) InCache(Φ) is generalized so that
+it can take as input a set of formulas Φ. It returns true if Φ is known as just defined. (2) Similarly
+GetValue(Φ) is generalized to take sets of formulas as input. It returns the product of the cached
+values of the formulas φ ∈ Φ.
+The intuition behind #DPLL-Cache is to recognize that as variables are set the input formula
+may become broken up into disjoint components, i.e., sets of clauses that share no variables with
+each other. Since these components share no variables we can compute the number of solutions to
+each component and multiply the answers to obtain the total solution count. Thus, it is intended
+that GetValue be called with a set of disjoint components Φ. In that case it will correctly return the
+solution count for Φ—i.e., the product of the solution counts for each φ ∈ Φ.
+The algorithm creates a standard DPLL tree, however it caches component formulas as their
+values are computed. It keeps its input in decomposed form as a set of disjoint components, and
+if any of these components are already in the cache (and thus their value is known) it can remove
+411
+
+BACCHUS , DALMAO , & P ITASSI
+
+these parts of the input—reducing the size of the problem it still has to solve and avoiding having
+to resolve these components.
+The new algorithm uses the previously defined cache access subroutines along with two additional (low complexity) subroutines. (1) ToComponents(φ): takes as input a formula φ, breaks it
+up into a set of minimal sized disjoint components, and returns this set. (2) RemoveCachedComponents(Φ): returns the input set of formulas Φ with all known formulas removed. The input to
+#DPLL-Cache is always set of disjoint formulas. Hence, to run #DPLL-Cache on the input formula
+φ we initially make the call #DPLL-Cache (ToComponents(φ)).
+ToComponents simply computes the connected components of the primal graph generated by
+φ. That is, in this graph all of the variables of φ are nodes, and two nodes are connected if and only
+if the corresponding variables appear together (in any polarity) in a clause of φ. Each connected
+component of this primal graph (which can be computed with a simple depth-first traversal of the
+graph Cormen, Leiserson, Rivest, & Stein, 2001), defines a set of variables whose clauses form an
+independent component of φ.
+Each call of #DPLL-Cache completes with the solution of the unknown components from the
+set of inputed components Φ. If all components of Φ are known the product of the values of these
+components will be returned at line 4. Otherwise the input set of components is reduced by removing all known components (line 6), which must leave at least one unknown component and
+potentially reduces the size of the remaining problem to be solved. Then a variable from some unsolved component is chosen and is branched on. Since the variable only appears in the component
+φ its assignment can only affect φ. In particular, its assignment might break φ into smaller components (line 8 and 11). The recursive call will solve all components it is passed, so after the two
+recursive calls the value of φ can be computed and cached (line 12). Finally, since all components
+in the inputed set Φ are now solved its value can be retrieved from the cache and returned.
+Example 7 Figure 5 illustrates the behavior of #DPLL-Cache on the formula φ = {(a, b, c, x),
+(¬a, b, c), (a, ¬b, c), (d, e, f, x), (¬d, e, f ), (d, ¬e, f )}. Although the problem could be solved
+with a simpler search tree, we use a variable ordering that generates a more interesting behavior.
+Each node shows the variable to be branched on, and the current set of components #DPLLCache is working on. The known components (i.e., those already in the cache) are marked with an
+asterisk (∗ ). The branch variables are set to FALSE on the left branch and TRUE on the right branch.
+The empty formula is indicated by {}, while a formula containing the empty clause is indicated
+by {()}. To simply the diagram we use unit propagation to simplify the formula after the branch
+variable is set. This avoids the insertion into the diagram of nodes where unit clause variables are
+branched on. Finally, note that known formulas are removed before a recursive call is made, as per
+line 6 of Algorithm 8).
+At the root, once x has been set to false, φ is broken up into two components φa,b,c = {(a, b, c),
+(¬a, b, c), (a, ¬b, c)}, and φd,e,f = {(d, e, f ), (¬d, e, f ), (d, ¬e, f )}. The search tree demonstrates
+that it does not matter how the search interleaves branching on variables from different components,
+the components will still be solved independently. We see that the leftmost node in the tree that
+branches on f succeeds in solving the component {(e, f ), (¬e, f )}. This component is then added
+to the cache. Similarly, the parent node that branches on b solves the component {(b, c), (¬b, c)}.
+(The subcomponents Ψ− and Ψ+ generated by setting b, lines 8 and 11 of Algorithm 8, and performing unit propagation are equal to the empty formula, {}, and thus are known). On backtrack
+to d, the alternate value for d does not affect the component {(b, c), (¬b, c)}, so its value can be
+retrieved from the cache leaving only the component {(e, f )} to be solved. Branching on e solves
+412
+
+BACKTRACKING S EARCH
+
+FOR
+
+#SAT AND BAYES
+
+x:{φ}
+HH
+HH
+
+HH
+
+H
+  
+..
+φa,b,c ,
+a:
+.
+φd,e,f
+H
+ HH
+
+HH
+
+
+HH
+
+
+HH
+
+
+
+ H
+
+
+{(b, c)},
+{(b, c), (¬b, c)},
+b:
+d:
+φd,e,f
+φd,e,f ∗
+H
+H
+n 
+o∗ nH o∗
+ HH
+
+H
+{}
+{}
+
+H
+HH
+
+HH
+
+
+
+
+
+{(b, c), (¬b, c)}∗ ,
+{(b, c), (¬b, c)},
+e:
+b:
+{(e, f )}
+{(e, f ), (¬e, f )}
+HH
+HH
+
+HH
+
+
+
+
+
+ 
+
+∗
+∗
+{}
+{}
+f:
+{(e, f ), (¬e, f )}∗
+{(e, f ), (¬e, f )}
+H
+
+H
+n  o nH o
+{}∗
+{()}∗
+
+H
+n 
+o∗ nH o∗
+{}
+{}
+
+Figure 5: Search Space of #DPLL-Cache
+
+this component. Backtracking to d we have that both {(e, f )} and {(e, f ), (¬e, f )} are solved, so
+φd,e,f ’s value can be computed and placed in the cache. On backtracking to a, the alternate value
+for a does not affect the component φd,e,f , so its value can be retrieved from the cache leaving
+only the component {(b, c)} to be solved. Branching on b solves this component, after which both
+{(b, c)} and {(b, c), (¬b, c)} are solved so φa,b,c ’s value can be computed and placed in the cache.
+The search can then backtrack to try setting x to TRUE.
+We can obtain the following upper bound on the runtime of #DPLL-Cache.
+Theorem 2 For solving #S AT on n variables, there exists an execution of #DPLL-Cache that runs in
+time bounded by nO(1) 2O(w) where w is the underlying branch width of the instance. Furthermore,
+the algorithm can be made deterministic with the same time guarantees (as discussed in Section 2.5).
+So we see that #DPLL-Cache can achieve the same level of performance as the best S UM P ROD
+algorithms.
+Finally, there is a third variant of #DPLL with caching, #DPLL-Space , that achieves a nontrivial time-space tradeoff. This algorithm is the natural variant of #DPLL-Cache, modified to remove
+cached values so that only linear space is consumed. The algorithm utilizes one additional subroutine. (6) RemoveFromCache(Φ): takes as input a set of formulas (a set of components) and removes
+all of them from the cache. After splitting a component with a variable instantiation and computing
+the value of each part, #DPLL-Space cleans up the cache by removing all of these sub-components,
+so that only the value of the whole component is retained. Specifically, #DPLL-Space is exactly like
+#DPLL-Cache, except that it calls RemoveFromCache(Ψ− ∪ Ψ+ ) just before returning (line 14).
+413
+
+BACCHUS , DALMAO , & P ITASSI
+
+Theorem 3 For solving #S AT on n variables, there is an execution of #DPLL-Space that uses only
+space linear in the instance size and runs in time bounded by 2O(w log n) where w is the underlying
+branch width of the instance. Furthermore, the algorithm can be made deterministic with the same
+time and space guarantees.
+The proofs of Theorems 1–3 are given in the appendix.
+3.3 Using DPLL Algorithms for Other Instances of S UM P ROD:
+The DPLL algorithms described in this section can be easily modified to solve other instances of
+S UM P ROD. However, since #S AT is #P complete many instances of S UM P ROD can also be solved
+by simply encoding them in #S AT. For example, this approach is readily applicable to BAYES and
+has proved to be empirically successful (Sang et al., 2005b). Furthermore, the encoding provided
+by Sang et al. (2005b) achieves the same complexity guarantees as standard algorithms for BAYES.
+(That is, the CNF encoding has tree width no greater than the original Bayes Net). Note that this
+encoding assigns non-uniform probabilities to values of the variables. That is, for variable x the
+probability of x = 0 might not be equal to the probability of x = 1. This is easily accommodated
+in our algorithms: instead of multiplying the value returned by each recursive call by 21 we simply
+multiply it by the probability of the corresponding variable value (i.e., by Pr (x = 0) or Pr (x = 1)).
+On the other hand, if conversion to #S AT is inapplicable or undesirable the algorithms can
+be modified to solve other instances of S UM P ROD directly. For S UM P ROD, we want to compute
+L Nm
+L
+j=1 fj (Ej ). DPLL chooses a variable, Xi , and for each value d of Xi it recursively
+Xn
+X1 . . .
+solves the reduced problem F|Xi =d . (Hence, instead of a binary decision tree it builds a k-ary tree).
+The reduced problem F|Xi =d is to compute
+M
+X1
+
+...
+
+M M
+
+Xi−1 Xi+1
+
+...
+
+m
+MO
+
+fj (Ej )|Xi =d ,
+
+Xm j=1
+
+where fj (Ej )|Xi =d is fj reduced by setting Xi = d. #DPLL-SimpleCache caches the solution to
+the reduced problem to avoid recomputing it. For example, it can remember the reduced problem by
+remembering which of the original functions in F remain (i.e., have not been reduced to a constant
+value) and the set of assignments that reduced these remaining functions. #DPLL-Cache caches
+the solution to components of the reduced problem. For example, it can remember a component by
+remembering the set of original functions that form the component along with the set of assignments
+that reduced these functions. It can compute the current components by finding the connected
+components of the primal graph generated from the hypergraph of the S UM P ROD instance with
+all instantiated variables removed. It is a straightforward adaptation to show that the above three
+theorems continue to hold for #DPLL, #DPLL-Cache, and #DPLL-Space so modified to solve S UM P ROD.
+Algorithm 9 shows how #DPLL-Cache, for example, can be modified to solve general S UM P ROD problems. The algorithm takes as input a set of components Φ, just like #DPLL-Cache,
+initially containing the components of the original problem. In the algorithm fns(x) denotes the set
+of functions of the original problem that (a) contain x in their scope, and (b) are fully instantiated
+by the instantiation of x.
+414
+
+BACKTRACKING S EARCH
+
+FOR
+
+#SAT AND BAYES
+
+Algorithm 9: S UM P ROD-DPLL-Cache algorithm for arbitrary S UM P ROD problems
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+
+S UM P ROD-DPLL-Cache (Φ)
+begin
+if InCache(Φ) then
+return GetValue(Φ)
+else
+Ψ = RemoveCachedComponents(Φ)
+choose a variable x that appears in some component φ ∈ Ψ
+p=0
+foreach d ∈ domain of x do
+Φd = ToComponents(φ|x=d )
+Q
+α = f ∈fns(x) LOOKUP(value of f on ρ ∪ {x = d})
+p = p + α × S UM P ROD-DPLL-Cache(Φ − {φ} ∪ Φd )
+end
+AddToCache(φ, p)
+return GetValue(Φ)
+end
+
+4. Comparing Algorithms for BAYES and #S AT
+In this section, we will prove that our DPLL based algorithms are at least as powerful as the standard
+complete algorithms for solving #S AT, and that they are provable more powerful than many of
+them on some instances. This last feature is important as it means that solving S UM P ROD using
+DPLL augmented with caching can in some cases solve problems that are beyond the reach of many
+standard complete algorithms.
+As mentioned earlier, the algorithms for S UM P ROD as well as our new DPLL-based algorithms,
+are actually nondeterministic algorithms that require some nondeterministically chosen input. (This
+input can be viewed as being a sequence of bits). For VE, the nondeterministic bits encode an elimination ordering; for RC, the nondeterministic bits encode a branch decomposition; for AND/OR
+search the nondeterministic bits encode a pseudo tree; and for our DPLL based algorithms, the
+nondeterministic bits encode the underlying decision tree indicating which variable will be queried
+next in the backtracking process. Thus when comparing the “power” of these algorithms we must
+be careful about how the nondeterminism is resolved. For example, VE operating with a very bad
+elimination ordering cannot be expected to run as efficiently as #DPLL-Cache operating with a
+very good branching strategy. First we present some definitions which allow us to state our results
+precisely.
+Definition 7 Let f be a CNF formula. Define Time[VE](f ) to be the minimal runtime of any variable elimination algorithm for solving #S AT for f , over all choices of elimination orderings for f .
+Similarly define Time[A](f ), for A equal to RC-Cache, RC-Space, RC-Cache+ , AND/OR-Space,
+AND/OR-Cache, AND/OR-Cache+ , #DPLL-Cache, and #DPLL-Space. (For example, Time[RCCache](f ) is the minimal runtime of the RC-Cache algorithm solving #S AT for f , over all possible
+branch decompositions of f .)
+
+415
+
+BACCHUS , DALMAO , & P ITASSI
+
+Definition 8 Let A and B be two nondeterministic algorithms for #S AT. Then we will say that A
+polynomial-time simulates B if there is a fixed polynomial p such that for every CNF formula f
+Time[A](f ) ≤ p(Time[B](f )).
+The following theorem shows that RC-Cache and RC-Cache+ polynomially simulate VE. The
+proof of this theorem is implicit in the results of Darwiche (2001).
+Theorem 4 Both RC-Cache and RC-Cache+ polynomially simulate VE.
+Now we prove that DPLL with caching is as powerful as previous algorithms.
+Theorem 5 #DPLL-Cache polynomially simulates RC-Cache, RC-Cache+ , AND/OR-Cache,
+AND/OR-Cache+ , and VE. #DPLL-Space polynomially simulates RC-Space, AND/OR-Space and
+DDP.5
+The proof of this theorem is given in the appendix. It should be noted that the proof also
+implies that there is a deterministic version of #DPLL-Cache that has time (and space) complexity that is at least as good as any deterministic realization of RC-Cache, RC-Cache+ , AND/ORCache, AND/OR-Cache+ , or VE. Similarly, there is a deterministic version of #DPLL-Space that
+has time (and space) complexity that is at least as good as any deterministic realization of RC-Space,
+AND/OR-Space and DDP.
+Now we prove that DPLL with caching can in some cases run super-polynomially faster than
+previous algorithms. The proof is given in the appendix.
+Theorem 6 None of RC-Space, RC-Cache, AND/OR-Cache, AND/OR-Space or VE can polynomially simulate #DPLL-Cache, #DPLL-Space, or #DPLL.
+This theorem shows that #DPLL-Cache/Space has a basic advantage over the other standard
+algorithms for S UM P ROD. That is, on some problems RC, AND/OR search, and VE will all require
+time super-polynomially greater than #DPLL-Cache no matter what branch decomposition, pseudo
+tree, or variable ordering they are supplied with, even when caching is utilized. The proof of this
+theorem shows that the advantage of #DPLL-Cache arises from its ability to utilize dynamic variable orderings, where each branch can order the variables differently. The flexibility of a dynamic
+variable ordering for these instances gives rise to increased opportunities for contradictions thereby
+significantly decreasing the overall runtime.
+We note that Theorem 6 does not cover those algorithms that have more flexibility in their
+variable ordering, i.e., AND/OR-Cache+ , RC-Cache+ , and DDP. It is an open problem whether or
+not #DPLL-Cache is superpolynomially faster than these algorithms on some instances, although
+we conjecture that Theorem 6 is also true for these algorithms.
+In particular, note that #DPLL-Cache still has greater flexibility in its variable ordering than any
+of these algorithms. None of these algorithms have complete flexibility in their variable ordering.
+AND/OR-Cache+ must select an uninstantiated variable from the chain that starts at the root of its
+passed pseudo tree; RC-Cache+ must select an uninstantiated variable from the intersection of the
+labels of the left and right children of the root of its passed branch decomposition; and DDP must
+select an uninstantiated variable from the component it is currently solving. In contrast #DPLLCache can select any uninstantiated variable.
+5. DDP is the algorithm presented by Bayardo and Pehoushek (2000).
+
+416
+
+BACKTRACKING S EARCH
+
+FOR
+
+#SAT AND BAYES
+
+The difficulty with proving Theorem 6 for these other algorithms is that all of them can tradeoff flexibility in their variable ordering with their ability to decompose the problem. The clearest
+example of this occurs with AND/OR-Cache+ . If AND/OR-Cache+ is passed a pseudo tree that is
+simply a single chain of variables, it will have complete flexibility in its variable ordering, but at the
+same time it will never decompose the problem. Similarly, if RC-Cache+ is provided with a branch
+decomposition that has large labels it will have more flexibility in its variable ordering, but will be
+less effective in decomposing the problem. For the family of problems used to prove Theorem 6
+only flexibility in the variable ordering is needed to achieve a superpolynomial speedup, and thus
+for example AND/OR-Cache+ can achieve this speedup by completely sacrificing decomposition.
+#DPLL-Cache can manage the tradeoff between flexibility in variable ordering and decomposing the problem in more sophisticated ways. For example, it has the ability to use a variable
+ordering that encourages decomposition in some parts of its search tree while using a different variable orderings in other parts of its search tree. For instance, the Cachet system, which is based on
+#DPLL-Cache, employs a heuristic that dynamically trades off a variable’s ability to decompose the
+problem with its ability to refute the current subtree (Sang et al., 2005a). (It employs a weighted
+average of the number of clauses the variable will satisfy and the variable’s VSID score Moskewicz,
+Madigan, Zhao, Zhang, & Malik, 2001). #DPLL-Cache also has the ability to interleave the solving
+of its current set of components by successively choosing variables from different components. To
+extend Theorem 6 to cover AND/OR-Cache+ , RC-Cache+ and DDP a family of problems exploiting these features of #DPLL-Cache would have to be developed.
+
+5. Impact on Practice
+Some of the results of this paper were first presented in a conference paper (Bacchus, Dalmao, &
+Pitassi, 2003), and since that time a number of works have been influenced by the algorithmic ideas
+presented here.
+The Cachet system (Sang et al., 2004, 2005a) is a state of the art #S AT solver directly based
+on the results presented here. Cachet like our #DPLL-Cache algorithm, is based on the ideas of
+dynamic decomposition into components and caching of component solutions. It was an advance
+over previous #S AT solvers in its use of caching to remember previously solved components and
+in its integration of clause learning. The previous best #S AT solver, the DDP solver (Bayardo
+& Pehoushek, 2000), also performed dynamic component detection but had neither component
+caching nor clause learning. Our results highlighted the importance of component caching and the
+possibility of basing a #S AT solver on a standard DPLL implementation thus making the integration
+of clause learning feasible.
+Cachet resolved a number of issues in making the algorithms we presented here practical. This
+included practical ways of implementing the caching of components including a method for efficiently computing a key that could be used for cache lookup. (This method was subsequently
+improved by Thurley, 2006). The Cachet system has also been used to solve BAYES, most probable
+explanation (MPE), and weighted MAX-SAT problems by encoding these problems as weighted
+#S AT problems (Sang et al., 2005b, 2007). This approach has proved to be very successful, especially for BAYES where it is often much superior to standard BAYES algorithms. The applications
+of #S AT and the Cachet system for BAYES has been further advanced by Li et al. (2006, 2008).
+It should also be noted that practical #S AT solving and its applications to other problems like
+BAYES has also been advanced during this period by work on the RC algorithm and its application
+417
+
+BACCHUS , DALMAO , & P ITASSI
+
+to compiling CNF into representations on which model counting is tractable, e.g., (Darwiche, 2004;
+Chavira & Darwiche, 2006, 2008). This work has also illustrated the value of converting various
+problems into weighted #S AT instances, and the utilization of techniques like clause learning (in
+this case integrated into a RC style algorithm). There has also been considerable work advancing AND/OR search, e.g., (Dechter & Mateescu, 2004; Marinescu & Dechter, 2006; Dechter &
+Mateescu, 2007).
+One difference between the Cachet system and the RC and AND/OR search based systems mentioned above is that Cachet utilized a dynamic decomposition scheme. In particular, Cachet used a
+dynamic variable ordering heuristic that attempts to trade off a variable’s ability to decompose the
+problem with its ability to refute the current subtree. Because the variable ordering was dynamically
+determined during search, Cachet cannot predict what components will be generated during search.
+Hence it has to examine the current component (i.e., the component containing the variable just
+instantiated) to discover the new components generated. Thus Cachet utilized an approach like that
+specified in Algorithm 8 where a function like ToComponents is invoked on newly reduced component (see line 8). ToComponents must do a linear computation to find the new components (e.g., a
+depth-first search or a union-find algorithm). In addition, for each component it must examine the
+clauses contained in the component to compute a cache key.
+In contrast, RC and AND/OR search take as input a static or precomputed decomposition
+scheme (i.e., a branch decomposition or a pseudo tree). Hence, they are able to find components
+without doing any extra work during search, and are able to more efficiently compute cache keys for
+these components. For example, with AND/OR search, the algorithm simply follows the supplied
+pseudo tree. When the variable V along with all variables on the path from the root to V have
+been instantiated, AND/OR search knows that the variables in each subtree rooted by a child of V
+forms an independent component. Hence, it can “detect” these components during search in constant time. Similarly, it need not examine the clauses over the variables in these new components to
+compute a cache key. Instead it can compute a cache key from the node of the pseudo tree that roots
+the component and the set of instantiations of the parents of that root that appear in clauses with
+the variables of the component. Note that, the set of parents whose instantiations are relevant can
+be computed before search so that all that has to be done during search is to look up their current
+values.
+Thus, by using a static decomposition scheme RC and AND/OR search can gain efficiency
+over Cachet. However, these statically computed decompositions are not always as effective as the
+dynamic scheme employed by Cachet. First, it can be useful to override the precomputed decomposition scheme so as to drive the search towards contradictions. This is the gist of Theorem 6 which
+shows that more dynamic flexibility in variable ordering can provide superpolynomial reductions in
+the size of the explored search tree by better exploiting such contradictions. Second, static decompositions cannot account for the different values of the variables. That is, the formula that arises
+after instantiating a variable V to 0 can be quite different from the formula that arises after instantiating V to 1. This difference can negatively affect the performance of RC and AND/OR search
+in at least a couple of ways: components might be generated that are not predicted by the static
+decomposition scheme and thus the static scheme might not fully exploit decomposition; and due to
+the specific changes to the formula generated by particular instantiations, the static decomposition
+scheme might be inappropriate for much of the search space.
+In practice, Cachet displays a performance that is at least as good as systems built using the
+RC algorithm, and in some cases its performance is superior (see the empirical results presented
+418
+
+BACKTRACKING S EARCH
+
+FOR
+
+#SAT AND BAYES
+
+by Sang et al., 2004, 2005a). It should also be noted that #DPLL-Cache can easily utilize a static
+decomposition scheme and gain all of the efficiencies of such schemes. For example, if provided
+with a pseudo tree #DPLL-Cache can follow any ordering of the variables in that pseudo tree under
+which parents are always instantiated before their children. Like AND/OR search it will know that
+the children of any node in the pseudo tree each root an independent component, so it also will be
+able to detect these components in constant time. Furthermore, it would be able to utilize the more
+efficient caching scheme of AND/OR search. In this case its advantage over AND/OR search would
+be that it would have the freedom to interleave the solving of its components.6
+In more recent work our algorithms have also been applied to optimization problems (Kitching
+& Bacchus, 2008). This work involved adding branch and bound techniques to the decomposition
+and component caching described in #DPLL-Cache. During branch and bound dynamic variable
+ordering can be very effective. In particular, one wants to branch on variables that will drive the
+value of the current path towards a better value as this can generate a global bound that can be more
+effective in pruning the rest of the search space. The empirical results of Kitching and Bacchus
+(2008) show that the added flexibility of #DPLL-Cache can sometimes yield significant performance improvements over AND/OR search even when the extra flexibility of AND/OR-Cache+ is
+exploited.
+
+6. Final Remarks
+In this paper we have studied DPLL with caching, analyzing the performance of various types
+of caching for #S AT. Our results apply immediately to a number of instances of the S UM P ROD
+problem including BAYES, since #S AT is complete for the class #P. However, our proofs can also
+be modified without much difficulty so that our complexity results apply directly to any problem in
+S UM P ROD.
+More sophisticated caching methods have also been explored for solving S AT by Beame et al.
+(2003) who showed that some of these methods can considerably increase the power of DPLL.
+However, these more sophisticated caching methods are currently not practical due to their large
+overheads. In other related work, one of the results of Aleknovich and Razborov (2002) showed that
+SAT could be solved in time nO(1) 2O(w) . Our results extend this to any problem in S UM P ROD—as
+shown in Section 2.1 SAT is an instance of S UM P ROD.
+We have proved that from a theoretical point of view, #DPLL-Cache is just as efficient in terms
+of time and space as other state-of-the-art exact algorithms for S UM P ROD. Moreover, we have
+shown that on specific instances, #DPLL-Cache substantially outperforms the basic versions of
+these other algorithms. The empirical results presented in the works described in Section 5 indicate
+that these advantages can often be realized in practice and that on some problems our DPLL based
+algorithms can yield significant performance improvements.
+There are a number of reasons why our DPLL based algorithms can outperform traditional
+algorithms for S UM P ROD. Algorithms like VE and the join tree algorithm (which is used in many
+BAYES inference systems), take advantage of the global structure of interconnections between the
+functions as characterized by the tree width or branch width of the instance. Our DPLL algorithms
+however, can also naturally exploit the internal or local structure within the functions. This is
+accomplished by instantiating variables and reducing the functions accordingly. This can lead to
+6. Marinescu and Dechter (2007) present a method for searching an AND/OR tree in a best-first manner. This method
+can also interleave the solving of components, but in general best-first search has exponential space overheads.
+
+419
+
+BACCHUS , DALMAO , & P ITASSI
+
+improvements especially when the functions are encoded in a way to expose more of the function’s
+internal structure, such as an encoding by sets of clauses (e.g., see Li et al., 2008). There are two
+prominent examples of structure that can be exploited by DPLL.
+First, some of the subproblems might contain zero valued functions. In this case our algorithms
+need not recurse further—the reduced subproblem must have value 0.7 In VE the corresponding
+situation occurs when one of the intermediate functions, Fi , produced by summing out some of the
+variables, has value 0 for some setting of its inputs. In VE there is no obvious way of fully exploiting
+this situation. VE can achieve some gains by ignoring those parts of Fi ’s domain that map to 0
+when Fi appears in a product with other functions. However, it can still expend considerable effort
+computing some other intermediate function Fj many of whose non-zero values might in fact be
+irrelevant because they will eventually be multiplied by zero values from Fi .
+Second, it can be that some of the input functions become constant prior to all of their variables
+being set (e.g., a clause might become equivalent to TRUE because one of its literals has become
+true), or they might become independent of some of their remaining variables. This means the subproblems f |xi =1 and f |xi =0 might have quite different underlying hypergraphs. Our DPLL-based
+algorithms can take advantage of this fact, since they work on these reduced problems separately.
+For example, our algorithms are free to use dynamic variable orderings, where a different variable
+ordering is used solving each subproblem. VE, on the other hand, does not decompose the problem
+in this way, and hence cannot take advantage of this structure.
+In BAYES this situation corresponds to context-specific independence where the random variable X might be dependent on the set of variables W, Y, Z when considering all possible assignments to these variables (so f (X, W, Y, Z) is one of the input functions), but when W = True it
+might be that X becomes independent of Y (i.e., f (X, W, Y, Z)|W =1 might be a function F (X, Z)
+rather than F (X, Y, Z)). Previously only ad-hoc methods have been proposed (Boutilier, Friedman,
+Goldszmidt, & Koller, 1996) to take advantage of this kind of structure.
+It should be noted however, that when the problem’s functions have little or internal structure
+VE can be significantly more efficient than any of the other algorithms (RC, AND/OR search and
+our DPLL algorithms). VE only uses simple multiplication and summation operations and does
+have any of the overheads involved with instantiating variables and exploring an AND/OR search
+tree or backtracking tree.
+RC and AND/OR search share some of the same advantages over VE. However, they do not have
+as much flexibility as our DPLL algorithms. We have shown in Theorem 6 that fully exploiting the
+zero valued functions can in some instances require dynamic variable orderings that lie outside of
+the range of the basic versions of RC and AND/OR search. Although our proof does not cover the
+enhanced versions of RC and AND/OR (RC-Cache+ and AND/OR-Cache+ ), we have pointed out
+that even these versions do not have the same flexibility as our DPLL algorithms. In practice, the
+empirical evidence provided by the Cachet system (Sang et al., 2004, 2005a) and by the branch
+and bound system described by Kitching and Bacchus (2008) support our belief that this added
+flexibility can be important in practice.
+The exploitation of context-specific independence also poses some problems for RC and AND/OR
+search algorithms. In particular, the static decomposition schemes they employ are incapable of
+fully exploiting this structure—as pointed out above the underlying hypergraphs of the subproblems arising from different instantiations can be radically different. However, although our DPLL
+7. For #S AT this corresponds to the situation where a clause becomes empty.
+
+420
+
+BACKTRACKING S EARCH
+
+FOR
+
+#SAT AND BAYES
+
+algorithms are in principle able to exploit such structure, it remains an open problem to find practical
+ways to accomplishing this. Specifically, when a decomposition scheme is computed prior to search
+sophisticated (and computationally complex) algorithms can be utilized. It is difficult to overcome
+the overhead of such methods when they are used dynamically during search (although see Li and
+van Beek 2004 for some work in this direction). The development of methods that are light weight
+enough to use during search and are still effective for selecting decomposition promoting variables
+remains an open problem.
+Finally, as shown in the proof of Theorem 5, RC and AND/OR search possess no intrinsic
+advantages over our DPLL algorithms except perhaps conceptually simplicity. The proof shows
+that our DPLL algorithms can simulate RC and AND/OR search in such a way that no additional
+computation is required. Furthermore, as pointed out in the Section 5 our algorithms are also able
+to utilize static decomposition schemes obtaining the same efficiency gains as RC and AND/OR
+search.
+Recently, several papers (Sanner & McAllester, 2005; Mateescu & Dechter, 2007) have made
+significant progress on developing more compact representations for functions (rather than tabular
+form), thereby potentially enhancing all of the algorithms discussed in this paper (VE, RC, etc.) by
+allowing them to exploit additional local structure within the functions. An interesting future step
+would be to combine the unique dynamic features of #DPLL-Cache with one of these promising
+compact function representations to try to further improve S UM P ROD algorithms.
+Acknowledgments This research funded by governments of Ontario and Canada through their
+NSERC and PREA programs. Some of the results of this paper were presented in an earlier conference paper (Bacchus et al., 2003). We thank Michael Littman for valuable conversations.
+
+Appendix A. Proofs
+A.1 Lemmas Relating Branch Width, Tree Width, and Elimination Width
+Lemma 2 Let H = (V, E) be a hypergraph with a tree-decomposition of width w. Then there is
+an ordering π of the vertices V such that the induced width of H under π is at most w.
+Proof: Let H = (V, E) be a hypergraph of tree width w and let Ttd be a tree decomposition
+that achieves width w. That is, the maximum sized label of Ttd is of size w + 1. We can assume
+without loss of generality that the labels of the leaves of Ttd are in a one-to-one correspondence
+with the edges of H. For an arbitrary node m in Ttd , let label (m) be the set of vertices in the label
+of m, Am be the tree rooted at m, vertices(m) be the union of the labels of the leaf nodes in Am
+(i.e., the hyperedges of H appearing below Am ), and depth(m) be the distance from m to the root.
+Let x be any vertex of H, and let leaves(x) be the set of leaves of Ttd that contain x in their
+label. We define node(x) to be the deepest common ancestor in Ttd of all the nodes in leaves(x),
+and the depth of a vertex, depth(x), to be depth(node(x)). Note that x ∈ label (node(x)), since
+the path from the left-most leaf in leaves(x) to the right-most leaf must pass through node(x); and
+that x does not appear in the label of any node outside of the subtree rooted at node(x), since no
+leaf outside of this subtree contains x.
+Finally let π = x1 , . . . , xn be any ordering of the vertices such that if depth(y) < depth(x),
+then y must precede x in the ordering. We use the notation y <π x to indicate that y precedes x in
+421
+
+BACCHUS , DALMAO , & P ITASSI
+
+the ordering π (and thus y will be eliminated after x). We claim that the induced width of π is at
+most the width of Ttd , i.e., w.
+Consider Anode(x) , the subtree rooted at node(x), and vertices(node (x)), the union of the labels
+of the leaves of Anode (x) . We make the following observations about these vertices.
+1. If y ∈ vertices(node (x)) and y <π x, then y labels node(x) and node(y) must be ancestor
+of node(x) (or equal). y <π x implies that depth(y) ≤ depth(x). There must be a path from
+the leaf in Anode(x) containing y to node(y), and since node (y) is at least as high as node(x)
+the path must go through node(x) (or we must have node(x) = node(y)). In either case
+y ∈ label (node(x)).
+2. If y ∈ vertices(node(x)) and y >π x then node(y) must lie inside Anode(x) and node(y)
+must be a descendant of node(x) (or equal). y >π x implies that depth(y) ≥ depth(x).
+There must be a path from the leaf in A containing y to node(y), and since node(y) is at
+least as deep at node(x) there must either be a further path from node(y) to node(x), or
+node(y) = node(x).
+Note further that condition 2 implies that if y >π x and y appears in the subtree below node(x),
+then all hyperedges in the original hypergraph H containing y must also be in the subtree below
+node(x).
+We claim that the hyperedge produced at stage i in the elimination process when xi is eliminated
+is contained in label (node(xi )). Since the size of this set is bounded by w + 1, we thus verify that
+the induced width of π is bounded by w (note that the hyperedge produced in elimination does not
+contain xi where as label (node(xi )) does).
+The base case is when x1 is eliminated. All hyperedges containing x1 are contained in the subtree below node(x1 ), thus the hyperedge created when x1 is eliminated is contained in vertices(node (x1 )).
+All other vertices in vertices(node (x1 )) follow x1 in the ordering so by the above they must label
+node(x1 ) and vertices(node(x1 )) ⊆ label (node(x1 )).
+When xi is eliminated there are two types of hyperedges that might be unioned together: (a)
+those hyperedges containing xi that were part of the original hypergraph H, and (b) those hyperedges containing xi that were produced as x1 , . . . , xi−1 were eliminated. For the original hyperedges, all these are among the leaves below node(xi ), and thus are contained in vertices(node(xi )).
+For a new hyperedge produced by eliminating one of the previous variables, say the variable y, the
+hyperedge it produced is contained in label (node (y)) by induction, which in turn is contained in
+vertices(node(y)). If y is in the subtree below node(x) we get that this hyperedge is contained in
+vertices(node(x)) since this is a superset of vertices(node (y)). Otherwise, node(y) lies in another
+part of the tree, and its label cannot contain x (no node outside the subtree below node(x) has x in
+its label). Thus the hyperedge created when it is eliminated also cannot contain xi .
+In sum the hyperedge created when xi is eliminated is contained in vertices(node(xi )), since
+all of the hyperedges containing xi at this stage are in this set. Furthermore, all vertices x1 , . . . , xi−1
+are removed from this hyperedge, thus it contains only variables following xi in the ordering. Hence,
+by (1) above this hyperedge is contained in label (node(xi )). 2
+Lemma 3 Let H be a hypergraph with elimination width at most w. Then H has a tree-decomposition
+of tree width at most w.
+422
+
+BACKTRACKING S EARCH
+
+FOR
+
+#SAT AND BAYES
+
+Proof: (Proof of Lemma 3) Let π = x1 , . . . xn be an elimination ordering for H. Then we will
+construct a tree decomposition for H using π as follows. Initially, we have |E| trees, each of size
+1, one corresponding to each edge e ∈ E. We first merge the trees containing xn into a bigger tree,
+Tn , leaving us with a new, smaller set of trees. Then we merge the trees containing xn−1 into a
+bigger tree, Tn−1 . We continue in this way until we have formed a single tree, T . Now fill in the
+labels for all intermediate vertices of T so that the tree is a tree-decomposition. That is, if m and
+n are two leaves of T and they both contain some vertex v, then every node along the path from m
+to n must also contain v in its label. It is not too hard to see that for each xi , the tree Ti (created
+when merging the trees containing xi ) has the property that the label of its root (which connects it
+with the rest of T ) is contained in ei ∪ xi , where ei is the hyperedge created when xi is eliminated.
+Basically, all nodes with xj , j > i, are already contained in Ti so xi does not need to label Ti ’s root.
+Furthermore, if xj j < i is contained in Ti ’s root label, then xj must have been in some original
+hyperedge with a variable xk k ≥ i: thus xj would have appeared in the hyperedge ei generated
+when xi was eliminated.
+Hence the tree width of the final tree T can be no larger than the induced width of π. 2
+A.2 Complexity Results for Caching Versions of DPLL
+For the proof of theorems 1 and 2 we will need some common notation and definitions. Let f be
+k-CNF formula with n variables and m clauses, let H be the underlying hypergraph associated with
+f with branch width w. By the results of Darwiche (2001), there is a branch decomposition of
+H of depth O(log m) and width O(w). Also by the results of Robertson and Seymour (1995), it
+is possible to find a branch decomposition, Tbd , such that Tbd has branch width O(w) and depth
+O(log m), in time nO(1) 2O(w) . Thus our main goal for each of the three theorems will be to prove
+the stated time and space bounds for our DPLL-based procedures, when they are run on a static
+ordering that is easily obtainable from Tbd .
+Recall that the leaves of Tbd are in one-to-one correspondence with the clauses of f . We will
+number the vertices of Tbd according to a depth-first preorder traversal of Tbd . For a vertex numbered
+i, let fi denote the subformula of f consisting of the conjunction of all clauses corresponding to the
+leaves of the tree rooted at i. Let Vars(fi ) be the set of variables in the (sub)formula fi . Recall
+that in a branch decomposition the label of each vertex i, label (i), is the set of variables in the
+intersection of Vars(fi ) and Vars(f −fi ). Each node i in Tbd partitions the clauses of f into three
+sets of clauses: fi , fiL , and fiR , where fiL is the conjunction of clauses at the leaves of Tbd to the
+left of fi , and fiR is the conjunction of clauses at the leaves to the right of fi .
+All of our DPLL caching algorithms achieve the stated run time bounds by querying the variables in a specific, static variable ordering. That is, down any branch of the DPLL decision tree,
+DT , the same variables are instantiated in the same order. (In contrast a dynamic variable ordering allows DPLL to decide which variable to query next based on the assignments that have been
+made before. Thus different branches can query the variables in a different order.). The variable
+ordering used in DT is determined by the depth-first pre-ordering of the vertices in the branch decomposition Tbd and by the labeling of these vertices. Let (i, 1), . . . , (i, ji ) denote the variables in
+label (i) that do not appear in the label of an earlier vertex of Tbd . Note that since the width of Tbd
+is w, ji ≤ w for all i. Let 1, . . . , z be the sequence of vertex numbers of Tbd . Then our DPLL algorithm will query the variables underlying f in the following static order: π = h(i1 , 1), (i1 , 2), . . . ,
+(i1 , j1 ), (i2 , 1), . . . , (i2 , j2 ), . . . , (is , 1), . . . , (is , js )i i1 < i2 < . . . < is ≤ z, and j1 , . . . , js ≤ w.
+423
+
+BACCHUS , DALMAO , & P ITASSI
+
+Note that for some vertices i of Tbd , nothing will be queried since all of the variables in its label may
+have occurred in the labels of earlier vertices. Our notation allows for these vertices to be skipped.
+The underlying complete decision tree, DT , created by our DPLL algorithms on input f is thus a
+tree with j1 + j2 + . . . + js = n levels. The levels are grouped into s layers, with the ith layer
+consisting of ji levels. Note that there are 2l nodes at level l in DT , and we will identify a particular
+node at level l by (l, ρ) where ρ is a particular assignment to the first l variables in the ordering, or
+by ((q, r), ρ), where (q, r) is the lth pair in the ordering π, and ρ is as before.
+The DPLL algorithms carry out a depth-first traversal of DT , keeping formulas in the cache
+that have already been solved along the way. (For #DPLL-SimpleCache, the formulas stored in
+the cache are of the form f |ρ , and for #DPLL-Cache and #DPLL-Space, the formulas stored are
+various components of ToComponents(f |ρ ).) If the algorithm ever hits a node where the formula
+to be computed has already been solved, it can avoid that computation, and thus it does not do a
+complete depth-first search of DT but rather it does a depth-first search of a pruned version of DT .
+For our theorems, we want to get an upper bound on the size of the pruned tree actually searched by
+the algorithm.
+Theorem 1 For solving #S AT with n variables, there is an execution of #DPLL-SimpleCache that
+runs in time bounded by 2O(w log n) where w is the underlying branch width of the instance. Furthermore, the algorithm can be made deterministic with the same time guarantees.
+Proof: We want to show that the size of the subtree of DT searched by #DPLL-SimpleCache
+is at most 2O(w log n) . When backtracking from a particular node (l, ρ) = ((q, r), ρ) at level l in DT ,
+the formula put in the cache, if it is not already known, is of the form f |ρ . (Recall ρ is a setting to the
+first l variables.) However, we will see that although there are 2l different ways to set ρ, the number
+of distinct formulas of this form is actually much smaller than 2l . Consider a partial assignment, ρ,
+where we have set all variables up to and including (q, r), for some q ≤ is and some r ≤ jq . The
+number of variables set by ρ (the length of ρ) is j1 + j2 + . . . + jq−1 + r.
+Let ρ− denote the partial assignment that is consistent with ρ where only the variables in ρ that
+came from the labels of the vertices on the path from the root of Tbd up to and including vertex q
+are set. The idea is that ρ− is a reduction of ρ, where ρ− has removed the assignments of ρ that are
+irrelevant to fq and fqR .
+Consider what happens when the DPLL algorithm reaches a particular node ((q, r), ρ) at level
+l of DT . At that point the algorithm is solving the subproblem f |ρ , and thus, once we backtrack to
+this node, f |ρ = fqL |ρ ∧ fq |ρ ∧ fqR |ρ is placed in the cache, if it is not already known. Note that all
+variables in the subformula fqL are set by ρ, and thus either fqL |ρ = 0, in which case nothing new
+is put in the cache, or fqL |ρ = 1 in which case f |ρ = fq |ρ ∧ fqR |ρ = fq |ρ− ∧ fqR |ρ− is put in the
+cache. Thus, the set of distinct subformulas placed in the cache at level l = (q, r) is at most the
+set of all subformulas of the form fq |ρ− ∧ fqR |ρ− , where ρ− is a setting to all variables in the labels
+from the root to vertex q, plus the variables (q, 1), ..., (q, r). There are at most d · w such variables,
+where q has depth d in Tbd (each label has at most w variables since this is the width of Tbd ). Hence
+the total number of such ρ− ’s is at most 2(w·d) . This implies that the number of subtrees in DT at
+level l + 1 that are actually traversed by #DPLL-SimpleCache is at most 2 · 2w·d = 2O(w·d) , where
+d is the depth of node q in Tbd . Let t be the number of nodes in DT that are actually traversed by
+#DPLL-SimpleCache. Then, t is at most n2O(w·log n) , since t is the sum of the number of nodes
+visited at every level of DT and for each node q in Tbd d ∈ O(log m) = O(log n).
+424
+
+BACKTRACKING S EARCH
+
+FOR
+
+#SAT AND BAYES
+
+Accounting for the time to search the cache, the overall runtime of #DPLL-SimpleCache is at
+most t2 , where again t is the number of nodes in DT that are traversed by the algorithm. Thus,
+#DPLL-SimpleCache runs in time (n2O(w·log n) )2 = 2O(w·log n) . 2
+Theorem 2 For solving #S AT on n variables, there exists an execution of #DPLL-Cache that runs in
+time bounded by nO(1) 2O(w) where w is the underlying branch width of the instance. Furthermore,
+the algorithm can be made deterministic with the same time guarantees.
+Proof: We prove the theorem by placing a bound on the number of times #DPLL-Cache can
+branch on any variable xl . Using the notation specified above, xl corresponds to some pair (q, r) in
+the ordering π used by #DPLL-Cache. That is, xl is the r’th new variable in the label of vertex q of
+the branch decomposition Tbd .
+When #DPLL-Cache utilizes the static ordering π, it branches on, or queries, the variables
+according to that order, always reducing the component containing the variable xi that is currently due to be queried. However, since previously cached components are always removed (by
+RemoveCachedComponents in the algorithm), it can be that when it is variable xi ’s turn to be
+queried, there is no component among the active components that contains xi . In this case, #DPLLCache simply moves on to the next variable in the ordering, continuing to advance until it finds
+the first variable that does appear in some active component. It will then branch on that variable
+reducing the component it appears in, leaving the other components unaltered.
+This implies that at any time when #DPLL-Cache selects xl as the variable to next branch on it
+must be the case that (1) xl appears in an active component. In particular the value of this component
+is not already in the cache. And (2) no variable prior to xl in the ordering π appears in an active
+component. All of these variables have either been assigned a particular value by previous recursive
+invocations, or the component they appeared in has been removed because its value was already in
+the cache.
+In the branch decomposition Tbd let p be q’s parent (q must have a parent since the root has
+an empty label). We claim that whenever #DPLL-Cache selects xl as the next variable to branch
+on, the active component containing xl must be a component in the reduction of fp whose form is
+determined solely by the settings of the variables in p and the r variables of q that have already been
+set. If this is the case, then there can be at most 2(w+r) = 2O(w) different components that xl can
+appear in, and hence #DPLL-Cache can branch on xl at most 2O(w) times as each time one more of
+these components gets stored in the cache.
+Now we prove the claim. The label of q consists of variables appearing in p’s label and variables
+appearing in the label of q’s sibling. Since all of the variables in label (p) have been set, q and its
+sibling must now have an identical set of unqueried variables in their labels. Hence, q must be the
+left child of p as by the time the right child is visited in the ordering, xl will have already been
+queried. Thus, at the time xl is queried, fp will have been affected only by the current setting of
+label (p) (as these are the only variables it shares with the rest of the formula) and the first r queried
+variables from label (q). That is, fp can be in at most 2(w+r) different configurations, and thus the
+component containing xl can also be in at most this many different configurations.
+Thus with n variables we obtain a bound on the number of branches in the decision tree explored
+by #DPLL-Cache of n2O(w) . As in the proof of the previous theorem, the overall runtime is at most
+quadratic in the number of branches traversed, to give the claimed bound of nO(1) 2O(w) . 2
+
+425
+
+BACCHUS , DALMAO , & P ITASSI
+
+Theorem 3 For solving #S AT on n variables, there is an execution of #DPLL-Space that uses only
+space linear in the instance size and runs in time bounded by 2O(w log n) where w is the underlying
+branch width of the instance. Furthermore, the algorithm can be made deterministic with the same
+time and space guarantees.
+Proof: For this proof, it will be more natural to work with a tree decomposition rather than a
+branch decomposition.
+Let f be a k-CNF formula with n variables and m clauses and let H be the underlying hypergraph associated with f . We begin with a tree decomposition Ttd of depth O(log m) and width
+O(w) (computable in time nO(1) 2O(w) ). We can assume without loss of generality that the leaves
+of Ttd are in one-to-one correspondence with the clauses of f . Each node i in Ttd partitions f into
+three disjoint sets of clauses: fi , the conjunction of clauses at the leaves of the subtree of Ttd rooted
+at i, fiL , the conjunction of clauses of the leaves of Ttd to the left of fi , and fiR , the conjunction of
+clauses of the leaves of Ttd to the right of fi . #DPLL-Space will query the variables associated with
+the labels of Ttd according to the depth-first preorder traversal. Let the variables in label (i) not appearing in an earlier label on the path from the root to node i be denoted by S(i) = (i, 1), . . . , (i, ji ).
+If i is a non-leaf node with j and k being its left and right children, then the variables in S(i) are
+exactly the variables that occur in both fj and fk but that do not occur outside of fi . If we let c
+be the total number of nodes in Ttd , then #DPLL-Space will query the variables underlying f in
+the following static order: S(1), S(2), . . . , S(c), where some S(i) may be empty. The underlying
+decision tree, DT , created by #DPLL-Space is a complete tree with n levels. As before we will
+identify a particular node s at level l of DT by s = (l, ρ) where ρ is a particular assignment to the
+first l variables in the ordering, or by s = ((q, r), ρ) (the r th variable in S(q)).
+#DPLL-Space carries out a depth-first traversal of DT , storing the components of formulas in
+the cache as they are solved. However, now components of formulas are also popped from the cache
+so that the total space ever utilized is linear. If the algorithm hits a node where all of the components
+of the formula to be computed are known, it can avoid traversing the subtree rooted at that node.
+Thus it searches a pruned version of DT .
+During the (pruned) depth-first traversal of DT , each edge that is traversed is traversed twice,
+once in each direction. At a given time t in the traversal, let E = E1 ∪ E2 be the set of edges that
+have been traversed, where E1 are the edges that have only been traversed in the forward direction,
+and E2 are the edges that have been traversed in both directions. The edges in E1 constitute a partial
+path p starting at the root of DT . Each edge in p is labeled by either 0 or 1. Let p1 , . . . , pk be the
+set of all subpaths of p (beginning at the root) that end in a 1-edge. Let ρ1 , . . . , ρk be subrestrictions
+corresponding to p1 , . . . , pk except that the last variable that was originally assigned a 1 is now
+assigned a 0. For example, if p is (x1 = 0, x3 = 1, x4 = 0, x5 = 1, x6 = 0, x2 = 0), then
+ρ1 = (x1 = 0, x3 = 0), and ρ2 = (x1 = 0, x3 = 1, x4 = 0, x5 = 0). Then the information that is
+in the cache at time t contains ToComponents(f |ρi ), i ≤ k.
+For a node q of Ttd and corresponding subformula fq , the context of fq is a set of variables
+defined as follows. Let (q1 , . . . , qd ) denote the vertices in Ttd on the path from the root to q (excluding q itself). Then the context of fq is the set Context (fq ) = S(q1 ) ∪ S(q2 ) ∪ . . . ∪ S(qd ).
+Intuitively, the context of fq is the set of all variables that are queried at nodes that lie along the path
+to q. Note that when we reach level l = (q, 1) in DT , where the first variable of S(q) is queried,
+we have already queried many variables, including all the variables in Context(fq ). Thus the set
+of all variables queried up to level l = (q, 1) can be partitioned into two groups relative to fq : the
+426
+
+BACKTRACKING S EARCH
+
+FOR
+
+#SAT AND BAYES
+
+irrelevant variables, and the set Context(fq ) of relevant variables. We claim that at an arbitrary
+level l = (q, r) in DT , the only nodes at level l that are actually traversed are those nodes ((q, r), ρ)
+where all irrelevant variables in ρ (with respect to fq ) are set to 0. The total number of such nodes
+at level l = (q, r) is at most 2|Context(fq )|+r which is at most 2w log n . Since this will be true for all
+levels, the total number of nodes in DT that are traversed is bounded by n2w log n . Thus, all that
+remains is to prove our claim.
+Consider some node s = ((q, r), α) in DT . That is, α = α1 α2 . . . αq−1 b1 . . . br−1 , where for
+each i, αi is an assignment to the variables in S(i), and b1 . . . br−1 is an assignment to the first r − 1
+variables in S(q). Let the context of fq be S(q1 ) ∪ . . . ∪ S(qd ), d ≤ log n. Now suppose that α
+assigns a 1 to some non-context (irrelevant) variable, and say the first such assignment occurs at αut ,
+the tth variable in αu , u ≤ q − 1. We want to show that the algorithm never traverses s.
+Associated with α is a partial path in DT ; we will also call this partial path α. Consider the
+subpath/subassignment p of α up to and including αut = 1. If α is traversed, then we start by
+traversing p. Since the last bit of p is 1 (i.e., αut = 1) when we get to this point, we have stored
+in the cache ToComponents(f |ρ ) where ρ is exactly like p except that the last bit, αut , is zero. Let
+j be the first node in q1 , q2 , . . . qd with the property that the set of variables S(j) are not queried
+in p. (On the path to q in Ttd , j is the first node along this path such that the variables in S(j) are
+not queried in p.) Then ToComponents(f |ρ ) consists of three parts: (a) ToComponents(fjL |ρ ), (b)
+ToComponents(fj |ρ ), and (c) ToComponents(fjR |ρ ).
+Now consider the path p′ that extends p on the way to s in DT , where p′ is the shortest subpath of
+α where all of the variables S(i) for i < j have been queried. The restriction corresponding to p′ is a
+refinement of p where all variables in S(1)∪S(2)∪. . . S(j−1) are set. Since we have already set everything that occurs before j, we will only go beyond p′ if some component of ToComponents(f |p′ )
+is not already in the cache. ToComponents(f |p′ ) consists of three parts: (a) ToComponents(fjL |p′ ),
+(b) ToComponents(fj |p′ ), and (c) ToComponents(fjR |p′ ). Because we have set everything that occurs before j, all formulas in (a) will be known. Since p′ and ρ agree on all variables that are relevant
+to fj , ToComponents(fj |p′ ) = ToComponents(fj |ρ ) and hence these formulas in (b) in the cache.
+Similarly all formulas in (c) are in the cache since ToComponents(fjR |p′ ) = ToComponents(fjR |ρ ).
+Thus all components of ToComponents(f |p′ ) are in the cache, and hence we have shown that we
+never traverse beyond p′ and hence never traverse s. Therefore the total number of nodes traversed
+at any level l = (q, r) is at most 2wd , where d is the depth of q in Ttd , as desired. This yields an
+overall runtime of 2O(w log n) .
+It is left to argue that the space used is linear in the instance size. The total number of formulas
+that are ever stored in the cache simultaneously is linear in the depth of the tree decomposition,
+which is O(log m). Since we store each restricted formula f |ρ by storing the associated restriction
+ρ, the total space ever used is O(n log m), which is linear in the input size. 2
+A.3 Comparing Algorithms for BAYES and #S AT
+Before proving the next theorem, we first discuss in more detail the structure of the search space
+explored by various versions of RC, AND/OR search and DDP. All of these algorithms operate
+in the same way. They instantiate variables and when the problem decomposes into independent
+components they solve these components in separate recursions. Hence, when solving any CNF
+formula f they all generate some AND/OR search tree (Dechter & Mateescu, 2007).
+427
+
+BACCHUS , DALMAO , & P ITASSI
+
+The AND/OR search tree AO generated when one of the above algorithms solves the #S AT
+instance f (a CNF formula), is a rooted tree. Each node n of AO is labeled by a formula n.f and
+the subtree below n is generated when solving n.f . The root of A0 is labeled by the original formula
+f . There are four different types of nodes in AO:
+Query nodes. Each query node q has an associated variable q.var and two children corresponding
+to the two possible instantiations of q.var . That is, its children are labeled by the formulas
+q.f |q.var =0 and q.f |q.var =1 . A query node q is generated by the search algorithm whenever
+it chooses to instantiate q.var and then executes recursive calls on the two resultant reduced
+formulas.
+AND nodes. Each AND node, a, has a query node as its parent, and has one or more children
+all of which are query nodes. An AND node is generated by the search algorithm when it
+decomposes the current formula into two or more independent components following the instantiation of the parent query node’s variable. Each of these components will then be solved
+in one of the subtrees rooted by the AND node’s children. If a.f splits into the components
+V
+fi , i = 1, . . . , k, then a.f = i fi , and the i’th child of a is labeled by fi . Note that the fi
+share no variables. Hence, the set of query node variables that appear in the subtree below
+the i-th child of a are disjoint from the set of query node variables appearing below the j-th
+child of a for all j 6= i.
+Failure nodes. These are leaf nodes of the tree that are labeled with a formula containing the empty
+clause. If caching is being used, failure nodes might also be labeled by a formula in the cache
+that has already been shown to be unsatisfiable.
+Satisfying nodes. These are leaf nodes of the tree that are labeled with a formula containing no
+clauses. If caching is being used, satisfying nodes might also be labeled by a satisfiable
+formula in the cache whose model count is already know.
+Figure 6 shows an example AND/OR search tree.
+Each node n of the AO also has a value, n.value, computed by the algorithm that generates it.
+Here we only need to distinguish between zero values n.value = 0, and non-zero values denoted
+by n.value = 1. Every satisfying node has value 1, and every failure node has value 0. A query
+node has value 1 if and only if at least one of its children has value 1, and an AND node has value
+1 if and only if all of its children have value 1. For example, in Figure 6 AND node D has value
+0, while query node 2 has value 1. Note that all of the children of an AND node in AO must have
+value 1 except possibly the right most child. The algorithms generating AO all terminate the search
+below an AND node as soon as they discover a value 0 child—this implies that the AND node has
+value 0. It can be seen that n.value = 0 if n.f is unsatisfiable and n.value = 1 if n.f is satisfiable.
+Given any node n of AO, let AO(n) be the AND/OR subtree of AO rooted by n. Each satisfying
+assignment ρ of n’s formula n.f defines a solution subtree S(n) of AO(n). In particular, S(n) is
+a connected subtree of AO(n) rooted by n such that (1) if q is a query node in S(n) then S(n)
+also contains the child of q corresponding to the assignment made by ρ (i.e., if ρ[q.var ] is the value
+assigned to q.var in ρ, then S(n) will contain the child labeled by the formula q.f |q.var =ρ[q.var] ),
+(2) if a is an AND node in S(n) then S(n) contains all children of a, and (3) S contains no failure
+nodes. For example, a solution subtree of the AND/OR tree shown in Figure 6 (i.e., a solution
+subtree of the root node) is formed by the leaf nodes b, c, f, and l; the query nodes 1, 2, 3, 4, 5, 6,
+428
+
+BACKTRACKING S EARCH
+
+FOR
+
+#SAT AND BAYES
+
+1
+
+11
+
+2
+
+A
+
+16
+
+D
+
+n
+3
+
+8
+
+6
+
+12
+
+13
+
+!
+
+E
+
+u
+7
+
+B
+
+!
+
+C
+
+e
+4
+
+5
+
+c
+
+d
+
+o
+
+17
+
+!
+
+!
+
+i
+
+j
+
+19
+
+p
+q
+
+h
+
+15
+
+18
+
+g
+
+!
+
+b
+
+m
+
+10
+
+9
+
+f
+a
+
+14
+
+l
+
+r
+
+s
+
+!
+
+t
+
+x
+
+y
+
+z
+
+!
+
+v
+
+k
+
+w
+
+F il
+Failure
+node
+d
+!
+
+Satisfying node
+Query node
+AND node
+d
+
+Figure 6: An example AND/OR search tree with query nodes numbered 1–19, leaf nodes (both
+failure and satisfying) numbered a–z, and AND nodes labeled A–E.
+
+7, and 8; and the AND nodes A, and B. In particular, the left value of query nodes 1, 2, 3, 5, 6, 7
+and 8, along with the right value of query node 4 satisfy all clauses of the formula 1.f . A solution
+subtree of AO(n) exists if and only if n.value = 1.
+Finally, in an AND/OR search tree we say that a query node whose parent is an AND node is
+a component root. We also classify the root node as a component root. In Figure 6 query nodes 1
+(the root node), 3, 6, 8, 4, 5, 9, 10, 12, 13, 17, and 19 are component roots.
+Theorem 5 #DPLL-Cache polynomially simulates RC-Cache, RC-Cache+ , AND/OR-Cache,
+AND/OR-Cache+ , and VE. #DPLL-Space polynomially simulates RC-Space, AND/OR-Space and
+DDP.
+Proof: Since RC-Cache polynomially simulates VE we can ignore VE in our proof: showing that
+#DPLL-Cache polynomially simulates RC-Cache also shows that it polynomially simulates VE.
+Also we assume in our proof that if any of these algorithms use unit propagation, then so does
+#DPLL-Cache/Space. As explained in Section 3.1, #DPLL-Cache/Space without unit propagation
+can polynomially simulate versions of #DPLL-Cache/Space using unit propagation.
+429
+
+BACCHUS , DALMAO , & P ITASSI
+
+Each of the stated algorithms will generate an AND/OR search tree when solving a CNF formula
+f . To prove the theorem we first show how any AND/OR search tree solving f can be converted
+into a partial DPLL decision tree, DT , that is no bigger. Then we show that our DPLL algorithms
+can solve f using DT to guide its variable ordering. Thus, we obtain the result that the minimal
+runtime for any of the stated algorithms, which must result in the generation of some AND/OR
+search tree AOmin , can also be achieved by our DPLL algorithms. In particular, when run on the
+partial decision tree constructed from AOmin , our DPLL algorithms will achieve a polynomially
+similar runtime. (This suffices to prove the theorem, as we need only show the existence of an
+execution of our DPLL algorithms achieving this run time.)
+To make the distinction between the AND/OR search tree and the constructed partial decision
+tree clear, we will use the suffixes ao and dt to indicate elements of the AND/OR tree and decision
+tree respectively.
+DPLL decision trees contain only query variables, satisfying nodes, and failure nodes, where
+satisfying and failure nodes are both leaf nodes. We construct a partial decision tree DT from an
+AND/OR tree AO by expanding the left most solution subtree S(nao ) below every node nao ∈ AO
+with nao .value = 1 into a linear sequence of query variables in DT using a depth-first ordering
+of the query variables in S(nao ). For nodes nao ∈ AO with nao .value = 0 the same expansion is
+attempted, but in this case it will result in a sequence of query nodes that terminate at failure nodes.
+Every node qdt in DT has a pointer, dt→ao(qdt ) to a node qao in AO, at the end of the construction these pointers establish a map between the nodes in DT and the nodes in AO. Initially, the root
+of DT has a pointer to the root of AO. Then, for any node qdt ∈ DT :
+1. If dt→ao(qdt ) is a query node qao in AO, then make qdt a query node and create a left and
+right child, ldt and rdt , for qdt in DT . We make qdt query the same variable as qao (i.e.,
+qdt .var = qao .var ), and set its children to point to the children of qao (i.e., dt→ao(ldt ) and
+dt→ao(rdt ) are set to the left and right children of qao in AO).
+2. If dt→ao(qdt ) is an AND node aao in AO, then we reset dt→ao(qdt ) to be the left most child
+of aao in AO. We then apply the first rule above, and continue.
+3. If dt→ao(qdt ) is a failure node in AO then we set qdt to be a failure node. In this case qdt has
+no children.
+4. If dt→ao(qdt ) is a satisfying node in AO then we examine the path ρao in AO from the root
+to dt→ao(qdt ). Let rao be the last component root on ρao that has a right sibling.
+(a) If such an rao exists, and no node on the path from rao to dt→ao(qdt ) in AO is the right
+child of a query node whose left child has value 1, then we reset dt→ao(qdt ) to be the
+leftmost right sibling of rao . This node is also a component root, and hence it is a query
+node in AO. We then apply the first rule above, and continue.
+(b) Otherwise (either rao does not exist or there is some node on the path from rao that is
+the right child of a query node whose left child has value 1), we make qdt a satisfying
+node. In this case qdt has no children.
+Rule 4 of the construction is where we convert the leftmost solution subtree below each node nao
+in AO into a sequence of query nodes in DT by performing a depth-first traversal of this solution
+subtree. In particular, in this solution subtree the leftmost right sibling of the deepest component
+430
+
+BACKTRACKING S EARCH
+
+FOR
+
+#SAT AND BAYES
+
+1
+
+11
+
+2
+
+3
+
+16
+
+12
+
+n
+4
+
+!
+
+13o
+
+17
+
+p
+
+e
+14
+
+5b
+
+u
+
+15
+
+18
+
+a
+
+x
+6c
+
+d
+7
+
+!
+
+!
+
+q
+
+r
+
+19v
+
+s
+
+t
+
+w
+
+9
+
+y
+!
+
+8f
+
+g
+
+z
+
+10i
+
+h
+!
+
+l
+
+m
+
+j
+
+k
+Failure node
+!
+
+Satisfying node
+Query node
+
+Figure 7: The partial DPLL decision tree constructed from the AND/OR search tree of Figure 6.
+Each query and leaf nodes n is numbered with the number of the corresponding node,
+dt→ao(n), in the AND/OR search tree.
+
+root is the depth-first successor of the satisfying leaf node. The condition that no node on route
+to that sibling is the right child of a query node whose left child has value 1 ensures that we only
+perform a depth-first traversal along the leftmost solution subtree and not along subsequent solution
+subtrees. Figure 7 shows the partial decision tree that would be constructed from the AND/OR
+search tree of Figure 6.
+In the diagram, satisfying nodes whose pointers are reset to the next component root using
+rule 4a, are numbered with the corresponding query node in the AND/OR tree followed by the
+leaf label of the corresponding satisfying node. For example, node 5b in the Figure 7 represents
+satisfying child b of node 4 in Figure 6 that has been redirected to its depth-first successor node 5
+(the leftmost right sibling of the deepest component root 4).
+As another example, in the AND/OR tree, the right child of node 6 is the AND node C. Hence, in
+the decision tree, the right child of the corresponding query node 6, becomes query node 9 which is
+the leftmost child of node C (rule 2). Furthermore, when we reach satisfying node j in the AND/OR
+tree, we can proceed no further and hence the left child of query node 10 in the decision tree becomes
+a terminal satisfying node (rule 3). In particular, although the path from the root to node 10 in the
+AND/OR tree contains a component root with a right sibling, namely node 6, this path also contains
+the node C that is the right child of a query node (node 6) whose left child (node 7) has value 1.
+431
+
+BACCHUS , DALMAO , & P ITASSI
+
+There are two things to note. First, at any node ndt of DT all variables instantiated on the path
+ρao in A0 from the root to dt→ao(n) have been instantiated to the same values on the path ρdt in
+DT from the root to ndt . Since Rules 3 and 4b terminate paths, all nodes on ρdt are inserted only
+by Rules 1, 2, and 4b. Rules 1 and 2 only insert nodes on ρdt whose parents are already on ρdt , and
+Rule 1 ensures that the values assigned are the same as those in AO. Finally, Rule 4a only inserts a
+node adt on ρdt if one of dt→ao(adt )’s siblings is already on ρdt , and hence that sibling’s (and a’s)
+parent must already be on ρdt .
+Second, no variable is queried twice along any path of DT . That is, no node ndt in DT has
+an ancestor n′dt with ndt .var = n′dt .var . Again any path ρdt in DT is grown only by applications
+of Rules 1, 2, and 4a. Since no path in AO queries the same variable twice, Rules 1 and 2 must
+preserve this condition. Similarly Rule 4a moves to a new component root aao , and the set of query
+variables at and below aao in AO is disjoint with the set of query variables already appearing in ρdt .
+Using the above, from the AND/OR search tree AO generated by any of the algorithms RCSpace, AND/OR-Space or DDP when solving the formula f , we can construct a corresponding
+partial decision tree DT . Now we show that #DPLL-Space can solve f by exploring a search tree
+that is no larger than DT . Note that DT is itself no larger than AO, hence this will show that
+#DPLL-Space can solve f with a polynomially similar run time, proving that it can polynomially
+simulate RC-Space, AND/OR-Space and DDP. (Note that the run time of all of these algorithms is
+polynomially related to the size of the search trees they explore.)
+We execute #DPLL-Space using the variable ordering specified in DT . That is, starting at the
+root rdt of DT , #DPLL-Space will always query the variable of the current node of DT , ndt .var ,
+and then descend to ndt ’s left child. When it backtracks to ndt it will then descend to the right child.
+Hence, we only need to show that #DPLL-Space must backtrack if it reaches a leaf of DT . That is,
+it explores a search tree that is no larger than DT .
+First, if #DPLL-Space reaches a failure node of DT it must detect an empty clause and backtrack. By Rule 3 of the construction any failure node fdt of DT must correspond to a failure node
+dt→ao(fdt ) in AO. Since all variables instantiated on the path in AO from the root to dt→ao(fdt )
+are instantiated to the same values on the path in DT from the root to fdt , we see that if an empty
+clause was detected in AO at dt→ao(fdt ) then #DPLL-Space must also detect an empty clause
+at fdt . (Note that if the algorithm that generated AO used unit propagation, then we assume that
+#DPLL-Space does as well).
+Second, if #DPLL-Space reaches a satisfying node sdt of DT it must detect that all of its current
+set of components are solved and backtrack (line 4 of Algorithm 8). Let ρdt be the path in DT from
+the root to sdt , ρao be the path in AO from dt→ao(sdt ) to the root, and crdt be a node on ρdt such
+that dt→ao(crdt ) is a component root in AO (we say that crdt is a component root on ρdt ). We
+claim that (a) if lao is a left sibling of dt→ao(crdt ) in AO, then there exists a node ldt on ρdt such
+that dt→ao(ldt ) = lao , and lao .f is satisfied by ρdt ; (b) if rao is a right sibling of dt→ao(crdt ) in
+AO then rao .f is in #DPLL-Space’s cache.
+Given claim (a) the only clauses of the original formula not yet satisfied by ρdt are clauses from
+rao .f for those nodes rao in AO that are right siblings of some component root crdt on ρdt (i.e.,
+rao is a right sibling of component root dt→ao(crdt ) in AO). When #DPLL-Space arrived at crdt ,
+prior to reaching sdt , all variables in AO on the path from the root to dt→ao(crdt ) have already
+been instantiated to the same values on ρdt . Thus, if pao is dt→ao(crdt )’s parent in AO, #DPLLSpace would have recognized that rao .f was a separate component once it instantiated pao .var , and
+it would have added rao .f to its list of components (at line 8 or 11 of Algorithm 8). Note that,
+432
+
+BACKTRACKING S EARCH
+
+FOR
+
+#SAT AND BAYES
+
+once solved rao .f would not be removed from #DPLL-Space’s cache until it backtracks to undo the
+instantiation of pao .var . (At which point the solution all of pao ’s children would be combined to
+yield a solution to pao .f ).
+Furthermore, following the variable ordering specified in DT , #DPLL-Space would not instantiate any of the variables in r.f along the path ρdt . Hence, any component that is on #DPLL-Space’s
+list of components when it reaches ns must be equal to rao .f for some right sibling rao of a component root on ρdt , and by claim (b) will be removed by the call to RemoveCachedComponents(Φ)
+(line 6). This will leave #DPLL-Space with an empty list of components to solve, and hence it must
+backtrack at sdt .
+Now we prove the claims. For (a) we see that DT will always visit the children of an AND node
+in AO in a left to right order. That is, before inserting a component root crdt on its path, it must
+first visit all left siblings lao of dt→ao(crdt ). After inserting ldt on its path (with dt→ao(ldt ) = lao ),
+it will instantiate ldt and then start to query the nodes under lao searching alternate instantiations
+to these variables until it is able to traverse a leftmost solution subtree of AO(lao ). This traversal
+results in the insertion into the path of a solution to lao .f , after which DT inserts crdt on its path
+using Rule 4a.
+For (b) we observe that sdt is a satisfying node in DT only through the application of Rule 4b.
+Hence there are two possible cases. First, it can be that none of the component roots on ρdt have a
+right sibling. In this case every clause of the original formula is satisfied and #DPLL-Space must
+backtrack. For example, in Figure 7 this occurs at leaf nodes l and y.
+Otherwise, let crdt be a component root on ρdt such that dt→ao(crdt ) has a right sibling in AO,
+and let ndt be the first node on ρdt following crdt such that (i) ndt ’s successor on ρdt is its right
+child, and (ii) dt→ao(ndt ) has a left child in AO with value 1. Such a node ndt must exist, else sdt
+would not have been a leaf node of DT by Rule 4a. When #DPLL-Space arrived at node crdt it
+would have rao .f on its list of components for all right siblings rao of dt→ao(crdt ). There might
+also be other unsolved components on this list. All of these components, however, must be equal
+to rao .f for some right sibling rao of a component root on ρdt preceding crdt , and must have been
+placed on the list of components prior to #DPLL-Space reaching crdt . Then, when #DPLL-Space
+arrived at ndt it would have taken the left branch first. Thus it would have previously been invoked
+with all of these right sibling components on its component list.
+When #DPLL-Space is invoked with a list of components it either solves every component,
+placing them in its cache and keeping them there until it backtracks to the node where they were
+first placed on its list, or it discovers that one of these components is unsatisfiable. If one of the
+components is unsatisfiable, it will immediately backtrack to the point where that component was
+first placed on its list. In particular, all recursive calls where the list of components contains a known
+unsatisfiable component will return immediately since the call to InCache(Φ) will detect that the
+list of components has product equal to zero.
+Hence, on taking the left branch at ndt , #DPLL-Space, will have on its list of components,
+components of the form rao .f for right siblings of component roots above ndt on ρdt , and also lao .f
+where lao is the left child of dt→ao(ndt ) in AO. Since lao has value 1, lao .f is satisfiable, and either
+#DPLL-Space will solve all its components, placing their value in its cache, or it will discover that
+one of the components rao .f is unsatisfiable and will backtrack without visiting sdt . Therefore, if it
+does visit sdt it would have solved all components that could potentially be on its list of components,
+and these components would still be in is cache since they were placed on the list before arriving at
+sdt .
+433
+
+BACCHUS , DALMAO , & P ITASSI
+
+This shows that #DPLL-Space polynomially simulates RC-Space, AND/OR-Space and DDP.
+RC-Cache and AND/OR-Cache gain over RC-Space and AND/OR-Space by not having to solve
+some components more than once. That is, when they arrive at a node nao in their generated
+AND/OR tree AO, if nao .f has been solved before they can immediately backtrack.
+#DPLL-Cache gains the same efficiency over #DPLL-Space. In particular, it need never solve
+the same component more than once. Using caching to removing previously solved components
+from its list of components gives rise to the same savings that are realized by adding caching to
+AND/OR or RC. Formally, the same construction of a partial decision tree DT can be used. In
+AO we mark all nodes where search is terminated by a cache hit as a satisfying node (if the cached
+formula is satisfiable) or as a failure node (if the cached formula is unsatisfiable). Now, for example,
+AND nodes can have satisfying or failure nodes as children when those components have been
+solved before. Applying our construction to AO gives rise to a partial decision tree DT , and it
+can then be shown that #DPLL-Cache using DT to guide its variable choices will explore a search
+tree that is about the same size as DT . This proves that #DPLL-Cache polynomially simulates
+RC-Cache and AND/OR-Cache.
+The only subtle point is that #DPLL-Cache might not solve a component at the same point
+in its search. In particular, if a component φ first appears on #DPLL-Cache’s list of components
+with a previously added unsatisfiable component, #DPLL-Cache will backtrack without solving φ.
+Following DT , #DPLL-Cache will only do enough work to find φ’s first solution, after which it
+will proceed to the other components on its list. During its search for φ’s first solution, it will cache
+all unsatisfiable reductions of φ found during this search. Thus, the next time it encounters φ it can
+follow the same variable ordering and not do any extra work: the cached unsatisfiable reductions
+will immediately prune all paths leading to failure and it can proceed directly to the first solution
+to φ. If the other components on its list are all satisfiable, it will eventually backtrack to this first
+solution and then continue to solve φ. Hence, although #DPLL-Cache might encounter φ many
+times before solving it, each such encounter, except for the first, require adding to its search tree
+only a number of nodes linear in the number of variables in φ. The number of nodes added by
+the first encounter, where the φ’s first solution is found, and the encounter where it finally solves
+φ, together equal the number of nodes required in AO to solve φ. Hence, the “encounters without
+solving” do not increase the size of #DPLL-Cache’s search tree by more than a polynomial.
+Finally, we note that the construction given accommodates the use of dynamic variable orderings
+where the order of variables varies from branch to branch in the AND/OR search tree. (Varying
+the value assigned along the left and right branch of each query variable is also accommodated).
+That is, the proof also shows that #DPLL-Cache polynomially simulates AND/OR-Cache+ and
+RC-Cache+ . 2
+Theorem 6 None of RC-Space, RC-Cache, AND/OR-Cache, AND/OR-Space or VE can polynomially simulate #DPLL-Cache, #DPLL-Space, or #DPLL.
+To prove this theorem we first observe that from a result of Johannsen (Johannsen, 2001),
+#DPLL-Cache, #DPLL-Space, and #DPLL can all solve the negation of the propositional stringof-pearls principle (Bonet, Esteban, Galesi, & Johannsen, 1998) in time nO(log n) , when run with a
+dynamic variable ordering. Then we prove (in Theorem 7) that all of the other algorithms require
+time exponential in n on this problem. Hence, none of these algorithms can polynomially simulate
+#DPLL (or the stronger #DPLL-Space or #DPLL-Cache).
+434
+
+BACKTRACKING S EARCH
+
+FOR
+
+#SAT AND BAYES
+
+The string-of-pearls principle, introduced in a different form by Clote and Setzer (1998) and
+explicitly by Bonet et al. (1998) is as follows. From a bag of m pearls, which are colored red and
+blue, n pearls are chosen and placed on a string. The string-of-pearls principle says that if the first
+pearl in the string is red and the last one is blue, then there must be a red-blue or blue-red pair of
+pearls side-by-side somewhere on the string. The negation of the principle, Sm,n , is expressed with
+variables pi,j and pj for i ∈ [n] and j ∈ [m] where pi,j represents whether pearl j is mapped to
+vertex i on the string, and pj represents whether pearl j is colored blue (pj = 0) or red (pj = 1).
+The clauses of SPm,n are as follows.
+(1) Each hole gets at least one pearl: ∨m
+j=1 pi,j , i ∈ [n].
+(2) Each hole gets at most one pearl: (¬pi,j ∨ ¬pi,j ′ ), i ∈ [n] j ∈ [m] ,j ′ ∈ [m], j 6= j ′ .
+(3) A pearl goes to at most one hole: (¬pi,j ∨ ¬pi′ ,j ), i ∈ [n], i′ ∈ [n], i 6= i′ , j ∈ [m].
+(4) The leftmost hole gets assigned a red pearl and the rightmost hole gets assigned a blue pearl:
+(¬p1,j ∨ pj ) and (¬pn,j ∨ ¬pj ), j ∈ [m].
+(5) Any two adjacent holes get assigned pearls of the same color: (¬pi,j ∨ ¬pi+1,j ′ ∨ ¬pj ∨ pj ′ ),
+1 ≤ i < n, j ∈ [m], j ′ ∈ [m], j 6= j ′ , and (¬pi,j ∨ ¬pi+1,j ′ ∨ pj ∨ ¬pj ′ ), 1 ≤ i < n, j ∈ [m],
+j ′ ∈ [m], j 6= j ′ .
+Johannsen (Johannsen, 2001) shows that SPn,n has quasipolynomial size tree resolution proofs.
+It follows that #DPLL, #DPLL-Space and #DPLL-Cache can solve SPn,n in quasipolynomial time.
+Lemma 4 (Johannsen, 2001) SPn,n can be solved in time nO(log n) by #DPLL, #DPLL-Space, and
+#DPLL-Cache.
+Theorem 7 Let ǫ = 1/5. Any of the algorithms RC-Space, RC-Cache, AND/OR-Cache, AND/ORǫ
+Space, VE, or #DPLL-Cache using a static variable ordering, require time 2n to solve SPn,n .
+Proof: It can be seen from the proof of Theorem 5 that #DPLL-Cache using a static variable
+ordering can polynomially simulate all of the stated algorithms.
+ǫ
+Hence, it suffices to prove that #DPLL-Cache under any static ordering requires time 2n for
+SPm,n , m = n. By a static ordering, we mean that the variables are queried according to this
+ordering as long as they are mentioned in the current formula. That is, we allow a variable to be
+skipped over if it is irrelevant to the formula currently under consideration. We will visualize SPn,n
+as a bipartite graph, with n vertices on the left, and n pearls on the right. There is a pearl variable
+pj corresponding to each of the n pearls, and an edge variable pi,j for every vertex-pearl pair. (Note
+that there are no variables corresponding to the vertices but we will still refer to them.)
+Fix a particular total ordering of the underlying n2 + n variables, θ1 , θ2 , . . . , θl . For a pearl j,
+let fanin t (j) equal the number of edge variables pk,j incident with pearl j that are one of the first
+t variables queried. Similarly, for a vertex i, let fanin t (i) equal the number of edge variables pi,k
+incident with vertex i that are one of the first t variables queried. For a set of pearls S, let fanin t (S)
+equal the number of edge variables pk,j incident with some pearl j ∈ S that are one of the first t
+variables queried. Similarly for a set of vertices S, fanin t (S) equals the number of edge variables
+pi,k incident with some vertex i ∈ S that are one of the first t variables queried. Let edgest (j) and
+435
+
+BACCHUS , DALMAO , & P ITASSI
+
+edgest (S) be defined similarly although now it is the set of such edges rather than the number of
+such edges. It should be clear from the context whether the domain objects are pearls or vertices.
+We use a simple procedure, based on the particular ordering of the variables, for marking each
+pearl with either a C or with an F as follows. In this procedure, a pearl may at some point be marked
+with a C and then later overwritten with an F; however, once a pearl is marked with an F, it remains
+an F for the duration of the procedure. If a pearl j is marked with a C at some particular point in
+time, t, this means that at this point, the color of the pearl has already been queried, and fanin t (j)
+is less than nδ , δ = 2/5. If a pearl j is marked with an F at some particular point in time t, it means
+that at this point fanin t (j) is at least nδ . (The color of j may or may not have been queried.) If a
+pearl j is unmarked at time t, this means that its color has not yet been queried, and fanin t (j) is
+less than nδ .
+For l from 1 to n2 +n, we do the following. If the lth variable queried is a pearl variable (θl = pj
+for some j), and less than nδ edges pi,j incident to j have been queried so far, then mark pj with
+a C. Otherwise, if the lth variable queried is an edge variable (θl = pi,j ) and fanin l (j) ≥ nδ , then
+mark pearl j with an F (if not already marked with an F). Otherwise, leave pearl j unmarked.
+Eventually every pearl will become marked F. Consider the first time t∗ where we have either
+a lot of C’s, or a lot of F’s. More precisely, let t∗ be the first time where either there are exactly
+nǫ C’s (and less than this many F’s) or where there are exactly nǫ F’s (and less than this many
+C’s.) If exactly nǫ C’s occurs first, then we will call this case (a). Extend t∗ to t∗a as follows.
+Let θt∗ +1 , . . . , θt∗ +c be the largest segment of variables that are all pearl variables pj such that j
+is already marked with an F. Then t∗a = t∗ + c. Notice that the query immediately following θt∗a
+is either a pearl variable pj that is currently unmarked, or an edge variable. On the other hand, if
+exactly nǫ F’s occurs first, then we will call this case (b). Again, extend t∗ to t∗b to ensure that the
+query immediately following θt∗b is either a pearl variable pj that is currently unmarked, or is an
+edge variable.
+The intuition is that in case (a) (a lot of C’s), a lot of pearls are colored prematurely–that is,
+before we know what position they are mapped to–and hence a lot of queries must be asked. For
+case (b) (a lot of F’s), a lot of edge variables are queried thus again a lot of queries will be asked.
+We now proceed to prove this formally.
+We begin with some notation and definitions. Let f = SPn,n , and let Vars(f ) denote the
+set of all variables underlying f . A restriction ρ is a partial assignment of some of the variables
+underlying f to either 0 or to 1. If a variable x is unassigned by ρ, we denote this by ρ(x) = ∗. Let
+T be the DPLL tree based on the variable ordering θ. That is, T is a decision tree where variable θi
+is queried at level i of T . Recall that corresponding to each node v of T is a formula f |ρ where ρ is
+the restriction corresponding to the partial path from the root of T to v. The tree T is traversed by a
+depth-first search. For each vertex v with corresponding path p that is traversed, we check to see if
+f |p is already in the cache. If it is, then there is no need to traverse the subtree rooted below v. If
+it is not yet in the cache, then we traverse the left subtree of v, followed by the right subtree of v.
+After both subtrees have been traversed, we then pop back up to v, and store f |p in the cache. This
+induces an ordering on the vertices (and corresponding paths) of T that are traversed—whenever
+we pop back up to a vertex v (and thus, we can store its value in the cache), we put v (p) at the end
+of the current order.
+Lemma 5 Let f be SPn,n and let π be a static ordering of the variables. Let ρ be a partial restriction
+of the variables. Then the runtime of #DPLL-Cache on (f, ρ) is not less than the runtime of #DPLLCache on (f |ρ , π ′ ), where π ′ is the ordering of the unassigned variables consistent with π.
+436
+
+BACKTRACKING S EARCH
+
+FOR
+
+#SAT AND BAYES
+
+Lemma 6 For any restriction ρ, if f |ρ 6= 0 and ρ(pi,j ) = ∗, then pi,j occurs in f |ρ .
+Proof: Consider the clause Ci = (pi,1 ∨ . . . ∨ pi,m ) in f . Since pi,j is in this clause, if pi,j
+does not occur in f |ρ , then Ci |ρ must equal 1. Thus there exists j ′ 6= j such that ρ(pi,j ′ ) = 1. But
+then the clause (¬pi,j ∨ ¬pi,j ′ )|ρ = ¬pi,j and thus pi,j does not disappear from f |ρ . 2
+Corollary 1 Let θ be a total ordering of Vars(f ). Let ρ, ρ′ be partial restrictions such that ρ sets
+exactly θ1 , . . . , θq and ρ′ sets exactly θ1 , . . . , θq′ , q ′ < q. Suppose that there exists θk = pi,j such
+that ρ sets θk but ρ′ (θk ) = ∗. Then either f |ρ = 0 or f |ρ′ = 0 or f |ρ 6= f |ρ′ .
+Case (a). Let θ be a total ordering to Vars(f ) such that case (a) holds. Let P C denote the set of
+exactly nǫ pearls that are marked C and let P F denote the set of less than nǫ pearls (disjoint from
+P C ) that are marked F. Note that (the color of) all pearls in P C have been queried by time t∗a ; the
+color of the pearls in P F may be queried by time t∗a , and the color of all pearls in P − P C − P F
+have not been queried by time t∗a . Note further that the total number of edges pi,j that have been
+queried is at most nǫ+δ + n1+ǫ ≤ 2n1+ǫ .
+ǫ
+We will define a partial restriction, Ma , to all but 2n of the variables in θ1 , . . . , θt∗a as follows.
+For each j ∈ P F , fix a one-to-one mapping from P F to [n] such that range(j) ∈ edgest∗a (j) for
+each j. For each j ∈ P C , for any variable pi,j queried in θ1 , . . . θt∗a , set pi,j to 0. For any vertex i
+such that all variables pi,j have been queried in θ1 , . . . , θt∗a , map i to exactly one pearl j such that
+pj ∈ P − P C − P F . There are at most 2nǫ such i. (This can be arbitrary as long as it is consistent
+with the one-to-one mapping already defined on P F .) For all remaining pj ∈ P − P C − P F that
+have not yet been mapped to, set all queried variables pi,j to 0. For all pearls pj in P F that have
+been queried in θ1 , . . . , θt∗a , assign a fixed color to each such pearl (all Red or all Blue) so that the
+smallest Red/Blue gap is as large as possible. Note that the gap will be of size at least n1−ǫ . Ma
+sets all variables in θ1 , . . . θt∗a except for the variables pj , j ∈ P C . Since there are nǫ such variables,
+ǫ
+the number of restrictions ρ to θ1 , . . . , θt∗a consistent with Ma is exactly 2n . Let S denote this set
+of restrictions.
+Let f ′ = f |Ma and let θ ′ be be the ordering on the unassigned variables consistent with θ. (The
+set of unassigned variables is: pj , for j ∈ P C , plus all variables in θk , k > t∗a .) Let T ′ be the DPLL
+tree corresponding to θ ′ for solving f ′ . By Lemma 5, it suffices to show that #DPLL-Cache when
+ǫ
+run on inputs f ′ and T ′ , takes time at least 2n .
+Note that the first nǫ variables queried in T ′ are the pearl variables in P C , and thus the set of all
+ǫ
+n
+2 paths of height exactly nǫ in T ′ correspond to the set S of all possible settings to these variables.
+ǫ
+We want to show that for each vertex v of height nǫ in T ′ (corresponding to each of the 2n settings
+of all variables in P C ), that v must be traversed by #DPLL-Cache, and thus the runtime is at least
+ǫ
+2n .
+Fix such a vertex v, and corresponding path ρ ∈ S. If v is not traversed, then there is some
+ρ′ ⊆ ρ and some σ such that σ occurs before ρ′ in the ordering, and such that f ′ |σ = f ′ |ρ′ . We want
+to show that this cannot happen. There are several cases to consider.
+1a. Suppose that |σ| ≤ nǫ and σ 6= ρ′ . Then both ρ′ and σ are partial assignments to some of the
+variables in P C that are inconsistent with one another. It is easy to check that in this case,
+f ′ |ρ′ 6= f ′ |σ .
+2a. Suppose that |σ| > nǫ , and the (nǫ + 1)st variable set by σ is an edge variable pi,j . Because
+|ρ′ | ≤ nǫ , ρ′ (pi,j ) = ∗. By Corollary 1, it follows that f ′ |ρ′ 6= f ′ |σ .
+437
+
+BACCHUS , DALMAO , & P ITASSI
+
+3a. Suppose that |σ| > nǫ and the (nǫ + 1)st variable set by σ is a pearl variable pj . (Again, we
+know that pj is unset by ρ′ .) Since this is case (a), we can assume that pj ∈ P − P C − P F .
+Call a vertex i bad if P − P F − P C ⊂ edgest∗a (i). If i is bad, then fanin t∗a (i) is greater
+than n − 2nǫ ≥ n/2. Since the total number of edges queried is at most 2n1+ǫ , if follows
+that the number of bad vertices is at most 4nǫ . This implies that we can find a pair i, i + 1 of
+vertices and a pearl j ′ such that: (1) pi,j is not queried in θ1 , . . . , θt∗a ; (2) pi+1,j ′ is not queried
+in θ1 , . . . , θt∗a ; (3) pj ′ is in P − P C − P F and thus pj ′ is also not queried. Thus the clause
+(¬pi,j ∨ ¬pj ∨ ¬pi+1,j ′ ∨ pj ′ )|ρ′ does not disappear or shrink in f ′ |ρ′ , and thus f ′ |ρ′ 6= f ′ |σ .
+Case (b). Let θ be a total ordering to Vars(f ) such that case (b) holds. Now let P C denote the set
+of less than nǫ pearls marked C and let P F denote the set of exactly nǫ pearls marked F.
+ǫ
+We define a partial restriction Mb to all but 2n of the variables in θ1 , . . . , θt∗ as follows. Call a
+vertex i full if all variables pi,j have been queried in θ1 , . . . , θt∗b . There are at most nǫ full vertices.
+For each j ∈ P F , we will fix a pair of vertices Fj = (ij , i′j ) in [n]. Let the union of all nǫ sets Fj be
+denoted by F . F has the following properties. (1) For each j, no element of Fj is full; (2) For each
+j ∈ P F , Fj ∈ edgest∗b (j); and (3) every two distinct elements in F are at least distance 4 apart.
+Since f anint∗b (j) ≥ nδ , and δ = 2/5 > ǫ, it is possible to find such sets Fj satisfying these criteria.
+For each pi,j queried in θ1 , . . . θt∗b , where j ∈ P F and i 6∈ Fj , Mb will set pi,j to 0. For each
+j ∈ P C , and for any variable pi,j queried in θ1 , . . . θt∗b , set pi,j to 0. For any full vertex i , map i
+to exactly one pearl j such that pj ∈ P − P C − P F . (Again this can be arbitrary as long as it is
+consistent with a one-to-one mapping.) For the remaining pj ∈ P − P C − P F that have not yet
+been mapped to, set all queried variables pi,j to 0. For all pearls pj in P C , color them Red. For all
+pearls pj in P F that have been queried, assign a fixed color to each pearl.
+The only variables that were queried in θ1 , . . . θt∗b and that are not set by Mb are the edge
+ǫ
+variables, pi,j , where j ∈ P F , and i ∈ Fj . Let S denote the set of all 2n settings of these edge
+variables such that each j ∈ P F is mapped to exactly one element in Fj . Let f ′ = f |Mb and let
+T ′ be the DPLL tree corresponding to θ ′ for solving f ′ , where θ ′ is the ordering on the unassigned
+variables consistent with θ. By Lemma 5, it suffices to show that #DPLL-Cache on f ′ and T ′ takes
+ǫ
+time at least 2n .
+Note that the first 2nǫ variables queried in T ′ are the variables Pij ,j , Pi′j ,j , j ∈ P F . The
+only nontrivial paths of height 2nǫ in T ′ are those were each j ∈ P F is mapped to exactly one
+vertex in Fj , since otherwise the formula f ′ is set to 0. Thus, the nontrivial paths in T ′ of height
+2nǫ correspond to S. We want to show that for each such nontrivial vertex v of height 2nǫ in T ′
+(corresponding to each of the restrictions in S), that v must be traversed by #DPLL-Cache, and thus
+ǫ
+the runtime is at least 2n .
+Fix a vertex v and corresponding path ρ ∈ S. Again we want to show that for any ρ′ ⊆ ρ, and
+σ where σ occurs before ρ′ in the ordering, that f ′ |ρ′ 6= f ′ |σ . There are three cases to consider.
+1b. Suppose that |σ| ≤ 2nǫ . If σ is nontrivial, then both ρ′ and σ are partial mappings of the pearls
+j in P F to Fj , that are inconsistent with one another. It is easy to check that in this case
+f ′ |σ 6= f ′ |ρ′ .
+2b. Suppose that |σ| > 2nǫ and the (2nǫ + 1)st variable set by σ is an edge variable pi,j . Because
+|ρ′ | ≤ 2nǫ , ρ′ (pi,j ) = ∗. By Corollary 1, it follows that f ′ |σ 6= f ′ |ρ′ .
+438
+
+BACKTRACKING S EARCH
+
+FOR
+
+#SAT AND BAYES
+
+3b. Suppose that |σ| > 2nǫ and the (2nǫ + 1)st variable set by σ is a pearl variable pj . By the
+definition of t∗b , we can assume that pj ∈ P − P C − P F . By reasoning similar to case 3a, can
+find vertices i, i+1, and pearl j ′ ∈ P −P C −P F such that none of the variable pi,j , pi+1,j , pj ′
+are queried in θ1 , . . . , θt∗b . Thus the clause (¬pi,j ∨ ¬pj ∨ ¬pi+1,j ′ ∨ pj ′ )|ρ′ does not disappear
+to shrink in f ′ |ρ′ 1, and therefore f ′ |ρ′ 6= f ′ |σ .
+ǫ
+
+Thus for each of the two cases, #DPLL-Cache on f ′ and T ′ takes time at least 2n and thus
+ǫ
+#DPLL-Cache on f and T takes time at least 2n . 2
+
+References
+Aleknovich, A., & Razborov, A. (2002). Satisfiability, Branch-width and Tseitin Tautologies. In
+Annual IEEE Symposium on Foundations of Computer Science (FOCS), pp. 593–603.
+Bacchus, F., Dalmao, S., & Pitassi, T. (2003). Algorithms and Complexity Results for #SAT
+and Bayesian Inference. In Annual IEEE Symposium on Foundations of Computer Science
+(FOCS), pp. 340–351.
+Bayardo, R. J., & Pehoushek, J. D. (2000). Counting Models using Connected Components. In
+Proceedings of the AAAI National Conference (AAAI), pp. 157–162.
+Bayardo, R. J., & Miranker, D. P. (1995). On the space-time trade-off in solving Constraint Satisfaction Problems. In Proceedings of the International Joint Conference on Artificial Intelligence
+(IJCAI), pp. 558–562.
+Beame, P., Impagliazzo, R., Pitassi, T., & Segerlind, N. (2003). Memoization and DPLL: Formula
+Caching Proof Systems. In IEEE Conference on Computational Complexity, pp. 248–264.
+Birnbaum, E., & Lozinskii, E. L. (1999). The good old Davis Putnam procedure helps counting
+models. J. Artif. Intell. Research (JAIR), 10, 457–477.
+Bitner, J. R., & Reingold, E. (1975). Backtracking programming techniques. Communications of
+the ACM, 18(11), 651–656.
+Bodlaender, H. L. (1993). A tourist guide through Treewidth. Acta Cybernetica, 11(1–2), 1–21.
+Bonet, M., Esteban, J. L., Galesi, N., & Johannsen, J. (1998). Exponential separations between
+restricted resolution and cutting planes proof systems. In Annual IEEE Symposium on Foundations of Computer Science (FOCS), pp. 638–647.
+Boutilier, C., Friedman, N., Goldszmidt, M., & Koller, D. (1996). Context-specific independence in
+Bayesian Networks. In Uncertainty in Artificial Intelligence, Proceedings of Annual Conference (UAI), pp. 115–123.
+Chavira, M., & Darwiche, A. (2006). Encoding CNFs to empower component analysis. In Theory
+and Applications of Satisfiability Testing (SAT), pp. 61–74.
+Chavira, M., & Darwiche, A. (2008). On probabilistic inference by weighted model counting.
+Artificial Intelligence, 172(6-7), 772–799.
+Chavira, M., Darwiche, A., & Jaeger, M. (2006). Compiling relational bayesian networks for exact
+inference. Int. J. Approx. Reasoning, 42(1-2), 4–20.
+Clote, P., & Setzer, A. (1998). On PHP, st-connectivity and odd charged graphs. In Proof Complexity
+and Feasible Arithmetics, Vol. 39 of DIMACS Series, pp. 93–117. AMS.
+439
+
+BACCHUS , DALMAO , & P ITASSI
+
+Cormen, T. H., Leiserson, C. E., Rivest, R. L., & Stein, C. (2001). Introduction to Algorithms. 2nd
+Edition. McGraw Hill.
+Darwiche, A., & Allen, D. (2002). Optimal time-space tradeoff in probabilistic inference. In European Workshop on Probabilistic Graphical Models. Available at www.cs.ucla.edu/˜darwiche.
+Darwiche, A. (2001). Recursive conditioning. Artificial Intelligence, 126, 5–41.
+Darwiche, A. (2002). A logical approach to factoring belief networks. In Proceedings of the International Conference on Principles of Knowledge Representation and Reasoning, pp. 409–420.
+Darwiche, A. (2004). New advances in compiling CNF into decomposable negation normal form.
+In Proceedings of the European Conference on Artificial Intelligence (ECAI), pp. 328–332.
+Davies, J., & Bacchus, F. (2007). Using more reasoning to improve #SAT solving. In Proceedings
+of the AAAI National Conference (AAAI), pp. 185–190.
+Davis, M., Logemann, G., & Loveland, D. (1962). A machine program for theorem-proving. Communications of the ACM, 4, 394–397.
+Davis, M., & Putnam, H. (1960). A computing procedure for quantification theory. Journal of the
+ACM, 7, 201–215.
+Dechter, R. (1999). Bucket elimination: A unifying framework for reasoning. Artificial Intelligence,
+113, 41–85.
+Dechter, R., & Mateescu, R. (2004). Mixtures of deterministic-probabilistic networks and their
+AND/OR search space. In Uncertainty in Artificial Intelligence, Proceedings of Annual Conference (UAI), pp. 120–129.
+Dechter, R., & Mateescu, R. (2007). AND/OR search spaces for graphical models. Artificial Intelligence, 171(2-3), 73–106.
+Dubois, O. (1991). Counting the number of solutions for instances of satisfiability. Theoretical
+Computer Science, 81, 49–64.
+Haken, A. (1985). The intractability of resolution. Theoretical Computer Science, 39, 297–305.
+Hertel, P., Bacchus, F., Pitassi, T., & van Gelder, A. (2008). Clause learning can effectively psimulate general propositional resolution. In Proceedings of the AAAI National Conference
+(AAAI).
+Johannsen, J. (2001). Exponential incomparability of tree-like and ordered resolution. Unpublished manuscript, available at http://www.tcs.informatik.uni-muenchen.
+de/˜jjohanns/notes.html.
+Kask, K., Dechter, R., Larrosa, J., & Dechter, A. (2005). Unifying tree decompositions for reasoning
+in graphical models. Artificial Intelligence, 166(1-2), 165–193.
+Kitching, M., & Bacchus, F. (2008). Exploiting decomposition in constraint optimization problems.
+In Proceedings of Principles and Practice of Constraint Programming (CP), pp. 478–492.
+Lauritzen, S., & Spiegelhalter, D. (1988). Local computation with probabilities on graphical structures and their application to expert systems. Journal of the Royal Statistical Society Series
+B, 50(2), 157–224.
+440
+
+BACKTRACKING S EARCH
+
+FOR
+
+#SAT AND BAYES
+
+Li, W., & van Beek, P. (2004). Guiding real-world sat solving with dynamic hypergraph separator decomposition. In Proceedings of the International Conference on Tools with Artificial
+Intelligence (ICTAI), pp. 542–548.
+Li, W., van Beek, P., & Poupart, P. (2006). Performing incremental Bayesian Inference by dynamic
+model counting. In Proceedings of the AAAI National Conference (AAAI), pp. 1173–1179.
+Li, W., van Beek, P., & Poupart, P. (2008). Exploiting causal independence using weighted model
+counting. In Proceedings of the AAAI National Conference (AAAI).
+Littman, M. L., Majercik, S. M., & Pitassi, T. (2001). Stochastic boolean satisfiability. J. Automated
+Reasoning, 27(3), 251–296.
+Majercik, S. M., & Littman, M. L. (1998). Maxplan: A new approach to probabilistic planning. In
+Proceedings of the International Conference on Artificial Intelligence Planning and Scheduling (AIPS), pp. 86–93.
+Marinescu, R., & Dechter, R. (2006). Dynamic orderings for AND/OR branch-and-bound search
+in graphical models. In Proceedings of the European Conference on Artificial Intelligence
+(ECAI), pp. 138–142.
+Marinescu, R., & Dechter, R. (2007). Best-first AND/OR search for graphical models. In Proceedings of the AAAI National Conference (AAAI), pp. 1171–1176.
+Mateescu, R., & Dechter, R. (2007). AND/OR multi-valued decision diagrams for weighted graphical models. In Uncertainty in Artificial Intelligence, Proceedings of Annual Conference
+(UAI).
+Mateescu, R., & Dechter, R. (2005). AND/OR cutset conditioning. In Proceedings of the International Joint Conference on Artificial Intelligence (IJCAI), pp. 230–235.
+Moskewicz, E., Madigan, C., Zhao, M., Zhang, L., & Malik, S. (2001). Chaff: Engineering an
+efficient sat solver. In Proc. of the Design Automation Conference (DAC).
+Nilsson, N. J. (1980). Principles of Artificial Intelligence. Tioga.
+Pearl, J. (1988). Probabilistic Reasoning in Intelligent Systems (2nd edition). Morgan Kaufmann,
+San Mateo, CA.
+Preston, C. (1974). Gibbs States on Countable Sets. Cambridge University Press.
+Rish, I., & Dechter, R. (2000). Resolution versus search: Two strategies for SAT. Journal of
+Automated Reasoning, 24(1), 225–275.
+Robertson, N., & Seymour, P. (1991). Graph minors X. obstructions to tree-decomposition. Journal
+of Combinatorial Theory, Series B, 52, 153–190.
+Robertson, N., & Seymour, P. (1995). Graph minors XIII. the disjoint paths problem. Journal of
+Combinatorial Theory, Series B, 63, 65–110.
+Roth, D. (1996). On the hardness of approximate reasoning. Artificial Intelligence, 82(1–2), 273–
+302.
+Sang, T., Bacchus, F., Beame, P., Kautz, H. A., & Pitassi, T. (2004). Combining component caching
+and clause learning for effective model counting. In Theory and Applications of Satisfiability
+Testing (SAT).
+441
+
+BACCHUS , DALMAO , & P ITASSI
+
+Sang, T., Beame, P., & Kautz, H. A. (2005a). Heuristics for fast exact model counting. In Theory
+and Applications of Satisfiability Testing (SAT), pp. 226–240.
+Sang, T., Beame, P., & Kautz, H. A. (2005b). Performing Bayesian Inference by weighted model
+counting. In Proceedings of the AAAI National Conference (AAAI), pp. 475–482.
+Sang, T., Beame, P., & Kautz, H. A. (2007). A dynamic approach for MPE and weighted MAXSAT. In Proceedings of the International Joint Conference on Artificial Intelligence (IJCAI),
+pp. 173–179.
+Sanner, P., & McAllester, D. (2005). Affine algebraic decision diagrams (aadds) and their applications to structured probabilistic inference. In Proceedings of the International Joint Conference on Artificial Intelligence (IJCAI), pp. 1384–1390.
+Spitzer, F. L. (1971). Markov random fields and Gibbs ensembles. American Mathematical Monthly,
+78, 142–54.
+Thurley, M. (2006). sharpSAT—Counting models with advanced component caching and implicit
+BCP. In Theory and Applications of Satisfiability Testing (SAT), pp. 424–429.
+Valiant, L. G. (1979a). The complexity of enumeration and reliability problems. SIAM Journal of
+Computing, 9, 410–421.
+Valiant, L. G. (1979b). The Complexity of Computing the Permanent. Theoretical Computer Science, 8, 189–201.
+Zhang, W. (1996). Number of models and satisfiability of sets of clauses. Theoretical Computer
+Science, 155, 277–288.
+
+442
+
+

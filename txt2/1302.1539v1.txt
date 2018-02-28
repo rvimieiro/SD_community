@@ -1,0 +1,963 @@
+from the background. We will call this the background sub­
+traction approach. The details of the method are described
+briefly in Section 2.
+In earlier work as part of the Road watch project at Berkeley,
+
+it was shown that background subtraction can provide an
+effective means of locating and tracking moving vehicles in
+freeway traffic [Koller et at., 1994]. Moving shadows do,
+however, cause serious problems, since they differ from the
+background image and are therefore identified as parts of
+the moving objects. Moreover, when traffic is slow-moving
+or stationary, the background image becomes corrupted by
+the vehicles themselves.
+These problems arise from an oversimplified view of the
+task. What we would like to do is to classify each pixel of
+each image as moving object, shadow, or background. The
+basic idea of this paper is that we can classify each pixel
+using a probabilistic model of how that pixel looks when it
+is part of different classes (Section 3). For example, a given
+road pixel in shadow looks different from the same pixel
+in sunlight or as part of a vehicle. Because the appearance
+of the pixel in shadow is independent of the object that is
+casting the shadow, the shadow model for the pixel is rel­
+atively constant, like the background model. Furthermore,
+the probabilistic classification of the current pixel value can
+be used to update the models appropriately, so that vehicle
+pixels do not become mixed in with the background model
+when traffic is moving slowly.
+Essentially, the pixel models describe the probability dis­
+tribution of the appearance of the pixel conditioned on its
+type, where the type is a hidden variable. In this paper, the
+pixel appearance is modeled as a mixture of Gaussians, and
+is learned using the EM algorithm [Dempster et at., 1977].
+The details are given in Section 4, where we also describe an
+incremental version of the algorithm that provides real-time
+performance. We show that our approach is successful in
+coping with slow-moving objects and shadows (Section 5).
+There is a large literature (several hundred papers in the last
+decade, and several annual conferences) on the application
+of EM and related techniques to image reconstruction, im­
+age segmentation, and motion identification. Applications
+include optical astronomy, laser range finders, synthetic
+aperture radar, MRI, PET, microscopy, and X-rays. Almost
+without exception, EM is used to identify classes of pixels
+within an image or classes of motions within an optical flow
+field, on the assumption that similar pixels can be grouped
+together. Typical examples include Samadani [1995], Jep­
+son and Black [1993], Sawhney and Ayer [1996], and Weiss
+
+176
+
+Friedman and Russell
+
+and Adelson [1996]. To our knowledge, the use of EM to
+model the appearance of a single pixel over time is novel,
+and provides a natural probabilistic generalization of a clas­
+sical deterministic method.
+
+2
+
+Background subtraction
+
+The roots of background subtraction go back to the 19th
+century, when it was shown that the background image
+could be obtained simply by exposing a film for a period of
+time much longer than the time required for moving objects
+to traverse the field of view. Thus, in its simplest form,the
+background image is the long-term average image:
+I
+B(x,y,t) = t
+
+I
+
+L l(x,y,t')
+t'=l
+
+where l(x,y, t) is the instantaneous pixel value for the (x,y)
+pixel at timet. This can also be computed incrementally:
+B(x,y,t)
+
+(t- I)
+=
+
+--
+
+t
+
+1
+B(x,y,t- I)+ -l(x,y,t )
+t
+
+The variance can also be computed incrementally, and mov­
+ing objects can be identified by thresholding the Maha­
+lanobis distance between /(x, y,t) and B(x, y, t ).
+One obvious problem with this approach is that lighting
+conditions change over time. This can be handled using
+a moving-window average, or, more efficiently, using ex­
+ponential forgetting. In the latter scheme, each image's
+contribution to the background image is weighted so as to
+decrease exponentially as it recedes into the past. This is
+implemented by the update equation
+B(x,y,t) =(I- a)B(x,y, t- 1) +al(x,y,t)
+
+(1)
+
+where 1/a is the time constant of the forgetting process.
+Unlike the moving-window method, this requires no addi­
+tional storage. Exponential forgetting is equivalent to using
+a Kalman filter to track the background image, as done
+in [Koller et al., I994].
+Figure I shows a typical result from the method operating
+under favourable conditions. Although there are a few
+stray pixels identified as "moving" due to image noise, the
+vehicles are outlined reasonably well. Standard methods
+can be used to group the pixels belonging to each vehicle
+and to compute and track a smoothed convex hull.
+The sharp-eyed reader will have spotted that the background
+subtraction method succeeds not only in detecting moving
+vehicles, but also their shadows. 1 In practice, shadows
+have been one of the most serious problems for video­
+based traffic surveillance in both commercial and research
+1
+Some of the road markings are also labelled as "moving"­
+this is due to camera jitter. Also, the method fails to detect those
+parts of a moving vehicle that are approximately the same intensity
+as the background. Such problems are unavoidable in any pixel­
+based method.
+
+systems [Michalopoulos, 1991], sometimes resulting in un­
+dercounting or overcounting by as much as 50%. It might
+be thought that some simple fix such as lightening or thresh­
+olding might work to eliminate shadows, but these schemes
+may fail because parts of the road may be shadowed by
+buildings, and because of road markings-a shadow falling
+on a white line can still result in a brighter pixel than sun­
+light falling on tarmac [Kilger, 1992].
+As mentioned in the introduction, another serious problem
+arises when objects are slow-moving or temporarily station­
+ary. Here, "slow-moving" means that the time of traversal
+is non-negligible compared with 1/a, the time constant of
+the exponential forgetting process in Equation (1). W hen
+this happens, the background image becomes corrupted and
+object detection fails completely (Figure 2).
+The solution used by Koller et al. [I994] was to update
+the background image with only those pixels not identi­
+fied as moving objects. This is reasonably effective, but
+still has problems with very slow traffic because erroneous
+pixel classifications perturb the background image, which
+increases the number of erroneous classifications, and so
+on. Essentially, the distribution of pixels erroneously clas­
+sified as non-moving is biased away from the true mean of
+the background image, causing instability in the process.
+Despite these problems, the idea behind this approach is
+essentially right: each pixel must be classified before being
+used to update the background model. The next section
+shows how this can be done properly, using a probabilistic
+classifier and a stable updating algorithm. This approach
+also solves the problem with shadows.
+
+3
+
+Pixel models
+
+Consider a single pixel and the distribution of its values over
+time. Some of the time it will be in its "normal" background
+state-for example, a small area of the road surface. Some
+of the time it may be in the shadow of moving vehicles, and
+some of the time it may be part of a vehicle. Thus, in the
+case of traffic surveillance, we can think of the distribution
+of values ix.y of a pixel (x,y) as the weighted sum of three
+distributions rx,y (road), sx.y (shadow), and Vx,y (vehicle):
+
+ix,y
+
+=
+
+Wx,y
+
+·
+
+(rx,yo Sx,yo Vx.y)
+
+These distributions are subscripted to emphasize that they
+differ from pixel to pixel; rx,y is a probability distribution
+for the way that this specific pixel looks when it is showing
+unshadowed road at the corresponding physical location.
+It is essential to have different models for each pixels, be­
+cause, for example, some parts of the image may correspond
+to white road markings, others to dark streaks in the cen­
+ters of lanes, and still others to lamp-posts (see Figure 1).
+The weights are also subscripted, because some pixels may
+spend more time in shadow or vehicle than others.
+Figures 3(a) and 3(b) show the empirical distribution of in­
+tensity and RGB values, respectively, for pixel (160, I70),
+
+177
+
+Image Segmentation in Video Sequences
+
+·--. .
+
+(a)
+
+(b)
+
+-
+
+.
+
+.
+
+- -
+
+(c)
+
+Figure 1: (a) Background image computed during fast-moving traffic using exponential forgetting. (b) Current image
+{frame 1 00). (c) Thresholded difference image showing pixels associated with moving objects.
+
+(b)
+
+(a)
+
+(c)
+
+Figure 2: (a) Background image computed during slow-moving traffic using exponential forgetting. (b) Current image
+(frame 925). (c) Thresholded difference image showing pixels associated with moving objects.
+which is roughly two-thirds of the way towards the bot­
+tom right corner of the image. These data display the be­
+haviour one would expect: the shadow and road pixels form
+two fairly well-defined peaks, while the vehicle pixels are
+widely scattered. As a first approximation, we assume that
+each distribution can be modelled as a Gaussian. Using
+the techniques described in Section 4, we can fit three­
+component mixture models to the data. Figure 3(c) shows
+the fitted model for intensity values,and Figure 3(d) shows
+a scatter plot for the fitted ROB model. The fitted models
+are reasonably good (but far from ideal) approximations to
+the empirical data.
+The model for pixel (x, y) is parameterized by the parameters
+e = { W[, j.L[, L[ : l E { r, s, v}} so that Wx,y
+(w,, w,, Wv).
+2 Our models apply in two
+rx,y ,..., N(J.l, :E,), and so on.
+settings. In the first, we examine intensity levels, and J.L and
+:E are scalars. In the second, we examine RGB values, and
+J.l is a 3 x 1 vector and :E is a 3 x 3 matrix. The derivations
+are identical in the two cases. so we do not distinguish
+between them in the following discussion.
+=
+
+Let i be a pixel value (either an intensity level or a vector of
+RGB values). Let L be a random variable denoting the label
+of the pixel in this image. Our model defines the probability
+2For clarity, we omit the subscript x,y from the names of these
+
+parameters. However, it should be clear that there is a different
+
+set of parameters for pixel position
+
+x, y.
+
+that L = land /(x, y, t) = ito be
+P(L
+
+=
+
+l, l(x, y, t) = i I 8)
+
+Wt
+
+·
+
+==
+
+(211T� I:Etl-! exp{ -�(i- J.Ltlr.,-'(i- J.Lt)}
+2
+
+where dis the dimension of each pixel value (1 or 3 in our
+case). Given these probabilities, we can classify the pixel
+value. Namely, we choose the class I with highest posteriori
+probability P(L = lll(x, y, t)).
+
+4
+
+Algorithms for learning pixel models
+
+This section begins by describing the standard EM algo­
+rithm for learning mixture models from observed data with
+the class variable hidden. We then describe an efficient,
+incremental version suitable for real-time implementation.
+
+4.1
+
+EM
+
+for mixture models
+
+Suppose we observe a sequence of pictures 1, .. . , T, and
+that l(x, y, t) is the value of pixel (x, y) in the tth image. We
+want to learn the parameters of the distributions rx,y. Sx,y• vx,y
+as well as the relative weights Wx,y· To formally set up
+the learning problem, we define the likelihood of a set of
+
+178
+
+Friedman and Russell
+
+180
+160
+140
+
+w!JI!!<
+
+250
+
+120
+"'
+
+I
+
+200
+
+100
+
+ISO
+100
+
+80
+
+so
+
+60
+
+250
+
+4{)
+
+so
+
+20
+0
+
+100
+
+50
+
+150
+ln�nsity value
+
+200
+
+250
+
+{a)
+
+(b)
+
+0.045
+
+hli�ture model -
+
+shadow model
+road model
+
+0.04
+
+vehicle model
+
+0.035
+
+------
+
+�
+
+�
+
+road
+�hide
+
++
++
+
+o
+
+250
+
+0.025
+
+200
+
+O.Gl
+
+100
+
+ISO
+50
+
+0.015
+
+O.QI
+0.005
+
+0
+
+0
+
+;o!Jiue
+
+O.o3
+
+�
+
+shadow
+
+·-·-···
+
+�
+
+so
+
+£1,
+.�
+
+100
+
+green
+
+----
+
+�:
+·�
+
+.
+
+!50
+
+Intensity value
+
+200
+
+250
+250
+
+(c)
+
+(d)
+
+Figure 3: (a) Empirical distribution of intensity values for pixel (160, 170) over 1000 frames. (b) Scatter plot of RGB
+values for the same pixeL (c) Fitted three-component Gaussian mixture model for the data in (a). ( d) Scatter plot of 1000
+randomly-generated data points from a fitted three-component Gaussian mixture model for the data in (b).
+parameters E> to be the probability of the data given 8:
+= l,,I(x,y, t) I 8). We want to choose the parame­
+ters that maximize the likelihood.
+
+nT:tP(L
+
+We begin by examining a simpler problem. Suppose that
+the images were annotated by the labels of all pixels, and
+suppose that L1(x,y) is the label of x,y in the tth image. In
+this case, learning these parameters would be easy. Stan­
+dard arguments show that the optimal settings of parameters
+for this case can be computed as follows. We define the suf­
+ficient statistics for this mixture estimation to beNt. M,, and
+Z1, where
+- N1(x,y) is the number of images for which L1(x, y) = l;
+- M1(x,y)
+
+L1(x,y)
+
+and
+
+is the sum of the pixel values for which
+l, which we write as Lc=t .... T.Lr=ll(x,y, t);
+,
+
+"'
+
+is given by Nt(�.y)'L.t=t,...,T,L,=ll(x,y,t)­
+l(x, y, tl, the sum of the outer products of the input
+vectors with themselves.
+
+-Z,(x,y)
+
+From these sufficient statistics, we can compute w,, f.lt, and
+�1 as:
+N,
+=
+(2)
+Wt
+L,,, Nf
+{.ll
+
+�I
+
+=
+
+=
+
+M,
+
+N,
+1
+
+(3)
+T
+
+,
+N,z -J.LtJ.I.l
+
+(4)
+
+Unfortunately, we do not have labels L, for our training
+data. Thus, we define the likelihood with respect to the
+observable data: L(El) = nT:tP(l(x,y, t) I E>)- Learning
+mixture models is one of the classic examples of missing
+values. The standard solution in the literature is the ex­
+pectation maximization algorithm [Dempster et al., 1977;
+McLachlan and Krishnan, 19971 Roughly speaking, the
+EM algorithm explores a sequence of parameter settings,
+where each setting is found by using the previous one to
+classify the data. More precisely, assume that we have
+some parameter setting 8 We can use the probability of
+_
+
+179
+
+Image Segmentation in Video Sequences
+
+different labels according to
+
+ek as an estimate of their true
+
+distribution. We now reestimate the parameters, where we
+
+its contribution to the sufficient statistics. This means that
+we are increasing our training set at each step, yet we never
+
+"split" each vector l(x, y, t) between the different Gaussians
+
+reprocess the previous instances in the training set. This
+
+according to these proportions. Formally, we compute the
+
+procedure is no longer guaranteed to be monotonic in
+
+expected value of the sufficient statistics as follows:
+E[NI I ek]
+
+=
+
+T
+
+on
+
+L, but
+
+the average this process increases L. Thus, in the long
+
+run, this process converges to a local maximum with high
+probability.
+
+L P(Lr ::::; lll(x, y, t), ek)
+t=l
+
+T
+L P(Lr lll(x, y, t), ek)l(x,y,t)
+1=1
+T
+LP(Lr lll(x,y, t), ek)
+l(x,y,t) ·l(x,y,tl
+
+The resulting procedure for each pixel
+ing structure:
+
+(x,y) has the follow­
+
+=
+
+E[Zt I
+
+ek]
+
+=
+
+=
+
+Initialize parameters
+
+t ...... 0
+for
+
+t=I
+
+We then define
+
+ek+t
+
+by using Equations
+
+2-4 with the ex­
+
+pected sufficient statistics.
+
+e.
+
+{r,s, v}
+kwt
+Mt +-- kw1 11-1
+z1 ...... kw1 (:Ez + /-ll
+l
+
+E
+
+Nt
+
++--
+
+·
+
+·
+
+L(ek+l) �
+L(ek). That is, fj+l provides a better approximation to the
+
+do forever
+
+�+
+
+=
+
+for
+
+NL <- NL + P(Lt:::: lll(x,y, t), 6)
+Mt <- M1 + P(Lr = I I l(x,y, t),e)I(x, y, t)
+Zt <- Z1 + P(Lr = l l l(x,y, t), e)J(x,y,t)l(x,y, t)T
+Computeefrom {NL,M/,Zt}·
+
+�, then � is
+
+a stationary point (e.g., a local maximum) of the likelihood
+function. Combining these two properties, we see that this
+procedure will eventually converge to a stationary point
+[McLachlan and Krishnan,
+
+1997]. If we start the process
+
+several times with different setting of
+
+e0,
+
+we hope to find
+
+tLD
+
+t+--t+I
+l E {r,s, v}
+
+This process has two important properties. First,
+distribution of the data. Second, if
+
+·
+
+The initialization step of the procedure sets the statistics to
+
+e. Then,
+
+a good approximation to the optimal setting. In addition,
+
+be the expected statistics for the initial choice of
+
+for our application, we must have a way to identify which
+
+in each iteration we add the expected statistics for the new
+
+component of the model should be labelled as road, which
+
+instance to the accumulated statistics.
+
+as shadow, and which as vehicle.
+
+A heuristic solution to
+this problem is described in Section 5
+
+This procedure performs quite well, and the reported ex­
+periments in Section
+
+5 are based on it. However, since the
+growing, this procedure can
+
+sufficient statistics terms keep
+
+4.2
+
+run into problems in the long run. Moreover, the procedure
+never removes the contributions of old instances from the
+
+Incremental EM
+
+The standard EM procedure we just reviewed requires us
+
+sufficient statistics. Intuitively, the models that were used
+to compute the expectation for these instances is quite out
+
+(x, y) for all the images we have
+
+of date. Thus, the procedure would perform better if these
+
+Moreover, batch processing of the complete image sequence
+
+can introduce exponential forgetting, as done in Section 2.
+A version of Equation ( l) can be applied to the incremental
+
+to store the values of pixel
+
+observed. This is clearly impractical for our application.
+
+is not possible in a real-time setting. We now describe an
+incremental variant of EM that does not require storing the
+data. This procedure was introduced by Nowlan [1991],
+and is best understood in terms of the results of Neal and
+Hinton [ 1993].
+Neal and Hinton show that we can think of the EM process
+as continually adjusting the sufficient statistics. In this view,
+on each iteration when we process an instance, we remove
+its previous contribution to the sum and replace it with a
+new one. Thus, for example, when we update
+move
+
+N1,
+
+we re­
+
+P(L1 lll(x,y, t), ��) and add P(L1 lll(x, y, t), e*),
+=
+
+=
+
+where E>"' are the parameter settings we used to com­
+pute the previous estimated statistics from
+t), and
+
+e*
+
+are the current parameter settings.
+
+date M1, we remove
+
+l(x,y,
+
+Similarly, to up­
+
+P(L1 lll(x,y, t), ek')J(x,y, t) and add
+P(L1 l!I(x,y, t), ek)I(x,y,t). Neal and Hinton show that
+=
+
+=
+
+after each instance is processed, the likelihood of the data
+
+instances were removed. To deal with both problems, we
+
+EM process quite straightforwardly. We are in the process
+of experimenting with this variant.
+
+5
+
+Empirical results
+
+Our general procedure for processing a video sequence is
+as follows:
+
+l. Initialize mixture models for each pixel with a weak
+prior;
+2. For each new frame:
+
+(a) Update the estimated mixture model for each
+pixel using incremental EM;
+
+increases.
+
+(b) Heuristically label the mixture components;
+
+This argument motivates the following incremental ap­
+proach. W henever we observe a new instance, we add
+
+(c) Classify each pixel according the its current mix­
+ture model.
+
+180
+
+Friedman and Russell
+
+....
+
+.._.,....,FLA_c__
+
+u:
+
+�� ���
+
+....
+
+-.
+
+.
+
+(a)
+
+(b)
+
+=.. a
+.
+
+----..
+
+..
+
+...
+
+-
+
+�
+..$·
+.. -- .
+
+(c)
+
+(d)
+
+Figure 4: (a) Original image (frame 925). (b) Pixels identified as shadow. (c) Image with shadow pixels replaced by
+corresponding road value. (d) Mask showing pixels classified as vehicles.
+The heuristic labelling process is needed in cases where the
+mixture components are not in the same order as the prior
+model indicates. For example, the prior model expects that
+vehicle pixels will be brighter, in general, than road pixels.
+For white road markings, the brightness order is reversed.
+Our heuristics are as follows: label the darkest component
+as shadow; of the remaining two components, label the one
+with the largest variance as vehicle and the other as road.
+Sample results are shown in Figure 4, for the same image
+as shown in Figure 2. We show the original image and
+the identified shadow pixels, together with an image result­
+ing from replacing shadow pixels with the corresponding
+road value. The mask image showing the vehicle pixels
+is much cleaner than that obtained by background subtrac­
+tion. At the time of writing, we are beginning the exper­
+iments needed to show that this improvement carries over
+into vehicle detection and tracking performance. We are
+
+also rerunning our experiments with RGB models instead
+of intensity models; we assume that use of colour informa­
+tion will largely eliminate the tendency of darker vehicles
+to disappear, since very few vehicles have the same hue as
+the road, even if they have the same intensity values. We
+note that the incremental version of EM yields an algorithm
+capable of running in real time on a suitable platform. Our
+target hardware platform, to which we hope to port the al­
+gorithm, consists of 12 Texas Instruments C40 DSP chips
+running in parallel.
+
+6
+
+Conclusions and further work
+
+We have shown that a probabilistic approach to pixel classi­
+fication, together with an unsupervised learning algorithm
+
+Image Segmentation in Video Sequences
+
+for pixel models, can significantly improve the detection of
+moving objects in video sequences. This is just one sample
+point in a vast space of possible research on the application
+of probabilistic inference to the task of understanding sen­
+sory input, almost all of which is going on outside the AI
+community.
+
+181
+
+robust a uto m atic traffic
+
+scene analysis in real-time. In
+Proceedings of the 12th /APR International Conference
+on Pattern Recognition, Jerusalem, Israel, October 1994.
+
+[McLachlan and Krishnan,1997] G. J. McLachlan and
+T. Krishnan. T he EM Algorithm and Extensions. Wi­
+ley Interscience, 1997.
+
+Several improvements are needed in our system before it
+can be fielded. The most important from the point of view of
+robustness is the need for better initialization and labelling
+of models. Our heuristic approach may not work well
+in extremes of lighting conditions. Currently, our weak
+prior is equivalent to an initial model with a certain amount
+of evidential support-we are not able, for example, to
+state that the vehicle component is expected to have large
+variance but that its mean is very uncertain. Such priors
+require a MAP or penalty-based version of EM. This should
+require little or no additional computational expense and
+may result in significantly more robust performance.
+
+[Michalopoulos, 1991] P. Michalopoulos. Vehicle detec­
+tion video through image processing: the Autoscope
+system. IEEE Trans. on Vehicular Technology, 40:2129, 1991.
+
+We expect to reach the limits of purely pixel-based tech­
+niques fairly soon. Using more background knowledge,
+encoded as probabilistic models, one can expect much better
+performance. For example, temporal and spatial contiguity
+are strong constraints that we currently ignore--or rather,
+they are enforced in the grouping code, which is entirely ad
+hoc. Temporal contiguity in a pixel's classification can be
+enforced using a simple Markov model in which any given
+classification has a high probability of persisting. Similar
+schemes can be used for spatial contiguity, but these require
+Markov networks that impose a high computational burden.
+In any case, this level of models should allow extensions
+to, e.g., moving cameras, and should interface nicely with
+the higher-level dynamic belief network models of vehicle
+behaviour used in [Huang et al., 1994] to predict motions
+and to detect events such as stalled vehicles and accidents.
+
+[Samadani, 1995] R. Samadani. A finite mixtures algo­
+rithm for finding proportions in SAR images. IEEE
+Trans. on Image Processing, 4:1182-6, 1995.
+
+References
+[Dempster et al., 1977] A. Dempster, N. Laird, and D. Ru­
+bin. Maximum likelihood from incomplete data via the
+EM algorithm. Journal of the Royal Statistical Society,
+39 (Series B):l-38, 1977.
+[Huang et al., 1994] T. Huang, D. Koller, J. Malik, G. Oga­
+sawara, B. Rao, S. Russell, and J. Weber. Automatic
+symbolic traffic scene analysis using belief networks. ln
+Proceedings of the Twelfth National Conference on Ar­
+tificial Intelligence (AAA/-94), pages 966-972, Seattle,
+Washington, August 1994. AAAI Press.
+[Jepson and Black, 1993] A. Jepson and M.J. Black. Mix­
+ture models for optical flow computation. In CVPR,
+pages 760-1, 1993.
+[Kilger, 1992] M. Kilger. A shadow handler in a video­
+based real-time traffic monitoring system. In IEEE Work­
+shop on Applications of Computer Vision, 1992.
+[Ko!leretal., 1994] D. Koller,J. Weber, T. Huang,J. Ma­
+lik, G. Ogasawara, B. Rao, and S. Russell. Towards
+
+[Neal and Hinton, 1993] R. M. Neal and G. E. Hinton. A
+new view of the EM algorithm that justifies incremental
+and other variants. unpublished manuscript, 1993.
+[Nowlan, 1991] S. J. Nowlan. Soft Competitive Adapta­
+tion: Neural Network Learning Algorithms based on
+Fitting Statistical Mixtures. PhD thesis, School of Com­
+puter Science, Carnegie Mellon University, 1991.
+
+[Sawhney and Ayer, 1996] H.S. Sawhney and S. Ayer.
+Compact representations of videos through dominant
+and multiple motion estimation. PAM!, 18:814-30, 1996.
+[Weiss and Adelson, 1996] Y. Weiss and E.H. Adelson. A
+unified mixture framework for motion segmentation: In­
+corporating spatial coherence and estimating the number
+of models. In CVPR, pages 321-6,1996.
+
+

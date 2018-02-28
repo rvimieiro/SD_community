@@ -1,0 +1,1627 @@
+Expectation Propagation for
+Continuous Time Bayesian Networks
+
+Uri Nodelman
+Stanford University
+nodelman@cs.stanford.edu
+
+Daphne Koller
+Stanford University
+koller@cs.stanford.edu
+
+Abstract
+Continuous time Bayesian networks (CTBNs)
+describe structured stochastic processes with
+finitely many states that evolve over continuous
+time. A CTBN is a directed (possibly cyclic) dependency graph over a set of variables, each of
+which represents a finite state continuous time
+Markov process whose transition model is a
+function of its parents. As shown previously, exact inference in CTBNs is intractable. We address the problem of approximate inference, allowing for general queries conditioned on evidence over continuous time intervals and at discrete time points. We show how CTBNs can
+be parameterized within the exponential family,
+and use that insight to develop a message passing scheme in cluster graphs and allows us to
+apply expectation propagation to CTBNs. The
+clusters in our cluster graph do not contain distributions over the cluster variables at individual
+time points, but distributions over trajectories of
+the variables throughout a duration. Thus, unlike
+discrete time temporal models such as dynamic
+Bayesian networks, we can adapt the time granularity at which we reason for different variables
+and in different conditions.
+
+1 Introduction
+Many applications involve reasoning about a complex system that evolves over time. A standard approach is to discretize time at fixed intervals, known as time slices, and
+then model the system as evolving discretely from one time
+slice to the next. Observations are only incorporated as evidence at these fixed time points, and queries can only be
+asked about the system state at these times.
+A time slice model is very appropriate in many applications, e.g., those where evidence is obtained at regular
+intervals from some sensor. However, other settings are
+better modeled using a less rigid notion of temporal evolution. In many systems, there is no natural time granularity: Some variables evolve quickly, whereas others change
+
+Christian R. Shelton
+UC Riverside
+cshelton@cs.ucr.edu
+
+more slowly; even the same variable can change quickly
+in some conditions and slowly in others. Second, our ability to observe the system can vary significantly over time.
+We might have stretches where a variable is not observed
+at all, and intervals where we observe its entire trajectory;
+in other settings, we might only obtain evidence about certain state transitions (e.g., a marriage, a birth, a graduation).
+Attempts to model such systems as evolving over uniform
+discrete time intervals leads to very coarse approximations,
+or requires the entire trajectory be modeled at a very fine
+granularity, at high computational cost.
+An alternative approach is to model such systems as
+evolving over continuous time, e.g., as a Markov process (Duffie et al., 1996; Lando, 1998). Nodelman et al.
+(2002) (NSK from now on) extend Markov processes for
+factored domains, defining continuous time Bayesian networks (CTBNs) — a structured representation for complex
+systems evolving over continuous time. A CTBN encodes a
+homogeneous continuous-time Markov process over an exponentially large state space, consisting of the assignments
+to a set of variables.
+Exact inference in CTBNs involves generating a single
+matrix representing the transition model over the entire system state. As the number of states is exponential in the
+number of variables, this approach is generally intractable.
+NSK describe an approximate inference algorithm based
+on ideas from clique tree inference, but provide no formal
+justification for the algorithm. More importantly, the algorithm covers only point evidence — observations of the
+value of a variable at a point in time. As discussed above,
+in many applications, we observe a variable for an interval,
+or even for its entire trajectory.
+In this paper, we describe an approximate inference algorithm for CTBNs that allows both point and interval evidence. The algorithm uses message passing in a cluster
+graph, where the clusters do not contain distributions over
+the cluster variables at individual time points, but distributions over trajectories of the variables through a duration.
+We provide a new formulation of CTBN parameterization
+that allows the factors in the clusters to be divided as well as
+multiplied. With this basic building block, we can execute
+multiply-marginalize-divide message passing in a cluster
+graph, as proposed by Lauritzen and Spiegelhalter (1988).
+
+In particular, we can provide an expectation propagation
+algorithm for CTBNs (Minka, 2001), and prove a characterization of its convergence points as fixed points of a free
+energy function.
+A key benefit of our algorithm is that time is not discretized as part of the model. Rather, the inference algorithm reasons about entire trajectories over the variables in
+each cluster. Thus, we are not forced to use a fixed, global
+time granularity for all variables at all times. Rather, the inference algorithm dynamically determines the appropriate
+granularity to use in order to reason about different clusters in the cluster graph, adapting it to the rate at which the
+cluster evolves, in the current state of the system. In other
+words, our inference granularity varies both over variables
+and over time. This flexiblity allows us to avoid making
+unnecessary update steps, resulting in possibly significant
+computational savings over a time-slice approach.
+
+2 Continuous Time Bayesian Networks
+We begin by briefly reviewing the key definitions of
+Markov processes and continuous time Bayesian networks,
+as presented in (Nodelman et al. 2002; 2003).
+
+where exp is matrix exponentiation.
+NSK extend this framework to encode the joint dynamics of several local variables. In a continuous time Bayesian
+network, each variable X is a Markov process whose parameterization depends on a subset of other variables U.
+Definition 2.1 A conditional Markov process X is an
+inhomogeneous Markov process whose intensity matrix
+varies as a function of the current values of a set of discrete conditioning variables U. It is parameterized using a
+conditional intensity matrix (CIM) — QX|U — a set of homogeneous intensity matrices QX|u , one for each instantiation of values u to U.
+The parameters of QX|U are q X|u = {qx|u : x ∈ Val(X)}
+and θX|u = {θxx′ |u : x, x′ ∈ Val(X), x 6= x′ }.
+Definition 2.2 A continuous time Bayesian network N
+over X consists of two components: an initial distribution
+0
+PX
+, specified as a Bayesian network B over X, and a continuous transition model, specified using a directed (possibly cyclic) graph G whose nodes are X ∈ X; UX denotes
+the parents of X in G. Each variable X ∈ X is associated
+with a conditional intensity matrix, QX|UX .
+
+2.1 Representation and Parameterization
+A finite state, continuous time, homogeneous Markov process Xt with state space Val(X) = {x1 , . . . , xn } is de0
+scribed by an initial distribution PX
+and an n × n matrix of
+transition intensities:
+
+
+−qx1 qx1 x2 · · · qx1 xn
+ qx2 x1 −qx2 · · · qx2 xn 
+
+
+QX = 
+ ,
+..
+..
+..
+..
+
+
+.
+.
+.
+.
+qxn x1 qxn x2 · · · −qxn
+
+of transitioning from state xi to
+where qxi xj is the intensity
+P
+state xj and qxi = j6=i qxi xj .
+Given QX we can describe the transient behavior of Xt .
+If X0 = x then it stays in state x for an amount of time exponentially distributed with parameter qx . Thus, the probability density function f for Xt remaining at x is f (qx , t) =
+qx exp(−qx t) for t ≥ 0, and the corresponding probability
+distribution function F for Xt remaining at x for an amount
+of time ≤ t is given by F (qx , t) = 1 − exp(−qx t). The expected time of transitioning is 1/qx . Upon transitioning,
+X shifts to state x′ with probability θxx′ = qxx′ /qx . We
+can view the distribution in terms of the exponential distribution parameter qx , encoding when the next transition
+occurs, and the multinomial parameters θxx′ (x 6= x′ ), encoding where the state transitions.
+The distribution over the state of the process X at some
+future time t, PX (t), can be computed directly from QX .
+0
+is the distribution over X at time 0, then
+If PX
+0
+PX (t) = PX
+exp(QX · t) ,
+
+(1)
+
+2.2 Semantics
+There are several equivalent ways to define the semantics
+of a CTBN. NSK define one possible semantics using a
+“multiplication” operation called amalgamation on CIMs.
+This operation combines two CIMs to produce a single,
+larger CIM. Amalgamation takes two conditional intensity matrices QS 1 |C 1 , QS 2 |C 2 and combines them to form
+a new product CIM, QS|C = QS1 |C 1 ∗ QS 2 |C 2 where
+S = S 1 ∪ S 2 and C = (C 1 ∪ C 2 ) − S. The new CIM
+contains the intensities for the variables in S conditioned
+on those of C. A basic assumption is that, as time is continuous, variables cannot transition at the same instant. Thus,
+all intensities corresponding to two simultaneous changes
+are zero. If the changing variable is from S 1 , we can look
+up the correct intensity from the factor QS 1 |C 1 . Similarly,
+if it is from S 2 , we can look up the intensity from the factor
+QS 2 |C 2 . Intensities along the main diagonal are computed
+at the end in order to make the rows sum to zero for each
+instantiation of values to C.
+Example 2.3 Consider a CTBN A → B with CIMs
+QA
+»
+
+−1
+2
+
+1
+−2
+
+–
+
+2
+
+−5
+4
+2
+2
+
+QB|a1
+3
+2
+3
+−6
+4 5
+5 −7
+
+2
+
+−7
+4
+3
+3
+
+QB|a2
+3
+3
+4
+−8
+5 5 .
+6 −9
+
+The amalgamated CIM assigns intensity 0 to transitions
+that change both A and B simultaneously. For transitions
+involving only one of the variables, it simply uses the entry
+from the appropriate intensity matrix. The resulting matrix,
+if entries are ordered (a1 , b1 ), (a2 , b1 ), (a1 , b2 ), (a2 , b2 ),
+
+(a1 , b3 ), (a2 , b3 ), is
+2
+
+QAB
+
+6
+6
+6
+=6
+6
+4
+
+−6
+2
+2
+0
+2
+0
+
+1
+−9
+0
+3
+0
+3
+
+2
+0
+−7
+2
+5
+0
+
+0
+3
+1
+−10
+0
+6
+
+3
+0
+4
+0
+−8
+2
+
+0
+4
+0
+5
+1
+−11
+
+3
+
+7
+7
+7
+7 .
+7
+5
+
+For example, the entry (1, 3), representing the intensity of
+transitioning from (a1 , b1 ) to (a1 , b2 ) is 2, taken from the
+(1, 2) entry of the matrix QB|a1 .
+2.3 Sufficient Statistics
+A CTBN N defines a probability density over complete
+trajectories σ of the set of variables X. A complete trajectory can be specified as a sequence of states xi of X,
+each with an associated duration. This means we observe
+every transition of the system from one state to the next
+and the time at which it occurs. We can conveniently write
+the density over complete trajectories in terms of the sufficient statistics characterizing the trajectory: T [x|u] —
+the amount of time that X = x while UX = u; and
+M [x, x′ |u] — the number of times that X transitions from
+x to x′ while
+P UX = u (Nodelman et al., 2003). If we let
+M [x|u] = x′ M [x, x′ |u], we can write the density as
+Y
+PN (σ) =
+LX (T [X|U], M [X|U])
+X∈X
+
+where
+LX (T [X|U], M [X|U]) =
+(2)
+Y Y M[x|u]
+Y M[x,x′ |u]
+exp(−qx|u T [x|u]) ×
+)
+(qx|u
+θxx′ |u
+u
+
+x
+
+x′ 6=x
+
+is X’s likelihood contribution to the overall probability of
+the trajectory.
+
+3 Algorithm Overview
+The inference task on which we focus is that of answering
+probability queries given some partial observations about
+the current trajectory. Such observations fall into two main
+types: point evidence and continuous evidence. Point evidence is an observation of the value of a variable at a particular instant in time. Continuous evidence provides the
+value of a variable throughout an entire interval, which we
+take take to be a half-closed interval [t1 , t2 ). The endpoints
+of an interval at which a variable is observed do not necessarily correspond to transition points of the variable. They
+can start at an arbitrary time, contain zero or more transitions, and end at an arbitrary time.
+Without loss of generality, we can partition our evidence
+into a sequence of intervals of constant continuous evidence, possibly punctuated by point evidence or observed
+transitions. Within each interval, the set of variables we observe and their values are both constant. Note that constant
+
+continuous evidence includes the possibility of no evidence
+on the interval. This creates a sequence of distinguished
+time points t1 , . . . , tn with constant continuous evidence
+esi on every interval [ti , ti+1 ) and possible point evidence
+or observed transition epi at each ti . Both esi and epi are
+assignments to some subset of the variables in X.
+Example 3.1 Consider a system over the variables
+X, Y, Z. One set of evidence might have: X = x1 , Y = y1
+for the interval [0, 0.7); Y = y2 , Z = z1 for the interval
+[0.7, 1.1), Z = z2 at t = 1.1; X = x1 for the interval
+[1.1, 2); and Y = y1 at t = 1.5. The distinguished time
+points are 0, 0.7, 1.1, 1.5, 2. Note that the value of X may
+have changed 0 or more times in the interval [0.7, 1.1). The
+value of Y changed from y1 to y2 at exactly 0.7. We observe
+a transition for Z at t = 1.1, and an isolated observation
+of Y ’s value at t = 1.5.
+As NSK discuss, there is a range of query types that can
+be answered using a CTBN. These include the value of a
+variable at a given time, but also the time at which a variable first takes a particular value, or the expected number
+of times that a variable changes value. We propose an algorithm that can address all of these types of query, given
+both point and continuous evidence.
+Our algorithm uses message passing in cluster graphs, of
+which clique tree algorithms are a special case. In cluster
+graph algorithms, we construct a graph whose nodes correspond to clusters of variables, and pass messages between
+these clusters to produce an alternative parameterization,
+in which the marginal distribution of the variables in each
+cluster can be read directly from the cluster. In discrete
+graphical models, when the cluster graph is a clique tree,
+two passes of message passing produce exact marginals. In
+generalized belief propagation (Yedidia et al., 2000), message passing is applied to a graph which is not a clique
+tree, in which case the algorithm may not converge, and
+produces only approximate solutions. There are several
+forms of message passing algorithm. Our algorithm is
+based on multiply-marginalize-divide scheme of Lauritzen
+and Spiegelhalter (1988), which we now briefly review.
+At a high level, a cluster graph is defined in terms of a set
+of clusters Ci , whose scope is some subset of the variables
+X. Clusters are connected to each other by edges, along
+which messages are passed. The edges are annotated with
+a set of variables called a sepset Si,j which is the set of
+variables in Ci ∩ Cj . The messages passed over an edge
+Ci —Cj are factors over the scope Si,j .
+Each cluster Ci maintains a potential πi , a factor which
+reflects its current beliefs over the variables in its scope.
+Each edge similarly maintains a message µi,j , which encodes the last message sent over the edge. The potentials
+are initialized with a product of some subset of factors parameterizing the model (CIMs in our setting). Messages
+are initialized to be uninformative. Clusters then send messages to each other, and use incoming messages to update
+
+their beliefs over the variables in their scope. The message
+δi→j from Ci to Cj is the marginal distribution Si,j according to πi . The neighboring cluster Cj assimilates this message by multiplying it into πi , but avoids double-counting
+by first dividing by the stored message µi,j . Thus, the mesδ
+sage update takes the form πj ← πj · µi→j
+.
+i,j
+In our algorithm, the clusters do not represent factors
+over values of random variables. Rather, cluster potentials
+and messages both encode measures over entire trajectories
+of the variables in their scope.
+Example 3.2 Consider a CTBN A → B → C →
+D. We can form a clique tree {A, B}—{B, C}—{C, D},
+where the {A, B} cluster, for example, contains the CIMs
+QA , QB|A . Note that the message from this cluster to the
+{B, C} cluster is a marginal encoding a distribution over
+B’s trajectories. Although the joint A, B distribution is
+a homogeneous Markov process over A, B, the marginal
+distribution over B is not typically a homogeneous Markov
+process.
+As in this example, the marginal distributions that form
+the messages are not homogeneous Markov processes; indeed, the exact marginal distributions for the true joint distribution can be arbitrarily complex, requiring a number of
+parameters which grows exponentially with the size of the
+network. Thus, we cannot pass messages exactly without
+giving up the computational efficiency of the algorithm.
+We address this issue using the expectation propagation
+(EP) approach (Minka, 2001), which performs approximate message passing in cluster graphs.
+EP addresses the problem where messages can be too
+complex to represent and manipulate by using approximate
+messages, projecting each message δi→j into a compactly
+representable space so as to minimize the KL-divergence
+between δi→j and its approximation δ̂i→j . In a prototypical example (Minka, 2001), the cluster potentials and therefore the sepset marginals are mixtures of Gaussians, which
+are projected into the space of Gaussian distributions in the
+message approximation step. For messages in the exponential family, arg minδ̂i→j D(δi→j ||δ̂i→j ) can be obtained by
+matching moments of the distribution. EP can be applied
+to clique trees or to general cluster graphs. Note that, even
+in clique trees, the algorithm does not generally converge
+after two passes of message passing (as it does in exact inference), so that multiple iterations are generally required,
+and convergence is not guaranteed.
+In our application of EP, we use conditional intensity matrices (CIMs), reduced to match the evidence, to encode
+the cluster potentials; we approximate the messages in the
+cluster graph as homogeneous Markov processes, using a
+KL-divergence projection. To apply the EP algorithm to
+clusters of this form, we need to define basic operations
+over CIMs. First, we need to define the operations of multiplying and dividing CIMs, used in the message update step.
+Second, we need to describe the construction of initial po-
+
+tentials from CIMs, and how they account for the evidence.
+Finally, we need to show how to perform approximate margalization of CIMs, used to compute the message the approximate marginals of a cluster potential over its sepset.
+We begin by describing these operations in the next section, and then present the algorithm in its entirety in Sec. 5.
+We note that a similar approach — of encoding clusters as CIMs and approximating messages as homogeneous
+Markov processes — was used in the original clique tree
+algorithm of Nodelman et al. (2002), but with important differences. Most importantly, the new operations on
+CIMs allow us to to deal with continuous evidence rather
+than just point evidence. Second, the NSK algorithm was
+based on multiply-marginalize message passing scheme
+of Shafer and Shenoy (1990) algorithm, whereas our algorithm is based on multiply-marginalize-divide scheme
+of Lauritzen and Spiegelhalter (1988). Second, our algorithm performs approximate marginalization so as to minimize KL-divergence, a more principled approach. As a
+consequence, we can use the iterative EP algorithm for
+message propagation, improving the quality of approximation. As an instance of EP, our algorithm has the property
+that it converges to fixed points of the approximate free energy function, subject to calibration constraints on the approximate messages. Finally, and It also allows us to
+
+4 Basic Operations
+The basis for our algorithm is a reformulation of CIMs that
+supports the key operations required for message passing
+in EP: CIM product and division, incorporating evidence
+into a CIM, and approximate CIM marginalization.
+4.1 Amalgamating CIMs
+A CIM QS|C over variables S ⊆ X conditioned on C ⊂
+X defines the dynamics of S given C. We can rewrite
+QS|C as a single block matrix over the joint space S × C:
+
+
+0
+···
+0
+QS|c1
+
+ 0
+0
+QS|c2 · · ·
+
+
+QS|C = 
+ .
+.
+..
+..
+.
+..
+..
+
+
+.
+.
+0
+
+0
+
+· · · QS|cN
+
+The CIM QS|C induces a distribution φ(S|C) over the dynamics of S given C. Analogous to Eq. (1), exponentiating
+the CIM by taking φ(S|C)t = exp(QS|C · t) gives u the
+probability that, if we start with S = s and continue for t
+time, we end up at S = s′ , given that C = c for the entire
+time period. Thus, we can view a CIM as the logarithm of
+the distribution over the (conditional) system dynamics.
+We can now redefine the amalgamation operation in
+terms of this representation of CIMs. First, note that if we
+have a CIM QS ′ |C ′ where S ′ ⊆ S and C ′ ⊆ C, we can
+embed it within a matrix over S × C by embedding multiple copies of QS ′ |C ′ in the new, larger matrix. The resulting matrix would look just as above, except with repeated
+
+copies of QS′ |C ′ . We can choose the order of the states in
+the matrix arbitrarily.
+Definition 4.1 Amalgamation is an operation which takes
+two CIMS QS 1 |C 1 , QS2 |C 2 , and forms the new CIM QS|C
+where S = S 1 ∪ S 2 and C = (C 1 ∪ C 2 ) \ S. First
+we expand QS 1 |C 1 and QS 2 |C 2 into single matrices over
+S × C and then define the amalgamated matrix as the sum
+QS|C = QS 1 |C 1 + QS 2 |C 2 . The inverse of amalgamation
+is computed by matrix subtraction.
+Example 4.2 Consider the CTBN from Example 2.3. We
+expand each of QA and QB|A into a single matrix over
+the space A × B, in the order (a1 , b1 ), (a2 , b1 ), (a1 , b2 ),
+(a2 , b2 ), (a1 , b3 ), (a2 , b3 ), obtaining:
+
+QA
+
+QB|A
+
+=
+
+=
+
+2
+
+−1
+2
+0
+0
+0
+0
+
+1
+−2
+0
+0
+0
+0
+
+0
+0
+−1
+2
+0
+0
+
+0
+0
+1
+−2
+0
+0
+
+0
+0
+0
+0
+−1
+2
+
+0
+0
+0
+0
+1
+−2
+
+3
+
+2
+
+−5
+0
+2
+0
+2
+0
+
+0
+−7
+0
+3
+0
+3
+
+2
+0
+−6
+0
+5
+0
+
+0
+3
+0
+−8
+0
+6
+
+3
+0
+4
+0
+−7
+0
+
+0
+4
+0
+5
+0
+−9
+
+3
+
+6
+6
+6
+6
+6
+4
+
+6
+6
+6
+6
+6
+4
+
+7
+7
+7
+7
+7
+5
+
+7
+7
+7
+7 .
+7
+5
+
+The amalgamation of these two CIMs is given by the matrix
+addition QA + QB|A , producing precisely the matrix QAB
+shown in Example 2.3.
+The use of addition for amalgamation of CIMs is very
+natural when we consider its interpretation as the logarithm of the system dynamics. Specifically, adding CIMs is
+equivalent to multiplying their distributions. Recalling that
+CIMs directly parametrize the instantaneous behavior and
+examining the distribution as t → 0,
+
+4.2 Incorporating Evidence into CIMs
+Point observations about the system state affect our distribution over the state at a single point in time, which in turn,
+affects the distribution over the behavior of the system. But
+it does not affect our distribution over the dynamics as parameterized by the CIMs. By contrast, consider continuous
+evidence, as in Example 4.2. If we condition on the continuous evidence that A = a1 for all t ∈ [0, 1], then the
+dynamics of Z during that interval is described solely by
+QB|a1 rather than a mixture of QB|a1 and QB|a2 . An observation over an interval restricts our transition dynamics
+to remain within a subset of the full state space for the duration of the interval.
+To account for such evidence, we reduce the CIM —
+eliminate the rows and columns of the CIM that correspond to states inconsistent with the evidence. In the special case where we are conditioning QS|C on evidence e
+over some variable(s) in the conditioning set C, the result
+is a CIM QS|C,e that represents the conditional distribution φ(S|C, e). More generally, when we have evidence e1
+within S and e2 within C, the reduced CIM represents the
+unnormalized conditional distribution φ(S, e1 |C, e2 ). In
+this case, the reduced intensity matrix QS,e1 |C,e2 will have
+rows that sum to negative numbers. These negative numbers represent “extra” intensity with which we would normally leave the subsystem (if not for the evidence), and represent the probability flowing out of the subsystem. Note
+that a reduced intensity matrix φ(S, e) cannot, in general,
+be normalized and represented as an intensity matrix.
+Example 4.3 Consider the system over A and B described
+in Example 4.2. If we want to incorporate the continuous
+evidence that B = b1 for time t ∈ [0, 1], we use the reduced
+intensity matrix
+QA,b1 =
+
+φ(S|C)t = φ(S 1 |C 1 )t · φ(S 2 |C 2 )t
+
+
+
+−6
+1
+2 −9
+
+
+
+.
+
+= exp(QS 1 |C 1 · t) · exp(QS 2 |C 2 · t)
+
+As described above, the rows sum to negative numbers,
+= (I + QS1 |C 1 t + O(t2 )) · (I + QS2 |C 2 t + O(t2 )) whose magnitude corresponds to the intensity with which
+we would normally leave the subsystem when B = b1 .
+= I + (QS 1 |C 1 + QS 2 |C 2 )t + O(t2 )
+= exp((Q(S 1 |C 1 + QS 2 |C 2 )t)
+= exp(QS|C · t) .
+
+4.3 Marginalizing CIMs
+
+If we amalgamate all the CIMs of a CTBN N , we get
+a single intensity matrix encoding the distribution over the
+dynamics of the entire system:
+PN =
+
+Y
+
+X∈X
+
+φ(X|UX ) = exp
+
+X
+
+X∈X
+
+QX|UX
+
+!
+
+.
+
+This definition of amalgamation handles not only full
+CIMs, but also CIMs that are reduced to account for conditioning on continuous evidence, as we discuss next.
+
+Clusters in our cluster tree are associated with unnormalized CIMs, perhaps reduced by the incorporation of continuous evidence. In most cases, the marginal dynamics of
+such a CIM over a subset of variables cannot be described
+using an unconditional intensity matrix. Indeed, in general, the marginal distribution over a single variable X can
+only be correctly described by constructing the entire joint
+intensity matrix, and considering its marginal distribution
+over X. However, we can approximately marginalize factors — products of (reduced) CIMs — by projecting them
+into the space of distributions represented as unconditional
+intensity matrices.
+
+More precisely, consider the distribution φ(S) ∝
+PS0 exp(QS t) described by a (possibly reduced) intensity
+matrix QS . This distribution induces a marginal distribution φ(V ) over the dynamics of V for any subset V ⊂ S.
+We would like to project φ(V ) onto the space of distributions representable by the intensity matrix Q̂V , by minimizing the Küllback-Leibler divergence; specifically, we
+want to compute arg minP̂V D(PV ||P̂V ) where P̂V (t) =
+PV0 exp(Q̂V t). As the set of distributions representable by
+an intensity matrix is in the exponential family, we can minimize the KL-divergence over an interval [t1 , t2 ) by choosing P̂V (t) to match the moments of PV (t) over [t1 , t2 ).
+Importantly, a CIM in isolation, or even an unreduced intensity matrix, does not define a distribution over trajectories. To define a distribution and the requisite moments, we
+need an initial state distribution PV0 at time t1 and the duration of the interval [t1 , t2 ). Given a reduced CIM φ(V , e)
+over the interval [t1 , t2 ], we can obtain the conditional distribution over the system behavior by normalizing the distribution: φ(V |e) = Z1 exp(QV ,e · (t2 − t1 )), where Z
+is the partition function
+representing the probability of the
+Rt
+evidence: Z = t12 PV0 exp(QV ,e · t)dt. Note that Z is a
+function of the amount of time the evidence persists and of
+the distribution PV0 over the state at the beginning of the
+evidence.
+To match moments, we must compute the expected sufficient statistics over the interval [t1 , t2 ) for the variables in
+S. These expected sufficient statistics are E[T [j]], the expected amount of time in each state j, and E[M [j, k]], the
+expected number of transitions from j to k. For simplicity,
+assume that the evidence is constant throughout the interval. We can compute sufficient statistics for the more general case using a forward-backward algorithm (see Nodelman et al. (2005) for details and derivations). Let ∆j,k be
+a matrix with a one in row j, column k, and zeros everywhere else. Let e be a column vector of ones. Then for
+each instantiation j of S, we compute E[T [j]] as
+Z t2
+PS0 exp(QS (t − t1 ))∆j,j exp(QS (t2 − t))e dt ;
+c
+t1
+
+that is, we integrate over the probability of remaining in
+state j. The normalization constant c makes the expected
+amount of time over all states sum to t2 − t1 . Similarly, for
+each pair of instantiations j, k, we compute E[M [j, k]] as
+Z t2
+PS0 exp(QS (t − t1 ))∆j,k exp(QS (t2 − t))e dt ;
+c qjk
+t1
+
+that is, we integrate over the instantaneous probability
+of transitioning and use the same normalization constant.
+These integrals are guaranteed to be finite for any finite interval [t1 , t2 ].
+We can calculate the set of these integrals for all j and
+k simultaneously (as a set of differential equations) via
+the Runge-Kutta method of fourth order with adaptive step
+
+size. This method traverses the interval in small discrete
+steps each of which has a constant number of matrix multiplications. Thus, the main factor in the complexity of this
+algorithm is the number of steps which is a function of the
+step size.
+Importantly, the step size is adaptive and not fixed. The
+intensities of the QS matrix represent rates of evolution
+for the variables in the cluster, so larger intensities mean a
+faster rate of change which usually requires a smaller step
+size. We begin by setting the step size proportional to the
+inverse of the largest intensity in QS . The step size thus
+varies across different clusters and is sensitive to the current
+evidence. Also, following Press et al. (1992), we use a
+standard adaptive procedure that allows larger steps to be
+taken when possible based on error estimates.
+Given the expected sufficient statistics over S, we can
+calculate E[T [v]], the expected amount of time in each instantiation v of V , and E[M [v, v ′ ]], the expected number of transitions from v to v ′ . We also compute the total number of expected transitions from v, E[M [v]] =
+P
+′
+v ′ M [v, v ]. We can now match moments, setting the
+parameters of Q̂V to be the maximum likelihood parameters (Nodelman et al., 2003),
+qv =
+
+E[M[v]]
+E[T [v]] ;
+
+θvv′ =
+
+E[M[v,v ′ ]]
+E[M[v]]
+
+.
+
+(3)
+
+P 0 ,T
+
+We write φ̂(V ) = margS\V (φ(S)) for the distribution parameterized by Q̂V .
+Example 4.4 Consider the system over A and B described
+in Example 4.2. If we assume a uniform initial distribution
+and that we want to use this approximation for unit time
+(T = 1), then the matrix of expected sufficient statistics
+
+
+−
+
+ .24
+ .45
+M̄ [(a, b), (a′ , b′ )] = 
+ 0
+ .41
+0
+
+.18
+−
+0
+.42
+0
+.39
+
+.36
+0
+−
+.28
+1.03
+0
+
+0
+.35
+.23
+−
+0
+.78
+
+.54
+0
+.91
+0
+−
+.26
+
+
+
+0
+.47
+0
+.70
+.21
+−
+
+
+
+,
+
+
+
+
+.18 .12 .23 .14 .21 .13 .
+and T̄ [(a, b)] =
+Combining sufficient statistics for b1 (rows 1,2), b2 (rows
+3,4), and b3 (rows 5,6) we get the following matrix of expected sufficient statistics over B
+"
+#
+M̄ [b, b′ ] =
+
+−
+.87
+.80
+
+.71
+−
+1.81
+
+1.01
+1.61
+−
+
+.
+
+
+
+and T̄ [b] = .30 .37 .33 . With the expected sufficient statistics over B, we can compute the parameters of
+P 0 ,1
+φ̂(B) = margA (φ(A, B)),
+"
+#
+Q̂B =
+
+−5.73
+2.35
+2.42
+
+2.37
+−6.70
+5.49
+
+3.36
+4.35
+−7.91
+
+.
+
+There is an additional subtlety to the computation if QS
+is conditioned on continuous evidence and has negative row
+sums (representing the probability of the evidence as discussed in Sec. 4.2). In this case, we must account for the
+extra intensity of leaving the subsystem entirely when computing the expected number of transitions out of each state
+E[M [v]]. To do so, we add an extra state ι to QS before
+computing the expected sufficient statistics. For each instantiation s of S, the intensity of entering the extra state —
+qvι — makes the row sum to zero. Then, when we compute
+E[M [v]], we also include E[M [v, ι]] the expected number
+of transitions to the extra state, and use Eq. (3). In the computation, the normalization constant c makes the total time
+spent in all states except ι sum to t2 − t1 . Note that, as
+ιPdoes not correspond to any instantiation v, we have that
+v ′ θvv ′ < 1, and therefore the row sums in the resulting intensity matrix will also be negative. This corresponds
+to the fact that our marginalized intensity matrix approximates the marginal of P (e, S | C) in this case.
+Example 4.5 Continuing Example 4.3, we add a new state
+ι, resulting in a new CIM:
+
+
+−6
+1 5
+QA,b1 =  2 −9 7  ,
+0
+0 0
+
+where the last row/column correspond to the absorbing
+state ι. Assume a uniform initial distribution over the
+states of A and that we are in this subsystem for total time
+T = 1. Then, calculating the integrals by Runge-Kutta
+without normalizing yields the unnormalized matrix over
+transitions of A including the additional state ι,
+
+
+− .105 .526
+ 0.134
+− .470  ,
+0
+0
+−
+and an unnormalized
+vector over
+
+ the amount of time in
+each state, .105 .067 .828 . The normalization constant c = 1/(.105 + .067) = 5.81. So the expected sufficient statistics (given that we spend no time in ι) are
+
+
+− 0.61 3.05
+− 2.73  ,
+M̄ [a, a′ ] =  0.78
+0
+0
+−
+
+
+and T̄ [a] = .61 .39 0 . When we compute parameters with these statistics, we find that we get back the same
+QA,b1 as above because we have not incorporated any additional evidence. Incorporating evidence will generally
+lead to a different intensity matrix, as in Example 5.1.
+
+5 Expectation Propagation
+Based on these operations, we can describe a new message
+propagation algorithm for CTBNs. As discussed above, unlike the algorithm of Nodelman et al. (2002), the new algorithm uses product-marginalize-divide message passing, as
+
+in the clique tree algorithm of Lauritzen and Spiegelhalter
+(1988). As a consequence, when using approximate projection, we can apply the algorithm iteratively, as in expectation propagation, with the goal of improving our estimates.
+5.1 EP for Segments
+We first consider the message propagation algorithm for
+one segment of our trajectory, with constant continuous evidence. The generalization to multiple segments follows.
+We first construct the cluster tree for the graph G. This
+procedure is exactly the same as in Bayesian networks —
+cycles do not introduce new issues. We simply moralize
+the graph, connecting all parents of a node with undirected
+edges, and then make all the remaining edges undirected.
+If we have a cycle, it simply turns into a loop in the resulting undirected graph. We then select a set of clusters Ci .
+These clusters can be selected so as to produce a clique tree
+for the graph, using any standard method for constructing
+such trees. Or, we can construct a loopy cluster graph, and
+use generalized belief propagation. The message passing
+scheme is the same in both cases.
+Let Ai ⊆ Ci be the set of variables whose factors we
+associate with cluster Ci . Let Ni be the set of neighboring
+clusters for Ci and let Si,j be the set of variables in Ci ∩ Cj .
+We also compute, for each cluster Ci , the initial distribution
+PC0i using standard BN inference on the network B. After
+initialization, the algorithm is
+Procedure CTBN-Segment-EP(P 0, T, e, G)
+1. For eachQcluster Ci
+πi ← X∈Ai φ(X, UX , e)
+2. For each edge Ci —Cj
+µi,j ← 1
+Loop until convergence:
+3. Choose Ci —Cj
+4. Send-Message(i, j, PC0i , T )
+Procedure Send-Message(i, j, P 0, T )
+P 0 ,T
+
+1. δi→j ← margCi \Si,j (πi )
+δ
+
+2. πj ← πj · µi→j
+i,j
+3. µi,j ← δi→j
+It takes the initial distributions over the clusters P 0 , an
+amount of time T , and possibly some continuous evidence
+e which holds for the total time T . We use φ(·, e) to denote
+the CIM reduced by continuous evidence e if applicable.
+The algorithm iteratively selects an edge (i, j) in the cluster graph, and passes a message from Ci to Cj . In clique
+tree propagation, we might select edges so as to iteratively
+perform an upward and downward pass. In generalized belief propagation, we might use a variety of message passing schemes. Convergence occurs when messages cease to
+affect the potentials which means that neighboring clusters
+Ci and Cj agree on the approximate marginals over the variables Si,j .
+
+The basic factor operations are performed as described
+in Sec. 4. Specifically, let ρ(·) be a function taking factors to their CIM parameterization. For the initial potentials, ρ(πi ) is computed by adding the intensity matrices
+QX|UX reduced by evidence e for X ∈ Ai . Also, ρ(1) is
+an intensity matrix of zeros. Factor product is implemented
+as addition of intensity matrices, and factor division as subδ
+) = ρ(πj ) + ρ(δi→j ) − ρ(µi,j ).
+traction, so that ρ(πj · µi→j
+i,j
+Marginalization is implemented by computing the expected
+sufficient statistics, using the evidence e, the time period T ,
+and the initial distribution P 0 , as described in Sec. 4.3.
+Example 5.1 Assume we have a CTBN with 4 binary variables and graph A → B → C → D with CIMs
+»
+
+QA
+–
+−1
+1
+1 −1
+
+QB|a1 –
+−1
+1
+10 −10
+
+»
+
+»
+
+QB|a2 –
+−10 10
+,
+1 −1
+
+−2
+1
+10
+0
+
+1
+−11
+0
+1
+
+1
+0
+−11
+1
+
+0
+10
+1
+−2
+
+3
+
+2
+
+−1
+0
+10
+0
+
+0
+−10
+0
+1
+
+1
+0
+−10
+0
+
+0
+10
+0
+−1
+
+3
+
+h
+
+−1
+0
+
+0
+−10
+
+ρ(π1 ) = QAB = 4
+ρ(π2 ) = QBC = 4
+ρ(π3 ) = QCd1 =
+
+i
+
+5 ,
+
+5 ,
+
+.
+
+Our initial messages are
+ρ(δ1→2 ) =
+
+h
+
+−2.62
+2.62
+
+2.62
+−2.62
+
+i
+
+ρ(δ3→2 ) =
+
+h
+
+−1
+0
+
+0
+−10
+
+i
+
+These messages leave π1 , π3 unchanged and give us:
+2
+
+ρ(π2 ) = 4
+
+−4.62
+2.62
+10
+0
+
+2.62
+−13.62
+0
+1
+
+1
+0
+−22.62
+2.62
+
+3
+
+0
+10
+2.62
+−13.62
+
+5 .
+
+Our next messages are:
+ρ(δ2→1 ) =
+
+h
+
+−5.02
+2.62
+
+i
+
+2.62
+−8.57
+
+ρ(δ2→3 ) =
+
+h
+
+−4.42
+3.62
+
+3.42
+−13.62
+
+These leave π2 unchanged and give us
+2
+
+−4.40
+1
+10
+0
+
+1
+−13.40
+0
+1
+
+h
+
+−4.42
+3.62
+
+3.42
+−13.62
+
+ρ(π1 ) = 4
+ρ(π3 ) =
+
+1
+0
+−16.94
+1
+
+i
+
+0
+10
+1
+−7.94
+
+.
+
+Now δ3→2 would have no effect on π2 , however,
+ρ(δ1→2 ) =
+
+h
+
+−5.34
+3.31
+
+2.95
+−9.26
+
+i
+
+3
+
+5 ,
+
+2
+
+ρ(π2 ) = 4
+
+−4.95
+3.31
+10
+0
+
+2.95
+−14.31
+0
+1
+
+1
+0
+−22.95
+3.31
+
+3
+
+0
+10
+2.95
+−14.31
+
+5 .
+
+Our next messages are
+ρ(δ2→1 ) =
+
+h
+
+−5.39
+3.31
+
+2.95
+−9.16
+
+i
+
+ρ(δ2→3 ) =
+
+h
+
+−4.43
+3.76
+
+3.43
+−13.76
+
+This gives us
+ρ(π1 ) =
+ρ(π3 ) =
+
+where QC|B and QD|C have the same parameterization
+as QB|A . So A switches randomly between states a1 and
+a2 , and each child tries to match the behavior of its parent. Suppose we have a uniform initial distribution over
+all variables except D which starts in state d1 and remains in that state for unit time (T=1). Our cluster tree
+is AB—BC—CD and our initial potentials are:
+2
+
+which changes π2 so that
+
+"
+
+−4.45
+1
+10
+0
+
+1
+−13.45
+0
+1
+
+h
+
+−4.43
+3.76
+
+3.43
+−13.76
+
+1
+0
+−16.85
+1
+
+i
+
+0
+10
+1
+−7.85
+
+#
+
+,
+
+.
+
+At this point we have converged. If we use
+π1 to compute
+ˆ
+˜
+the distribution over A at time 1, we get .703 .297 . If
+we do exact inference by
+amalgamating
+all the factors and
+ˆ
+˜
+exponentiating, we get .738 .262 .
+5.2 EP for Trajectories
+When we have a trajectory containing multiple segments of
+continuous evidence, we apply this algorithm separately to
+every segment, passing information from one to the other
+in the form of distributions. More precisely, consider a trajectory defining a sequence of time points t1 , . . . , tn , with
+constant continuous evidence esi on every interval [ti , ti+1 )
+and possible point evidence or observed transition epi at
+each ti . We construct a sequence of cluster graphs Gti ,ti+1 ,
+each over a segment [ti , ti+1 ). Starting from the initial segment, we run inference on each cluster graph using CTBNSegment-EP, and compute the resulting distribution at time
+ti+1 ; we condition on any point evidence or the observed
+transition, and use the new distribution as the initial distribution from the next interval. The formal algorithm is as
+follows:
+Procedure CTBN-Filter-EP(P 0 , ht0 , . . . , tn i,
+hes1 , . . . , esn i, hep1 , . . . , epn i)
+For i = 0, . . . , n − 1
+1. Construct a cluster graph Gti ,ti+1
+2. CTBN-Segment-EP(P ti , (ti+1 − ti , esi , Gti ,ti+1 )
+i
+3. Extract P ti+1 from the calibrated Gti ,ti+1 )
+.
+4. Recalibrate P ti+1 and condition on epi+1
+The last point addresses a subtlety relating to the propagation of messages from one interval to another. If a variable X appears in two clusters Ci and Cj in a cluster graph,
+the distribution over its values in the two clusters is not generally the same, even if the EP computation converges. The
+reason is that even calibrated clusters only agree on the projected marginals over their sepset, not the true marginals.
+Thus, to obtain a coherent distribution P ti+1 to transmit to
+the next cluster graph, we should take the individual cluster
+marginals and sepsets for the state variables at time ti+1 , as
+
+i
+
+.
+
+obtained from Gti ,ti+1 , and recalibrate them to form a coherent distribution; the conditioning on point evidence can
+be done at the same time. We then extract P ti+1 as a set
+of calibrated cluster and sepset factors, and introduce each
+factor into the appropriate cluster or sepsent in Gti+2 ,ti+2 .
+The algorithm CTBN-Filter-EP performs filtering — forward message passing. To perform smoothing, we can
+also pass messages in reverse, where the cluster graph
+for [ti , ti+1 ) passes a message to the cluster graph for
+[ti−1 , ti ), representing the probability of the evidence after time ti given the state at ti . Note that, to achieve more
+accurate beliefs, we can also repeat the forward-backward
+propagation until the entire network is calibrated, essentially treating the entire network as a single cluster graph.
+We omit details for lack of space.
+Finally, we note that we chose to use one cluster graph
+for each segment of fixed continuous evidence. As a consequence, each cluster will approximate the trajectory of the
+variables it contains as a homogeneous Markov process,
+for the duration of the segment. We can modify the quality of the approximation by either refining or coarsening
+our choice of segments. In particular, if a set of variables is
+changing rapidly, we might want to partition a segment into
+subsegments, even if the evidence remains constant. Alternatively, we can reduce computational cost by collapsing
+several intervals of continuous evidence, approximating the
+trajectory distribution over the entire interval as a homogeneous Markov process. This step requires a more complex
+computation of sufficient statistics over the combined interval, but is not substantially different. The decision of how
+to partition time into intervals is analogous to a situation
+where we are approximating a distribution over continuous
+variables as a set of Gaussians, each defined over a subset
+of the space. The choice of how to partition the space into
+subsets determines the quality of our approximation.
+5.3 Energy Functional
+As for any EP algorithm over the exponential family, we
+can show that the convergence points of the EP algorithm
+in Sec. 5.1 are fixed points of the constrained optimization
+of the Kikuchi free energy functional, subject to calibration
+constraints on the projected marginals.
+The Kikuchi free energy function for a cluster graph G is
+F̂ [PN , P̂ ] =
+X
+X
+Eπφ [ln φ] +
+H πi (Ci ) −
+φ∈N
+
+Ci ∈G
+
+(4)
+X
+
+H µi,j (Si,j )
+
+Ci —Cj ∈G
+
+subject to the constraints:
+P 0 ,T
+
+µi,j = margCi \Si,j (πi ) .
+
+(5)
+
+Theorem 5.2 A set of potentials πi , µi,j is a stationary
+point of maximizing Eq. (4) subject to Eq. (5) if and only
+if, for every edge Ci —Cj there are potentials of the form
+
+Eating
+
+Average KL-divergence from Exact
+L
+SS
+EP
+No Evidence
+1 segment
+.102 .083
+.0629
+6 segments .016 .010
+.0077
+Point Evidence
+3 segments .027 .015
+.0086
+6 segments .023 .014
+.0076
+
+Hungry
+
+Uptake
+
+Full
+stomach
+
+Barometer
+
+Concentration
+
+Joint
+pain
+
+Drowsy
+
+(a)
+
+(b)
+
+Figure 1: (a)Drug effect network (b) Average KL-div. between
+the exact joint distribution and approximate distributions averaged
+over 60 time points.
+
+δi→j (Si,j ) such that
+0
+
+P ,T
+
+
+
+δi→j ∝ margCi \Si,j πi0 ×
+πi ∝
+
+πi0
+
+×
+
+Y
+
+δj→i
+
+Y
+
+k∈Ni −{j}
+
+
+
+δk→i 
+
+j∈Ni
+
+µi,j = δj→i × δi→j
+Corollary 5.3 Convergence points of the procedure CTBN-Segment-EP are stationary points of
+maximizing Eq. (4) subject to Eq. (5).
+The proof of these results is a special case of the general
+result on convergence of EP, which applies to any class of
+distributions in the exponential family.
+
+6 Experimental Results
+In our experiments, we used the drug effect network of
+NSK shown in Figure 1(a) allowing us to compare to the
+previous inference algorithm. We compared the results
+of our implementation of expectation propagation with exact inference and the approximate inference algorithm from
+NSK when possible. We ran three scenarios. In each one,
+at t = 0, the person modelled by the system experiences
+joint pain due to falling barometric pressure and takes the
+drug to alleviate the pain, is not eating, has an empty stomach, is not hungry, and is not drowsy. The drug is uptaking
+and the current concentration is 0. All scenarios ended at
+t = 6 (after 6 hours). We compare to exact inference by
+computing the average KL-divergence as discussed below.
+In the first scenario, there was no evidence after the given
+initial distribution. We ran the algorithms viewing the entire trajectory as a single segment. We tried using one approximation to describe the dynamics over the system and
+also broke it down into 6 evenly spaced segments. In the
+second second scenario, we observe at t = 1 that the person is not hungry and at t = 3, that he is drowsy. We ran
+the algorithms with 3 segments and again with 6 segments.
+NSK provide two approximate marginalizations: the linearization (L) and subsystem (SS) approximations. Also
+
+note that the NSK algorithms are single-pass multiplymarginalize instead of the multiply-marginalize-divide
+scheme of the EP algorithm. Figure 1(b) shows the average KL-divergence between exact joint distribution and
+the approximate joint distributions averaged over 60 evenly
+spaced time points between t = 0 and t = 6 for the experiments described above. From the table, one can see the expectation propagation easily beats the previous algorithms.
+In the third scenario, we have continuous observations
+over the variables representing hunger, eating, and drowsiness. After the initial distribution given above, these three
+variables persisted in their initial state until t = 0.5, after
+which the person became hungry. At t = 1 the person begins to eat. At t = 1.5 the hunger is gone and at t = 2
+the person stops eating. At t = 2.5 the person becomes
+drowsy and these three variables maintain their final value
+to the end of the trajectory at t = 6. We ran the EP forward
+filter with one segment for each interval of continuous evidence — a total of 6 segments (not evenly spaced). We
+again measured the average KL-divergence between the actual and approximate joint distributions as above, measuring at 60 evenly spaced time points between t = 0 and
+t = 6. The average KL-divergence was 0.00122. Allowing
+EP to run for only a single pass instead of going until convergence had a negligible effect — worsening the average
+KL-divergence by 6.7 × 10−7 . This is not surprising, as
+we found EP to converge rapidly: of the 6 segments we ran
+for the continuous evidence, all but one converged within a
+single pass.
+
+7 Discussion and Conclusions
+We have presented a new, well-founded, approximate inference algorithm for CTBNs that, for the first time, allows us to answer a full range of queries including the
+ability to handle continuous observations. We provided
+a view of CIM parametrization that enables cluster graph
+message passing algorithms that include division. Furthermore, we showed how we can compute a KL-divergence
+minimizing approximate marginalization of the distribution
+parametrized by the CIM.
+These results enabled us to provide an expectation propagation algorithm for CTBNs which, subject to our approximate marginalizations, converges to stationary points of the
+approximate free energy function. Other approaches to approximate inference, such as sampling based methods, are
+ongoing work.
+One of the most appealing properties of the algorithm
+that we proposed in this paper is that it adaptively selects the time granularity used for reasoning about a cluster
+based on the rate at which the cluster evolves. Different
+clusters will be discretized at different granularities, automatically selected by the integration algorithm. The same
+cluster may be discretized at one granularity in one interval of continuous evidence, and differently in another. By
+
+contrast, in DBNs, all variables in the system must be modeled at the time granularity of the variable that evolves most
+quickly. We can hope to extend this property further, by
+allowing one cluster in our network to cover a long interval, whereas another (over a different subset of variables)
+is partitioned into smaller segments. This could provide
+the basis for an algorithm that automatically and flexibly
+assigns computational resources to the parts of the system
+where the most interesting changes are occurring.
+Acknowledgments. This work was funded by DARPA’s EPCA
+program, under subcontract to SRI International, and by the Boeing Corporation.
+
+References
+Duffie, D., Schroder, M., & Skiadas, C. (1996). Recursive
+valuation of defaultable securities and the timing of resolution of uncertainty. The Annals of Applied Probability,
+6, 1075–1090.
+Lando, D. (1998). On Cox processes and credit risky securities. Review of Derivatives Research, 2, 99–120.
+Lauritzen, S., & Spiegelhalter, D. (1988). Local computations with probabilities on graphical structures and their
+application to expert systems. Journal of the Royal Statistical Society, Series B, 50, 157–224.
+Minka, T. P. (2001). Expectation propagation for approximate bayesian inference. UAI ’01: Proceedings of the
+17th Conference in Uncertainty in Artificial Intelligence
+(pp. 362–369). Morgan Kaufmann Publishers Inc.
+Nodelman, U., Shelton, C. R., & Koller, D. (2002). Continuous time Bayesian networks. Proceedings of the
+Eighteenth Conference on Uncertainty in Artificial Intelligence (pp. 378–387).
+Nodelman, U., Shelton, C. R., & Koller, D. (2003). Learning continuous time Bayesian networks. Proceedings of
+the Nineteenth Conference on Uncertainty in Artificial
+Intelligence (pp. 451–458).
+Nodelman, U., Shelton, C. R., & Koller, D. (2005). Expectation maximization and complex duration distributions
+for continuous time Bayesian networks. Proceedings of
+the Twenty-first Conference on Uncertainty in Artificial
+Intelligence. (in this volume).
+Press, W. H., Teukolsky, S. A., Vetterling, W. T., & Flannery, B. P. (1992). Numerical recipes in C, chapter 16.
+Cambridge University Press. Second edition.
+Shafer, G., & Shenoy, P. (1990). Probability propagation. Annals of Mathematics and Artificial Intelligence,
+2, 327–352.
+Yedidia, J. S., Freeman, W. T., & Weiss, Y. (2000). Generalized belief propagation. NIPS (pp. 689–695).
+
+

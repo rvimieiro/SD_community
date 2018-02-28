@@ -1,0 +1,1387 @@
+dependencies are present among hidden state variables, leading many to search for approximation algorithms [1, 13, 15, 14]. Unfortunately, modeling persistence with DBNs requires the introduction of many
+inter-temporal arcs, often making exact inference intractable with standard inference algorithms.
+In this paper, we define Persistent Causal DBNs (PCDBNs), a particular class of DBN models capable of
+modeling many real-world systems that involve long
+chains of causal influence coupled with persistence of
+causal effects. We show that a linear time algorithm
+exists for inference (smoothing) in linear chain and
+tree-based PC-DBNs. We then generalize our results
+to polytree causal networks, where the algorithm remains exact, and to general networks, where it inherits properties of loopy belief propagation [21]. Our
+method relies on a transformation of the original prototype network, allowing smoothing to be done efficiently; however, this method does not readily deal
+with the incremental filtering problem. Nonetheless,
+we show empirically that, if evidence is observed at
+every time slice, approximate filtering can be accomplished with fixed window smoothing, producing lower
+error than approximate Boyen-Koller (BK) filtering [1]
+
+using a fraction of the computation time.
+The algorithm that we present exploits a particular type of determinism that is given by the persistence relation. There has been other work that seeks
+to directly or indirectly exploit general deterministic
+structure in Bayesian networks using compilation approaches [2], a generalized version belief propagation
+[10], and variable elimination with algebraic decision
+diagrams [3, 19]. These more general methods have
+not been tailored to the important special cases of
+DBNs and persistency. To our knowledge, this is the
+first work to investigate persistency in DBNs.
+The paper is organized as follows: In Section 2 we
+introduce the changepoint transformation. Section 3
+introduces persistent causal chain DBNs and the corresponding inference algorithm, which retains all the
+essential properties of later models. Then, Section 4
+will discuss the steps leading to a fully general algorithm. Experimental results are presented in Section
+5, followed by conclusions.
+
+2
+
+Notation and changepoints
+
+Consider a Bayesian network (BN) with N binary variables Xi ; we will refer to this network as the prototype.
+The corresponding Dynamic BN with M slices is created by replicating the prototype M times and connecting some of the variables to their copies in the next
+slice. In our notation, upper indices range over time
+slices of the DBN; lower indices range over variables
+in each time slice. Colon notation is used to denote
+sets and sequences. Thus, for instance, X41:M denotes
+the entire temporal sequence of values of X4 from time
+1 to time M . Variables without an upper index will
+refer to their respective counterparts in the prototype.
+We say that a variable Xk is persistent if
+½
+P (Xk |U )
+if Xkt−1 = 0
+P (Xkt = 1|Xkt−1 , U t ) =
+,
+1
+if Xkt−1 = 1
+(1)
+where U = P a(Xk ) refers to the parents of Xk in the
+prototype. In other words, 1 is an absorbing state.
+Sometimes [12] a variable is called persistent if it has
+an arc to the next-slice copy of itself. Our definition of
+persistence is strictly stronger, but no confusion should
+arise in this paper.
+There are 2M temporal sequences of values of a binary
+variable Xk . If the variable is persistent, the number of
+configurations is reduced to M + 1. Information about
+Xk1:M can be summarized by looking at the time when
+X changed from 0 to 1 (we sometimes refer to the 0
+state as the off state and 1 as the on state). Thus,
+inference in the persistent DBN with binary variables
+is equivalent to inference in a network whose topology closely resembles that of the prototype and whose
+
+variables are M +1-ary discrete changepoint variables,
+with correspondingly defined conditional probability
+distributions (CPDs), as shown in Figure 1b. The
+models in Figure 1a and 1b are identical; one can go
+back and forth between them by recognizing that
+(X̃ = j) ⇔ (X j = 0) ∧ (X j+1 = 1) and
+(X j = 0) ⇔ (X̃ > j).
+If the prototype is a tree, belief propagation in the
+transformed network yields an algorithm whose complexity is O(M 2 N ). The quadratic part of the computation comes from summing over the M + 1 values
+of the single parent for each of the M + 1 values of
+the child. Similarly, if the prototype is a polytree,
+complexity will be proportional to M Umax +1 , where
+Umax is the largest in-degree in the network. This
+transformation by itself, when all hidden state variables are persistent, allows us to perform smoothing
+much more efficiently than by operating on the original DBN. There is, however, additional structure in
+the CPDs that allows us to do better by a factor of M ,
+and we can also adapt our algorithm to deal with the
+case when some hidden variables are not persistent.
+
+3
+
+PCC-DBN inference
+
+To simplify the exposition, let us now focus on a specific prototype, a persistent causal chain DBN (PCCDBN). This is a chain with P a(Xi ) = {Xi−1 }, i =
+1, ..., N and P a(O) = XN (thus it has N+1 nodes).
+Let us further assume that the leaves are nonpersistent and observed, while the causes (X nodes)
+are all persistent and hidden. The network is shown
+in Figure 1a and its transformed version in Figure 1b.
+Consider the problem of computing P (O). This is in
+general one of the most difficult inference problems, requiring one to integrate out all hidden state variables,
+and is implicit in most inference queries:
+P (O1:M ) =
+
+X
+
+1:M
+1:M
+P (O1:M | X1:N
+) · P (X1:N
+)
+
+(2)
+
+1:M
+X1:N
+
+Let {jk : 0 ≤ jk ≤ M } index the sequence of Xk1:M
+in which variable Xkjk is the last (highest-time) variable to be in the off state, unless jk = 0 in which case
+it indexes the sequence in which all Xk are in the on
+state. As an example, if M = 3, then jk = {0, 1, 2, 3}
+indexes the states Xk1:M = {111, 011, 001, 000}, respectively, for all k. All configurations not indexed by ji
+have zero probability due to the persistence assumption. To simplify notation, we use jk to denote the
+event that Xk1:M is the sequence indexed by jk . We
+also say that Xk fired at jk . We can decompose Equa-
+
+X11
+
+X12
+
+...
+
+X1M
+
+X̃1
+
+X21
+
+X22
+
+...
+
+X2M
+
+X̃2
+
+where σ̄kL contains all the terms in the sum such that
+Xk first fires when Xk−1 has not fired:
+X
+
+σ̄kL =
+
+...
+
+...
+
+2
+XN
+
+...
+
+...
+
+..
+
+1
+XN
+
+.
+
+...
+
+jk <L
+
+M
+XN
+
+...
+
+O2
+
+X̃ N
+
+X
+
+σkL =
+
+O1O2 . . . OM
+
+OM
+
+(a)
+
+(7)
+
+σkL contains all the terms in which Xk first fires when
+Xk−1 has also fired:
+
+L≤jk <M
+
+O1
+
+k
+Pbkjk Pbk · Σjk+1
+.
+
+k
+PbkL Pkjk −L Pk · Σjk+1
+,
+
+(8)
+
+and σ̂kL contains the final term in which Xk never fires:
+
+(b)
+
+σ̂kL = PbkL PkM −L · ΣM
+k+1 .
+
+(9)
+
+Figure 1: (a) A PCC-DBN network with N + 1 nodes
+per slice; (b) the transformed network. We sometimes
+refer to X21 as the temporal parent of X22 and to X12
+as its causal parent.
+
+In order to calculate Equation 5 in time O(M N ), we
+need to pre-compute σ̄kL , σkL and σ̂kL for all values of L
+in O(M ) for each variable Xk .
+
+tion 2 according to the network structure as follows:
+
+3.1
+
+P (O1:M ) =
+
+M
+X
+j1 =0
+
+...
+
+M
+X
+
+P (j1 )
+
+M
+X
+
+P (j2 | j1 ) . . .
+
+j2 =0
+
+P (jN | jN −1 ) · P (O1:M | jN )
+
+(3)
+
+jN =0
+
+Denote by Pk the probability that variable Xk will fire
+for the first time given that its causal parent has fired,
+and by Pbk the probability that Xk will fire for the first
+time given that its causal parent has not fired:
+Pk
+
+≡
+
+j
+P (Xkj = 1 | Xkj−1 = 0, Xk−1
+= 1)
+
+Pbk
+
+≡
+
+j
+P (Xkj = 1 | Xkj−1 = 0, Xk−1
+= 0).
+
+Let Pk and Pbk denote the complements 1 − Pk and
+1 − Pbk , respectively. We can define ΣL
+k recursively
+to denote the partial sum over jk from Equation 3,
+conditioned on jk−1 = L:
+X
+k
+ΣL
+P (jk | jk−1 = L) · Σjk+1
+(4)
+k ≡
+jk
+1:M
+with boundary condition ΣL
+| jN = L).
+N +1 ≡ P (O
+Using this notation, Equation 3 can be rewritten as:
+
+P (O1:M ) =
+
+M
+X
+
+P (j1 ) · Σj21
+
+(5)
+
+j1 =0
+
+Now we now need to show that one can calculate the
+L
+entire set Σ0:M
+2:N in time O(M N ). Each Σk can be
+written as follows:
+L
+L
+L
+ΣL
+k = σ̄k + σk + σ̂k ,
+
+(6)
+
+Upward Recursion Relations
+
+As a boundary condition for the recursion, assume we
+have calculated ΣkN +1 for all 0 ≤ k ≤ M . We show
+how to do this in time O(M ) in Section 3.2. Also, this
+algorithm requires the pre-calculation and caching of
+Pbki for 0 ≤ k ≤ N and 0 ≤ i ≤ M , which can be done
+recursively in O(M N ) time and space.
+Inspecting Equation 7 more closely, it should be easy
+i
+to see that one can calculate σ̄N
+for 0 ≤ i ≤ M in
+O(M ) time using the following recursion:
+σ̄li+1 = σ̄li + Pbli · Pbl · Σik+1 ,
+
+(10)
+
+with boundary condition σ̄l0 = 0 for all l. One can also
+calculate σki for 0 ≤ i ≤ M with the recursion:
+σki−1 =
+
+σki
+Pk + Pbki−1 · Pk · Σi−1
+k+1 ,
+Pb
+
+(11)
+
+k
+
+with boundary condition σkM = 0 for all l. Finally, one
+i
+can calculate σ̂N
+for 0 ≤ i ≤ M with the recursion:
+σ̂ki−1 =
+
+σ̂ki
+Pk
+Pb
+
+(12)
+
+k
+
+with boundary condition σ̂kM = PbkM · ΣM
+k+1 for all l.
+i
+i
+i
+Once σ̄N
+, σN
+and σ̂N
+are calculated, one can calculate
+i
+all ΣN for 0 ≤ i ≤ M in O(M ) time using Equations 10, 11, 12 and 6. After Σ0:M
+is calculated, we
+N
+can use Equation 4 to obtain Σ0:M
+N −1 in time O(M ),
+and repeat N times to get all values of Σ0:M
+1:N . Thus
+the entire calculation takes O(M N ) time.
+
+3.2
+
+Computing ΣiN +1
+
+To finalize the proof, we have to show how to calculate ΣiN +1 (the probability of the observations for a
+1:M
+given configuration i of XN
+) for all 0 ≤ i ≤ M in
+time O(M ). Recall that ΣiN +1 ≡ P (O1:M | jN = i).
+Since the parent of each Oj is given, for each i, this
+calculation is simply the product of the observations:
+P (O1:M | jN = i) =
+
+M
+Y
+
+k
+P (Ok | XN
+, jN = i)
+
+(13)
+
+k=1
+
+Using our existing notation, we define
+φ`N +1
+φ̄`N +1
+
+=
+=
+
+k
+P (Ok | XN
+= 1),
+k
+
+P (O |
+
+k
+XN
+
+= 0),
+
+(14)
+(15)
+
+ΣiN +1 can be calculated for all 0 ≤ i ≤ M in time
+O(M ) via the recursion relation:
+M
+Y
+
+φ̄`N +1
+.
+φ`N +1
+`=1
+(16)
+Note that this formulation puts no distributional assumption on P (O|XN ). The leaves can be distributed
+as multinomials, Gaussians etc, as is often done with
+Hidden Markov models [18] when they are put to their
+many uses.
+Σ0N +1 =
+
+3.3
+
+φ`N +1
+
+and
+
+`
+Σ`+1
+N +1 = ΣN +1 ·
+
+Downward Recurrences
+
+The above discussion completes the description of the
+“λ-pass” of PCC-DBN algorithm. Similar reasoning
+can be applied to obtain the “π-pass” recurrences that
+we now give without full derivation. Analogously to
+Σ, the semantics of Ψjk is p(Xk = j|Ok+ ), where Ok+ is
+the subset of evidence reachable from Xk through its
+parent1 . Ψjk is again a sum of three components:
+Ψjk = ψkj + ψ̄kj + ψ̂kj
+
+(17)
+
+ψ̄ accounts for the terms where the parent has not yet
+changed:
+ψ̄k`−1 = ψ̄k` ·
+
+1
++ Pbk`−1 · Pbk · Ψ`k−1
+Pk
+
+(18)
+
+with initialization ψ̄kM = 0 for all k.
+ψ accounts for the terms where the parent has already
+changed:
+ψk`+1 = ψk` · Pk + Pbk`+1 · Pk · Ψ`+1
+k−1
+
+(19)
+
+1
+We only have evidence in the bottom layer in PCCDBNs, but this will come handy in the next section.
+
+with boundary condition ψk0 = Pk Ψ0k−1 for all k. Also,
+since Xk eventually changes in this scenario, ψkM = 0.
+ψ̂ accounts for the terms where the node never
+changes:
+X
+ψ̂kM =
+(20)
+Pbki · PkM −i · Ψik−1 .
+0≤i≤M
+
+Because the upper index refers to the changepoint of
+Xk , only ψ̂kM is non-zero. We can just compute this in
+O(M ) without the need for recurrences.
+Initialization of the Ψ-recurrences happens at the
+root(s) of the network. For any root r, Ψ0r = Pbk and reM −1 b b
+= Ψir · Pbr . Finally, ΨM
+Pr /Pk .
+currently Ψi+1
+r
+r = Ψr
+3.4
+
+PCC-DBN and belief propagation
+
+We have just defined PCC-DBN, a version of belief
+propagation that first collects the evidence by passing
+the λ-messages towards the root of the chain and the
+proceeds to distribute information towards the leaves
+via the π-messages. After propagation is complete, we
+can obtain any posterior as
+p(X̃k |O) = Σk+1 · Ψk .
+
+(21)
+
+It is now useful to recall the types of potentials involved in Pearl’s algorithm [8] and how they relate
+to the quantities above. For each node X, there
+are local potentials πX (x) ≡def p(X = x|e+
+X ) and
++
+−
+λX (x) ≡def p(e−
+|X
+=
+x),
+where
+e
+and
+e
+denote
+reX
+X
+X
+spectively the evidence reachable through parents and
+the evidence reachable from X “downwards”, X included. There are two types of messages in Pearl’s algorithm: πX→Yi sent by X to its children and λX→Ui
+sent to its parents. A closer look at PCC-DBN reveals
+that each Σk is identical to λXk →Xk−1 — the message
+from Xk to its single parent Xk−1 . The local potential
+λXk (jk ) is identical to Σk+1 , because there are no children other than Xk+1 and evidence is only observed
+at the bottom of the chain. Ψk corresponds directly
+to πXk (jk ). This is why Equation 21 works.
+3.5
+
+Simple Generalizations and Causal Trees
+
+While PCC-DBNs are useful for demonstrating the
+general ideas of handling the probability distributions
+arising from the changepoint transformation, they
+form a rather restricted class of networks, and the inference query that we performed was also restricted.
+Here we state succinctly a set of simple alterations
+which allow this algorithm to be relaxed in various
+ways:
+General evidence patterns We can have observations anywhere in the network, in any time slice.
+
+Casting the inference as belief propagation gives the
+answer to any probabilistic query as Equation 21 with
+one caveat: An observation such as X33 = 1 does not
+tell us with certainty the position of the changepoint,
+but it just provides evidence that j3 < 3, thus we
+cannot simply set the changepoint variable to state 3.
+Rather, the potentials corresponding to such evidence
+must be multiplied onto the messages as prescribed by
+the belief propagation algorithm (see Equation 22).
+Non-stationarity Stationarity of conditional probability distributions was used to simplify the formulae
+in the previous exposition, but is not required. All
+that is needed is to keep running products of respective
+probabilities instead of the powers in the exponents of
+Pk , Pbk . They need to be computed incrementally and
+tabulated to avoid hidden linear terms in the computation.
+Extension to trees The extension of PCC-DBN
+to causal trees (PCT-DBNs) is now fairly straightforward. Because each node Xk can now have multiple
+children Ch(Xk ), we must replace Σk in all recurrences
+with the true λ-potential for Xk :
+Y
+λXk = λXk →Xk ·
+Σi ,
+(22)
+i∈Ch(Xk )
+
+where λXk →Xk accounts for evidence observed in Xk ’s
+temporal chain. The vector λXk →Xk is zero where the
+evidence rules out a changepoint — before the time t
+of the last observed Xkt = 0 and after the time s of first
+observed Xks = 1. Everywhere else, λXk →Xk (jk ) = 1.
+Note that λX (x) potential can be obtained in O(M )
+time per node.
+In computation of ψ potentials, Ψk on the right-hand
+side of the recurrences is replaced by the πP a(Xk )→Xk ,
+which in turn include the influence of evidence under
+Xk ’s siblings:
+Y
+πP a(Xk )→Xk = πXk ·
+Σi .
+(23)
+i∈Ch(P a(Xk ))\Xk
+
+Again, this preserves the O(M ) per-node complexity.
+Thus, PCT-DBN is linear in both N and M .
+
+4
+
+Further Generalizations
+
+In this section we describe three more important generalizations of PC-DBNs: polytrees, non-persistent
+nodes, and finally an approximate algorithm for general DAGs. These relaxations are more involved than
+those of Section 3.5 and thus require more elaboration.
+4.1
+
+Polytrees
+
+Belief propagation [16, 17] is a powerful framework for
+exact inference in polytree networks. Polytrees, unlike
+
+trees, allow multiple parents of a node, but remain
+acyclic in the undirected sense. In polytree changepoint networks, structure in the conditional probability table P (X = x|U ) can be exploited to save a multiplicative factor of M + 1 just as we showed for tree
+networks. The ψ-recurrences run over the first parent variable, while the remaining parents are summed
+over by brute force. Similarly, the σ-recurrences run
+over the parent that the message is addressed to. For
+instance, the definition of σ will be replaced by
+" L
+# " j
+#
+k
+X
+Y (z)
+Y
+(j +1)
+(z)
+i
+b
+σ ∝
+P
+·
+P k
+· Σjk
+P
+k
+
+L≤jk <M
+
+k
+
+z=1
+
+z=L+1
+
+k
+
+k
+
+k+1
+
+(24)
+and Equation 11 by
+(i)
+
+σki−1
+σkM
+
+σki
+
+=
+=
+
+·
+
+Pk
+
+(i)
+Pbk
+
++
+
+" i−1
+Y
+z=1
+
+#
+(z)
+Pbk
+
+(i)
+
+· Pk · Σi−1
+k+1
+
+0,
+
+(25)
+
+where, assuming we are sending to the first parent,
+(z)
+
+Pk
+(z)
+Pb
+k
+
+=
+
+P (Xk = 1|U1 = 1, I{U2: ≤ z})
+
+=
+
+P (Xk = 1|U1 = 0, I{U2: ≤ z}) (26)
+
+are now functions of the joint configuration of the remaining parents U2: . The proportionality constant in
+Equation 24 equals the product of the remaining parents’ π-messages. We call this PPT-DBN, the persistent polytree algorithm.
+The worst-case time complexity of PPT-DBN is dominated by the cost associated with the largest familyclique: O((M + 1)Umax ). The 2T BN algorithm [12]
+suffers a worst-case time complexity O(22N M ), as all
+nodes in two slices may be entangled [9] in the clique
+to connect the two subsequent time-slices, even though
+the prototype network is a polytree [12, section 3.6.2].
+Therefore, we expect PPT-DBN will be comparatively
+better for shorter temporal chains of larger networks.
+However, PPT-DBN really shines on space complexity.
+At most O(M N ) memory is consumed, compared to
+2TBN, where the potentials in the joint tree can grow
+as large as O(22N ). Later we show experimentally how
+dramatic the difference can be.
+4.2
+
+Non-persistent nodes
+
+While it is convenient to assume that all non-leaf variables are persistent, it does limit the modeling power
+at our disposal. We now show how an occasional nonpersistent variable in the network can also be handled
+in polynomial time. We assume the non-persistent
+variable is isolated, that is, all of its neighbors are
+persistent. We make this assumption in order to avoid
+having to invoke an embedded general DBN inference
+
+X1
+
+X2
+
+X3
+
+with φkj defined appropriately:
+
+X4
+
+
+
+
+
+
+P (Y 1 = 0|X 1 )
+P (Y = 0|Y k−1 = 0, X k )
+φkj (X k ) =
+P (Y k = 1|Y k−1 = 0, X k )
+
+
+
+1
+
+Ỹ
+
+Figure 2: The minimal example of network with a nonpersistent node.
+
+D
+
+CD
+
+C
+
+BC
+
+(a)
+D
+
+(j + 1)
+κki (j) = κk+1
+i
+
+B
+
+↑ ΣC
+D ???
+
+D̃
+
+(b)
+(c)
+Figure 3: a) Induced cliques and separators b) Enlarged clique for generalized BP c) Σ-message flow in
+a network with a non-persistent variable
+
+4.2.2
+algorithm such as 2TBN to handle connected nonpersistent variables. It can be done, but quickly becomes complex and inelegant. A simple way to handle connected non-persistent nodes is to combine them
+into a single joint node. Obviously, this solution causes
+exponential growth in the state space of the joined
+nodes, making it somewhat unappealing. A two-slice
+approach made aware of the determinism, e.g. by use
+of ADD compilation [3, 2], could very well work better
+for networks with only a few persistent variables.
+4.2.1
+
+To illustrate how an isolated non-persistent node
+would be handled, assume first a simple structure
+such as in Figure 2. Then we can efficiently compute
+P (Ỹ = j) by moving the sums inward:
+P
+P (Ỹ = j) =
+P (X)P (Ỹ = j|X) =
+·M X
+¸· M
+¸
+Q
+Q k
+P
+P (X k |X k−1 )
+φj =
+k=1
+X 1 ,...X M k=1X
+X
+P
+P (X 1 )φ1j
+P (X 2 |X 1 )φ2j . . .
+P (X M |X M −1 )φM
+j
+X2
+
+|
+
+XM
+
+|
+
+{z
+
+}
+
+{z
+
+κM
+
+}
+
+κ2
+
+This gives rise to the recurrence
+X
+P (X M = v|X M −1 = i) · φM
+κM
+j
+i (j) =
+
+(27)
+
+v
+
+κki (j) =
+
+X
+v
+
+P (X k = v|X k−1 = i) · φkj · κk+1
+,
+v
+
+∀1 ≤ k < j < M − 1.
+
+The general case
+
+Pearl’s belief propagation has been generalized to the
+clique tree propagation algorithm [21]. With belief
+propagation (BP), the cliques correspond to edges of
+the original polytree and the separators consist of single nodes. In the process of message passing, the variables not in the separator are summed out of the clique
+potentials.
+
+A simple example
+
+X1
+
+k=1
+1<k≤j
+k =j+1
+k >j+1
+
+Therefore, we do not need to compute κ for every j,
+but compute κki (M ) for all k as a special case and then
+κki (M − 1) for all k to start the recursion. All other
+values can be read off κki (M − 1) with the appropriate
+indexing shift. Thus, we can obtain the entire distribution P (Ỹ ) in O(M ) time! Allowing non-persistent
+variables to take on multiple values is also straightforward: we only need to allow the bottom index in κki
+to range over the domain of Xk .
+
+j
+C 1 C 2 . . . . . . . . .C M ↑ ΣCB
+
+BCD
+
+if
+if
+if
+if
+
+Now, P (Ỹ = j) = κ01 . Moreover, a short analysis will
+reveal that
+
+B̃
+
+B
+
+k
+
+The PCT-DBN algorithm used the “natural” cliques
+induced by the transformed network. Assume we have
+a situation such as in Figure 3. Because the variable
+C is not persistent, the size of the induced separator
+C is 2M . However, we can work conceptually with
+a larger clique BCD. Message propagation then calls
+for summing out all C 1:M , which we can do without
+actually instantiating the clique potential using a recurrence derived much like that of Equation 27. In
+the interest of space, we only show here the simple κ
+recurrence. The full recurrence calls for summing over
+all persistent variables in the clique and the resulting
+complexity is O((M + 1)B ), where B is the number of
+persistent neighbors of the non-persistent variable.
+
+5
+
+Experimental evaluation
+
+We implemented our algorithms in Matlab and compare them to the exact and approximate algorithms as
+implemented in the Bayesian Network Toolbox (BNT)
+[11]. Namely, we will compare to the Boyen-Koller
+(BK) algorithm [1] in its 1) exact and 2) fully factored
+setting. Although BK reduces in its exact form to
+the incremental junction-tree algorithm, we found it
+was faster in practice than the 2TBN implementation.
+
+Speedup vs standard inference − growing N
+
+2
+
+Speedup vs standard inference − growing M
+
+2
+
+10
+
+10
+exact inference out of memory
+
+1
+
+1
+
+10
+
+Filtering time (sec)
+
+Filtering time (sec)
+
+10
+
+0
+
+10
+
+−1
+
+10
+
+PCT−DBN
+BK/exact
+BK/approx
+
+−2
+
+10
+
+−1
+
+10
+
+PCT−DBN
+BK/exact
+BK/approx
+
+−2
+
+10
+
+−3
+
+10
+
+0
+
+10
+
+−3
+
+10
+
+20
+30
+nodes in thebinary tree
+
+40
+
+50
+
+60
+
+10
+
+70
+
+Figure 4: Performance scale up of PCT-DBN with N .
+The temporal length was fixed at M = 20. Note log
+scale y-axis.
+
+20
+
+40
+
+60
+80
+100
+Number of time slices
+
+120
+
+140
+
+Figure 5: Performance scale up of PCT-DBN with M .
+The number of nodes was held at N = 19.
+Scale up − growing N, crosses, M=20
+
+3
+
+10
+
+PPT−DBN
+BK/exact
+BK/approx
+
+Therefore the 2TBN algorithm is not included in the
+evaluation.
+
+5.1
+
+Filtering time (sec)
+
+Matlab run-time is not the ideal measure of algorithm complexity as it is arguably more sensititve to
+the quality of implementation compared to other languages. However, we should note that we did not make
+any special effort to optimize our code for Matlab, and
+the BNT library is a widely used and mature code
+base, so we expect any advantages due to code quality
+to fall to the competing approaches. Our Matlab code
+and further evaluation results can be downloaded at
+http://www.cs.pitt.edu/~tomas/papers/UAI08.
+
+2
+
+10
+
+1
+
+10
+
+0
+
+10
+
+−1
+
+10
+
+10
+
+20
+
+30
+
+40
+50
+60
+70
+Number of one−slice nodes
+
+80
+
+90
+
+100
+
+Figure 6: Performance scale up of PPT-DBN with N .
+
+Speed of the tree algorithm
+
+To compare inference speed, a network with the structure of a full binary tree with N nodes was generated.
+Among the M N possible observations, 10% of the variables were set to a random value (subject to persistence constraints so that P (E) 6= 0). We measured
+the time to execute the query p(X̃1 |E)—the posterior
+probability over the root node—for each algorithm2 .
+This process was repeated 100 times for each M , N
+combination and the respective times added up. The
+results are graphed out in Figures 4 and 5.
+PCT-DBN outperforms both the exact incremental
+joint tree algorithm and the approximate BK algorithm (assuming independence) by several orders of
+magnitude as N , the size of a slice grows (Figure 4).
+In fact, the exact algorithm soon runs out of memory (around N = 20) and only the approximate version keeps up. Exact PCT-DBN inference also performs consistently about 100 times faster than exact
+junction-tree and approximate BK inference when we
+look at scale-up with the number of slices, as shown in
+2
+The actual query is in fact irrelevant as all algorithms
+compute all posterior marginals simultaneously.
+
+Figure 5.
+5.2
+
+Speed of the polytree algorithm
+
+The asymptotic time complexity of PPT-DBN, as M
+increases, may be less favorable than that of the incremental approaches. However, its lower memory complexity is very favorable, as documented by the following experiment. We generated a network where most
+non-root nodes have exactly 2 parents and measured
+the time for the three inference algorithms. Quadratic
+scale-up with M is expected for PPT-DBN in such a
+network.
+Figure 6 shows the exact PPT-DBN algorithm to be
+several times faster than, but scaling very similarly
+to, the approximate fully factorized Boyen-Koller algorithm with an M = 20 time slice inference window.
+Peeking ahead into Figure 7 suggests the time performance would be about identical at M = 70 time slices.
+The junction-tree algorithm does not scale beyond 20
+nodes due to memory usage.
+Figure 7 shows clearly that asymptotically, PPT-DBN
+
+Running error with M, N= 17
+
+Scale up − growing M, crosses, N = 17
+
+3
+
+10
+
+0.35
+BK/FF
+W=10
+W=20
+W=50
+W=100
+
+0.3
+2
+
+0.25
+RMS error in posterior
+
+Filtering time (sec)
+
+10
+
+1
+
+10
+
+BK/exact
+BK/approx
+
+0.05
+
+−1
+
+10
+
+20
+
+40
+
+60
+
+80
+100
+120
+140
+Number of time slices
+
+160
+
+180
+
+0
+
+200
+
+Figure 7: Performance scale up of PPT-DBN with M .
+The number of nodes was held at N = 17.
+scales with a steeper slope than both BK inference and
+junction-tree inference. Indeed, for about N = 70,
+BK eventually surpasses PPT-DBN in terms of speed.
+However, it remains faster than junction-tree incremental inference throughout the range. On a computer with 1 GB RAM, the exact version begins to hit
+memory limits around M = 200 and N = 17.
+We conclude that if exact inference is desired for persistent polytree causal networks, using the PPT-DBN
+algorithm is a better choice for a wide range of inference window lengths. Furthermore, if approximate
+inference is acceptable, we show in Section 5.3 that for
+large enough N , fixed window smoothing using PPTDBN can outperform BK inference in terms of RMS
+error, while still performing many times faster. For the
+special case of persistent causal trees, the new algorithm dominates by orders of magnitude in all ranges
+that we tested versus both junction tree and BK assuming intra-slice independence.
+5.3
+
+0.15
+
+0.1
+
+PPT−DBN
+
+0
+
+10
+
+0.2
+
+Fixed-window approximation
+
+A minor disadvantage of the PPT-DBN algorithm is
+that it cannot do online inference yet. Therefore, when
+monitoring a process, M grows and so does the computation time. In practice, only a fixed number of most
+recent observations are usually considered with older
+observations falling out of the “window”. Thus we
+evaluate if reasonable precision can be attained with
+small window sizes, where PPT-DBN dominates.
+Figure 8 shows, for several time slices t, the root mean
+square error of computed posterior marginals
+v
+uN
+uX
+t
+ErrBK = t [PBK (Xit |O1:t ) − Pex (Xit |O1:t )]2
+i=1
+
+incurred by the fully factored Boyen-Koller method
+and the same error for PPT-DBN which ignores all
+
+10 20 30
+
+50
+
+70
+
+100
+
+150
+
+200
+
+Time
+
+Figure 8: Accuracy of PC-DBN with growing inference
+window M . Averages are over 100 different parameterizations of the network; error bars are omitted for
+clarity but standard deviations are the same order of
+magnitude as the means for all curves.
+evidence older than W , for different values of W . We
+use a binary tree prototype with all leaf variables nonpersistent and observed. All non-leaf variables are persistent and hidden. The CPT probabilities are sampled uniformly at random. The observed evidence O is
+obtained by forward-sampling the DBN and restricting it to the observables. We find that the error of
+our algorithm falls with growing W as expected. The
+results become even more favorable for PC-DBN as
+N, the number of nodes per slice, grows (see also further results online). The error made by fixing the
+inference window tends to be lower than that of the
+Boyen-Koller approximation for reasonable values of
+W and we can eliminate the unfavorable dependence
+on M at a small price of accuracy. One clear drawback to a naive implementation of the fixed-window
+approach is that if evidence is not observed at each
+time slice, in the presence of persistence a piece of
+crucial evidence might drop off the window preventing
+the model from “remembering” that a persistent state
+was already acheived. This glitch could in principle be
+fixed by caching when persistent variables have turned
+on.
+
+6
+
+Conclusions and future work
+
+We presented an algorithm for PC-DBNs, a way to
+exploit the special structure of the DBN probability
+distribution when many variables are persistent. Unlike forward-backward approaches to DBN inference
+that work slice-to-slice, we collapse the entire temporal progression and perform inference in the original prototype network structure. For trees, the algorithm is many times faster than state-of-the-art
+general-purpose exact and approximate DBN inference
+algorithms, while having a space complexity of only
+
+O(M N ). This continues to hold even in the polytree generalization with inference window lengths into
+the hundreds. While this method does not directly
+yield an incremental filtering algorithm, we show that
+a fixed-window smoothing version of PC-DBN inference can perform approximate filtering faster and with
+comparable or less error than BK-filtering.
+Although we have not presented a filtering algorithm
+that can exploit persistence, we do believe that one
+is possible. The number of possible joint configurations of variables in two subsequent slices is 3N with
+the persistence assumption as opposed to 4N in the
+general network. This hints at the possibility of a
+2TBN-like algorithm leveraging persistence and still
+remaining linear in the number of time slices.
+
+[8] Jin H. Kim and Judea Pearl. A computational model
+for combined causal and diagnostic reasoning in inference systems. In Proceedings IJCAI-83 (Karlsruhe,
+Germany), pages 190–193, 1983.
+[9] Daphne Koller and Nir Friedman. Bayesian Networks
+and Beyond. Unpublished manuscript.
+[10] David Larkin and Rina Dechter. Bayesian inference in
+the presence of determinism. In Proceedings of Workshop on AI and Statistics, AISTAT 2003.
+[11] Kevin Murphy. The Bayes Net Toolbox for Matlab.
+Computing Science and Statistics, 33, 2001.
+[12] Kevin Murphy. Dynamic Bayesian Networks: Representation, Inference and Learning. PhD thesis, EECS,
+University of California, Berkeley, Berkeley, CA, July
+2002.
+
+Another possible direction for this work is to allow
+multi resolution temporal modeling by modeling systems on very short time scales, but utilizing a persistence approximation for the slow processes. In such
+cases, a model with a single time-scale could efficiently
+and accurately deal with systems that have both fast
+and slow processes.
+
+[13] Kevin Murphy and Yair Weiss. The factored frontier algorithm for approximate inference in DBNs. In
+Proceedings of 12th NIPS, volume 12, 2000.
+
+Also interesting is the vision of approximate inference
+algorithms not requiring persistence, but simply assuming that the hidden state changes at most once
+in the period of interest. If the change in the hidden
+state is relatively slow, this could be a fairly accurate approximation. Such problems are often found
+in bioinformatics areas such as phylogeny discovery,
+where time of a mutation is of interest [6].
+
+[15] Mark Andrew Paskin. Exploiting Locality in Probabilistic Inference. PhD thesis, EECS, University of
+California, Berkeley, Berkeley, CA, December 2004.
+
+References
+
+[18] L.R. Rabiner. A tutorial on hidden Markov models
+and selected applications in speech recognition. In
+Proceedings of the IEEE, volume 77, pages 257–286,
+Feb 1989.
+
+[1] X. Boyen and D. Koller. Tractable inference for complex stochastic processes. In Proceedings of UAI-98,
+pages 33–42, 1998.
+
+[14] Brenda M. Ng. Survey of Bayesian models for modelling of stochastic temporal processes. Technical Report UCRL-TR-225272, Lawrence Livermore National
+Laboratory, 2006.
+
+[16] Judea Pearl. Fusion, propagation, and structuring in
+belief networks. Artificial Intelligence, 29(3):241–288,
+1986.
+[17] Mark A. Peot and Ross D. Shachter. Fusion and propagation with multiple observations in belief networks.
+Artificial Intelligence, 48(3):299–318, 1991.
+
+[2] Mark Chavira and Adnan Darwiche. Compiling
+Bayesian networks with local stucture. In Proceedings
+of IJCAI 2005, 2005.
+
+[19] Scott Sanner and David McAllester. Affine algebraic
+decision diagrams (AADDs) and their application to
+structured probabilistic inference. In Proceedings of
+IJCAI 2005, 2005.
+
+[3] Mark Chavira and Adnan Darwiche. Compiling
+Bayesian networks using variable elimination. In Proceedings of IJCAI 2007, 2007.
+
+[20] Tomáš Šingliar and Miloš Hauskrecht. Learning to
+detect adverse traffic events from noisily labeled data.
+In Proceedings of PKDD 2007, pages 236–247, 2007.
+
+[4] Gregory Cooper, Denver Dash, John Levander, WengKeen Wong, William Hogan, and Michael Wagner.
+Bayesian biosurveillance of disease outbreaks. In Proceedings of UAI, pages 94–103, 2004.
+
+[21] Jonathan S. Yedidia, William T. Freeman, and Yair
+Weiss. Understanding belief propagation and its generalizations. In Exploring Artificial Intelligence in the
+New Millennium, January 2003.
+
+[5] Thomas Dean and Keiji Kanazawa. A model for reasoning about persistence and causation. Computational Intelligence, 5(3):142–150, 1990.
+[6] Tal El-Hay, Nir Friedman, Daphne Koller, and Raz
+Kupferman. Continuous time Markov networks. In
+Proceedings of UAI-06. AUAI Press, 2006.
+[7] R.E. Kalman. A new approach to linear filtering and
+prediction problems. Transactions of the ASME—
+Journal of Basic Engineering, pages 35–45, March
+1960.
+
+

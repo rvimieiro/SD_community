@@ -1,0 +1,1453 @@
+421
+
+Cost-Sharing in Bayesian Knowledge Bases
+
+and Carmel Domshlak
+Dept. of Math. and Comp. Sci.
+Ben Gurion University of the Negev
+P. 0. Box 653, Beer-Sheva 84105, ISRAEL
+e-mail: { shimony, carmel} @cs.bgu.ac.il
+
+Solomon Eyal Shimony
+
+Abstract
+
+Bayesian knowledge bases (BKBs) are a gen­
+eralization of Bayes networks and weighted
+proof graphs (WAODAGs), that allow cycles
+in the causal graph. Reasoning in BKBs re­
+quires finding the most probable inferences
+consistent with the evidence. The cost­
+sharing heuristic for finding least-cost ex­
+planations in WAODAGs was presented and
+shown to be effective by Charniak and Hu­
+sain. However, the cycles in BKBs would
+make the definition of cost-sharing cyclic as
+well, if applied directly to BKBs. By treat­
+ing the defining equations of cost-sharing as
+a system of equations, one can properly de­
+fine an admissible cost-sharing heuristic for
+BKBs. Empirical evaluation shows that cost­
+sharing improves performance significantly
+when applied to BKBs.
+1
+
+INTRODUCTION
+
+Bayes networks [7] are a commonly used reasoning
+tool within the uncertainty in AI community. Lately,
+graphical causal probabilistic models have shown up
+that generalize on the acyclic Bayes networks, in or­
+der to cater for causal phenomena which cannot be
+strictly partially ordered. These models have causal
+cycles [1, 8], or undirected sections in the directed
+graphs [2J. Clearly, one stii! needs to do either be­
+lief revision or belief updating [7] in order to perform
+reasoning in these schemes. These more general mod­
+els, being less restrictive, pause interesting problems
+in implementing reasoning algorithms for them.
+Bayesian knowledge bases (BKBs) [8] are a general­
+ization of Bayes networks and weighted (AND/OR,
+directed acyclic) proof graphs (acronym WAODAGs)
+[4], that allow cycles in the causal graph. Consider the
+problem of finding the most probable inference ("ex­
+planation") consistent with the evidence in a BKB.
+This problem is analogous to (and more general than)
+the NP-hard problem of belief revision in Bayes net-
+
+Eugene Santos Jr.
+
+Dept. of Electrical and Comp. Eng.
+Air Force Institute of Technology
+Wright-Patterson AFB, OH
+e-mail:esantos@afit.af.mil
+
+works, or finding minimum-cost proof on a WAODAG.
+As for Bayes networks, reasoning with tree-shaped
+BKBs can be done efficiently. However, it is clear that
+in actual applications we cannot usually force our rep­
+resentation to belong to the easy class of problems.
+To-date, finding most-probable inference in general
+BKBs has been implemented as best-first heuristic
+search, where the heuristic used was cost-so-far, with
+dismal results. The reason is that this local heuris­
+tic does not take into account the cost of nodes (or
+variables) to be assigned later on in the search. Prop­
+agation of costs to be incurred is much preferable, but
+it is non-trivial to do so in a manner resulting in an
+admissible heuristic. The latter was first achieved by
+using the cost-sharing propagated cost method [3] (see
+next section for a brief definition).
+It was shown by Charniak and Husain [3] that for find­
+ing least-cost explanations in WAODAGs, the ( admis­
+sible) cost-sharing heuristic has a much better perfor­
+mance. The cost sharing heuristic was also found use­
+ful for belief revision in Bayes networks [9). Here, we
+generalize cost-sharing to apply to cyclic graphs, and
+show that the resulting heuristic is also admissible.
+The generalization of the cost-sharing heuristic, while
+straightforward, causes several problems. First, the
+cycles in the BKB make the problem of properly defin­
+ing the heuristic nontrivial. If we just used the same
+defining equations, the fact that there are cycles would
+make the defining equations cyclic. But by looking
+at these equations as a system of equations, we state
+that a solution to the system is our heuristic. Any
+such solution to the system of equations is shown to
+be an admissible heuristic. A second problem is how
+to solve these equations. The standard top-down algo­
+rithm used in prior work would be hindered by the cy­
+cles: even if we convert it to a kind of message-passing
+updating algorithm, in many cases the algorithm will
+loop indefinitely. Instead, we show that converting the
+system of semi-linear equations to a linear program, we
+can evaluate the heuristic in polynomial time.
+We begin with a motivating BKB example, followed
+by a formal definition of BKBs (section 2). We then
+relate BKBs to WAODAGs, and review the cost shar-
+
+422
+
+Shimony, Domshlak, and Santos
+
+.,
+
+Figure
+
+1:
+
+Example graph with RVs as nodes.
+
+ing heuristic for WAODAGs. In Section 4 we extend
+cost-sharing to handle cy cles, and present an efficient
+method of computing the heuristic. Section 5 discusses
+several implementation issues and refinements. Sec­
+tion 6 compares search with cost-sharing to search with
+a local "cost-so-far" heuristic.
+
+2
+
+Figure
+
+2:
+
+Example Knowledge Graph
+
+BAYESIAN KNOWLEDGE BASES
+
+In modeling an uncertain world, we designate random
+variables (abbrev. RVs) to represent the discrete ob­
+jects or events in question. We then assign a joint
+probability distribution to each possible state of the
+world, i.e., a specific value assignment for each RV.
+Graphical probabilistic models, such as Bayes net­
+works [7], represent the existing dependencies in the
+model (variables not shown as dependent are assumed
+independent) , facilitating a concise representation of
+the distribution- as a set of conditional probabilities.
+Let D, E and F be RVs. The conditional probabil­
+ity, P(DIE, F), identifies the belief in D's truth given
+that E and F are both known to be true, and repre­
+sents an uncertain causal rule. We call D the head of
+P(DIE, F) and {E, F} the tail.
+The distribution of the model is defined by,
+n
+
+P(A1, ... , An)=
+
+II P(A;IX(A;))
+
+(1)
+
+i=l
+
+where X(A;) is the set of RVs which Ai condition­
+ally depends upon. If set X(A;) is small, the amount
+of information we must actually store to be able to
+compute the required joint probability is considerably
+(exponentially) less than the size of the cross product
+of the domains.
+In Bayes networks, the conditional dependencies are
+represented with a directed acyclic graph. Let A, B
+and C be RVs representing a traffic light, its asso­
+ciated vehicle detector and pedestrian signal, respec­
+tively. Suppose that the vehicle detector affects the
+traffic light, which in turn affects the pedestrian sig­
+nal. Figure 1 graphically depicts this network over
+these variables. Since the signal depends upon the
+light, we say that A is the parent of C. Similarly, B is
+the parent of A.
+Now, expand the model with an additional variable
+denoting time of day, and suppose that the domain
+
+expert wishes to add the conditional probability that
+the detector is tripped during rush hour when the light
+is red. Such an inclusion would introduce a cycle into
+our graph, which would not be permitted in a Bayes
+network. In the application domain, however, such
+cycles are frequently a natural representation.
+By introducing a finer level of distinction than one
+node per RV, using instead one node for each possi­
+ble RV instantiation, the BK B representation finesses
+this problem. Assuming the same trio of RV s and the
+partial set of values below:
+P(C ="Don't Walk" lA =red)=x1
+
+P(A = greenjB = On) = X3
+P(C = "Walk"IA =green) = x2
+P(A = redlB
+
+=
+
+Off) =X4
+
+We can legally add the new constraint, P(B =On lA =
+red, D =rush hour) =xs, without creating a directed
+cycle, as shown in Figure 2. Additionally, it is possi­
+ble to have cycles in the knowledge graph in certain
+cases, without jeopardizing consistency of the distri­
+bution (see [8]).
+A BK B graph has two distinct types of nodes. The
+first, shown as lettered ovals, corresponds to individ­
+ual RV instantiations. These are called instantiation
+nodes or !-nodes for short. The second type of node,
+depicted as a blackened circle, is called a support node
+or 5-node. These nodes, which represent the condi­
+tional probability value, have exactly one out-bound
+arrow to the instantiation node representing the head
+of the conditioning case. Support nodes also have zero
+or more in-bound dependency or conditioning arrows
+representing the tail of the conditioning case.
+The above representation of the conditional probabili­
+ties, by separating out the variable-states and the (pos­
+sibly partial) conditioning, results both in more flexi­
+bility, and a more compact representation [8]. These
+properties are extremely useful in knowledge acqui-
+
+423
+
+Cost-Sharing in Bayesian Knowledge Bases
+
+sition and in learning models from data, for various
+applications such as data-mining [5].
+2.1
+
+I
+
+t
+
+\
+
+DEFINING KNOWLEDGE GRAPHS
+
+'
+
+'
+
+10
+
+1
+
+'
+
+I
+
+I
+
+sl ',
+
+-
+
+'
+
+'
+
+\
+
+I
+
+'
+
+5
+
+'
+
+s4 �
+I
+
+We define the topology as follows:
+Definition 1 A correlation-graph G
+
+= (IUS, E) is a
+directed graph such that InS = 4> and E � {I x S} U
+{S xI}. Furthermore, for all a E S, (a,b) and (a,b')
+are in E if and onl y if b = b'. {IUS} are the nodes
+of G and E are the edges of G. A node in I is called
+an instantiation-node (abbrev. 1-node) and a node in
+S is called a support-node (abbrev. S-node).
+
+1-nodes represent the various states of the world such
+as the truth or falsity of a proposition.
+S-nodes, on
+the other hand, explicitly e mbody the relationships
+between the 1-nodes.
+Let 1r be a partition on I. Intuitively, 1r denotes the
+groups of 1-nodes (states) which are mutually exclu­
+sive. This can be used to represent random variables
+with discrete but multiple instantiations, with each
+partition cell corresponding to an RV.
+Definition 2 G
+
+is said to I- respect 1r if for all cells O"
+in 1r, for any S-node b E S such that (b, a) E E, b does
+not have a parent in O" except, possibly, a.
+Basically, mutually exclusive 1-nodes cannot be di­
+rectly related to each other through the S-nodes. Next,
+we define mutual exclusion between S-nodes.
+Definition 3 Two S-nodes b1 and
+be mutually exclusive with respect
+
+b2 in S are said to
+to 1r if there exist
+different /-nodes c1, c2 that are parents of b1, bz, re­
+spectively and c1, c2 are in the same cell in 11".
+
+Definition 4 G is said to S-respect 1r if for all /-nodes
+a in I, any two distinct parents of a {S-nodes b1 and
+b2) are mutually exclusive.
+
+G is said to
+respects and S-respects 1r.
+
+Definition 5
+
+respect
+
+1r
+
+if G both !­
+
+To complete our knowledge-graph, we define a function
+w from S to �- This serves as the mechanism for
+handling uncertainty in the relationships.
+Definition 6 A knowledge-graph K is a 3-tuple
+(G, w, 1r) where G = (/US, E) is a correlation-graph,
+w is a function from S to the positive reals (for each
+a E S, w(a) is the weight of a), 1r is a partition on I,
+and G respects 1r.
+
+The probabilistic semantics of a knowledge graph is
+provided by relating weights to probabilities, as fol­
+lows: P'(a) = e-w(a), where P'(a) is the conditional
+probability that the child of a is true given that the
+
+'s5 ,
+
+Figure
+
+3:
+
+0
+
+Knowledge Graph with a Cycle
+
+parents of a are true. To make sure that the probabil­
+ities obey the axioms of probability theory, a normal­
+ization constraint is enforced [8] on BKBs. However,
+this issue is irrelevant to finding most-probable infer­
+ence, and is thus beyond the scope of this paper.
+
+2.2
+
+INFERENCE GRAPHS
+
+A BKB is a knowledge graph, together with an infer­
+ence scheme. The latter is defined by a set of permissi­
+ble inference graphs. An i nferen ce graph is a subgr aph
+of the knowledge graph corresponding to an inference
+chain (or proof) . Let r
+(I' U S', E') be some sub­
+graph of our correlation-graph G = (I U S, E) where
+I' � I, S' � S, and E' � E. Furthermore, r has a
+weight w ( r) defined as follows:
+=
+
+( )
+
+w r
+
+=
+
+L w(s).
+&ES'
+
+An 1-node a E J' is said to be well-supported in r i f
+i t h as a n incoming S-node i n r (that is, if there exists
+an edge (b, a) in E'). An S-node b is said to be well­
+founded in r if all its incoming 1-nodes (conditions)
+are also present in r. An S-node b E S' is said to be
+well-defined in r if it supports some I-node.
+is said to be an inference over K if i t is acyclic,
+consistent (i.e. for all cells O" in 1r, II' n O"l � 1), all of
+its 1-nodes are well supported, and all of its S-nodes
+are well-founded and well-defined. An inference thus
+corresponds to a proof. Given the knowledge graph in
+F igure 3, one possible inference can be seen in Figure 4.
+
+r
+
+For an abductive BKB, the problem we are address­
+ing is, given a set s of 1-nodes, find an inference r of
+minimum weight that contains all of s. Given the se­
+mantics of costs in BKBs, such an inference (proof)
+is equivalent to a maximum probability explanation
+(abductive inference) for s.
+
+3
+
+COST-SHARING IN WAODAGS
+
+WAODAGs [4] are essentially acyclic knowledge
+graphs, with a single sink (out-degree 0) node s (called
+
+424
+
+Shimony, Domshlak, and Santos
+
+)' - '
+
+/ s2
+
+'
+
+5
+I
+
+/' s4 '�
+'
+
+-
+
+'
+
+!_
+
+�-,
+
+'s5 '
+
+Figure
+
+4:
+
+cS
+
+An Inference in the Knowledge Graph
+
+edges. The actual solution is the set of nodes abutting
+the dummy edges. Since we need to find the minimal
+cost solution, we need a heuristic value for each cut. In
+fact, the heuristic value is defined over both edges and
+nodes, as follows. Let w ( v ) be the weights of the root
+nodes. We define the heuristic cost function c from
+E U V U 2E to the non-negative reals as:
+if v is a root node
+if v is an AND node
+if v is an OR node
+for nodes,
+
+v
+ce
+( )
+the evidence node), and a partition of nodes into AND
+nodes (corresponding to S-nodes in a BKB) and OR
+nodes (I-nodes in a BKB). The evidence node is an
+AND node. Each WAODAG node has an associated
+cost (or weight). A proof r of sis a subgraph contain­
+ing s where for each AND node in r, all of its parents
+are in r, and for each OR node in r, at least one of its
+parents are in r. Proofs in WAODAGs correspond to
+inferences in BKBs. The partition function 1r has no
+counterpart in WAODAGs.
+The cost of a proof r is the sum of the weights of all
+nodes in r. As for knowledge graphs, one would like to
+find a least cost proof that contains the evidence node
+s. This is an NP-hard problem, usually solved by best­
+first search, starting from s, and adding parents when
+necessary (branching when several possibilities exist at OR nodes). An obvious admissible heuristic, cost­
+so-far, estimates the cost of a partial proof p as the
+sum of costs of nodes currently in p.
+The heuristic can be improved upon by propagating
+costs, but preserving admissibility is non-trivial. Such
+an improved heuristic, cost-sharing, was first presented
+in [3], where the search is in terms of edges, rather
+than nodes. We review the cost-sharing heuristic for
+WAODAGs below, beginning with some necessary no­
+tation borrowed from [3].
+Let edge e = ( a, b) (from node a to node b); we call a
+the source of e, and b the sink of e. Also, we say that
+b is a child (immediate descendent) of a. If e is an
+edge, then v. denotes that node v is its source, and u•
+denotes that u is its sink (we also sometimes use the
+notation Ve also to denote the source node of e, likewise
+for sinks). If v is a node, then e is an arbitrary edge
+v
+v
+incoming to v, and e an outgoing edge from v. Also,
+Ev is the set of all incoming edges of v, and Ev is the
+set of all outgoing edges. A node with no parents is
+called a root node.
+For convenience, a dummy edge e' leading from the
+evidence node is added to the graph, as well as one
+dummy edge leading into each root node. A state
+in the search space is a cut of the WAODAG (a set­
+wise minimal set of edges that separates s from the
+root nodes). The initial state is the set { e'}, and a
+final state is a cut consisting only of root node dummy
+
+(v
+
+c e)
+=�
+
+for edges, and for sets of edges
+
+c(C)
+
+=
+
+C � E:
+
+L c(e)
+eEC
+
+4
+
+COST-SHARING IN BKBS
+
+For BKBs, we intend to use the same definitions for the
+cost-sharing heuristic. One difference between BKBs
+and WAODAGs is that in WAODAGs, only root nodes
+have weights, whereas in BKBs every S-node has a
+weight. The difference can be overcome by observing
+that for each S-node v we can always add one new 1'
+node and S-node pair (call the latter v ) , set w ( v' ) =
+w (v), and let the new w ( v ) be 0.
+The semantics of
+the BKB stay the same, and now only root nodes have
+non-0 cost. Instead of doing that, we will note that
+the new I-node only has one parent and one child, and
+absorb w ( v' ) into the equation for v, to get:
+_
+
+c( v ) -
+
+{ c(Ev)
+
++
+
+( )
+c( ev)
+
+w v
+
+mine.EE.
+
+if v is an S node
+if v is an I node
+
+(2)
+
+for nodes, and the same equations as above for edges.
+Noting, however, the optimization in [3], observe that
+disjoint S-nodes are never in the same inference, and
+thus we can replace the equation for edges by:
+
+( v)
+ce
+
+=
+
+c(ve)
+k(ev)
+
+(3)
+
+where k(ev) is the number of consistent immediate
+support paths. Specifically, if v is an S-node, then
+k(ev) = 1 since there is only one outgoing edge from
+an S-node. If v is an I-node, k( ev) is the number of
+consistent 1-nodes immediately supported by S-nodes
+that are children of v.1 As for WAODAGs, we have
+for sets of edges:
+
+c(C)
+
+=
+
+L c(e)
+
+(4)
+
+eEC
+1This number should be an upper bound on the number
+of edges outgoing from v that are in any inference. It may
+be possible to get a tighter bound in some cases, and if so
+that bound can be used in place of k( e").
+
+Cost-Sharing in Bayesian Knowledge Bases
+
+It is by no means clear whether these equations are suf­
+ficient to uniquely define the cost function. However,
+treating equations 2, 3, 4 as a system of equations in
+the variables c( v ), c( e) with v E V, e E E rather than
+a definition, we can refer to solutions of the system.
+Henceforth, we will denote by c an arbitrary solution
+to equations 2, 3, 4, whenever unambiguous. We will
+show that an arbitrary solution c to the system (hence­
+forth called a cost-sharing solution) is an admissible
+heuristic, by extending the proof of [ 3].
+
+425
+
+Consider the knowledge graph in figure 3. The follow­
+ing values can be computed immediately: c((sl, il))
+
+=
+
+=
+
+and c ((s4 , i2))
+c( s4) = 5.
+All other
+equations now contain undefined terms, so we proceed
+by evaluating partially defined minima. For example,
+
+c(sl)
+
+10,
+
+=
+
+=
+
+we could now set (temporarily), c(i2)
+5. As a result,
+we get the edge cost c((i2, s2)) = 2.5, since i2 has two
+children. We now have c(s2)
+3.5, and this in turn
+=
+
+makes c(il) = 3.5, c((il, s3))
+1.75, and
+This causes a re-evaluation of c(i2)
+=
+
+=
+
+c(s3) = 2.75.
+2.75, which
+
+causes re-evaluation to proceed indefinitely, until even­
+
+Theorem 1 Any cost-sharing solution c is an admis­
+
+sible heuristic for BKBs.
+Proof outline: we first note that while the BKB is a
+graph with cycles, an inference is acyclic, and corre­
+sponds to an AND-DAG. A cut of an inference is de­
+fined exactly as for an AND-DAG in [3]: a minimal set
+of edges that any path from the evidence to the leaves
+must intersect. As in WAODAGs, we define a cut of
+the BKB as a cut of some BKB inference.
+Now, we proceed with the same proof as in [3]. All
+steps of the proof are the same, it does not matter
+that we have cycles, as the cycles only serve to further
+decrease c, and thus it is still an underestimate of the
+true weight.
+The remaining problems are with applying the
+WAODAG expansion operator Sr, which requires a
+topological sort T of the DAG. Since we have cycles,
+this is no longer possible. We must guarantee that
+once the we apply the expansion operator at a node,
+its outgoing edges will not be used anymore. To do
+that, we modify the expansion operator as follows. A
+state s is a set of edges and a set of deleted edges. Our
+expansion operator S, applied at node n is the same
+as Sr, except that when S is applied at node n, the
+edges En are added to the set of deleted edges. A state
+which contains a deleted edge is illegal, and discarded.
+In order that all possible inferences be reachable, it is
+not sufficient to apply the expansion according to a
+topological ordering. If S is applied, at each state, at
+all nodes where there is some en in the current set of
+edges, reachability is maintained. 0
+We now address the problem of computing a solution
+c(v). Clearly, the seemingly obvious solution of using
+the equations directly will not help: some values will
+be undefined initially. One could think of a scheme
+that, to compute a minimum over several terms, some
+defined and some not, just takes the minimum over the
+currently defined terms, and propagates the resulting
+value. If every node participates in some inference,
+such a scheme is guaranteed to assign a cost value at
+each node eventually. However, in order to have all
+equations satisfied, it may be necessary to update cost
+values already derived, for example, due to finding a
+lower value than already used before, at an 1-node. It
+turns out that such a scheme may loop indefinitely, as
+the following example shows.
+
+tually (in the limit of an infinite number of loops,
+or i n practice determined by computational numeri­
+cal accuracy) we get convergence at: c(il) = c(i2) =
+
+c(s2) = c(s3) = 2, c((il, s2)) = c((il, s3)) = 1, and
+c(i3) = c((s5, i3)) = c(s5) = 3. Not e further that the
+
+costs we get reflect an illegal, cyclic inference, but since
+
+we need an underestimate in order to get an admissible
+heuristic, this is not a problem.
+Solving the system of equations efficiently is non­
+trivial. In fact, if we had max functions in addition
+to the min functions, or if the summation included
+negative terms, it would be easy to show that the prob­
+lem of finding a solution is NP-hard (and deciding the
+existence of a solution is NP-complete). However, in
+our case , we can use linear programming techniques to
+derive a solution, by transforming the equations to a
+linear system, as follows. For each node and edge, we
+have a variable, which for convenience we denote by
+the same name. Linear equations are left as they are.
+Minimization equations are translated as follows:
+
+is replaced by the set of inequalities:
+V
+
+�
+
+Ut
+
+1
+
+V
+
+�
+
+U2
+
+,
+
+. ..
+
+V
+
+�
+
+Uk
+
+Observe that the latter set of inequalities is weaker
+than the minimization. F inally, the objective function
+to maximize is:
+8(c)
+
+=
+
+L
+
+vel
+
+( )
+
+c v
+
+An optimal solution c* to the above linear program can
+be found using standard linear programming methods,
+such as the simplex method [6]. A solution always ex­
+
+=
+
+ists, since setting all c( v )
+0, v E I clearly determines
+a unique, not necessarily optimal, solution to the equa­
+tions and inequalities.
+
+Theorem 2 Let c• be an optimal solution to the lin­
+. ear program. Then c* is also a solution to the cost­
+sharing equation system (equations 2, 3, 4).
+Proof: Let c* be an optimal solution to the linear pro­
+gram. Assume that c* violates some of equations 2,
+3, 4. Since the linear linear program equations are
+the same as equations 2, 3, 4, except that minimiza­
+tion was replaced by inequalities, only equations of the
+form:
+c(v ) = min c( ev)
+e ,eE.
+
+426
+
+Shimony, Domshlak, and Santos
+
+can be violated. Let v be a variable (node) where the
+above equation is violated. Then, since the linear pro­
+gram enforces c*(v ) S c* (ev ) for all eu E Ev, then it
+must be the case that for this variable, c*(v) < c• (ev)
+for all ev E Eu (otherwise it will indeed be the min­
+imum, thus not violating the equation). Define R to
+be the set of nodes consisting of v and its immediate
+descendents (all immediate descendents are S-nodes),
+and let ER be all edges with sources in R. Define an­
+
+and, for I-nodes with just one parent:
+
+c(ve) = w(ue ) +
+
+e'"'EE.
+
+c(we')
+-k(e'"')
+
+(6)
+
+Next, observe that the linear program is only neces­
+sary within each strongly connected component. The
+implementation is, thus:
+
+'
+
+other solution c* to the linear program as follows. For
+
+L
+
+1.
+
+Initialization: find strongly connected compo­
+nents, and sort them in a total ordering consistent
+with a topological ordering of the components,
+such that the evidence node(s) is first.
+
+program equations (starting with edges v E, then the
+S-nodes, then the rest of the edges in ER) determine
+
+2.
+
+the as yet undefined costs in c•'. The resulting solution
+is unique, because it uses equations for which all values
+on the right-hand-side are already determined, and the
+
+Add to the graph a dummy edge
+S-node v.
+
+3. Proceed from the last component down to the
+first, and for each component do:
+
+every node
+
+u
+
+not in R let
+
+for every edge
+
+e
+
+c*'(v) = Vmin
+
+=
+
+c*'(u) = c*(u), and likewise
+not in ER, Jet c•' ( e ) = c* ( e ) . Let
+mi ne v EE v c* ( ev ) , and let the linear
+
+8(c*),
+
+and
+
+As an example, consider the graph of Figure 3, where
+we would get the following set of inequalities:
+
+il S 1 + (i2, s2)
+
+(b) Solve the linear program, to get the heuristic
+costs.
+
+i2Sl+(il,s3)
+i
+i
+(il, s3) =
+(i2, s2) =
+;
+
+4. Initialize an agenda with a single state s, with
+edges(s)=e', the evidence dummy edge, and an
+empty list of expanded nodes.
+
+il s
+
+10
+
+i2S5
+
+;
+
+�
+
+5.
+
+85 = (il, s5) + (i2, s5) ; i3 = s5
+i2
+il
+.
+.
+(z2, s5) = 2 ; (zl, s5) = 2
+where we need to maximize c(i l ) + c(i2) + c(i3). The
+optimal solution is the same as the convergence value
+shown above, i. e. c(il) = c(i2) = 2 and c(i3) = 3.
+
+5
+
+for every
+
+(a) Set up the linear program over variables de­
+termined by nodes and edges for the cur­
+rent component (including edges to and from
+other components). Incoming edges will have
+costs set in previous components, if any, and
+these costs are considered as constants for
+this component.
+
+'
+
+left-hand side is not. Clearly, c• is also a solution to
+the linear program2, where only one I-node cost was
+changed (increased). We have 8(c*') >
+thus c* is not optimal, a contradiction. D
+
+( *• v )
+
+IMPLEMENTATION DETAILS
+
+In applying the cost-sharing heuristic, we actually use
+a simplified linear program, as follows. First, whenever
+an 1-node v has only a single parent, we use c( v ) =
+c( ev ) rather than the inequality. We also cancel out
+all edge cost variables by substituting them according
+to equations (3, 4). Finally, we can also cancel out by
+substitution all the S-node costs (noting that S-nodes
+all have only one child), to get a system of inequalities
+just for the 1-node costs. For !-nodes with more than
+one parent, we get:
+
+c(ve ) S w(ue) +
+
+�
+L...J
+e'wEEu
+
+c(we1)
+k(e'w)
+
+Looping until time limit, or required number of
+solutions found, get states of lowest heuristic cost
+from agenda, and do:
+(a) Find the first strongly connected component
+containing a node v with some outgoing edge
+v
+e
+in edges(8 ) .
+
+(b) If there is no such component, output
+solution).
+
+of the i neq ualities for other !-nodes, which cannot cause
+the inequalities to be v iolated .
+
+(a
+
+(c) Otherwise, expand 8 at the current strongly
+connected component, as follows. For each
+unexpanded node v in the current compo­
+nent for which there is an edge dv E E11 in
+edges(8 ) , and for each edge ev E Ev such that
+no parent of u. (the source node of e11) has
+been expanded do:
+1.
+
+n.
+
+(5)
+
+2
+Costs of ed ges and S-nodes can only be increased by
+this change, thus can (at worst ) affect variables not in R
+through introducing higher values on the right-hand-side
+
+s
+
+m.
+
+create a new state s', with node v added
+to the list of expanded nodes. The edges
+of s' are the edges of 8 with all edges E11
+removed and all edges Eu added.
+Evaluate the cost of s' by subtracting the
+cost of removed edges and adding the cost
+of added edges, from the cost of s.
+1
+
+If 8 is consistent (does not contain any
+pair of 1-nodes from the same cell in the
+partition), insert it into the agenda.
+
+For example, let us trace the algorithm as run on the
+BKB fragment of figure 3, with i3 being the evidence.
+
+Cost-Sharing in Bayesian Knowledge Bases
+
+The heuristic costs are computed as shown in the pre­
+vious section. The strongly connected components are
+{il, i2} and { i3}. The starting state, So, contains just
+the dummy edge (i3, *). Search proceeds as shown in
+table 1, where "Pop" is the ID of the popped state. For
+lack of space, the dummy edges (*,i5),(*,s2),(*,s3)
+are missing from the table, but this should not ad­
+versely affect clarity.
+In the actual implementation, several details should be
+observed. First, instead of maintaining a list of deleted
+edges, it is sufficient, and more efficient, to treat any
+edge outgoing from an expanded node as if it were a
+deleted edge, and maintain a list of expanded I-nodes.
+Second, the fact that S-nodes are all AND nodes with
+a single outgoing edge is used to save some time: once
+an edge outgoing from an S-node is picked, we are
+forced to select all the incoming edges into the S-node
+anyway, so we do all that in one expansion step, and
+do not keep track of expanded S-nodes.
+6
+
+•Caa-so-f•
+• Cou-...,...1"• (tai.WJ
+
+-�-�---4--f----i- • CWJ-Sharinj
+
+l
+
+i!r-�----+-----i·�·-1
+
+Results are depicted in Figures 5, 6 using log-scale of
+time to solution and number of expansion steps, re­
+spectively for the Y axis (X axis is just the number
+of the problem instance, and thus essentially meaning­
+less here). Times for cost-sharing include initialization
+of the heuristic costs. The cases labeled cost-so-far
+(failed) are those taking 2000 seconds without reach­
+ing a solution, or crashing due to lack of swap space.
+Figure 7 plots total number of problems solved vs. to­
+tal CPU time. Cost-sharing does better than cost-so­
+far by at least one order of magnitude. Finding several
+best solutions is also useful [9]. A timing comparison
+for the 10 best solutions is depicted in Figure 8.
+These preliminary experiments suggest that cost­
+sharing is an extremely useful search heuristic for
+graphs with cycles, as well as directed acyclic graphs.
+We know of no other heuristics for this search prob­
+lem. Nor is it clear how one would apply schemes
+such as clustering to BKBs, and even if they could, a
+strongly-connected component size of over 40 for most
+of the problem instances in the experiments suggest
+that the clique size would be too large to handle by
+such schemes. Thus, heuristic search with cost-sharing
+appears to be the only viable method for BKBs not in
+one of the (topologically) easier classes of problems.
+
+I
+
+'
+le-(H
+
+___;,_
+
+___,--+-----
+
+___
+
+6.00
+
+!tOO
+
+UtOO
+
+Figure 5: Time: Cost-Sharing vs. Cost-So-Far
+
+EXPERIMENTAL RESULTS
+
+The above algorithm was tested on several BKB's pro­
+duced from an available acyclic BKB for reasoning
+about raising gold-fish. The network has 165 !-nodes
+and 350 S-nodes. Cycles were introduced by random
+reversal of several arc pairs. Evidence selection was
+also random. Runtime and number of expansion steps
+(iterations through step 4 of the algorithm) were com­
+pared between a search algorithm using cost-sharing
+and one using cost-so-far. The program was imple­
+mented in C++, and run on a SPARC-10.
+
+427
+
+--.,.-- ----:---+----+-
+
+•Cc.i-K>-fu
+
+:�:::;eikd
+; )
+
+__:_
+
+Jc.H.JJ
+
+---1------f----j--
+
+��
+
+2-
+
+''""'' --'-------+---'-
+
+'"'
+
+Figure 6: Expansion Count Comparison
+
+�
+--"tiiilt:�
+
+10.00
+
+/
+/
+/
+
+0.00
+
+'"'
+
+-----��
+
+6.50
+6.00
+'"'
+
+,.,
+
+'·"'
+l.OO
+
+--
+
+L
+/
+'
+
+'
+
+l.lO
+1.00
+
+•
+
+I
+
+_j_
+
+_j_
+J
+
+i
+
+---
+
+- �1�=�
+
+'"' ----+ -2.00
+
+l
+
+I
+
+I
+I
+
+......----�
+
+-----, _,_
+
+. ________ _
+
+I
+
+/
+
+/
+
+L
+
+..d.
+l
+
+l
+j
+I
+
+_
+
+I
+
+I
+
+I'C'-01
+
+Figure 7: Number of Problems Solved vs. CPU Time
+
+Shimony, Domshlak, and Santos
+
+428
+
+Iteration
+
+0
+1
+2
+
+Pop
+
+So
+s1
+
+s5
+s3
+s1
+
+3
+4
+5
+
+Expand Edge
+
+Edges
+
+(i3, *)
+(i1, s5) , (i2, s5)
+
+(i1,s3), (i1, s5)
+(i2, s2) , (i2, s5)
+(*,s4)
+
+Delete Edges
+
+i3, *)
+i1, s5)(i1 , s3)
+i1, s5 , il, s3
+i2,s2 , i2, s5
+i2, s5 , i2, s2
+i1, s5 ,(i1,s3
+i2, s5 , i2, s2
+
+i3, *)
+i1, s5
+i1, s5
+i2, s5
+i2, s5
+( i1, s5
+i2, s5
+
+Add Edges
+
+New State ID
+
+i 3 , *)
+So
+i1 , s5) , (i2, s5) s1
+* , sn
+s2
+s3
+i2,s2)
+* , s4)
+--g4
+i1, s3)
+s5
+(*,s1)
+s6
+*, s4)
+s1
+
+NONE
+Table
+
+1:
+
+Cost
+
+3
+3
+12
+4
+7
+
+4
+12
+7
+7
+
+Trace of the Search Algorithm
+
+References
+1
+
+• C�oj._f.., CIW..J
+
+----+------'-·C�II-sM!io"C
+
+[1]
+
+Constantin F. Aliferis and Gregory F. Cooper. A
+structurally and temporally extended Bayesian be­
+lief network model: Definitions, properties, and
+modeling techniques. In Uncertainty in Artificial
+
+Intelligence, Proceedings of the 12th Conference,
+28-39. Morgan Kaufmann, August 1996.
+
+pages
+
+[2]
+.
+
+:
+
+Steen A.
+Andersson,
+David Madigan,
+and
+Michael D. Perlman. An alternative Markov prop­
+erty for chain graphs. In Uncertainty in Artificial
+
+Intelligence, Proceedings of the 12th Conference,
+1996.
+
+;
+
+pages 40-48. Morgan Kaufmann, August
+Figure
+
+7
+
+8:
+
+Time Comparison for
+
+10 Best
+
+Solution
+
+CONCLUSION
+
+Bayesian knowledge bases
+
+(BKBs )
+
+are a useful gener­
+
+alization of both weighted proof graphs and Bayes net­
+works that allow causal cycles. The cycles in the graph
+
+[3]
+
+Eugene Charniak and Saadia Husain. A new ad­
+missible heuristic for minimal-cost proofs. In Pro­
+ceedings of AAAI Conference, pages 446-451, 1991.
+
+[4]
+
+Eugene Charniak and Solomon E. Shimony. Cost­
+based abduction and MAP explanation. Artificial
+
+Intelligence Journal, 66(2):345-374, 1994.
+
+[5]
+
+)
+
+]
+
+[6
+
+WAODAG search heuristic, the cost-sharing heuristic
+(3], to apply to BKBs. The adaptation is non-trivial
+due to the fact that the heuristic as-is, is undefined for
+cyclic graphs. Additionally, it is non-trivial to com­
+pute the modified heuristic efficiently.
+Having successfully modified the cost-sharing heuris­
+tic to BKBs, we showed empirically that the heuristic
+saves considerable search effort in several BKBs which
+
+is a toy version of an application domains: raising gold­
+fish. In addition to using the suggested algorithm and
+heuristic for BKB reasoning henceforth, it may be pos­
+sible to use the scheme for reasoning in other models
+with cycles, such as reasoning in chain graphs or the
+model presented in
+
+[1].
+
+Acknowledgments
+This research is supported in part by an infrastruc­
+ture grant for data-mining from the Israeli Ministry of
+Science, and by AFOSR Project #940006.
+
+Advances in Knowledge Discovery and Data
+Mining. AAAI Press / MIT Press, 1996.
+
+itors.
+
+pose a difficult problem for implementing reasoning in
+the model. A heuristic search algorithm currently ap­
+pears the only viable method to perform belief revision
+( finding best "inference" . We adapted a successful
+
+Usama M. Fayyad, Gregory Piatetsky-Shapiro,
+Padhraic Smyth, and Ramasamy Uthurusamy, ed­
+
+[7]
+
+George L. Nemhauser, A. H. G. Rinnooy Kan, and
+Optimization: Handbooks
+M. J. Todd, editors.
+
+in Operations Research and Management Science
+Volume 1. North Holland, 1989.
+Judea Pearl. Probabilistic Reasoning in Intelligent
+Systems: Networks of Plausible Inference. Morgan
+Kaufmann, San Mateo, CA, 1988.
+
+[8] Eugene Santos, Jr. and Eugene S. Santos.
+Bayesian knowledge-bases.
+Technical Report
+AFITfEN TR96 0 5,Department of Electrical and
+Computer Engineering, Air Force Institute of Tech­
+nology, 1996.
+
+/
+
+[9]
+
+-
+
+Solomon E. Shimony and Eugene Santos, Jr. Ex­
+ploiting case-based independence for approximat­
+
+International Journal
+of Approximate Reasoning, 14(1), January 1996.
+
+ing marginal probabilities.
+
+

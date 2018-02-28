@@ -1,0 +1,2460 @@
+arXiv:1211.1505v1 [cs.DS] 7 Nov 2012
+
+Solving weighted and counting variants of connectivity problems
+parameterized by treewidth deterministically in single
+exponential time
+Hans L. Bodlaender
+
+Marek Cygan
+
+Stefan Kratsch∗
+
+Utrecht University
+The Netherlands
+H.L.Bodlaender@uu.nl
+
+University of Warsaw
+Poland
+cygan@mimuw.edu.pl
+
+Max-Planck-Institute
+Saarbrücken, Germany
+skratsch@mpi-inf.mpg.de
+
+Jesper Nederlof†
+Utrecht University
+The Netherlands
+J.Nederlof@uu.nl
+
+November 8, 2012
+
+Abstract
+It is well known that many local graph problems, like Vertex Cover and Dominating Set,
+can be solved in 2O(tw) |V |O(1) time for graphs G = (V, E) with a given tree decomposition of
+width tw. However, for nonlocal problems, like the fundamental class of connectivity problems, for a long time we did not know how to do this faster than twO(tw) |V |O(1) . Recently,
+Cygan et al. (FOCS 2011) presented Monte Carlo algorithms for a wide range of connectivity problems running in time ctw |V |O(1) for a small constant c, e.g., for Hamiltonian Cycle
+and Steiner tree. Naturally, this raises the question whether randomization is necessary to
+achieve this runtime; furthermore, it is desirable to also solve counting and weighted versions
+(the latter without incurring a pseudo-polynomial cost in terms of the weights).
+We present two new approaches rooted in linear algebra, based on matrix rank and determinants, which provide deterministic ctw |V |O(1) time algorithms, also for weighted and
+counting versions. For example, in this time we can solve Traveling Salesman or count
+the number of Hamiltonian cycles. The rank-based ideas provide a rather general approach
+for speeding up even straightforward dynamic programming formulations by identifying
+“small” sets of representative partial solutions; we focus on the case of expressing connectivity via sets of partitions, but the essential ideas should have further applications. The
+determinant-based approach uses the matrix tree theorem for deriving closed formulas for
+counting versions of connectivity problems; we show how to evaluate those formulas via
+dynamic programming.
+
+1
+
+Introduction
+
+The notion of treewidth proved to be an excellent tool for dealing with many NP-hard problems
+on graphs. In the 1970s and 1980s, several groups of researchers discovered the concept independently. In their fundamental work on graph minors, Robertson and Seymour [45] introduced the
+∗
+
+Part of the work was done at Utrecht University supported by the Nederlandse Organisatie voor Wetenschappelijk Onderzoek (NWO), project: ’KERNELS’.
+†
+Supported by the Nederlandse Organisatie voor Wetenschappelijk Onderzoek (NWO), project: ’Space and
+Time Efficient Structural Improvements of Dynamic Programming Algorithms’.
+
+1
+
+notions treewidth and tree decomposition, and these became the dominant terminology. The notion has been extensively studied and used in various areas of (theoretical and applied) computer
+science (see for example [7] for a survey). Informally, the notion measures how well a graph can
+be decomposed in a tree-like manner, resulting in a so-called tree decomposition. This is useful
+since many eﬃcient algorithms solving NP-hard problems on trees generalize to eﬃcient algorithms for graphs with good tree decompositions. Almost without exception these algorithms
+crucially rely on the dynamic programming paradigm, so studying the complexity of problems
+on graphs of small treewidth amounts to studying the dynamic programming paradigm.
+Two inﬂuential results are Bodlaender’s [8] and Courcelle’s theorems [16], showing that if
+we assume that input graphs have bounded treewidth, then there are linear time algorithms
+to ﬁnd an optimal tree decomposition and for each property that can be expressed in monadic
+second order logic, given such a tree decomposition, to decide if the property holds for the input
+graph. Algorithmic engineering evaluations of Bodlaender’s and Courcelle’s algorithms are not
+encouraging however, due to the large constant factors in the running times, even for small
+3
+values of the treewidth, e.g., the running time of Bodlaender’s algorithm is O(twO(tw ) n).
+Hence a natural question is how much we can optimize the dependence on the treewidth,
+that is, we aim for a running time of the type f (tw)nc on graphs with n vertices and a tree
+decomposition of width tw of where we ﬁrst aim at obtaining a small growing (but, since we
+assume P =
+6 N P, exponential) function f (tw) and second a small exponent c. For problems
+with locally checkable certiﬁcates, that is, certiﬁcates assigning a constant number of bits per
+node that can be checked by a cardinality check and iteratively looking at all neighborhoods of
+the input graph1 , it quickly became clear that f (tw) only needs to be single-exponential. See
+[33, 42] for sample applications to the Independent Set/Vertex Cover problems. From the work
+of [31] and known Karp-reductions between problems it follows that this dependence cannot be
+improved to subexponential algorithms unless the Exponential Time Hypothesis (ETH) fails,
+i.e., unless CNF-SAT has a subexponential algorithm. In [37] it was shown that under a stronger
+assumption (the so-called Strong Exponential Time Hypothesis, SETH), the current algorithms
+are optimal even with respect to polynomial jumps, that is, problems with current best running
+time f (tw)nO(1) cannot be solved in f (pw)1−ǫ nO(1) for positive ǫ where f (pw) is 2pw , 3pw for
+respectively Independent Set and Dominating Set. While there is no consensus opinion on
+whether ETH and SETH are true, improving beyond lower bounds proven under either of them
+is at least as hard as improving the state of the art of CNF-SAT in the respective way.
+A natural class of problems that does not have locally checkable certiﬁcates are connectivity
+problems such as Hamiltonian cycle and Steiner Tree (see for example [27, Section 5]), begging
+the question whether these can be solved within single-exponential dependence on tw as well.
+Early work shows that if we assume, in addition to small treewidth, that the input graph is
+planar, or, more general, avoids a minor, then many connectivity problems have algorithms with
+single-exponential dependence of tw, exploiting Catalan structures [20]. A positive answer to the
+question, using a randomized approach was found by Cygan et al. [18] using an approach termed
+“Cut & Count”: It provided a transformation of the natural certiﬁcates to “cut-certiﬁcates”
+transforming the connectivity requirement into a locally checkable requirement. The transformation is only valid modulo 2, but by a standard technique [41] introducing randomization, the
+decision variant can be reduced to the counting modulo 2 variant. This result was considered
+surprising since in the folklore 2O(tw log tw) nO(1) dynamic programming routines for connectivity
+problems all information stored seemed needed: Given two partial solutions inducing diﬀerent
+connectivity properties, one may very well be extendable to a solution while the other one is
+1
+For example, for the odd cycle transversal problem that asks to make the input graph by removing at most
+k vertices, a locally checkable certificate would be a solution set combined with a proper two-coloring of the
+remaining bipartite graph.
+
+2
+
+not (this resembles the notion of Myhill-Nerode equivalence classes [29]).
+The Cut & Count approach is one of the algorithms from the family of dynamic programming based algorithms using a modulo 2 based transformation [4, 6, 36, 35, 38, 46]. These
+algorithms give the smallest running times currently known, but have several disadvantages
+compared to traditional dynamic programming algorithms: (a) They are probabilistic. (b) The
+dependence on the inputs weights in weighted extensions is pseudo-polynomial. (c) They do
+not extend to counting the number of witnesses. (d) They do not give intuition for the optimal
+substructure / equivalence classes. An additional disadvantage of the Cut & Count approach
+of [18], compared to traditional dynamic programming algorithms on tree decompositions, is
+that their dependence in terms of the input graph is superlinear. Our work shows that each of
+these disadvantages can be overcome, with two diﬀerent approaches, both giving deterministic
+algorithms for connectivity problems that are singly-exponential in the treewidth.
+
+1.1
+
+Our contribution
+
+Our contribution consists of two new approaches that resolve the aforementioned issues of
+the Cut & Count approach, the “Rank based” and “Squared determinant” approaches. They
+can be used to quickly and deterministically solve respectively weighted and counting versions
+of problems solved by the Cut & Count approach. Additional advantages of the rank based
+approach are that it gives a more intuitive insight in the optimal substructure / equivalence
+classes of a problem and that is has only a linear dependence on the input graph in the running
+time. The only disadvantage of both approaches when compared to the Cut & Count approach
+is that the dependence on the treewidth or pathwidth in the running time is slightly worse.
+However, although we did not manage to overcome it, this disadvantage might not be inherently
+due to the new methods. Due to the generality of our key ideas, we feel our methods may inspire
+future work not involving tree decompositions as well.
+Although both approaches apply to all problems studied in [18]. We only study (variants
+of) Steiner Tree, Hamiltonian Cycle and Feedback Vertex Set in this work in order
+to prevent losing focus. Our results on these problems are described in Table 1.
+
+1
+2
+3
+4
+5
+6
+7
+
+Problem
+Weighted Steiner Tree
+Traveling Salesman
+k-Path
+Feedback Vertex Set
+# Hamiltonian Cycle
+# Steiner Tree
+Feedback Vertex Set
+
+Pathwidth
+n(1 + 2ω )pw pwO(1)
+n(2 + 2ω/2 )pw pwO(1)
+n(2 + 2ω/2 )pw (k + pw)O(1)
+n(1 + 2ω )pw pwO(1)
+Õ(6pw pwO(1) n2 )
+Õ(5pw pwO(1) n3 )
+Õ(5pw pwO(1) n3 )
+
+Treewidth
+n(1 + 2ω+1 )tw twO(1)
+n(5 + 2(ω+2)/2 )tw twO(1)
+n(5 + 2(ω+2)/2 )tw (k + tw)O(1)
+n(1 + 2ω+1 )tw twO(1)
+Õ(15tw twO(1) n2 )
+Õ(10tw twO(1) n3 )
+Õ(10tw twO(1) n3 )
+
+Table 1: Table with our results. Rows 1 − 4 are discussed in Section 3 while rows 5 − 7 are
+discussed in Section 4. Line 7 is the result of applying the determinant approach to Feedback
+Vertex Set (note that we do not solve the counting variant). The symbol ω denotes the
+matrix multiplication exponent (currently it is known that ω < 2.3727 due to [47]).
+Since one of the main strengths of the treewidth concept seems to be its ubiquity, it is perhaps
+not surprising that our results improve, simplify, generalize or unify a number of seemingly
+unrelated results. In all cases, problem instances can be reduced to instances with small treeor pathwidth using standard techniques. This is further discussed in Subsection 1.2.
+We would like to mention that very recently, a subset of the current authors found an
+eﬃcient rank bound of a partial solution versus partial solution matrix for the Hamiltonian
+3
+
+cycle problem. We will use this in the current to get a low running time for the Traveling
+Salesman problem.
+1.1.1
+
+Rank based approach
+
+Our ﬁrst tool is the rank based method (presented in Section 3). This is based on a very generic
+idea to improve a dynamic programming algorithm, that we will now outline.
+Recall that a dynamic programming algorithm ﬁxes a way to decompose certiﬁcates into
+‘partial certiﬁcates’, and builds partial certiﬁcates in a bottom-up manner while storing only
+their essential information. Given some language L ⊆ {0, 1}∗ , this is typically implemented by
+a deﬁning an equivalence ∼ on partial certiﬁcates x, y ∈ {0, 1}k such that x ∼ y if xz ∈ L ↔
+yz ∈ L, for every extension z ∈ {0, 1}l . For connectivity problems on treewidth, the number of
+non-equivalent certiﬁcates can be seen to be larger than our running times. For example [44]
+for a lower bound in communication complexity.
+We will use however, that sometimes we can represent the joint essential information for
+sets of partial certiﬁcates more eﬃciently than naively representing essential information for
+every partial certiﬁcate separately. The rank based approach achieves this as follows: Given a
+dynamic programming algorithm, consider the matrix A whose rows and columns are indexed
+by partial certiﬁcates, with A[x, y] = 1 if and only if xy ∈ L. Then observe that if a set of rows
+X ⊆ {0, 1}n is linearly dependent (modulo 2), any partial certiﬁcate x ∈ X is redundant in the
+sense that if xz ∈ L there will be y ∈ X with yz ∈ L. Hence, the essential information can be
+reduced to rk(A) partial certiﬁcates.
+For getting this approach to work we require an upper bound on the rank of the matrix M
+deﬁned as follows: Fix a ground set U and let p and q be partitions of U (p and q represent
+connectivity induced by partial solutions), deﬁne M[p, q] to be 1 if and only if the meet of p and q
+is the trivial partition, that is, if the union of the partial solutions induce a connected solution.
+Although this matrix has dimensions of order 2θ(|U | lg |U |), we given a simple factorization in
+GF(2) of matrices with inner dimension 2|U | using an idea of [18]. Interestingly, our factorization
+follows from more generic results in communication complexity [39, 40]. Furthermore, our
+factorization (Lemma 3.13) can be derived from the much more general setting of communication
+complexity [39, 40] (or more speciﬁcally, Lemma 5.7 from [39]).
+1.1.2
+
+Squared determinant approach
+
+Our second tool is the squared determinant approach (presented in Section 4). This gives a
+generic transformation of counting connected objects to a more local transformation. In [18] the
+existence of such a transformation in GF(2) was already given. For extending this to counting
+problems, we will need three key insights. The ﬁrst insight is that (a variant of) Kirchhoﬀ’s
+matrix tree theorem gives a reduction from counting connected objects to computing a sum
+of determinants. However, we cannot fully control the contribution of a connected object (it
+will appear to be either 1 or -1). To overcome this we ensure that every connected object
+contributed exactly once, we compute a sum of squares of determinants. The last obstacle is
+that the computation of a determinant is not entirely local (in the sense that we can verify a
+contribution by iteratively considering its intersection with all bags) since we have to account for
+the number of inversions of a permutation in every summand of the determinant. To overcome
+this, we use that this in fact becomes a local computation once we have ﬁxed the order of the
+vertices in a clever way.
+
+4
+
+1.2
+
+Relations to previous work
+
+As mentioned before, our results improve, simplify, generalize or unify a number of seemingly
+unrelated results. We will support this claim in this subsection.
+1.2.1
+
+Algorithms for problems with small solutions.
+
+Although we do not improve the running time of known algorithms, a signiﬁcant advantage of
+our approach is that it uniﬁes several known non-trivial algorithms. We proceed by giving three
+important examples:
+Finding long paths In [2], the authors gave a deterministic 2O(k) |E| lg |V | time algorithm
+that ﬁnds a simple path on k vertices in a graph G = (V, E), resolving the open question
+whether simple paths of length log n can be found in polynomial time from [43]. In a follow-up
+3
+work, [14] this was improved to a 4k+O(log k) |V ||E| time algorithm. All these algorithms use the
+(arguably) involved construction of perfect hash families, and no 2O(k) |V |O(1) time deterministic
+algorithm avoiding the use of such families was previously known.
+As a corollary of our technique we can obtain a simple O(2O(k) kO(1) |V |+|E|) time algorithm,
+or an O(4.28k kO(1) |V | + |E|) with a standard technique from [23] (see also [10]) as follows.
+Create a depth ﬁrst search tree of the input graph; if the height of the tree is more than k,
+the longest path from a leaf to the root gives a k-path and we are done. Otherwise, there is a
+path decomposition of width at most k, with for every leaf-root path a bag with the vertices on
+this path. Since this can be performed in linear time (see [10] for details) we can respectively
+apply a simple variant of the algorithm from Section 3.4 or the algorithm from Theorem 3.20
+to obtain the algorithms.
+Finding feedback vertex sets Many papers (see [18, 13] and the references therein) have
+been devoted to the Feedback Vertex Set problem: Given an input graph G = (V, E) and
+a (small) parameter k, can we remove at most k vertices from G in order to obtain a forest?
+It should be noted that if this is indeed the case, then a tree decomposition of width k + 1 of
+G is easily obtained from a solution X by adding X to all bags of a tree decomposition of the
+forest V \ X. Based on this simple observation, deterministic 2O(k) kO(1) |V | + |E| algorithms are
+easily obtained by using a constant-factor approximation or the method of iterative compression. We would like to mention that this is very diﬀerent from previously known deterministic
+2O(k) kO(1) |V |O(1) algorithms that all rely on a measure-based branching strategy.
+H-minor free √
+graphs In√[19], it√was shown that any H-minor-free graph either has treewidth
+be solved once
+bounded by O( k), or a 2 k × 2 k grid as a minor. Many problems
+√ can easily
+√
+we know that the input graph has such a grid (for instance a 2 k × 2 k grid as a minor
+guarantees that the graph does not have a vertex cover smaller than k or does have a 4k-path).
+Thus, we are left with solving the problem with the assumption of bounded treewidth.
+In the case of problems with a local veriﬁcation algorithm
+such as vertex cover, a standard
+√
+O(
+k)
+O(1)
+dynamic programming algorithm then gives us a 2
+n
+algorithm to check whether a
+graph has a vertex cover no larger√ than k. In the case of k-path, however, the standard dynamic
+programming routine gives a 2O( k log k) nO(1) complexity. Motivated by this a number of papers
+showed that the fact that G is H-minor free can be exploited to give 2O(tw) nO(1) time algorithms
+(see [20] and the references therein). In [18] this result was extended to general graphs at the
+cost of randomization and a pseudo-polynomial dependence on the input weights, if present. In
+the current work we resolve the latter issues thereby fully unifying these previous results.
+
+5
+
+1.2.2
+
+Graph classes with small treewidth
+
+Sometimes the input is restricted to a graph class that is guaranteed to have small treewidth
+by known results. We survey here some connections of our work to previous results that are
+more tailor made for such a graph class.
+Bounded degree A number of problems has been studied in the setting were the input
+graph has bounded degree. For example, the Traveling Salesman has received considerable
+attention [5, 22, 26, 32]. Our contribution is a derandomization at the cost of a slightly larger
+base of the exponential dependence.
+Throughout the following, we let n denote the number of vertices of the given graph. Then
+the following theorem by Fomin et al. reduces the bounded degree setting to small treewidth:
+Theorem 1.1 ([24]). For any ǫ > 0 there exists an integer nǫ such that for any graph G with
+n > nǫ vertices,
+1
+13
+1
+pw(G) ≤ n3 + n4 + n5 + n≥6 + ǫn,
+6
+3
+30
+where ni is the number of vertices of degree i in G for any i ∈ {3, . . . , 5} and n≥6 is the number
+of vertices of degree at least 6.
+This theorem is constructive, and the corresponding path decomposition (and, consequently,
+tree decomposition) can be found in polynomial time. Using this result one can get fast determinstic algorithms for all the connectivity problems listed in Subsection 1.3.3 in [18]. In
+this paper we restrict ourselves to the most studied setting, Traveling Salesman problem
+for cubic graphs. In [18] a 1.201n nO(1) Monte-Carlo algorithm was obtained for Hamiltonian
+cycle; Very recently in [17], this is improved to a 1.1583n nO(1) time Monte-Carlo algorithm
+for Hamiltonian cycle. By combining the ideas of this paper with a result from [17], we obtain a 1.2186n nO(1) time deterministic algorithm for the Traveling Salesman problem in
+Corollary 3.19.
+Planar graphs Recall from the previous subsection that n denotes the number of vertices of
+the given graph. Here we begin with a consequence of [25]:
+√
+√
+Proposition 1.2 ([25]). For any planar graph G, tw(G) + 1 ≤ 32 4.5n ≤ 3.183 n. Moreover
+a tree decomposition of such width can be found in polynomial time.
+Using this we immediately obtain the following result for Traveling Salesman on planar
+graphs.
+Corollary√1.3. There exists
+√ an algorithm that solves Traveling Salesman on planar graphs
+in 4.283.183 n nO(1) = 26.677 n nO(1) time.
+√
+
+The best √known algorithm so far was the O(26.903 n )-time algorithm of Bodlaender et al.
+for Hamiltonian cycle was given in [18].
+[21]. A 43.183 n nO(1) randomized algorithm
+√
+6.677
+n
+Similarly, we obtain an
+)-time deterministic algorithm
+for k-cycle on planar graphs
+√
+√ O(2
+(compare to the O(27.223 n ) time of [21]), and well-behaved c n -time algorithms for the other
+connectivity problems studied in [18].
+
+6
+
+2
+
+Preliminaries
+
+We use standard graph theory notation. Additionally for a subset of edges X ⊆ E of an
+undirected graph G = (V, E) by G[X] we denote the subgraph induced by edges and endpoints
+of X, i.e. G[X] = (V (X), X). For X, Y ⊆ V we let E(X, Y ) be the set of all edges with one
+endpoint in X and one in Y . For a vertex v and X ⊆ V we denote degX (v) for the number of
+neighbors of v contained in X.
+Partitions and the partition lattice. Given a base set U , we use Π(U ) for the set of
+all partitions of U . It is known that, together with the coarsening relation ⊑, Π(U ) gives a
+lattice, with the minimum element being {U } and the maximum element being the partition
+into singletons. We denote ⊓ for the meet operation and ⊔ for the join operation in this lattice;
+these operators are associative and commutative. We use Π2 (U ) ⊂ Π(U ) to denote the set of all
+partitions of U in blocks of size 2, or equivalently, the set of perfect matchings over U . Given
+p ∈ Π(U ) we let #blocks(p) denote the number of blocks of p. If X ⊆ U we let p↓X ∈ Π(X)
+be the partition obtained by removing all elements not in X from it, and analogously we let for
+U ⊆ X denote p↑X ∈ Π(X) for the partition obtained by adding singletons for every element in
+X \ U to p. Also, for X ⊆ U , we let U [X] be the partition of U where one block is {X} and all
+other blocks are singletons. If a, b ∈ U we shorthand U [ab] = U [{a, b}]. The empty set, vector
+and partition are all denoted by ∅.
+Tree decompositions and treewidth. A tree decomposition [45] of a graph GSis a tree T in
+which each node x has an assigned set of vertices Bx ⊆ V (called a bag) such that x∈T Bx = V
+with the following properties:
+• for any uv ∈ E, there exists an x ∈ T such that u, v ∈ Bx .
+• if v ∈ Bx and v ∈ By , then v ∈ Bz for all z on the (unique) path from x to y in T.
+The treewidth tw(T) of a tree decomposition T is the size of the largest bag of T minus one,
+and the treewidth of a graph G is the minimum treewidth over all possible tree decompositions
+of G (thus the graphs of treewidth one are exactly the forests and trees and that are not also
+independent sets). Finding a tree decomposition of minimum treewidth is N P-hard [3], but for
+each ﬁxed integer k there is a linear time algorithm for ﬁnding a tree decomposition of width
+at most k (if it exists) [8]. In this paper, we will always assume that tree decompositions of the
+appropriate width are given.
+Dynamic programming algorithms on tree decompositions are often presented on nice tree
+decompositions, introduced by Kloks [34]; see also [9, 28] regarding treewidth and dynamic
+programming. We present a slightly augmented variant that speciﬁes bags/nodes for introducing
+edges; this was already used by Cygan et al. [18].
+Definition 2.1 (Nice Tree Decomposition). A nice tree decomposition is a tree decomposition
+with one special bag z called the root and in which each bag is one of the following types:
+• Leaf bag: a leaf x of T with Bx = ∅.
+• Introduce vertex bag: an internal vertex x of T with one child vertex y for which
+Bx = By ∪ {v} for some v ∈
+/ By . This bag is said to introduce v.
+• Introduce edge bag: an internal vertex x of T labeled with an edge uv ∈ E with one
+child bag y for which u, v ∈ Bx = By . This bag is said to introduce uv.
+7
+
+• Forget bag: an internal vertex x of T with one child bag y for which Bx = By \ {v} for
+some v ∈ By . This bag is said to forget v.
+• Join bag: an internal vertex x with two child vertices l and r with Bx = Br = Bl .
+We additionally require that every edge in E is introduced exactly once.
+Proposition 2.2. Given a tree decomposition of some graph G = (V, E), a nice tree decomposition rooted at an empty bag, an introduce edge bag for any choice of {u, v} ∈ E or an forget
+vertex bag can be computed in ntwO(1) time.
+By ﬁxing the root of T, we associate with each bag x in a tree decomposition T a vertex set
+Vx ⊆ V where a vertex v belongs to Vx if and only if there is a bag y which is a descendant of
+x in T with v ∈ By (recall that x is its own descendant). We also associate with each bag x of
+T a subgraph of G as follows:
+
+
+Gx = Vx , Ex = {e|e is introduced in a descendant of x }
+Path decompositions and pathwidth. A path decomposition is a tree decomposition where
+the tree of nodes is restricted to be a path. The pathwidth of a graph is the minimum width of
+all path decompositions. Path decompositions can, similarly as above, be transformed into nice
+path decompositions, these obviously contain no join bags.
+Further notation. Given a graph G = (V, E) and a For two integers a, b we use a ≡ b to
+indicate that a is even if and only if b is even. We use N to denote the set of all non-negative
+integers. We use Iverson’s bracket notation: if p is a predicate
+we let [p] be 1 if p if true and 0
+P
+otherwise. If ω : U → {1, . . . , N }, we shorthand ω(S) = e∈S ω(e) for S ⊆ U . For a function
+s by s[v → α] we denote the function s \ {(v, s(v))} ∪ {(v, α)}. Note that this deﬁnition works
+regardless of whether s(v) is already deﬁned or not. We use either s|X or s|X to denote the
+vector obtained by restricting the domain to X.
+
+3
+
+The rank based approach
+
+This section is devoted to a complete presentation of our rank based approach for connectivity
+problems parameterized by treewidth. At the heart of the approach is a technique for reducing
+large sets of partial solutions, expressed as weighted partitions (to be deﬁned later), down to
+smaller sets that maintain the same optimal solution value along with at least one optimal solution (though we point out that this reduction by design cannot maintain all optimal solutions).
+The main result behind the approach is presented in Section 3.2; it ensures that we can always
+ﬁnd a small set of representative partial solutions. To avoid creating a series of ad hoc results for
+single problems, we introduce a collection of operations on families of weighted partitions, such
+that our results apply to any dynamic programming (DP) formulation that can be expressed
+using these operators only (see Section 3.1).
+In Sections 3.3, 3.4, and 3.5 we give DP formulations using our operators for Steiner
+Tree, Traveling Salesman, and Feedback Vertex Set respectively. Except for Feedback Vertex Set, where this turns out to be more involved, the programs are close to naive
+formulations that give runtimes 2Ω(tw·log tw) (note that our operators and language of weighted
+partitions are nonstandard). At the ﬁrst read of this section, it is perhaps useful to read only
+one of the DP formulations, but the diﬀerent problems solved by them should indicate the
+versatility of our operators.
+8
+
+Section 3.6 presents the proofs for the main building blocks of the approach (those given in
+Section 3.2). Finally, Section 3.7 discusses limitations and possible improvements to the results
+presented in this section.
+
+3.1
+
+Operators on sets of weighted partitions
+
+We will now introduce formally what we mean by sets of weighted partitions and followed by a
+deﬁnition of the mentioned collection of operations on such partition sets.
+Definition 3.1 (set of weighted partitions). Recall that Π(U ) denotes the set of all partitions
+of some set U . A set of weighted partitions is a set A ⊆ Π(U ) × N, i.e., a family of pairs, each
+consisting of a partition of U and a non-negative integer weight. We say that A is unweighted
+if (p, w) ∈ A implies that w = 0.
+The operators naturally apply to connectivity problems by allowing, e.g., gluing of connected
+components (i.e., diﬀerent sets in a partition), or joining of two partial solutions by taking the
+meet operation ⊓ on the respective partitions. We will later see that if the recurrence only uses
+these operators, then the naive algorithm evaluating the recurrence can be improved beyond
+the typical 2Ω(tw·log tw) that comes from the high number of diﬀerent possible partial solutions.
+For notational ease, we let rmc(A) denote the set obtained by removing non-minimal weight
+copies, i.e.,
+
+rmc(A) = (p, w) ∈ A ∄(p, w′ ) ∈ A ∧ w′ < w .
+Definition 3.2 (operators on weighted partitions). Let U be a set and A ⊆ Π(U ) × N.
+
+↓ B = rmc(A∪B). Combine two sets of weighted
+Union. For B ⊆ Π(U )×N, deﬁne A∪
+partitions and discard dominated partitions.
+
+Insert. For X ∩ U = ∅, deﬁne ins(X, A) = {(p↑U ∪X , w) | (p, w) ∈ A}. Insert additional elements into U and add them as singletons in each partition.
+Shift. For w′ ∈ N deﬁne shft(w′ , A) = {(p, w + w′ ) | (p, w) ∈ A}. Increase the
+weight of each partition by w′ .
+Glue. For u, v, let Û = U ∪ {u, v} and deﬁne glue(uv, A) ⊆ Π(Û ) × N as
+o
+n
+glue(uv, A) = rmc( (Û [uv] ⊓ p↑Û , w) (p, w) ∈ A ).
+
+Also, if ω : Û × Û → N, let glueω (uv, A) = shft(ω(u, v), glue(uv, A)). In each
+partition combine the sets containing u and v into one; add u and v to the base
+set if needed.
+
+Project. For X ⊆ U let X = U \ X, and deﬁne proj(X, A) ⊆ Π(X) × N as
+n
+o
+proj(X, A) = rmc( (p↓X , w) (p, w) ∈ A ∧ ∀e ∈ X : ∃e′ ∈ X : p ⊑ U [ee′ ] ).
+
+Remove all elements of X from each partition, but discard partitions where this
+would reduce the number of blocks/sets.
+
+Join. For B ⊆ Π(U ′ ) × N let Û = U ∪ U ′ and deﬁne join(A, B) ⊆ Π(Û ) × N as
+o
+n
+join(A, B) = rmc( (p↑Û ⊓ q↑Û , w1 + w2 ) (p, w1 ) ∈ A ∧ (q, w2 ) ∈ B ).
+
+Extend all partitions to the same base set. For each pair of partitions return the
+outcome of the meet operation ⊓ , with weight equal to the sum of the weights.
+9
+
+Regarding the deﬁnition, note the role of U [ab]: Using p ⊓ U [ab] we obtain a partition that
+is the same as p except that the sets containing a and b are now merged into one (if they were
+one set already then nothing happens). When we use p ⊑ U [ab] then this is true if a and b are
+in the same set in the partition p (but the set can be larger than just {a, b}).
+Note also that ins(X, A) and shft(,a) re the only operators that do not require rmc() in its
+deﬁnition; all other operators may create weighted partitions that consist of the same partition
+but with diﬀerent weights (we want to keep only the cheaper one).
+Straightforward implementation gives the following:
+Proposition 3.3. Each of the operations union, shift, insert, glue and project can be performed
+in S|U |O(1) time where S is the size of the input of the operation. Given A, B, join(A, B) can
+be computed in time |A| · |B| · |U |O(1) .
+
+3.2
+
+Representing collections of weighted partitions
+
+The key idea for getting a faster dynamic programming algorithm is to follow the naive DP,
+but to consider only small representative sets of weighted partitions instead of all weighted
+partitions that would be considered by the naive DP. Intuitively, a representative (sub)set of
+partial solutions should allow us to always extend to an optimal solution provided that one of
+the complete set of partial solutions extends to it. Let us deﬁne this formally.
+Definition 3.4 (Representation). Given a set of weighted partitions A ⊆ Π(U ) × N and a
+partition q ∈ Π(U ), deﬁne
+opt(q, A) = min {w | (p, w) ∈ A ∧ p ⊓ q = {U }} .
+For another set of weighted partitions A′ ⊆ Π(U ) × N, we say that A′ represents A if for all
+q ∈ Π(U ) it holds that opt(q, A′ ) = opt(q, A).
+Note that the deﬁnition of representation is symmetric, i.e., if A′ represents A then A also
+represents A′ . However, we will only be interested in the special case where A′ ⊆ A and where
+we have a size guarantee for ﬁnding a small such subset A′ .
+′
+
+Definition 3.5 (Preserving representation). A function f : 2Π(U )×N × Z → 2Π(U )×N is said to
+preserve representation if for every A, A′ ⊆ Π(U ) × N and z ∈ Z it holds that if A′ represents
+A then f (A′ , z) represents f (A, z). (Note that Z stands for any combination of further inputs.)
+Completing the required tools, the following lemma and theorem establish that the operations needed for the DP preserve representation, and that we can always ﬁnd a reasonably small
+representative set of weighted partitions. The proofs are deferred to Section 3.6.
+Lemma 3.6. The union, insert, shift, glue, project, and join operations from Definition 3.2
+preserve representation.
+Theorem 3.7 (reduce). There exists an algorithm reduce that given set of weighted partitions
+A ⊆ Π(U ) × N, outputs in |A|2(ω−1)|U | |U |O(1) time a set of weighted partitions A′ ⊆ A such
+that A′ represents A and |A′ | ≤ 2|U | , where ω denotes the matrix multiplication exponent.
+It was recently shown that ω < 2.3727 [47].
+
+10
+
+3.3
+
+Application to Steiner Tree.
+
+In this section we show how to solve the Steiner Tree problem via a dynamic programming
+formulation that requires only the operators introduced in Section 3.3.
+Steiner Tree
+Input: A graph G = (V, E) weight function ω : E → N \ {0}, a terminal set K ⊆ V and a
+nice tree decomposition T of G of width tw.
+Question: The minimum of ω(X) over all subsets X ⊆ E of G such that G[X] is connected
+and K ⊆ V (G[X]).
+
+Of course, since the weights are positive, in an optimal solution X indeed induces a tree
+as the problem name suggests. We will start by restating the recurrence used by the folklore
+algorithm for solving this problem using the introduced terminology on weighted partitions.
+Generally, we will denote the (to be computed) tables as Ax (·) whereas Ex (·) stands for a set of
+partial solutions; in both cases x denotes the current bag. For a bag x, and s ∈ {0, 1}Bx deﬁne
+
+
+
+−1
+Ax (s) =
+p, min ω(X) p ∈ Π(s (1)) ∧ Ex (p, s) 6= ∅
+X∈Ex (p,s)
+n
+Ex (p, s) = X ⊆ Ex ∀v ∈ Bx : v ∈ V (G[X]) ∨ v ∈ K → s(v) = 1
+∧ ∀v1 , v2 ∈ s−1 (1) : v1 v2 are in same block in p ↔ v1 , v2 connected in G[X]
+o
+∧ #blocks(p) = cc(G[X]) .
+
+Note that s : Bx → {0, 1} expresses which vertices we chose for the Steiner tree (namely those
+with s(v) = 1). Intuitively, Ex (p, s) is the set of partial solutions having (a subset of) s−1 (1) as
+incident vertices in Bx and connecting the vertices of s−1 (1) according to p. Furthermore, the
+deﬁnition ensures that all connected components spanned by the edges of any partial solution
+contain at least one vertex of the current bag, and all terminals are contained in some connected
+component. Thus if we pick the tree decomposition T such that the root is the forget node,
+say x, for some terminal, say v, then we can check at the (single) child y of x the entry Ay (s)
+where s(v) = 1 (there are no other vertices in this bag): This allows only the partition p = {{v}},
+and by deﬁnition it must correspond to a minimum weight set of edges that spans a single
+connected component that contains all terminals.
+We proceed with the recurrence for Ax (s) which is used by the folklore dynamic programming
+algorithm. In order to simplify the notation, let v denote the vertex introduced and contained
+in an introduce bag, and let y, z denote the left and right children of x in T, if present. We
+distinguish on the type of bag in T:
+Leaf bag x:
+Ax (∅) = {(∅, 0)}
+
+Indeed, Ex (p, s) only contains the empty set; it connects nothing and has weight 0.
+Introduce vertex v bag x with child y:
+
+
+ins({v}, Ay (s|By )),
+Ax (s) = Ay (s|By ),
+
+
+∅,
+
+if s(v) = 1
+if s(v) = 0 ∧ v ∈
+/K
+if s(v) = 0 ∧ v ∈ K
+
+Using v for a Steiner tree corresponds to s(v) = 1, and we insert v as a singleton into
+each partition (as there are no edges incident with v yet). If v is a terminal, then not
+inserting v is not feasible. Else, if v ∈
+/ K, and we do not use v then we get the same
+partial solutions as the previous bag.
+11
+
+Forget vertex v bag x with child y:
+↓
+Ax (s) = Ay (s[v → 0]) ∪
+proj(v, Ay (s[v → 1]))
+
+We combine partial solutions that either include v or exclude v. If v is included, we ensure
+it was connected to other vertices by removing it with the project operation (if it was a
+singleton then the corresponding partition is eﬀectively eliminated).
+Introduce edge e = uv bag x with child y:
+(
+Ay (s)
+Ax (s) =
+↓ glue (uv, A (s)),
+Ay (s) ∪
+y
+ω
+
+if s(u) = 0 ∨ s(v) = 0
+otherwise.
+
+To be able to include the edge we need by the deﬁnition of Ex (p, s) that s(u) = s(v) = 1.
+If we include the edge, we account for the weight ω(u, v) and update the connectivity p
+by connecting u and v with the glue operation.
+Join bag x with children y and z:
+Ax (s) = join(Ay (s), Az (s)).
+We know that every partial solution represented in Ax (s) can be obtained from partial
+solutions represented by Ay (s) and Az (s). To combine two partial solutions from Ay (s)
+and Az (s), we have to sum the weights of the used edges and join the connectivity, and
+this is exactly what the join operation does.
+Theorem 3.8. There exist algorithms that given a graph G solve Steiner Tree in time
+n(1 + 2ω )pw pwO(1) time if a path decomposition of width pw of G is given, and in time n(1 +
+2ω+1 )tw twO(1) time if a tree decomposition of width tw of G is given.
+Proof. The algorithm is the following: use the above dynamic programming formulation as
+discussed to compute Ar (where r is the child of the root, as discussed), but after evaluation
+of every entry Ax , use Theorem 3.7 to obtain and store A′x = reduce(Ax ) rather than Ax .
+Since Ax = reduce(A) represents A and the recurrence uses only the operators deﬁned in
+Deﬁnition 3.2 which all preserve representation by Lemma 3.6, we have as invariant that for
+every x ∈ T the entry A′x stored for Ax represents Ax by Lemma 3.6. In particular, the
+stored value A′r (s) represents Ar (s) and hence we can safely read oﬀ the answer to the problem
+from this stored value as done from Ar (s) in the folklore dynamic programming algorithm.
+Let us focus on the time analysis: since for all operations from Deﬁnition 3.2 we can apply
+Proposition 3.3, and for obtaining the tree/path decomposition with the required properties we
+can use Proposition 2.2 the bottleneck clearly is the reduce algorithm.
+If we are given a path decomposition, it can easily be seen that the intermediate sets of
+−1
+weighted partitions are always of size at most 2|s (1)|+1 , and P
+hence the time needed for computing reduce(Ax (s)) for any bag x can be upper bounded by i0 +i1 =|Bx | |Bi1x | 1i0 2ωi1 pwO(1) =
+(1 + 2ω )pw pwO(1) .
+If we are given a tree decomposition, we need to consider the time required to compute
+A′x (s) were x is a join bag. Then the size of the intermediate sets of weighted partitions is easily
+−1
+upper bounded by P
+4|s (1)| , and hence
+the time needed for computing reduce(Ax (s)) can be
+
+upper bounded by i0 +i1 =|Bx | |Bi1x | 1i0 2(ω+1)i1 twO(1) = (1 + 2ω+1 )tw twO(1) .
+12
+
+3.4
+
+Application to Traveling Salesman.
+
+In this section we give an algorithm for Traveling Salesman by expressing a corresponding
+dynamic programming using the operators from Section 3.1.
+Traveling Salesman
+Input: A graph G = (V, E), weight function ω : E → N and tree decomposition T of G of
+width tw.
+Question: The minimum of ω(X) over all Hamiltonian cycles X ⊆ E.
+
+First, for technical convenience, we guess an edge v1 vn ∈ X that has to be included in the
+Hamiltonian cycle. Note that this can be done with only tw guesses since we can guess an edge
+adjacent to a vertex of minimum degree which is easily seen to be at most tw. Now, using
+Proposition 2.2, we turn the tree decomposition T into a nice tree decomposition that is rooted
+at the introduce edge bag for {v1 , vn }; slightly abusing notation we refer to the latter as T.
+After accounting for the weight of {v1 , vn }, this reduces the problem to tw instances of ﬁnding
+a minimum weight Hamiltonian path between two ﬁxed vertices.
+For a bag x and s ∈ {0, 1, 2}Bx deﬁne
+
+
+
+−1
+Ax (s) =
+M, min ω(X) M ∈ Π2 (s (1)) ∧ Ex (M, s) 6= ∅
+X∈Ex (M,s)
+
+Ex (M, s) = X ⊆ Ex : v ∈ Bx → degX (v) = s(v)
+∧ v ∈ Vx \ Bx → degX (v) = 2
+
+∧ {u, v} ∈ M → u and v are connected in Gx [X]
+
+∧ Gx [X] contains no cycles .
+
+In this case, s : Bx → {0, 1, 2} encodes the degree of vertices in Bx in the corresponding
+partial solution (the degree bound and exclusion of cycles implies that these are collections
+of paths). Our partitions M ∈ Π2 (s−1 (1)) store the pairing of degree-1 vertices induced by
+connecting paths. Again naively implemented this would give 2Ω(tw log tw) partial solutions, but
+our concept of representative sets gives the desired single-exponential runtime.
+Consider the table entry Az (s) where z is the root of T, s(v1 ) = s(vn ) = 1 and for v 6= v1 , vn
+we have s(v) = 2. It is easy to see that this table entry is empty if there is no Hamiltonian
+path from v1 to vn and otherwise it is ({{v1 , vn }}, w) where w is the weight of the minimum
+Hamiltonian path. Hence, to solve the problem it suﬃces to compute Az (s).
+Leaf bag x: We have Bx = ∅. For ease of notation we permit a single table entry for the empty
+partition of Bx into vertices labeled 0, 1, and 2:
+Ax (∅) = {(∅, 0)}
+Introduce vertex v bag x with child y: We have Bx = By ∪ {v}. For all s ∈ {0, 1, 2}Bx we
+compute Ax (s) as follows
+(
+Ay (s|By ) if s(v) = 0,
+Ax (s) =
+∅
+otherwise.
+Since v is just introduced it cannot have neighbors in Vx and there is no change in connectivity.
+Forget vertex v bag x with child y: We have By = Bx ∪ {v}. For all s ∈ {0, 1, 2}Bx we
+compute Ax (s) as follows
+Ax (s) = Ay (s[v → 2]).
+13
+
+The vertex v cannot have neighbors outside Vx so it must have its two neighbors in Vx .
+Note that s[v → 2] ∈ {0, 1, 2}By , with s(v) = 2.
+Introduce edge e = uv bag x with child y: We have Bx = By . For all s ∈ {0, 1, 2}Bx we
+compute Ax (s) as follows
+
+
+∅,
+if s(u) = 0 ∨ s(v) = 0,
+
+
+
+
+
+if s(u) = s(v) = 1,
+glueω (uv, Ay (s[u, v → 0]))
+↓
+Ax (s) = Ay (s) ∪ proj({v}, glueω (uv, Ay (s[u → 0, v → 1]))) if s(u) = 1 ∧ s(v) = 2,
+
+
+
+proj({u}, glueω (uv, Ay (s[u → 1, v → 0]))) if s(u) = 2 ∧ s(v) = 1,
+
+
+
+
+proj({u, v}, glueω (uv, Ay (s[u, v → 1])))
+otherwise.
+
+In all cases, an optimal solution may simply make no use of the edge e; hence we copy the
+set of matchings from the child accordingly (this gives the term Ay (s)). If s(u) or s(v) is
+0, the edge cannot have been used. When considering partial solutions using e, we have
+to use the entry of Ay where the degree of u and v is decreased by 1 to account for the
+edge. In the case that s(u) and s(v) are 1 we can simply add the edge to the matching.
+In the case that s(u) = 1 and s(v) = 2 (or the symmetric opposite), we have to glue e
+to M , meaning that in the new matching u is matched with the vertex, say w, that v
+was previously matched with; here glue ﬁrst creates a set {u, v, w} and project shrinks it
+to {u, w} (since v now has degree two and its speciﬁc connectivity needs not be traced).
+In the case that s(u) and s(v) both are 2, including e in a matching M in Ay (s) gives the
+matching M \ {au, bv} ∪ {ab} for some a, b. We have to ensure that {a, b} =
+6 {u, v} which
+is done by projecting (if {a, b} = {u, v} then projection eliminates the partition).
+
+Join bag x with children y and z: We have Bx = By = Bz and compute Ax (s) for all s ∈
+{0, 1, 2}Bx as follows
+[
+Ax (s) = ↓ proj(s−1 (2) \ (l−1 (2) ∪ r −1 (2)), join(Ay (l), Az (r)))
+l+r=s
+
+Note here that l, r, s ∈ {0, 1, 2}Bx hence the summation is vector summation. Since we
+combine two characteristics of partial solutions into a new one, the degrees of the left
+and right partial solution (l and r) have to sum up to the degrees of the new one (s).
+Two characteristics (M1 , w1 ) ∈ Ay (l) and (M2 , w2 ) ∈ Az (r) combine to a characteristic
+of Ax (s) if and only if M1 ∪ M2 is acyclic which is equivalent to saying that all vertices
+in s−1 (2) are connected to vertices in s−1 (1) in the resulting partition M1 ⊓ M2 , and the
+latter is ensured by the project operation.
+Using the tools from Subsection 3.2, we obtain the following result. However, it should be noted
+that we give an improvement of this in Subsection 3.6; this uses a non-trivial result from [17].
+Theorem 3.9. There exist algorithms that given a graph G solve Traveling Salesman in
+time n(2 + 2ω )pw pwO(1) time if a path decomposition of width pw of G is given, and in time
+n(7 + 2(ω+1) )tw twO(1) time if a tree decomposition of width tw of G is given.
+Proof. The algorithm is the following: use the above dynamic programming formulation from
+Subsection 3.4 to compute Ar , but after evaluation of every entry Ax , use Theorem 3.7 to store
+A′x = reduce(Ax ) rather than Ax . Since A′x = reduce(A) represents A and the recurrence uses
+only the operators deﬁned in Deﬁnition 3.2 which all preserve representation by Lemma 3.6,
+we have as invariant that for every x ∈ T the entry A′x represents Ax . In particular, the stored
+14
+
+value A′z (s) represents Az (s) where z is the root of T and hence we can safely read oﬀ the answer
+to the problem as done in the naive dynamic programming algorithm from Az (s)).
+Let us focus on the time analysis: since for all operations from Deﬁnition 3.2 we can apply
+Proposition 3.3, and for obtaining the tree/path decomposition with the required properties
+we can use Proposition 2.2 the bottleneck clearly is the reduce algorithm. Also, note that the
+guessing of the edge v1 vn gives overhead of at most pw or tw so this will be subsumed by the
+last term of the claimed running time.
+In the ﬁrst algorithm that is given a path decomposition, note we can assume x is either
+a leaf, introduce vertex, forget vertex or introduce edge bag. In this case the size of the
+−1
+intermediate sets of weighted partitions is by our invariant at most 2|s (1)| . Then the time
+−1
+needed to perform reduce(Ax (s)) is at most 2ω|s (1)| pwO(1) and the time to compute Ax (s) for
+every {0, 1, 2}Bx is
+
+
+X
+X
+|Bx |
+ω|s−1 (1)|
+O(1)
+2
+pw
+≤
+1i0 1i2 2ωi1 pwO(1)
+i
+,
+i
+,
+i
+0
+1
+2
+Bx
+i0 +i1 +i2 =|Bx |
+
+s∈{0,1,2}
+
+= (2 + 2ω )|Bx | pwO(1) ,
+
+where the last equality is due to the multinomial theorem. Hence A′x can be computed for every
+x ∈ T in the claimed time bound.
+For tree decompositions, note that if x is a join bag, and we denote Â for the intermediate
+values in the computation of A′ (x) then
+|Âx (s)| ≤
+
+X
+
+|l−1 (1)| |r −1 (1)|
+
+2
+
+l+r=s
+
+2
+
+=
+
+|Bx |
+
+Y X
+
+2[l=1]+[r=1] = 4|s
+
+−1 (1)|
+
+6|s
+
+−1 (2)|
+
+.
+
+i=1 l+r=si
+
+where in the ﬁrst equality we expand into independent products over all coordinates of the
+vectors and use the following simple observation in the second equality
+
+
+1 if si = 0
+X
+[li =1]+[ri =1]
+2
+= 4 if si = 1
+(1)
+
+
+li +ri =si
+6 if si = 2.
+
+Using this, it can also be seen that the reduce operation to obtain A′x (s) is performed in
+−1
+−1
+−1
+time bounded by 4|s (1)| 6|s (2)| 2(ω−1)|s (1)| |Bx |O(1) . Then the total time needed to evaluate
+Ax (s) for every s ∈ {0, 1, 2}Bx is bounded by
+
+
+X
+|Bx |
+1i0 2(ω+1)i1 6i2 = n(7 + 2(ω+1) )|Bx | ,
+i0 , i1 , i2
+i0 +i1 +i2 =|Bx |
+
+by the multinomial theorem and the claim follows.
+
+3.5
+
+Application to Feedback Vertex Set.
+
+As a third application of the rank based approach we show how to formulate and solve Feedback Vertex Set using a dynamic programming formulation based on the operators introduced in Section 3.1.
+Feedback Vertex Set
+Input: An undirected graph G = (V, E), an integer k and a nice tree decomposition T of
+G of width tw.
+Question: Find a set Y ⊆ V such that |Y | ≤ k and G[V \ Y ] is a forest.
+15
+
+Using the operators for weighted partitions for solving Feedback Vertex Set requires a
+slight reformulation of the problem. The reason is that the operators are designed to maximize
+connectivity, whereas Feedback Vertex Set requires that we avoid creating cycles in introduce edge nodes of the tree decomposition. (It can be seen that certain more directly applicable
+operators do not preserve representation, e.g., selection of all partitions in which two vertices
+are connected, but we omit a detailed discussion at this point.)
+The idea for the reformulation is to seek an induced subgraph that is a tree on at least i =
+|V | − k vertices; this is equivalent to requiring maximum connectivity using only i − 1 edges. Of
+course, this requires that the connected components created by the deletion of a feedback vertex
+set can be connected into a single tree. To this end, we make the following changes: We modify
+G, by adding a special universal vertex v0 to it, i.e., it is adjacent to all vertices of G. Denote
+E0 for the set of edges incident to v0 . Then we ask for a pair (Y, Y0 ) such that Y ⊆ V \ {v0 },
+|Y | ≤ k, Y0 is a subset of E0 , and the graph (V \ Y, E[V \ Y ] ∪ Y0 ) is a tree. (By E[X] we mean
+all edges in E with both endpoints in X.) This is clearly equivalent to the original problem
+statement since G[V \(Y ∪{v0 })] can be extended to a tree in this way if and only if it is a forest.
+We emphasize that the tree must contain all edges between all selected original vertices and
+may contain any edges incident on v0 (this in particular aﬀects the possibilities and introduce
+edge bags). Note also that we can modify the tree decomposition T accordingly by adding v0
+to all bags and making it nice again.
+For a bag x, integers i, j and s ∈ {0, 1}Bx deﬁne
+
+Ax (s, i, j) = (p, 0) p ∈ Π(s−1 (1)) ∧ Ex (p, s, i, j) 6= ∅
+
+Ex (p, s, i, j) = (X, X0 ) ∈ 2Vx × 2E0 ∩Ex |X| = i ∧ |Ex [X \ {v0 }] ∪ X0 | = j
+∧ X ∩ Bx = s−1 (1) ∧ v0 ∈ Bx → s(v0 ) = 1
+
+∧ ∀u ∈ X \ Bx ∃u′ ∈ s−1 (1) : u, u′ connected in (X, Ex [X \ {v0 }] ∪ X0 )
+
+∧ ∀v1 , v2 ∈ s−1 (1) : v1 v2 are in same block in p ↔ v1 , v2 are connected
+in (X, Ex [X \ {v0 }] ∪ X0 ) .
+
+In words, (p, 0) ∈ Ax (s, i, j) indicates that there exists a subset {v0 } ∩ Vx ⊆ X ⊆ Vx with
+X ∩Bx = s−1 (1) and a subset X0 ⊆ Ex ∩E0 such that in the graph (X, Ex [X \{v0 }]∪X0 ) we have
+i vertices, j edges, no connected component fully contained in Vx \ Bx , and that the elements
+of s−1 (1) are connected according to the partition p. It follows that the given instance of
+Feedback Vertex Set is a YES-instance if and only if for some i ≥ |V ∪{v0 }|−k = |V |−(k−1)
+we have that Az (∅, i, i − 1) is non-empty: For the forward direction, we can take a solution and
+extend it to a tree of the required type using the incident edges of v0 . For the backward
+direction, we have that (X, Ex [X \ {v0 }] ∪ X0 ) contains i vertices and i − 1 edges and that it is
+connected; hence it is a tree and V \ X is a feedback vertex set.
+In order to simplify the notation, let v denote the vertex introduced and contained in an
+introduce bag, and let y, z denote the left and right children of x in T, if present. As usual,
+undeﬁned table entries are assumed to be empty for notational convenience. We distinguish on
+the type of bag in T:
+Leaf bag x:
+Ax (∅, 0, 0) = {(∅, 0)}
+Clearly, if i = j = 0 then Ex (∅, i, j) = {(∅, ∅)} and it is empty otherwise.
+
+16
+
+Introduce vertex v bag x with child y:
+
+
+∅
+Ax (s, i, j) = ins({v}, Ay (s|By , i − 1, j)),
+
+
+Ay (s|By , i, j),
+
+if v = v0 ∧ s(v) = 0,
+if s(v) = 1,
+otherwise.
+
+If v = v0 we require s(v) = 1 by deﬁnition. Otherwise, if s(v) = 1, we account for its
+inclusion in X: We extend solutions where the number of vertices is i − 1 (eﬀectively, this
+increases the number of vertices, as intended).
+
+Forget vertex v bag x with child y:
+↓
+Ax (s, i, j) = Ay (s[v → 0], i, j) ∪
+proj(v, Ay (s[v → 1], i, j)).
+
+We combine solutions from the child bag where v can be included or excluded in the intended tree (since the current bag does not specify s(v)). For previous solutions with s(v) =
+1, we remove v from the partitions using the project operator; this eliminates partial solutions that have v as a singleton in the partition since that would create a separate
+component that can no longer be connected (deviating from building a single tree).
+Introduce edge e = uv bag x with child y:
+
+↓
+
+Ay (s, i, j) ∪ glue(v0 v, Ay (s, i, j − 1))
+Ax (s, i, j) = glue(uv, Ay (s, i, j − 1))
+
+
+Ay (s, i, j)
+
+if u = v0 ∧ s(v) = 1,
+if s(u) = 1 ∧ s(v) = 1,
+otherwise.
+
+If u = v0 (or, by symmetry, v = v0 ) we can choose to insert the edge v0 v, and account for
+it by extending previous solutions with j − 1 edges. If s(u) = s(v) = 1 we have to include
+the edge uv in Ex [X] and again build upon solutions with j − 1 edges.
+
+Join bag x with children y and z:
+Ax (s, i, j) =
+
+[
+↓
+
+join(Ay (s, i1 , j1 ), Az (s, i2 , j2 )).
+
+=i+s−1 (1)
+
+i1 +i2
+j1 +j2 =j
+
+We ﬁrst compensate for vertices accounted for twice in the i counter since they were
+introduced in both subtrees of T by subtracting their number; these are exactly the
+vertices in s−1 (1) ⊆ Bx (they are selected for the tree and by basic tree decomposition
+properties they must be contained in Bx if they are in both subtrees). Then we simply
+add the number of edges of both subsolutions, and their connectivity is automatically
+joined by the join operator.
+We obtain the following theorem, whose proof is analogous to the proof of Theorem 3.8 and
+therefore omitted. However, let us explain why we can still obtain a time bound that is linear
+in n, despite the two additional table dimensions i and j of range O(n). The trick here is to see
+that we do not need to fully evaluate the table, but that smaller ranges for i and j suﬃce. First,
+let us see that i ∈ {j + 1, . . . , j + tw + 1}: If j ≥ i then the partial solution must already contain
+a cycle (and every further added vertex needs at least one incident edge so we cannot reach i∗
+vertices and i∗ − 1 edges). If i > j + tw + 1 then the table is empty, since matching partial
+solutions would have more than tw + 1 connected components, which violates the condition
+17
+
+that each component is connected to a vertex of the current bag. Second, to see that a small
+range of values for i suﬃces at each bag, consider the following: If we have a nonempty table
+entry Ax (s, i, j), then any table entry Ax (s′ , i′ , j ′ ) with i′ < i − tw is suboptimal (and hence
+not required): We can always add Bx \ {v0 } to the implicit feedback vertex set of any solution
+in Ax (s, i, j) to get a better solution than Ax (s′ , i′ , j ′ ); it is less constrained since its connected
+components contain only the mandatory v0 from Bx and it has at least i′ vertices in connected
+components.
+Theorem 3.10. There exist algorithms that given a graph G solve Feedback Vertex Set
+in time n(1 + 2ω )pw pwO(1) time if a path decomposition of width pw of G is given, and in time
+n(1 + 2ω+1 )tw twO(1) time if a tree decomposition of width tw of G is given.
+
+3.6
+
+Representing collections of weighted partitions based on rank
+
+Preserving representation. We ﬁrst need to prove Lemma 3.6. That is, that the operations
+union, insert, shift, glue, project, and join preserve representation. While this is an essential
+part of the rank based approach, the actual proofs are not particularly instructive to read and
+are postponed to Appendix B.3.
+Finding small representative subsets. The remainder of this subsection is devoted to the
+proof of Theorem 3.7. The key idea is as follows: To ﬁnd optimal partial solutions in a set A
+of weighted partitions, one checks for certain partitions q what is the minimum weight w such
+that A contains some pair (p, w) such that p ⊓ q gives the unit partition. For intuition let us
+ignore the weights for the moment and only look at the partitions in A. Very roughly we need
+to ﬁnd a subset of those partitions that can complete any partition q to the unit partition {U },
+assuming that some partition in A does that too (we only need to represent what A can do).
+It can be seen that any set cover of partitions p such that for any q at least one of them
+gives p ⊓ q = {U } suﬃces. It turns out that taking a subset of partitions that form a basis in
+a certain matrix can play the same role, and is much easier to handle (both in proof and for
+ﬁnding it algorithmically). Given that, it is not hard to get the additional property that the
+representative subset always matches the correct weight that the original set A would provide;
+this corresponds essentially to a basis of minimum weight.
+Our matrix simply states for all pairs p and q of partitions whether or not the meet operation
+applied to them gives the unit partition. The crucial part, of course, is to show that it has low
+rank, in order to guarantee a small basis. The matrix is formally deﬁned as follows; for notational
+ease let us ﬁx U = [t], and let us shorthand (V1 , V2 ) for a partition {V1 , V2 } ∈ Π(U ).
+Π(U )×Π(U )
+
+Definition 3.11. Deﬁne M ∈ Z2
+
+by
+(
+1 p ⊓ q = {U },
+M[p, q] =
+0 else.
+
+The idea for getting a good rank bound for this matrix is to consider a simple class of
+partitions, namely cuts into only two sets (where the second set may in fact be empty). The
+subsequent lemma then shows that in arithmetic modulo two, the matrix M can be written as
+the product of two cutmatrices C, which are deﬁned as follows.
+Definition 3.12. Deﬁne cuts(t) := {(V1 , V2 ) | V1 ∪˙ V2 = U ∧ 1 ∈ V1 }, where 1 stands for an
+Π(U )×cuts(t)
+arbitrary but ﬁxed element of U . Deﬁne C ∈ Z2
+by C[p, (V1 , V2 )] = [(V1 , V2 ) ⊑ p].
+
+18
+
+Intuitively, the matrix C represents which pairs of partitions and cuts are consistent, i.e.,
+the partition needs to be a reﬁnement of the cut. It is crucial that one side of the cut is ﬁxed
+to contain a particular vertex since that allows the following trick via counting modulo two:
+For each pair of partitions, the product CC T can be seen to count the number of partitions
+that are consistent with both p and q. If p ⊓ q = {U } then there is only one such partition.
+Otherwise, if p ⊓ q is a partition with at least two sets then there is an even number of cuts
+that are consistent (to see this, pair the cuts by including respectively excluding any set that
+does not include the special element 1 ∈ V1 ). The formal proof is postponed to Appendix B.1.
+Lemma 3.13. It holds that M ≡ CC T .
+From the factorization we pretty immediately get the following lemma that encapsulates the
+idea behind ﬁnding small representative subsets. It shows that linear dependence allows us to
+discard one of the corresponding partitions (e.g., the one of highest weight).
+P
+Lemma 3.14. Let X ⊆ Π(U ) and q, r ∈ Π(U ) such that C[q, ·] ≡ p∈X C[p, ·] and r ⊓ q = {U }.
+Then, there exists p ∈ X such that r ⊓ p = {U }.
+Proof. We have that
+M[q, ·] ≡ C[q, ·]C T ≡ (
+
+X
+
+p∈X
+
+C[p, ·])C T ≡
+
+X
+
+p∈X
+
+M[p, ·].
+
+Where the equivalences respectively follow by Lemma 3.13, assumption,
+P and Lemma 3.13
+combined with linearity of matrix multiplication. In particular, M[q, r] ≡ p∈X M[p, r]. Thus,
+if M[q, r] = 1 then M[p, r] = 1 for some p ∈ X and the lemma follows.
+At this point any naive algorithm for ﬁnding a lightest basis would suﬃce to complete our
+algorithm, e.g., this is straightforward via Gaussian elimination when the rows are ordered by
+weight. However, aiming for a faster algorithm, the following lemma ﬁnds the required basis
+faster via matrix multiplication; the proof is postponed to Appendix B.2.
+Lemma 3.15. There is an algorithm that, given a n × m matrix with m ≤ n and with entries
+from the field F2 and weights ω : [n] → N, finds a basis X ⊆ [n] of the row space minimizing
+ω(X) in O(nmω−1 ).
+Now we can wrap up and prove Theorem 3.7.
+Proof of Theorem 3.7. The algorithm reduce is as follows:
+Algorithm reduce(A)
+1: let A = {(p1 , w1 ), . . . , (pℓ , wℓ )} and A = {p1 , . . . , pℓ }.
+2: if ℓ ≤ 2|U | then return A
+P
+3: ﬁnd a basis X ⊆ A of the row space of C[A, ·] minimizing
+pi ∈X wi using Lemma 3.15.
+4: return {(p, w) | (p, w) ∈ A ∧ p ∈ X}.
+Clearly, A′ = reduce(A) ⊆ A. Since the number of columns of C equals 2|U |−1 , X being a
+basis for the row space guarantees that |A′ | ≤ 2|U | . The running time is clearly dominated by
+the call to the algorithm of Lemma 3.15 since any entry of C can be computed in |U |O(1) time.
+Then, since C[A, ·] is a |A| × 2t−2 the claimed running time follows.
+It remains to argue that A′ represents A. Suppose for a contradiction that this is not the
+case. Since A′ ⊆ A we have for every q that opt(q, A) ≤ opt(q, A′ ). Thus our assumption
+implies that opt(q, A) < opt(q, A′ ), that is, for some q there is (p, w) ∈ A and q such that
+19
+
+p ⊓ q = {U } and w < opt(q, A′ ). Since X is a basis of the row space of C[A, ·] we know that
+the row C[p, ·] is a linear combination of a set of rows from C[X, ·]. Let Y ⊆ X be the set of
+indices of these rows. By Lemma 3.14, we know that there exists pi ∈ Y such that q ⊓ pi = {U };
+Hence, since w < opt(q, A′ ), it must be that wi > w. But we have that (X \ {pi }) ∪ {p} also
+is a basis of the row space of C[A, ·] since C[pi , ·] is a linear combination
+P of the rows indexed by
+(Y \ {pi }) ∪ {p}. Since wi > w, this contradicts that X minimizes pi ∈X wi .
+
+3.7
+
+Improvements and limitations of the approach
+
+The main ingredient for the proof of Theorem 3.7 is Lemma 3.14 which in turn follows directly
+from the factorization M = CC T (Lemma 3.13). Thus by establishing a better factorization,
+i.e., with smaller inner dimension, using matrices whose entries are computable in polynomial
+time, then we would immediately get improved algorithmic results.
+It can be seen that such an improvement is not possible: Assume that |U | is odd and ﬁx
+an element u0 ∈ U . The submatrix of M with rows and columns indexed by {U [X] | u0 ∈
+X ∧ |X| = (|U | + 1)/2} is easily seen to be an identity matrix, since the meet of two of such
+partitions gives the unit partition if and only if they are constructed from X1 and X2 with
+X1 = U \ X2 ∪ {u0 }. Since the inner dimension is an upper bound on the rank this rules out
+relevant improvements to the factorization of M, because the above construction shows that
+the rank is at least 2|U | /|U |.
+However, if we restrict our attention to the submatrix of M corresponding only to perfect
+matchings (such as we use for the TSP algorithm) then the following improved factorization
+can be established.
+Theorem 3.16 ([17]). Let H be the submatrix of M restricted to all matchings. Then H can
+be factorized into two matrices whose entries can be computed in time |U |O(1) , where the inner
+dimension of the factorization is 2|U |/2−1 .
+Combining this result with the proof technique of Theorem 3.7, we obtain the following
+improvement:
+Corollary 3.17. There exists an algorithm reducematchings that given set of weighted match(ω−1)
+ings A ⊆ Π2 (U ) × N, outputs in |A|2 2 |U | |U |O(1) time a set of weighted matchings A′ ⊆ A
+such that A′ represents A and |A′ | ≤ 2|U |/2 , where ω denotes the matrix multiplication exponent.
+Proof. The proof is almost identical to the proof of Theorem 3.7: let H = C ′ C ′′ be the matrix
+factorization from Theorem 3.16. Then by the same proof, Lemma 3.14 holds when we replace C
+with C ′ and restrict X and p and r to consist of matchings. Then reducematchings is obtained
+from reduce by replacing C with C ′ . The arguments for the correctness and running times of
+this algorithm are analogous to the arguments from the proof of Theorem 3.7.
+Thus, for problems whose dynamic programming formulation via our introduced set of operators requires only weighted perfect matchings, but not the generality of weighted partitions,
+we get somewhat faster algorithms; among the considered problems this is true for Traveling
+Salesman, and it seems unlikely for Steiner Tree or Feedback Vertex Set.
+Theorem 3.18. There exist algorithms that given a graph G solve Traveling Salesman in
+time n(2 + 2ω/2 )pw pwO(1) time if a path decomposition of width pw of G is given, and in time
+n(5 + 2(ω+2)/2 )tw twO(1) time if a tree decomposition of width tw of G is given.
+The proof is analogous to the proof of Theorem 3.9, the only diﬀerence being the use of
+reducematchings instead of reduce; for completeness a proof is provided in Appendix B.4.
+20
+
+Combining the ideas from the proof of Theorem 3.18 with Lemma 1.1 and a trick from [18]
+we obtain the following corollary:
+Corollary 3.19. There is an algorithm solving Traveling Salesman on cubic graphs in
+1.2186n nO(1) time.
+The observation from [18] is that on cubic graphs, we know that the degree of a vertex in a
+subsolution cannot be 2 if at most 1 incident edges is introduced, an it cannot be 0 if at least 2
+edges are introduced since the remaining edge is not enough to make the degree 2. Hence these
+states can be safely ignored.
+Again the proof idea similar to proof of Theorem 3.18 we can also rather easily obtained
+the following result:
+Theorem 3.20. There exist algorithms that given a graph G and integer k finds a path of length
+k in time n(2 + 2ω/2 )pw (k + pw)O(1) time if a path decomposition of width pw of G is given, and
+in time n(5 + 2(ω+2)/2 )tw (k + tw)O(1) time if a tree decomposition of width tw of G is given.
+The idea is to slightly modify the table entries from Subsection 3.4: In the deﬁnition of Ex
+we remove the requirement v ∈ Vx \ Bx → degX (v) = 2, and hence the formula in the forget
+bag has to be altered to Ax (s) = Ay (s). Then we can set all weights to 1 and now we are up to
+maximizing ω(X). It is easy to see that our approach can be altered to deal with maximization
+problems and hence this gives the required result since involved weight being more than k · tw
+already guarantees that we have a k-path.
+
+4
+
+Determinant approach
+
+In this section we will present the determinant approach that can be used to solve counting
+versions of connectivity problems on graphs of small treewidth. Throughout this section, we
+will assume a graph G along with a path/tree decomposition T of G of with pw or tw is given.
+Let A be an incidence matrix of an orientation of G, that is A = (ai,j ) is a matrix with n
+rows and m columns. Each row of A is indexed with a vertex and each column of A is indexed
+with an edge. The entry av,e is deﬁned to be 0 if v 6∈ e; −1 if e = uv and u < v; or 1 if e = uv
+and u > v. We assume, that all the vertices are ordered with respect to the post-ordering of
+their forget nodes in the tree, that is vertices forgotten in a left subtree are smaller than vertices
+forgotten in the right subtree, and a vertex forgotten in a bag x is smaller than a vertex forgotten
+in a bag which is an ancestor of x. Similarly we order edges according to the post-ordering of
+the introduce edge nodes in the tree decomposition.
+Let v1 be an arbitrary ﬁxed vertex and let F be the matrix A with the row corresponding to
+v1 removed. For a subset S ⊆ E let FS be the matrix with n − 1 rows and |S| columns, whose
+columns are those of F with indices in S. The following folklore lemma is used in the proof of
+the Matrix Tree Theorem (see for example [1, Page 203] where our matrix is denoted by N )
+Lemma 4.1. Let S ⊆ E be a subset of size n − 1. If (V, S) is a tree, then | det(FS )| = 1 and
+det(FS ) = 0 otherwise.
+In this section we are up to compute the number of connected edgesets X such that X ∈ F
+where F is some implicitly deﬁned set
+P family. Our main idea is to use Lemma 4.1 to reduce
+this task to computing the quantity X∈F det(FX )2 instead, and to ensure that if X ∈ F is
+connected, then it is a tree.
+For two (not necessarily disjoint) subsets V1 , V2 of an ordered set let us deﬁne inv(V1 , V2 ) =
+|{(u, v) : u ∈ V1 , v ∈ V2 , u > v}|. If X, Y are ordered set, recall that for a permutation
+1−1
+f : X → Y we have that the sign equals sgn(f ) = (−1)|{(e1 ,e2 ):e1 ,e2 ∈S∧e1 <e2 ∧f (e1 )>f (e2 )}| .
+21
+
+The following proposition will be useful:
+Proposition 4.2. Let Xl , Xr ⊆ V and Yl , Yr ⊆ E such that Xl ∩ Xr = ∅ and Yl ∩ Yr = ∅ and
+1−1
+1−1
+for every e1 ∈ Yl and e2 ∈ Yr we have that e1 < e2 . Suppose fl : Yl → Xl and fr : Yr → Xr .
+Denote f = fl ∪ fr , that is, f (v) = fl (v) if v ∈ Yl and f (v) = fr (v) if v ∈ Yr . Then it holds
+that sgn(f ) = sgn(f1 )sgn(f2 ) · (−1)inv(Xl ,Xr ) .
+To see that the proposition is true, note that from the deﬁnition of sgn, the pairs e1 , e2 with
+e1 , e2 ∈ Y1 or e1 , e2 ∈ Y2 are already accounted for in the part sgn(f1 )sgn(f2 ) so it remains to
+show that
+|{(e1 , e2 ) : e1 ∈ Y1 , e2 ∈ Y2 ∧ e1 < e2 ∧ f (e1 ) > f (e2 )}|
+indeed equals inv(Xl , Xr ), but this is easy to see since we have by assumption that e1 < e2 .
+
+4.1
+
+Counting Hamiltonian cycles
+
+For our ﬁrst application to counting Hamiltonian cycles, we derive the following formula which
+expresses the number of Hamiltonian cycles of a graph:
+
+∀v∈V
+
+X
+
+[X is a Hamiltonian cycle]
+
+X⊆E
+degX (v)=2
+
+{a 2-regular graph has n subtrees on n − 1 edges if it is connected and 0 otherwise}
+X
+X
+1
+[(V, S) is a tree]
+= ·
+n
+X⊆E
+S⊆X,|S|=n−1
+∀v∈V degX (v)=2
+
+{Lemma 4.1}
+X
+1
+= ·
+n
+
+X
+
+det(FS )2 .
+
+X⊆E
+S⊆X,|S|=n−1
+∀v∈V degX (v)=2
+
+By plugging the permutation deﬁnition of a determinant, we obtain the following expression
+for the number of Hamiltonian cycles of a graph:
+1
+·
+n
+=
+
+1
+·
+n
+
+X
+
+X
+
+(
+
+X
+
+X⊆E
+S⊆X,|S|=n−1 f :S 1−1
+→ V \{v1 }
+∀v∈V degX (v)=2
+
+∀v∈V
+
+X
+
+X
+
+X
+
+sgn(f )
+
+Y
+
+e∈S
+
+sgn(f1 )sgn(f2 )
+
+1−1
+X⊆E
+S⊆X
+f1 ,f2 :S → V \{v1 }
+degX (v)=2
+
+af (e),e )2
+
+Y
+
+af1 (e),e af2 (e),e ,
+
+e∈S
+
+Note that in the last equality we dropped the assumption |S| = n − 1, as it follows from the
+fact that f1 (and f2 ) is a bijection.
+Our goal is to compute the formula by dynamic programming over some nice tree decomposition T. To this end, let us deﬁne a notion of “partial sum” of the above formula, that we
+will store in our dynamic programming table entries. For every bag x ∈ T, sdeg ∈ {0, 1, 2}Bx ,
+s1 ∈ {0, 1}Bx and s2 ∈ {0, 1}Bx deﬁne
+22
+
+Ax (sdeg , s1 , s2 ) =
+
+X
+
+X
+
+X
+
+sgn(f1 )sgn(f2 )
+
+1−1
+S⊆X
+X⊆Ex
+f1 :S → (Vx \{v1 })\s−1
+1 (0)
+∀v∈(Vx \Bx ) degX (v)=2
+1−1
+f2 :S → (Vx \{v1 })\s−1
+∀v∈Bx degX (v)=sdeg (v)
+2 (0)
+
+Y
+
+af1 (e),e af2 (e),e
+
+e∈S
+
+(2)
+
+Intuitively in sdeg we store the degrees of vertices of Bx in G[X], whereas s1 (and s2 ) specify
+whether a vertex of Bx was already used as a value of the bijection f1 (and f2 ).
+Leaf bag x:
+Ax (∅, ∅, ∅) = 1
+Introduce vertex v bag x with child y: for sdeg ∈ {0, 1, 2}Bx and s1 , s2 ∈ {0, 1}Bx
+(
+Ay (sdeg |By , s1 |By , s2 |By ) if sdeg (v) = s1 (v) = s2 (v) = 0
+Ax (sdeg , s1 , s2 ) =
+0
+otherwise.
+Since the vertex v is not incident to any edge from Ex , we have that degX = 0 and hence
+all summands in which f1 or f2 map an edge to v will vanish .
+Forget vertex v bag x with child y: for sdeg ∈ {0, 1, 2}Bx and s1 , s2 ∈ {0, 1}Bx
+(
+Ay (sdeg [v → 2], s1 [v → 1], s2 [v → 1]) if v 6= v1
+Ax (sdeg , s1 , s2 ) =
+Ay (sdeg [v → 2], s1 [v → 0], s2 [v → 0]) otherwise
+Since v is moved out of Bx we need to make sure degX (v) = 2, and since no edges incident
+to v will be introduced anymore we require s1 (v) = s2 (v) = 1, unless v = v1 : Since it is
+not used as a value for bijections f1 , f2 , we need to handle this vertex separately.
+Introduce edge e = uv bag x with child y: Here we have three cases. Either the edge e is
+not contained in the set X, or it is a part of X \ S, or ﬁnally it is a part of S. In the last
+case we need to choose the values f1 (e) and f2 (e) and account for their contribution to
+−1
+sgn(f1 )sgn(f2 ), but we can restrict ourselves to values of (s−1
+1 (1) \ {v1 }) ∩ e and (s2 (1) \
+{v1 }) ∩ e respectively, because otherwise either we do not obtain a bijection or the whole
+summand will disappear since av′ ,e = 0 for v ′ 6∈ e.
+If sdeg (u), sdeg (v) ≥ 1, then we set
+
+Ax (sdeg , s1 , s2 ) =Ay (sdeg , s1 , s2 ) + Ay (s′deg , s1 , s2 )
+X
+Ay (s′deg , s1 [u′ → 0], s2 [v ′ → 0]) · au′ ,e · av′ ,e
++
+u′ ∈(s−1
+1 (1)\{v1 })∩e
+v′ ∈(s−1
+2 (1)\{v1 })∩e
+−1
+
+· (−1)inv(s1
+
+′
+(1),u′ )+inv(s−1
+2 (1),v )
+
+,
+
+where s′deg is the function sdeg with the values for u and v decreased by one. Observe that
+on the ﬁrst two mentioned cases are accounted for on the ﬁrst line. For the third case, we
+need to account for the new number of inversions contributing to sgn(f1 )sgn(f2 ). Note
+that vertices from Vx \ Bx cannot participate in such an inversion since the vertex and
+edge are both smaller than v ′ and e due to the ordering.
+
+23
+
+To this end, we can use Proposition 4.2 with Yr = {e} and Xr = {v ′ } since e is the largest
+−1
+−1
+′
+′
+edge in Ex , and it follows that the factor (−1)inv(s1 (1),u )+inv(s2 (1),v ) indeed accounts for
+the new inversions.
+Finally, when sdeg (u) = 0 or sdeg (v) = 0, then we set
+Ax (sdeg , s1 , s2 ) = Ay (sdeg , s1 , s2 )
+Join bag x with children y and z:
+X
+Ax (sdeg , s1 , s2 ) =
+
+sdeg,y +sdeg,z =sdeg
+s1,y +s1,z =s1
+s2,y +s2,z =s2
+−1
+
+Ay (sdeg,y , s1,y , s2,y ) · Az (sdeg,z , s1,z , s2,z )
+−1
+
+−1
+
+−1
+
+· (−1)inv(s1,y (1),s1,z (1))+inv(s2,y (1),s2,z (1))
+In the above formula when adding two functions we denote coordinate-wise addition. To
+see that we correctly account for the new number of inversions, ﬁrst note that vertices
+from Vx \ Bx cannot participate in such an inversion since the vertex and incident edge
+are both smaller than the vertices appearing in Bx and their incident edges e due to the
+ordering. Then by Proposition 4.2 we correctly account for the new inversions since all
+edges from Ey are smaller than Ez due to the post-ordering of edges.
+Theorem 4.3. There exist algorithms that given a graph G solve # Hamiltonian Cycle in
+Õ(6pw pwO(1) n2 ) time if a path decomposition of width pw is given, and in time Õ(15tw twO(1) n2 )
+time if a tree decomposition of width tw is given.
+Proof. Observe that when all the table entries of a tree decomposition rooted at an empty bag z
+are computed, the number of Hamiltonian cycles is equal to Az (∅, ∅, ∅)/n. Moreover each of the
+twO(1) n nodes involves operations on integers of bitlength O(n log n), since all the table entries
+have absolute value at most nO(n) .
+In the described dynamic programming we have 3 · 2 · 2 = 12 states per vertex, however
+observe that when sdeg (v) = 0, then all non-zero summands of the partial sum (2) satisfy
+s1 (v) = s2 (v) = 0, since otherwise the function f1 (or f2 ) assigns the value of v to an edge that
+was not incident to v. Similarly when v 6= v1 and sdeg (v) = 2, then it is enough to store the
+states only with s1 (v) = s2 (v) = 1, because if v was not yet assigned as a value by f1 (or f2 ),
+then since we can not add to X any more edges incident to v, this table entry will not be used
+as in the forget node we require that s1 (v) = s2 (v) = 1. Hence for each vertex v 6= v1 there are
+only 6 triples (sdeg (v), s1 (v), s2 (v)), i.e. (0, 0, 0), (1, 0, 0), (1, 0, 1), (1, 1, 0), (1, 1, 1) and (2, 1, 1),
+which is enough to show the claimed running time for path decompositions.
+In case of tree decompositions we need to analyze the time complexity needed to handle
+the summation in join nodes. Observe that there are exactly 15 pairs of triples, which describe
+states of vertices in the left and right subtree, according to the following table, where X denotes
+that this pair is not a valid pair of triples. Hence we can restrict ourselves to these triples when
+evaluating the summation.
+
+4.2
+
+Counting Steiner Trees
+
+In this section we show how to count the number of Steiner trees of a prescribed size. Let v1
+be an arbitrary ﬁxed terminal from K. The number of Steiner trees with exactly k edges is
+expressed by the following formula.
+24
+
+(0, 0, 0)
+(1, 0, 0)
+(1, 0, 1)
+(1, 1, 0)
+(1, 1, 1)
+(2, 1, 1)
+
+X
+
+(0, 0, 0)
+(0, 0, 0)
+(1, 0, 0)
+(1, 0, 1)
+(1, 1, 0)
+(1, 1, 1)
+(2, 1, 1)
+
+(1, 0, 0)
+(1, 0, 0)
+X
+X
+X
+(2, 1, 1)
+X
+
+[X is a Steiner tree] =
+
+X⊆E,|X|=k
+
+(1, 0, 1)
+(1, 0, 1)
+X
+X
+(2, 1, 1)
+X
+X
+
+(1, 1, 0)
+(1, 1, 0)
+X
+(2, 1, 1)
+X
+X
+X
+
+X
+
+(1, 1, 1)
+(1, 1, 1)
+(2, 1, 1)
+X
+X
+X
+X
+
+X
+
+(2, 1, 1)
+(2, 1, 1)
+X
+X
+X
+X
+X
+
+[(Y, X) is a tree]
+
+Y ⊆V,|Y |=k−1,K⊆Y X⊆E(Y,Y ),|X|=|Y |−1
+
+=
+
+X
+
+X
+
+det(FY,X )2
+
+Y ⊆V,|Y |=k−1,K⊆Y X⊆E(Y,Y ),|X|=|Y |−1
+
+where FY,X is the submatrix of F with rows in Y \ {v1 } and columns in X. Again, by
+plugging the permutation deﬁnition of a determinant we obtain:
+X
+
+X
+
+X
+
+sgn(f1 )sgn(f2 )
+
+Y ⊆V,|Y |=k−1,K⊆Y X⊆E(Y,Y ),|X|=|Y |−1 f ,f :X 1−1
+→ Y \{v1 }
+1 2
+
+Y
+
+af1 (e),e af2 (e),e ,
+
+e∈X
+
+where sgn(f ) = (−1)|{(e1 ,e2 ):e1 ,e2 ∈X∧e1 <e2 ∧f (e1 )>f (e2 )}| .
+Let us deﬁne a “partial sum” of the above formula. For every bag x ∈ T, 0 ≤ i ≤ |Vx |,
+sY ∈ {0, 1}Bx , s1 ∈ {0, 1}Bx and s2 ∈ {0, 1}Bx deﬁne:
+Ax (i, sY , s1 , s2 ) =
+
+X
+
+X
+
+X
+
+Y ⊆Vx
+X⊆E(Y,Y )∩Ex f :X 1−1
+→ Y \{v1 }\s−1
+1
+1 (0)
+|Y |=i
+1−1
+f2 :X → Y \{v1 }\s−1
+(K∩Vx )⊆Y
+2 (0)
+Y ∩Bx =s−1
+Y (1)
+
+sgn(f1 )sgn(f2 )
+
+Y
+
+af1 (e),e af2 (e),e .
+
+e∈X
+
+Note that in the above deﬁnition when sY (v) = 0, then in order to have a non-zero table
+entry we need to have s1 (v) = s2 (v) = 0, since otherwise an edge of X would be assigned (by
+f1 or f2 ) a vertex which is not its endpoint, which leaves only 5 reasonable states per vertex.
+Leaf bag x:
+Ax (0, ∅, ∅, ∅) = 1
+Introduce vertex v bag x with child y: for 0 ≤ i ≤ |Vx |, sY ∈ {0, 1}Bx and s1 , s2 ∈
+{0, 1}Bx
+
+
+if sY (v) = s1 (v) = s2 (v) = 0, v 6∈ K
+Ay (i, sY |By , s1 |By , s2 |By )
+Ax (i, sY , s1 , s2 ) = Ay (i − 1, sY |By , s1 |By , s2 |By ) if sY (v) = 1, s1 (v) = s2 (v) = 0
+
+
+0
+otherwise.
+Note that the choice of including (or not) the vertex v into Y is described by sY (v) and
+moreover if v ∈ K then we have to include v into Y .
+
+25
+
+Forget vertex v bag x with child y: for 0 ≤ i ≤ |Vx |, sY ∈ {0, 1}Bx and s1 , s2 ∈ {0, 1}Bx
+
+
+Ay (i, sY [v → 1], s1 [v → 1], s2 [v → 1])
+if v ∈ K, v 6= v1
+
+
+
+A (i, s [v → 1], s [v → 0], s [v → 0])
+if v = v1
+y
+Y
+1
+2
+Ax (i, sY , s1 , s2 ) =
+Ay (i, sY [v → 1], s1 [v → 1], s2 [v → 1])
+
+
+
++A (i, s [v → 0], s [v → 0], s [v → 0]) otherwise
+y
+Y
+1
+2
+Introduce edge e = uv bag x with child y:
+Ax (i, sY , s1 , s2 ) =Ay (i, sY , s1 , s2 )
+X
++
+
+u′ ∈(s−1
+1 (1)\{v1 })∩e
+v′ ∈(s−1
+2 (1)\{v1 })∩e
+
+Ay (i, sY , s1 [u′ → 0], s2 [v ′ → 0]) · au′ ,e · av′ ,e
+−1
+
+· [sY (u) = sY (v) = 1](−1)inv(s1
+
+′
+(1),u′ )+inv(s−1
+2 (1),v )
+
+Join bag x with children y and z:
+X
+
+Ax (sY , s1 , s2 ) =
+
+s1,y +s1,z =s1
+s2,y +s2,z =s2
+
+Ay (sY , s1,y , s2,y ) · Az (sY , s1,z , s2,z )
+
+−1
+
+−1
+
+−1
+
+−1
+
+· (−1)inv(s1,y (1),s1,z (1))+inv(s2,y (1),s2,z (1))
+Observe that the functions sY is used in both children, to make the choice of taking a
+vertex to Y or not consistent between the two subtrees.
+Theorem 4.4. There exist algorithms that given a graph G counts the number of Steiner trees
+of size i for each 1 ≤ i ≤ n − 1 in Õ(5pw pwO(1) n3 ) time if a path decomposition of width pw is
+given, and in time Õ(10tw twO(1) n3 ) time if a tree decomposition of width tw is given.
+Proof. Observe that when all the table entries of a tree decomposition rooted at an empty bag
+z are computed, the number of Steiner trees with exactly i edges is equal to Az (i + 1, ∅, ∅, ∅).
+Moreover each of the twO(1) n nodes involes operations on integers of bitlength O(n log n), since
+all the table entries have absolute value at most nO(n) .
+As we have already noted we can assume that for each vertex v 6= v1 the triple (sY (v), s1 (v), s2 (v))
+is of one of the following forms (0, 0, 0), (1, 0, 0), (1, 0, 1), (1, 1, 0), (1, 1, 1), which is enough to
+prove the claimed running time for path decompositions.
+In order to handle join nodes eﬀectively, observe that there are exactly 10 pairs of triples,
+which describe states of vertices in the left and right subtree, according to the following table,
+where X denotes that this pair is not a valid pair of triples.
+
+(0, 0, 0)
+(1, 0, 0)
+(1, 0, 1)
+(1, 1, 0)
+(1, 1, 1)
+
+(0, 0, 0)
+(0, 0, 0)
+X
+X
+X
+X
+
+(1, 0, 0)
+X
+(1, 0, 0)
+(1, 0, 1)
+(1, 1, 0)
+(1, 1, 1)
+
+26
+
+(1, 0, 1)
+X
+(1, 0, 1)
+X
+(1, 1, 1)
+X
+
+(1, 1, 0)
+X
+(1, 1, 0)
+(1, 1, 1)
+X
+X
+
+(1, 1, 1)
+X
+(1, 1, 1)
+X
+X
+X
+
+4.3
+
+Feedback Vertex Set
+
+Note that to solve the Feedback Vertex Set problem it is enough to solve its dual, which
+will be easier to work with in the squared determinant framework.
+Maximum Induced Forest
+Input: An undirected graph G, an integer k and a nice tree decomposition T of G of width
+tw.
+Question: Find a set Y ⊆ V such that |Y | ≥ k and G[Y ] is a forest.
+
+Without loss of generality we can assume that the graph G contains an isolated vertex, which
+we denote as v1 . Since if such vertex is not present we can add it, increase k by one and update
+the tree decomposition accordingly. Clearly v1 is contained in any maximal induced forest. So
+far by using squared determinant we counted trees, but now we want to check whether there
+exists an induced forest of a prescribed size. To achieve this we deﬁne a new set of edges E ′
+containing all the edges between v1 and V \ {v1 } (note that E ′ ∩ E(G) = ∅). Observe, that there
+exists an induced forest containing v1 with n0 vertices and m0 edges (hence n − m0 connected
+components) in G iﬀ there exists an induced tree in G′ = (V, E(G) ∪ E ′ ) containing v1 with n0
+vertices and n − m0 − 1 edges of E ′ . Therefore it is enough to count induced trees in G′ , while
+keeping track of the number of used edges from E ′ . Consequently it is enough to ﬁnd, whether
+the following sum is positive
+X
+X
+[(Y, X) is a tree ]
+Y ⊆V,v1 ∈Y,|Y |=k X⊆E(Y,Y )∪E ′ (Y,Y )
+E(Y,Y )⊆X
+|X|=|Y |−1
+
+=
+
+X
+
+X
+
+′
+det(FY,X
+)2
+
+Y ⊆V,v1 ∈Y,|Y |=k X⊆E(Y,Y )∪E ′ (Y,Y )
+E(Y,Y )⊆X
+|X|=|Y |−1
+′
+where FY,X
+is an orientation of an incidence matrix of G with rows from Y \ {v1 } and columns
+from X. By pluggin the permutation deﬁnition of the determinant we obtain the following
+X
+X
+X
+Y
+af1 (e),e af2 (e),e
+sgn(f1 )sgn(f2 )
+Y ⊆V,v1 ∈Y,|Y |=k X⊆E(Y,Y )∪E ′ (Y,Y ) f ,f :X 1−1
+→ Y \{v1 }
+1 2
+E(Y,Y )⊆X
+
+e∈X
+
+where sgn(f ) = (−1)|{(e1 ,e2 ):e1 ,e2 ∈X∧e1 <e2 ∧f (e1 )>f (e2 )}| . Note that we have removed the assumption that |X| = |Y | − 1 as this is enforced by the assumption that f1 is a bijection.
+Observe, that a tree decomposition of G one can obtain a tree decomposition of G′ of width
+increase by at most one by ensuring that v1 is included in every bag. Therefore we assume that
+we are given a nice tree decomposition T of G′ . Let us deﬁne a “partial sum” of the above
+formula. For every bag x ∈ T, 0 ≤ i ≤ |Vx |, sY ∈ {0, 1}Bx , s1 ∈ {0, 1}Bx and s2 ∈ {0, 1}Bx
+deﬁne:
+Ax (i, sY , s1 , s2 ) =
+
+X
+
+X
+
+X
+
+1−1
+X⊆Ex
+Y ⊆Vx
+f :X → Y \{v1 }\s−1
+1 (0)
+({v1 }∩Vx )⊆Y Ex ∩E(Y,Y )⊆X 1
+1−1
+f2 :X → Y \{v1 }\s−1
+|Y |=i
+2 (0)
+Y ∩Bx =s−1
+Y (1)
+
+sgn(f1 )sgn(f2 )
+
+Y
+
+af1 (e),e af2 (e),e
+
+e∈X
+
+The dynamic programming part of our algorithm is very similar to the one described for
+Steiner Tree.
+27
+
+Leaf bag x:
+Ax (0, ∅, ∅, ∅) = 1
+Introduce vertex v bag x with child y: for 0 ≤ i ≤ |Vx |, sY ∈ {0, 1}Bx and s1 , s2 ∈
+{0, 1}Bx
+
+if sY (v) = s1 (v) = s2 (v) = 0, v 6= v1
+
+Ay (i, sY |By , s1 |By , s2 |By )
+Ax (i, sY , s1 , s2 ) = Ay (i − 1, sY |By , s1 |By , s2 |By ) if sY (v) = 1, s1 (v) = s2 (v) = 0
+
+
+0
+otherwise.
+Note that v1 has to be included into Y .
+
+Forget vertex v bag x with child y: for 0 ≤ i ≤ |Vx |, sY ∈ {0, 1}Bx and s1 , s2 ∈ {0, 1}Bx
+
+
+if v = v1
+Ay (i, sY [v → 1], s1 [v → 0], s2 [v → 0])
+Ax (i, sY , s1 , s2 ) = Ay (i, sY [v → 1], s1 [v → 1], s2 [v → 1])
+
+
++Ay (i, sY [v → 0], s1 [v → 0], s2 [v → 0]) otherwise
+Introduce edge e = uv bag x with child y:
+
+Ax (i, sY , s1 , s2 ) =[e ∈ E ′ ∨ sY (u) = 0 ∨ sY (v) = 0]Ay (i, sY , s1 , s2 )
+X
+Ay (i, sY , s1 [u′ → 0], s2 [v ′ → 0]) · au′ ,e · av′ ,e
++
+u′ ∈(s−1
+1 (1)\{v1 })∩e
+v′ ∈(s−1
+2 (1)\{v1 })∩e
+
+−1
+
+· [sY (u) = sY (v) = 1](−1)inv(s1
+
+′
+(1),u′ )+inv(s−1
+2 (1),v )
+
+Observe that we have an option of not including e into X only if e ∈ E ′ or min(sY (u), sY (v)) =
+0.
+Join bag x with children y and z:
+Ax (sY , s1 , s2 ) =
+
+X
+
+s1,y +s1,z =s1
+s2,y +s2,z =s2
+
+Ay (sY , s1,y , s2,y ) · Az (sY , s1,z , s2,z )
+
+−1
+
+−1
+
+−1
+
+−1
+
+· (−1)inv(s1,y (1),s1,z (1))+inv(s2,y (1),s2,z (1))
+Observe that the functions sY is used in both children, to make the choice of taking a
+vertex to Y or not consistent between the two subtrees.
+Theorem 4.5. There exist algorithms that given a graph G solves the Feedback Vertex
+Set problem in Õ(5pw pwO(1) n3 ) time if a path decomposition of width pw is given, and in time
+Õ(10tw twO(1) n3 ) time if a tree decomposition of width tw is given.
+
+Proof. Observe that when all the table entries of a tree decomposition rooted at an empty bag z
+are computed, the there exists an induced forest in G with n0 vertices iﬀ Az (n0 + 1, ∅, ∅, ∅) > 0.
+Moreover each of the twO(1) n nodes involes operations on integers of bitlength O(n log n), since
+all the table entries have absolute value at most nO(n) .
+Similarly as in the case of Steiner Tree we can assume that each vertex v 6= v1 the triple
+(sY (v), s1 (v), s2 (v)) is of one of the following forms (0, 0, 0), (1, 0, 0), (1, 0, 1), (1, 1, 0), (1, 1, 1),
+which is enough to prove the claimed running time for path decompositions.
+In order to handle join nodes eﬀectively, observe that there are exactly 10 pairs of triples,
+which describe states of vertices in the left and right subtree, according to the following table,
+where X denotes that this pair is not a valid pair of triples. The table is identical to the one
+used in the Steiner Tree problem.
+
+28
+
+(0, 0, 0)
+(1, 0, 0)
+(1, 0, 1)
+(1, 1, 0)
+(1, 1, 1)
+
+5
+
+(0, 0, 0)
+(0, 0, 0)
+X
+X
+X
+X
+
+(1, 0, 0)
+X
+(1, 0, 0)
+(1, 0, 1)
+(1, 1, 0)
+(1, 1, 1)
+
+(1, 0, 1)
+X
+(1, 0, 1)
+X
+(1, 1, 1)
+X
+
+(1, 1, 0)
+X
+(1, 1, 0)
+(1, 1, 1)
+X
+X
+
+(1, 1, 1)
+X
+(1, 1, 1)
+X
+X
+X
+
+Conclusions
+
+In this paper, we have given deterministic algorithms for connectivity problems on graphs of
+small treewidth, with the running time only single exponential in the treewidth. We have
+given two diﬀerent techniques. Each technique solves the standard unweighted versions, but
+for variants (counting, weighted versions, . . . ), sometimes only one of the techniques appears
+to be usable. Both techniques make novel use of classic linear algebra. As the treewidth and
+branchwidth of a graph diﬀer by a constant factor, our algorithms also work for graphs of
+bounded branchwidth, and one can easily translate our algorithms to algorithms working on
+branch decompositions.
+Our work improves upon the Cut&Count approach not only by having deterministic algorithms, but also (some of) our algorithms only use time that is linear in the number of vertices
+in the graph. However, the base of the exponent is somewhat larger, and an important question
+is whether this can be reduced. In the rank-based approach, this amounts to the following question: Can Algorithm reduce from the proof of Theorem 3.7 be implemented in linear time? It
+would also be interesting to have a linear time implementation of Algorithm reducematchings
+from Corollary 3.17.
+We believe that our algorithms not only break a theoretical barrier, but may also be of
+practical use. A possible algorithm for e.g., Hamiltonian Circuit may be the following: run the
+standard DP on the tree decomposition, but as soon as we work with a table of size larger than
+2tw , we can use the rank-based approach and remove table entries by ﬁnding a base. Thus, we
+are guaranteed that we never have to process tables of size larger than 2tw , at the cost of running
+a number of Gaussian elimination steps. It would be very interesting to perform an algorithm
+engineering study on this approach. It also may be interesting to see how this combines with a
+well known heuristic by Cook and Seymour for TSP [15], that uses ﬁnding a minimum length
+Hamiltonian Circuit in a graph with small branchwidth as a central step.
+A ﬁnal very intriguing question that our work implies is the following: Is the rank-based
+approach also usable in settings outside graphs of small treewidth? The rank-based approach
+gives a new twist to the dynamic programming approach, in the sense that we consider the
+“algebraic structure” of the partial certiﬁcates in a quite novel way. Thus, this suggests a study
+of this algebraic structure for dynamic programming algorithms for problems in other areas.
+We would like to mention that uses of the rank based approach could also be found in work
+on rank-width boolean-width [30, 11], but in these cases the rank structure exploited is by more
+explicit assumption present in the input.
+
+Acknowledgements
+We would like to thank Piotr Sankowski for pointing us to relevant literature of matrixmultiplication time algorithms. Moreover the second author thanks Marcin Pilipczuk and
+Lukasz Kowalik for helpful discussions at the early stage of the paper.
+
+29
+
+References
+[1] M. Aigner and G.M. Ziegler. Proofs from the book. Berlin. Germany, 2010.
+[2] Noga Alon, Raphael Yuster, and Uri Zwick. Color-coding. J. ACM, 42(4):844–856, 1995.
+[3] Stefan Arnborg and Andrzej Proskurowski. Linear time algorithms for NP-hard problems
+restricted to partial k-trees. Discrete Applied Mathematics, 23(1):11–24, 1989.
+[4] Andreas Björklund. Determinant sums for undirected Hamiltonicity. In FOCS, pages
+173–182. IEEE Computer Society, 2010.
+[5] Andreas Björklund, Thore Husfeldt, Petteri Kaski, and Mikko Koivisto. Trimmed Möbius
+inversion and graphs of bounded degree. Theory Comput. Syst., 47(3):637–654, 2010.
+[6] Andreas Björklund, Thore Husfeldt, and Nina Taslaman. Shortest cycle through speciﬁed
+elements. In Yuval Rabani, editor, SODA, pages 1747–1753. SIAM, 2012.
+[7] Hans Bodlaender. Treewidth: Structure and algorithms. In Giuseppe Prencipe and Shmuel
+Zaks, editors, Structural Information and Communication Complexity, volume 4474 of Lecture Notes in Computer Science, pages 11–25. Springer Berlin / Heidelberg, 2007.
+[8] Hans L. Bodlaender. A linear-time algorithm for ﬁnding tree-decompositions of small
+treewidth. SIAM J. Comput., 25(6):1305–1317, 1996.
+[9] Hans L. Bodlaender and Arie M. C. A. Koster. Combinatorial Optimization on Graphs of
+Bounded Treewidth. The Computer Journal, 51(3):255–269, 2008.
+[10] H.L. Bodlaender. On linear time minor tests with depth-ﬁrst search. Journal of Algorithms,
+14(1):1 – 23, 1993.
+[11] Binh-Minh Bui-Xuan, Jan Arne Telle, and Martin Vatshelle. Boolean-width of graphs.
+Theor. Comput. Sci., 412(39):5187–5204, 2011.
+[12] P. Bürgisser, M. Clausen, and M.A. Shokrollahi. Algebraic complexity theory, volume 315.
+Springer, 1997.
+[13] Yixin Cao, Jianer Chen, and Yang Liu. On feedback vertex set new measure and new
+structures. pages 93–104, 2010.
+[14] J. Chen, J. Kneis, S. Lu, D. Mölle, S. Richter, P. Rossmanith, S. Sze, and F. Zhang.
+Randomized divide-and-conquer: Improved path, matching, and packing algorithms. SIAM
+Journal on Computing, 38(6):2526–2547, 2009.
+[15] William Cook and Paul D. Seymour. Tour merging via branch-decomposition. INFORMS
+Journal on Computing, 15(3):233–248, 2003.
+[16] Bruno Courcelle. The monadic second-order logic of graphs. i. recognizable sets of ﬁnite
+graphs. Inf. Comput., 85(1):12–75, 1990.
+[17] Marek Cygan, Stefan Kratsch, and Jesper Nederlof. Fast Hamiltonicity checking via bases
+of perfect matchings. 2012.
+[18] Marek Cygan, Jesper Nederlof, Marcin Pilipczuk, Michal Pilipczuk, Johan M. M. van
+Rooij, and Jakub Onufry Wojtaszczyk. Solving connectivity problems parameterized by
+treewidth in single exponential time. In Rafail Ostrovsky, editor, FOCS, pages 150–159.
+IEEE, 2011.
+30
+
+[19] Erik D. Demaine, Mohammad Taghi Hajiaghayi, and Ken ichi Kawarabayashi. Algorithmic
+graph minor theory: Decomposition, approximation, and coloring. pages 637–646, 2005.
+[20] Frederic Dorn, Fedor V. Fomin, and Dimitrios M. Thilikos. Catalan structures and dynamic
+programming in H-minor-free graphs. pages 631–640, 2008.
+[21] Frederic Dorn, Eelko Penninkx, Hans L. Bodlaender, and Fedor V. Fomin. Eﬃcient exact
+algorithms on planar graphs: Exploiting sphere cut decompositions. 58(3):790–810, 2010.
+[22] David Eppstein. The traveling salesman problem for cubic graphs. 11(1):61–81, 2007.
+[23] M. R. Fellows and M. A. Langston. On search decision and the eﬃciency of polynomialtime algorithms. In Proceedings of the twenty-first annual ACM symposium on Theory of
+computing, STOC ’89, pages 501–512, New York, NY, USA, 1989. ACM.
+[24] Fedor V. Fomin, Serge Gaspers, Saket Saurabh, and Alexey A. Stepanov. On two techniques
+of combining branching and treewidth. 54(2):181–207, 2009.
+[25] Fedor V. Fomin and Dimitrios M. Thilikos. A simple and fast approach for solving problems
+on planar graphs. pages 56–67, 2004.
+[26] Heidi Gebauer. On the number of Hamilton cycles in bounded degree graphs. pages 241–
+248, 2008.
+[27] Mika Göös and Jukka Suomela. Locally checkable proofs. In Cyril Gavoille and Pierre
+Fraigniaud, editors, PODC, pages 159–168. ACM, 2011.
+[28] Illya V. Hicks, Arie M. C. A. Koster, and Elif Kolotoǧlu. Branch and tree decomposition
+techniques for discrete optimization. Tutorials in Operations Research 2005, pages 1–19,
+2005.
+[29] John E. Hopcroft, Rajeev Motwani, and Jeﬀrey D. Ullman. Introduction to Automata
+Theory, Languages, and Computation. 2nd edition, 2001.
+[30] Sang il Oum and Paul Seymour. Approximating clique-width and branch-width. Journal
+of Combinatorial Theory, Series B, 96(4):514 – 528, 2006.
+[31] Russell Impagliazzo, Ramamohan Paturi, and Francis Zane. Which problems have strongly
+exponential complexity? J. Comput. Syst. Sci., 63(4):512–530, 2001.
+[32] Kazuo Iwama and Takuya Nakashima. An improved exact algorithm for cubic graph TSP.
+pages 108–117, 2007.
+[33] Jon Kleinberg and Éva Tardos. Algorithm Design. 2005.
+[34] Ton Kloks. Treewidth, Computations and Approximations, volume 842 of Lecture Notes in
+Computer Science. Springer, 1994.
+[35] Ioannis Koutis. Faster algebraic algorithms for path and packing problems. In Luca Aceto,
+Ivan Damgård, Leslie Ann Goldberg, Magnús M. Halldórsson, Anna Ingólfsdóttir, and
+Igor Walukiewicz, editors, ICALP (1), volume 5125 of Lecture Notes in Computer Science,
+pages 575–586. Springer, 2008.
+
+31
+
+[36] Ioannis Koutis and Ryan Williams. Limits and applications of group algebras for parameterized problems. In Susanne Albers, Alberto Marchetti-Spaccamela, Yossi Matias,
+Sotiris E. Nikoletseas, and Wolfgang Thomas, editors, ICALP (1), volume 5555 of Lecture
+Notes in Computer Science, pages 653–664. Springer, 2009.
+[37] Daniel Lokshtanov, Daniel Marx, and Saket Saurabh. Known algorithms on graphs of
+bounded treewidth are probably optimal. pages 777–789, 2011.
+[38] László Lovász. On determinants, matchings, and random algorithms. In FCT, pages 565–
+574, 1979.
+[39] László Lovász. Communication complexity: a survey. Paths, flows, and VLSI-Layout,
+pages 235–265, 1990.
+[40] László Lovász and Michael E. Saks. Communication complexity and combinatorial lattice
+theory. J. Comput. Syst. Sci., 47(2):322–349, 1993.
+[41] Ketan Mulmuley, Umesh V. Vazirani, and Vijay V. Vazirani. Matching is as easy as matrix
+inversion. 7(1):105–113, 1987.
+[42] Rolf Niedermeier. Invitation to Fixed-Parameter Algorithms. 2002.
+[43] Christos H. Papadimitriou and Mihalis Yannakakis. On limited nondeterminism and the
+complexity of the V-C dimension. Journal of Computer and System Sciences, 53(2):161 –
+170, 1996.
+[44] Ran Raz and Boris Spieker. On the “log rank”-conjecture in communication complexity.
+Combinatorica, 15(4):567–588, 1995.
+[45] Neil Robertson and Paul D. Seymour. Graph minors. III. Planar tree-width. J. Comb.
+Theory, 36(1):49–64, 1984.
+[46] Ryan Williams. Finding paths of length k in O⋆ (2k ) time. Inf. Process. Lett., 109(6):315–
+318, 2009.
+[47] Virginia Vassilevska Williams. Multiplying matrices faster than Coppersmith-Winograd.
+In Howard J. Karloﬀ and Toniann Pitassi, editors, STOC, pages 887–898. ACM, 2012.
+
+32
+
+A
+A.1
+
+Omitted proofs of Section 2
+Proof of Proposition 2.2
+
+Proof. (sketch) We brieﬂy sketch how to get a nice tree decomposition that is rooted at the
+introduce edge bag for a chosen edge {u, v} ∈ E. To get an empty root bag instead, it suﬃces
+to add a series of forget vertex bags that ends in a new (empty) root.
+Let T be a tree decomposition for G and let {u, v} ∈ E be the chosen edge. Pick an arbitrary
+bag, say Br , of T that contains both u and v or forget v as the root and follow the arguments
+given by Kloks [34] to generate a nice tree decomposition with root bag Br in linear time.
+Now additionally do the following. Below each leaf add a series of introduce vertex bags,
+starting from an empty bag, to make all (new) leaf bags be empty. Regarding the introduce
+edge bags, ﬁrst observe that for each vertex there is only one forget vertex bag; this follows
+from the connectedness property of tree decompositions. To add an introduce edge bag for an
+edge {p, q} take the higher of the forget vertex bags for p and q, split the bag into two identical
+copies and use the lower one to introduce {p, q}. For the root bag Br , this requires a series
+of forget vertex bags, until only u and v are left in the highest bag. Then use that bag to
+introduce {u, v}.
+
+B
+B.1
+
+Omitted proofs of Section 3
+Proof of Lemma 3.13
+
+Proof. For every p, q ∈ Π(U ):
+(CC T )[p, q] =
+
+X
+
+(V1 ,V2 )∈cuts(t)
+
+=
+
+X
+
+(V1 ,V2 )∈cuts(t)
+
+=
+
+X
+
+(V1 ,V2 )∈cuts(t)
+
+[(V1 , V2 ) ⊑ p][(V1 , V2 ) ⊑ q]
+[(V1 , V2 ) ⊑ p ∧ (V1 , V2 ) ⊑ q]
+[(V1 , V2 ) ⊑ p ⊓ q]
+
+= 2#blocks(p ⊓ q)−1
+≡ [p ⊓ q = {U }].
+The key here is that we count the number of cuts which are coarser than both p and q, i.e.,
+cuts (V1 , V2 ) ∈ cuts(t) such that each set of p or q is completely contained in V1 or V2 . It follows
+easily, that this is equivalent to each set of p ⊓ q being contained in V1 or V2 . Considering the
+blocks of p ⊓ q it is clear that the block containing 1 must be in V1 , by the deﬁnition of cuts(t).
+Any further block can be either in V1 or V2 , which gives a total of 2#blocks(p ⊓ q)−1 coarser cuts.
+Clearly, that number is odd if and only if there is a single block in p ⊓ q (the one containing 1),
+i.e., if p ⊓ q = {U }.
+
+B.2
+
+Proof of Lemma 3.15
+
+Proof. First observe that a basis minimizing the weight is just a lexicographicaly minimum
+basis, as independent sets of rows form a matroid. Notice that we may assume that n ≤ 2m
+since we can start with the ﬁrst m rows and then iteratively introduce m new rows, ﬁnd a new
+basis and discard all introduced rows not in this basis. This takes at most n/m iterations, so if
+we manage to perform one iteration in mω time, this procedure indeed implements the lemma.
+Recall that a matrix is in row echelon form if
+33
+
+1. All nonzero rows (rows with at least one 1) are above all rows of all zeroes.
+2. The leading coeﬃcient (the ﬁrst nonzero number from the left, also called the pivot) of a
+nonzero row is always strictly to the right of the leading coeﬃcient of the row above it.
+3. All entries in a column below a leading entry are zeroes (implied by the ﬁrst two criteria)
+We use the folklore fact that an n × 2n matrix can be brought into row-echelon form that is
+obtained using only elementary row operations in O(nω ) time (see for example [12, Proposition
+16.9]).
+We proceed as follows: given an n × m matrix with m ≤ n ≤ 2m we ﬁrst transpose
+it and then sort the columns on their weight in increasing order. Then we bring it in rowechelon form in O(mω ) as discussed above. Since elementary row operations preserve linear
+column combinations we can now restrict ourselves to ﬁnding a minimum weight basis in the
+obtained matrix that is in reduced echelon form. And it is easy to see that in this matrix the
+minimum weight basis is exactly the set of columns that contain a leading 1: it is clearly a set
+of linearly independent columns, and if a column is not in the basis it can be expressed as a
+linear combination of columns to the left of it since for all non-zero entries of that column there
+is a leading 1 appear on the same row in a column before it by the row echelon property.
+
+B.3
+
+Proof of Lemma 3.6
+
+Proof. In the following let U be a set, let A, A′ ⊆ Π(U ) × N, and assume that A′ represents
+A. Note that the union and join operations are symmetric and hence we only need to show the
+preservation of representation with respect to one of the parameters.
+Union: We have for all q ∈ Π(U ) and B ⊆ Π(U ) × N that
+↓
+↓
+opt(q, A′ ∪
+B) = min{opt(q, A′ ), opt(q, B)} = min{opt(q, A), opt(q, B)} = opt(q, A ∪
+B).
+
+Insert: We may assume that X = {e} since for Y ∩Z = ∅, ins(Y ∪Z, A) equals ins(Y, ins(Z, A)).
+Note that if {e} ∈ q, opt(q, ins({e}, C)) = ∞ and representation is preserved trivially.
+Otherwise, we have for every C ⊆ Π(U ) × N and any q ∈ Π(U ∪ {e}) with {e} ∈
+/ q that
+
+opt(q, ins({e}, C)) = min w (p, w) ∈ C ∧ p↑U ∪{e} ⊓ q = {U ∪ {e}}
+= min {w | (p, w) ∈ C ∧ p ⊓ q↓U = {U }}
+
+= opt(q↓U , C).
+
+Note that the second equivalence uses the fact that e must be connected to some e′ ∈ U
+in q, since {e} ∈
+/ q. Now preservation of representation follows since
+opt(q, ins({e}, A′ )) = opt(q↓U , A′ ) = opt(q↓U , A) = opt(q, ins({e}, A′ )).
+Shift: We have for all q ∈ Π(U ) and w′ ∈ N that
+opt(q, shft(w′ , A′ )) = w′ + opt(q, A′ ) = w′ + opt(q, A) = opt(q, shft(w′ , A)).
+Glue: We may assume that a, b ∈ U since otherwise glue(ab, A) = ins({a, b} \ U, glue(ab, A)).
+Note that for every C ⊆ Π(U ) × N and any q ∈ Π(U ) we have that
+opt(q, glue(ab, C)) = min {w | (p, w) ∈ C ∧ (p ⊓ U [ab]) ⊓ q = {U }}
+= min {w | (p, w) ∈ C ∧ p ⊓ (q ⊓ U [ab]) = {U }}
+
+= opt(q ⊓ U [ab], C).
+
+34
+
+Then preservation of representation follows since
+opt(q, glue(ab, A′ )) = opt(q ⊓ U [ab], A′ ) = opt(q ⊓ U [ab], A) = opt(q, glue(ab, A)).
+It is clear from its deﬁnition that the variant of Glue with three parameters also preserves
+representation.
+Project: We may assume that X = {e} since for Y ∩Z = ∅, proj(Y ∪Z, A) equals proj(Y, proj(Z, A)).
+Then for every C ⊆ Π(U ) × N and any q ∈ Π(U \ {e}) we have that
+
+opt(q, proj({e}, C)) = min w (p, w) ∈ C ∧ p↓U \{e} ⊓ q = {U \ {e}} ∧ {e} ∈
+/p
+= min {w | (p, w) ∈ C ∧ p ⊓ q↑U = {U }}
+
+= opt(q↑U , C).
+
+Now preservation of representation follows directly
+opt(q, proj({e}, A′ )) = opt(q↑U , A′ ) = opt(q↑U , A) = opt(q, proj({e}, A)).
+Join: We may assume that A, B ⊆ Π(Û ) × N since otherwise we can use
+join(A, B) = join(ins(U ′ \ U, A), ins(U \ U ′ , B)).
+For every B ⊆ Π(Û ) × N and r ∈ Π(Û ) it holds that
+o
+n
+opt(r, join(A′ , B)) = min w1 + w2 (w1 , p) ∈ A′ , (w2 , q) ∈ B ∧ p ⊓ q ⊓ r = {Û }
+
+= min opt(q ⊓ r, A′ ) + w2 (w2 , q) ∈ B
+= min {opt(q ⊓ r, A) + w2 | (w2 , q) ∈ B}
+o
+n
+= min w1 + w2 (w1 , p) ∈ A, (w2 , q) ∈ B ∧ p ⊓ q ⊓ r = {Û }
+
+= opt(r, join(A, B)).
+
+B.4
+
+Proof of Theorem 3.18
+
+Proof. The algorithm is the following: use the above dynamic programming formulation from
+Subsection 3.4 to compute Ar , but after evaluation of every entry Ax , use Theorem 3.7 to store
+reducematching(Ax ) rather than Ax . This is possible because by deﬁnition Ax clearly is a
+set of weighted matchings. Since reducematchings(A) represents A and the recurrence uses
+only the operators deﬁned in Deﬁnition 3.2 which all preserve representation by Lemma 3.6,
+we have as invariant that for every x ∈ T the entry stored for Ax represents Ax by Lemma 3.6.
+In particular, the stored value for Ar (s) dominates Ar (s) and hence we can safely read oﬀ the
+answer to the problem as done in Section 3.4.
+Let us focus on the time analysis: since for all operations from Deﬁnition 3.2 we can apply
+Proposition 3.3, the bottleneck clearly is the reducematchings algorithm. Recall that the
+guessing of the edge v1 vn gives overhead of at most pw or tw so this will be subsumed by the
+last term of the claimed running time.
+In the ﬁrst algorithm that is given a path decomposition, note we can assume x is either a
+leaf, introduce vertex, forget vertex or introduce edge bag. In this case the size of Ax (s) is by
+
+35
+
+−1
+
+our invariant at most 2|s (1)|/2 . Then the time needed to perform reducematchings(Ax (s)) is
+−1
+at most 2ω/2|s (1)| pwO(1) and the time to compute Ax (s) for every {0, 1, 2}Bx is
+
+
+X
+X
+|Bx |
+ω/2|s−1 (1)|
+O(1)
+2
+pw
+≤
+1i0 1i2 (2ω/2 )i1 pwO(1)
+i
+,
+i
+,
+i
+0 1 2
+Bx
+i0 +i1 +i2 =|Bx |
+
+s∈{0,1,2}
+
+= (2 + 2ω/2 )|Bx | pwO(1) ,
+
+where the last equality is due to the multinomial theorem. Hence Ax can be computed for every
+x ∈ T in the claimed time bound.
+For tree decompositions, note that if x is a join bag then
+|Ax (s)| ≤
+
+X
+
+|l−1 (1)|/2 |r −1 (1)|/2
+
+2
+
+2
+
+=
+
+|Bx |
+
+Y X
+
+2[l=1]/2+[r=1]/2 = (23/2 )|s
+
+−1 (1)|
+
+4|s
+
+−1 (2)|
+
+.
+
+i=1 l+r=si
+
+l+r=s
+
+where we use in the second-last equation that
+
+X
+
+[li =1]/2+[ri =1]/2
+
+2
+
+li +ri =si
+
+
+
+1
+= 23/2
+
+
+4
+
+if si = 0
+if si = 1
+if si = 2.
+
+(3)
+
+Using this, it can also be seen that the reduce operation on Ax (s) is performed in time
+−1
+−1
+−1
+bounded by (23/2 )|s (1)| 4|s (2)| 2(ω−1)/2|s (1)| |Bx |O(1) . Then the total time needed to evaluate
+Ax (s) for every s ∈ {0, 1, 2}Bx is bounded by
+
+
+X
+|Bx |
+1i0 (2(ω+2)/2 )i1 4i2 = (5 + 2(ω+2)/2 )|Bx | ,
+i0 , i1 , i2
+i0 +i1 +i2 =|Bx |
+
+and the claimed running time follows by the multinomial theorem.
+
+36
+
+

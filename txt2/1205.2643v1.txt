@@ -1,0 +1,1045 @@
+to truncate the time horizon of the Markov decision
+process (MDP). Moreover, they have had to focus on
+either discrete or linear-Gaussian models; where an
+abundant sea of alternatives already exists. Despite
+this, the EM approach was a key initial step in the development of more sophisticated inference and learning
+techniques for fully and partially observed MDPs.
+These new inference and learning methods for stochastic control and planning have led to progress along
+several frontiers. First, the new methods apply naturally to structured MDPs, such as dynamic Bayesian
+network controllers, and hence can benefit from a rich
+body of knowledge in the fields of statistical inference
+and factored representations (Toussaint et al., 2008).
+Second, the inference and learning approach opens up
+room for looking at the problem from a new angle,
+with the potential of leading to new insights and fostering innovation. For example, this strategy enabled
+(Hoffman et al., 2009) to relax the quadratic cost constraint in the classical and ubiquitous linear quadratic
+controllers via an EM algorithm with a tractable E
+step, but with general error functions. In that work,
+the authors also show that such an algorithm is equivalent to a policy gradient method where the simulation
+component is replaced by exact and efficient computations.
+Third, the adoption of Monte Carlo EM has allowed
+for the extension of these methods to more general
+(hybrid discrete-continuous, nonlinear, non-Gaussian)
+state and action spaces (Hoffman et al., 2007a,b;
+Kober and Peters, 2008). The demonstrations with
+robots in (Kober and Peters, 2008) are particularly impressive. However, as noted in (Hoffman et al., 2007a),
+the forward-backward procedure in the Monte Carlo
+E step can be very computationally expensive. To
+avoid this, (Kober and Peters, 2008) use only forward
+simulation. This is an adequate pragmatic solution
+
+224
+
+HOFFMAN ET AL.
+
+provided that the state space is not high-dimensional
+and/or that the rewards are not rare events (e.g. fairly
+flat reward functions with occasional narrow peaks).
+We note however that with increasing dimension, the
+probability of hitting a high reward (for many reward functions used in practice) becomes exponentially small.
+To attack larger dimensional spaces with potentially
+rare rewards, (Hoffman et al., 2007a) proposes to sample from a trans-dimensional target distribution that is
+proportional to the reward function. Hence, the samples are guided to areas of high reward. This target
+distribution arises from a formulation of the stochastic
+control problem as one of carrying out Bayesian inference for an infinite mixture of finite-horizon MDPs,
+where the reward occurs at the last step of each MDP.
+A reversible jump MCMC algorithm (Green, 1995)
+is then developed to draw the states, actions, policy parameters and horizon lengths from the transdimensional target distribution. By doing this, they
+overcome the need for truncating the MDP that exists
+with the EM approach. They show that their proposed MCMC algorithm outperforms various Monte
+Carlo EM and policy search methods on a simple simulation example.
+In this paper we propose several modifications and
+methodology improvements over (Hoffman et al.,
+2007a) that we believe are essential to make the
+method practical in more general, higher-dimensional
+state and policy spaces. First, we derive a new transdimensional target distribution that incorporates the
+rewards at all time steps. The need for the reward
+to occur only in the last time step of each mixture
+component was essential for deriving efficient two-filter
+smoothers in discrete MDPs (Toussaint and Storkey,
+2006). The approach in (Hoffman et al., 2007a) inherited this restrictive requirement. However, we point
+out here that this requirement can be eliminated when
+adopting reversible jump MCMC algorithms. Within
+the MCMC framework, it is possible to introduce more
+informative target distributions that incorporate all
+the rewards without deteriorating the computational
+efficiency of the algorithm. In fact, as we show in the
+next subsection and the experimental section, the new
+target distributions can result in more efficient control
+algorithms.
+Second, we note that the correlations among the variables of MDPs are very strong because of the natural
+time dependencies in these models. These correlations
+are one of the main causes of poor mixing times in
+high-dimensions. To overcome this fundamental problem, we propose a reformulation of the target distribution in terms of independent noise variables and deterministic transformations. This not only leads to huge
+
+UAI 2009
+
+improvements in mixing time, but also allows for the
+adoption of the common random numbers technique
+for variance reduction, which has been shown to perform well in control tasks (Ng and Jordan, 2000).
+Our third major contribution addresses the problem
+of obtaining point estimates of the policy parameters.
+Whereas (Hoffman et al., 2007a) leaves the question of
+choosing a point estimate open, we present a strategy
+for finding these estimates by optimizing the marginal
+distribution of the policy parameters. This improvement has its roots in an elegant method developed for
+myopic Bayesian experimental design (Müller, 1998;
+Müller et al., 2004).
+
+2
+
+Description of the Model
+
+We will assume a controlled Markov process over
+states, actions, and rewards (Xn , Un , Rn ) evolving according to
+•
+•
+•
+•
+
+an initial state model: x0 ∼ µ(x0 ),
+a parameterized policy: un ∼ p(un |xn , θ),
+a transition model: xn+1 ∼ p(xn+1 |xn , un ),
+and deterministic rewards: rn = r(xn , un ).1
+
+In this paper we will be working in a model-based
+framework, in which these models are assumed to be
+known. Our goal is then to find the policy parameters
+θ∗ which maximize the discounted expected reward
+P∞
+J(θ) = E[ n=0 γ n r(Zn )],
+where Zn = (Xn , Un ) is the state/action pair at time
+n and γ < 1 is a discount factor.
+Following (Toussaint and Storkey, 2006), it is then possible to rewrite the expected reward as the expectation
+J(θ) = (1 − γ)−1 E[r(ZK )],
+which is taken with respect to the trans-dimensional
+distribution
+p(k, z0:k |θ) = (1 − γ) γ k p(z0 |θ)
+
+k
+Y
+
+p(zn |zn−1 , θ). (1)
+
+n=1
+
+Here, the marginal distribution over trajectory lengths
+corresponds to the term p(k) = (1 − γ)γ k . Building
+on this result, (Hoffman et al., 2007a) introduced a
+reversible jump MCMC algorithm to produce samples
+of (k, z0:k , θ) from a distribution with density
+p(k, z0:k , θ) ∝ r(zk ) p(k, z0:k |θ) p(θ),
+
+(2)
+
+where p(θ) is some prior distribution over θ chosen to
+ensure that our distribution is proper. We should note
+1
+More generally the rewards could be stochastic, but we
+will assume otherwise in order to simplify later notation.
+
+UAI 2009
+
+HOFFMAN ET AL.
+
+here that the use of this density requires a positive
+reward model, however this is easy to ensureR so long
+as the rewards are bounded. If the integral J(θ) dθ
+is finite we can choose an improper prior p(θ) ∝ 1.
+Another reasonable choice is a uniform distribution
+on a bounded region of the parameter space. This
+restricts the search for θ∗ to a fixed region but does not
+alter the expected reward surface inside that region.
+By construction the target distribution (2) admits a
+marginal p(θ) ∝ J(θ) p(θ) as desired. Note that only
+the reward at the last time step of the MDP appears
+in this distribution. In the following subsection, we
+will show that it is possible to derive an alternative
+distribution that accounts for the sum of rewards at
+all time steps. The experiments will show that this
+new distribution has desirable properties.
+2.1
+
+Summing over all rewards
+
+As mentioned above, the distribution utilized in (Hoffman et al., 2007a) and given by Equation 2 relies on
+weighting by rewards obtained at the end of the sampled trajectory. This formulation was crucial to the
+development of EM-based procedures such as (Toussaint and Storkey, 2006) in order to obtain efficient
+recursions. In the case of sampling-based procedures,
+however, we can greatly improve upon earlier methods
+by instead using the entire sequence of rewards r0:k .
+We can first rearrange those terms which depend on
+the discount factor γ,
+∞ Z
+X
+J(θ) = (1 − γ)−1
+r(zn ) p(n, z0:n |θ) dz0:n
+n=0
+
+Z
+∞
+X
+γn
+r(zn ) p(z0:n |n, θ) dz0:n
+= (1 − γ)
+1−γ
+n=0
+using the series expansion of γ n /(1 − γ) we can write
+!Z
+∞
+∞
+X
+X
+k
+= (1 − γ)
+γ
+r(zn ) p(z0:n |n, θ) dz0:n
+n=0
+
+k=n
+
+finally, by changing the order of summation we obtain
+= (1 − γ)
+
+∞
+X
+
+γk
+
+k=0
+
+=
+
+∞ Z
+X
+
+k
+X
+
+k=0
+
+n=0
+
+k Z
+X
+
+r(zn ) p(z0:n |n, θ) dz0:n
+
+n=0
+
+!
+r(zn ) p(k, z0:k |θ) dz0:k .
+
+This reformulation allows us to introduce the new target distribution
+
+Pk
+pe(k, z0:k , θ) ∝
+(3)
+n=0 r(zn ) p(k, z0:k |θ) p(θ),
+which just as before results in a marginal proportional
+to the expected reward.
+
+3
+
+225
+
+Explicit noise variables
+
+While theoretically sound, sampling from (2) or (3) requires a carefully tuned proposal distribution in order
+to accurately explore the posterior. In many cases the
+policy parameters θ and the sequence of state/action
+pairs z0:k (as well as the individual steps within that
+sequence) will be highly correlated, resulting in a
+Markov chain which mixes very poorly over these variables. Blocking the variables can improve the mixing
+time of the Markov chain. Here, however, we adopt an
+even more efficient sampling strategy. In many models
+both the transition model and the policy take the form
+of deterministic functions with added noise2 , i.e.
+un = πθ (xn ) + φn and xn+1 = f (xn , un ) + ψn+1 .
+where n = (φn , ψn ) denotes the noise (i.e. stochastic)
+components which are distributed according to
+p(n |θ) = p(ψn ) p(φn |θ).
+Under this distribution the initial-state is a special
+case, however it becomes notationally convenient to
+consider this as “fully stochastic” and write ψ0 = x0 .
+Here we allow the noise φn to depend upon θ so that
+the policy can control exploratory noise. In more general settings it might also make sense to let x0 depend
+upon θ, but here we assume that the initial state is
+uncontrolled.
+Under these circumstances, the strong correlation exhibited by zn and zn+1 is mostly due to the deterministic components. We remind the reader that it
+is this strong correlation that causes any MCMC algorithm to mix poorly. We can limit this problem
+by sampling 0:k rather than the state/path terms.
+This is an idea closely related to the techniques discussed by (Papaspiliopoulos et al., 2003). Under this
+re-parameterization, the new target distribution is
+
+Pk
+pe(k, 0:k , θ) ∝
+(4)
+n=0 r(zn ) p(k) p(0:k |k, θ).
+Although we have eliminated the need to sample zn , we
+must still calculate it in order to compute the reward
+at time n; this calculation is, however, deterministic
+given zn−1 and n .
+The reformulation mitigates the mixing problems
+due to the strong dependencies between θ and z0:k
+as well as between zn+1 and zn that were caused
+by the deterministic components of p(un |xn , θ) and
+p(xn+1 |xn , un ). The dependencies between the variables in this new artificial joint distribution are purely
+2
+
+In this paper we present additive noise models purely
+for ease of exposition. It is trivial to generalize this
+approach to models where states are given by xn+1 =
+f (xn , un , ψn+1 ) and actions by un = πθ (xn , φn ) for any
+functions f and πθ .
+
+226
+
+HOFFMAN ET AL.
+
+UAI 2009
+
+due to the reward function r and in many cases will
+be comparatively weak.
+
+the accumulated (non discounted) reward along one
+Pkj
+simulated trajectory as R(ζj ) = n=0
+r(zn ).
+
+Apart from its decorrelating effect, this technique has
+a secondary benefit as a variance reduction technique.
+The noise terms 0:k can act as common random numbers, in a way that is closely related to the idea of fixing random seeds in policy search (i.e. PEGASUS (Ng
+and Jordan, 2000)). In particular, we can fix the noise
+variables for a predetermined number of MCMC moves
+updating the policy. In doing this, both θn and θn−1
+will depend on the same random seeds (noise terms).
+Consequently, the variance of the policy update will be
+reduced. This is a direct consequence of the fact that
+the variance of the difference of two estimators based
+on Monte Carlo simulations is equal to the sum of the
+individual variances of each estimator minus their joint
+covariance (Spall, 2005).
+
+The appropriate artificial target distribution is then
+Qν
+peν (θ, ζ1:ν ) ∝ p(θ) j=1 R(ζj ) p(ζj |θ),
+(5)
+
+4
+4.1
+
+Marginal Optimization
+Annealing
+
+So far we have defined a distribution pe(k, z0:k , θ)
+(Equation (3)) for which the policy parameter θ is
+marginally distributed as J(θ) p(θ). Our goal however
+is to estimate the maximum θ∗ = arg maxθ J(θ).
+If J(θ) happens to have a strongly dominant and
+highly peaked mode around the global maximum θ∗ ,
+we can justify sampling from pe(k, z0:k , θ) and deriving a point estimate of θ∗ by averaging the samples’ θ
+components. This is the approach taken in (Hoffman
+et al., 2007a). However, in general the assumption of
+such a favorable J(θ) is unrealistic. If J(θ) is multimodal or fairly flat then this approach will yield poor
+estimates.
+Instead, let us consider peν (θ) ∝ J(θ)ν p(θ). For large
+exponents ν the probability mass of this distribution
+will concentrate on the global maximum θ∗ . If we
+could sample from peν (θ), then the generated samples
+would allow us to derive a much better point estimate
+of θ∗ . Note however that this is not as simple as it
+might seem at first glance. For example raising the
+joint density in Equation (3) to the power of ν will
+not result in a distribution with this desired marginal.
+A method for generating samples from marginal distributions of this form was proposed in (Müller, 1998;
+Müller et al., 2004) in the context of optimal design
+and independently in (Doucet et al., 2002) in the context of marginal maximum a posteriori estimation.
+The trick is to define an artificial distribution jointly
+over multiple simulated trajectories. To simplify notation let us first define ζj = {kj , z0:kj } to represent
+one simulated trajectory. Furthermore we will denote
+
+where ν is a positive integer and p(ζj |θ) is given by
+Equation (1). It is easy to verify that this distribution
+does indeed admit the desired marginal distribution
+peν (θ) ∝ J(θ)ν p(θ). However, because the modes of
+J(θ)ν will typically be narrow and widely separated for
+large ν, sampling from this distribution using Markov
+chain Monte Carlo techniques directly is difficult.
+Therefore, we take a simulated annealing approach (as
+in (Müller, 1998; Müller et al., 2004; Doucet et al.,
+2002)) in which we start sampling from peν with ν=1,
+and then slowly increase ν over time according to an
+annealing schedule. Increasing ν slowly enough allows
+the chain to efficiently explore the whole parameter
+space before becoming more constrained to the major
+modes for larger values of ν.
+One limitation of Equation (5) is that the annealing
+schedule is limited to full integer steps. However, we
+can further generalize this approach to allow for a real
+valued annealing schedule by defining the modified target distribution
+peν (θ, ζ1:dνe ) ∝
+
+
+bνc
+Y
+p(θ) 
+R(ζj ) p(ζj |θ) R(ζdνe )ν−bνc p(ζdνe |θ), (6)
+j=1
+
+where ν is now real valued and bνc and dνe denote the
+integer valued floor and ceiling of ν.
+For integer values of ν, this distribution again admits
+the marginal peν (θ) ∝ J(θ)ν p(θ) as before. While this
+does not hold for the intermediate distributions with
+real valued ν, these distributions provide a smooth
+bridge between the integer steps. This allows for more
+gradual annealing, thereby reducing the variance of
+the overall sampler.
+While in theory we should let ν approach infinity, in
+practice this is not computationally feasible. Instead
+we choose an annealing schedule that plateaus at a
+final integer value νmax , at which point the chain is
+run for another M iterations. These last M samples
+from peνmax (θ) are then used as the basis of a point
+estimate of θ∗ .
+4.2
+
+Clustering
+
+If J(θ) has a unique maximum and νmax is sufficiently
+large, the final samples from pνmax (θ) will all be concentrated around θ∗ . In this case averaging the L final
+
+UAI 2009
+
+HOFFMAN ET AL.
+
+Require: an initial sample θ(0)
+1: initialize our trajectories with ζ0 given θ (0)
+2: initialize ν := 1
+3: for i = 1 to N do
+4:
+for all trajectories ζj do
+5:
+perform a birth or death move on ζj
+6:
+if i is divisible by nup
+perform an update move on ζj
+7:
+end for
+8:
+sample θ(i) given θ(i−1)
+9:
+update ν with some annealing schedule
+(i)
+10:
+sample a new trajectory ζdνe if necessary
+11: end for
+12: cluster all {θ (i) } obtained under νmax
+
+Figure 1: The reversible-jump MDP algorithm.
+samples can provide a good estimate of θ∗ . In practice however, it is possible that pνmax still has multiple
+modes with significant probability mass. In this case
+simple averaging can lead to a poor estimate.
+To provide a better point estimate under these circumstances we cluster the final samples and use the center
+of the largest cluster as our estimate of θ∗ . For the
+clustering we use simple agglomerative clustering using average linkage (UPGMA). Other techniques such
+as for example mean shift clustering (Cheng, 1995)
+could be used instead. Note however that the popular
+K-Means algorithm is not suited for this purpose as it
+tends to split high density areas into multiple clusters.
+
+5
+
+Algorithm
+
+While we cannot directly sample from the annealed
+distribution in (6), a Markov chain targeting this distribution can be constructed. For a given θ a combination of birth, death, and blocked update moves are
+used to propose updates for each trajectory in {ζj }.
+The birth and death moves allow us to mix across trajectories of different dimensions, and it is here that
+we need to bring in the machinery of reversible jump
+MCMC. Finally, given the trajectory samples we can
+update θ using Metropolis-Hastings. Acceptance probabilities for these various moves are described later,
+and pseudo-code for the algorithm is given in Figure 1.
+Before describing the acceptance ratios for this algorithm, however, we should first discuss the relationship between the different trajectory terms. Although
+the reward and state/action terms are deterministic
+given the noise variables, we can see from Equation (6)
+that they must still be computed in order to evaluate
+
+227
+
+r0
+
+r1
+
+z0
+
+ψ0
+0
+
+rk
+
+z1
+
+zk
+
+x0
+
+x1
+
+···
+
+xk
+
+u0
+
+u1
+
+θ
+
+uk
+
+φ0
+
+ψ1
+1
+
+φ1
+
+ψk
+
+φk
+
+k
+
+Figure 2: A graphical model depicting the interactions
+between state/action, noise, and reward terms (as well
+as any dependency on θ).
+
+the target density (up to a normalizing constant). As
+noted before, though, modifying n or inserting a new
+term ∗n requires that we recalculate all following state,
+action, and reward terms—a fact that can be readily
+verified via the graphical model shown in Figure 2. In
+this work the fact that we are working directly with
+the noise variables means that we are updating the
+actual states zn only indirectly. Birth/death moves at
+intermediate points in a trajectory would shift the sequence of random variates, which effectively combines
+the birth/death move with a potentially high dimensional blocked update move. This would lead to lower
+acceptance rates and worse mixing of the chain in addition to higher computational cost. We therefore only
+sample birth and death moves at the end of a trajectory (i.e. for n = k) and update intermediate noise
+terms using the largest block size for which the acceptance ratios remain reasonable. Using birth/death
+moves only at the end of the trajectory is theoretically
+valid because the update moves eventually update all
+states.
+At every iteration and for each trajectory we will propose a new trajectory ζj∗ given ζj and θ. The trajectories are conditionally independent given θ, and as a
+result we can write the acceptance probability for each
+proposed move as min(1, α), where
+α=
+
+peν (ζj∗ |θ) q(ζj |ζj∗ )
+·
+peν (ζj |θ) q(ζj∗ |ζj )
+
+for some proposal density q. Since each trajectory can
+be sampled independently we will drop the j indices
+and write the internal variables for each trajectory as
+ζ = (k, 0:k , z0:k ). We will also define the “annealing
+
+228
+
+HOFFMAN ET AL.
+
+exponent” for each trajectory, as β = ν − bνc if ζ is
+the final trajectory and β = 1 otherwise.
+At each iteration we propose a birth move with probability bk or a death move with probability dk = 1−bk .3
+Proposing a birth move involves sampling a new noise
+∗
+term ∗k+1 and calculating zk+1
+; we accept with probability min(1, αbirth ), where
+αbirth
+
+
+β
+∗
+)
+p(k + 1) dk+1 p(1:k ) p(∗k+1 ) R(z0:k , zk+1
+=
+p(k)
+bk p(1:k ) q(∗k+1 )
+R(z0:k )
+
+
+β
+∗
+)
+dk+1 R(z0:k , zk+1
+=γ
+.
+bk
+R(z0:k )
+
+The simplification in this last step is due to the fact
+that we are able to sample directly from the noise
+model, and as a result q = p. If a death move
+is proposed we need only remove the last noise and
+state/action term and hence there is no need to sample. The acceptance ratio for this move can be obtained by inverting the birth move ratio, and as a
+result we will accept with probability min(1, αdeath ),
+where
+β
+
+1 bk−1 R(z0:k−1 )
+.
+αdeath =
+γ dk
+R(z0:k )
+Every nup iterations a fixed-dimensional update move
+is proposed. We will first randomly select a block of
+nblock variables [a, b]. Given this block we can sample
+new noise terms ∗a:b and calculate the corresponding
+∗
+∗
+path terms za:b
+and zb+1:k
+. The move will be accepted
+with probability min(1, αupdate ), where
+
+β
+∗
+∗
+, zb+1:k
+)
+p(∗a:b ) q(a:b ) R(z0:a−1 , za:b
+∗
+p(a:b ) q(∗a:b ) R(z0:a−1 , za:b , zb+1:k
+)
+
+
+β
+∗
+∗
+R(z0:a−1 , za:b
+, zb+1:k
+)
+=
+.
+R(z0:k )
+
+αupdate =
+
+Finally, given the trajectories {ζj } we can sample a
+new set of policy parameters θ∗ from the proposal distribution q(θ∗ |θ). This new policy requires us to recalculate the state/action components for each trajectory,
+resulting in ζj∗ . These new policy parameters are then
+accepted with probability min(1, αmh ) where
+Qbνc
+∗
+∗ ∗
+j=0 R(ζj ) p(ζj |θ )
+αmh = Qbνc
+j=0 R(ζj ) p(ζj |θ)
+∗
+∗
+R(ζdνe
+)ν−bνc p(ζdνe
+|θ∗ ) q(θ|θ∗ ) p(θ∗ )
+·
+.
+R(ζdνe )ν−bνc p(ζdνe |θ) q(θ∗ |θ) p(θ)
+
+This form of the acceptance ratio is completely general, however a number of assumptions can be made
+
+UAI 2009
+
+in practice which greatly simplify its form. A common
+choice for the proposal q is a symmetric distribution
+such that q(θ, θ0 ) = q(θ0 , θ). If the proposal distribution is symmetric and the prior p(θ) is uniformly
+distributed, as noted in Section 2, then the final two
+terms of this acceptance ratio will cancel. Finally, if
+additionally the policy noise φ0:k is independent of θ,
+or if the policy is deterministic, the acceptance ratio
+simplifies to
+i
+∗
+)ν−bνc
+R(ζj∗ ) R(ζdνe
+i
+.
+= hQ
+bνc
+ν−bνc
+R(ζ
+)
+R(ζ
+)
+j
+dνe
+j=0
+hQ
+
+αmh
+
+bνc
+j=0
+
+If there is exploitable structure in θ we can also propose blocked updates of the parameters.
+
+6
+6.1
+
+Experiments
+Linear-Gaussian models
+
+We first experiment with linear-Gaussian transition
+models of the form
+f (xn , un ) = Axn + Bun + N (0, Σ), and
+πθ (xn ) = Kxn + m for θ = (K, m).
+This model is particularly interesting if we allow for
+multimodal rewards, as this will in general induce a
+multimodal expected reward surface. Figure 3 contrasts samples taken from both the non-annealed and
+annealed distribution (with annealing factor ν = 20)
+on a model with 1D state- and action-spaces. In this
+example we can see that the simple approach of averaging samples {θ(i) } results in a very poor estimate
+of the policy parameters, whereas both clustering and
+annealing are correctly able to recover the optimum.
+6.2
+
+Particles with force-fields
+
+For a more challenging control problem we chose to
+simulate a physical system in which a number of repellers are affecting the fall of particles released from
+within a start region. The goal is to direct the path
+of the particles through high reward regions of the
+state space in order to maximize the accumulated discounted reward. The four-dimensional state-space in
+this problem consists of a particle’s position and velocity (p, ṗ) for p ∈ R2 . Actions consist of repelling
+forces acting on the particle. Additionally, the particle is affected by gravity and a frictional force resisting
+movement.
+
+3
+
+In general we will let these terms be constant for all k,
+but it must be the case that b0 = 1 in order to ensure that
+we do not “kill off” chains of length one.
+
+The deterministic policy is parameterized by k repeller
+positions ri and strengths wi with a functional form
+
+UAI 2009
+
+HOFFMAN ET AL.
+
+229
+
+employ the noise variable parameterization and the
+annealing and clustering techniques discussed in Sections 3 and 4 in both samplers.
+
+(a) non-annealed samples
+
+(b) annealed samples
+
+(c) reward model
+
+(d) Trajectories, averaged
+
+(e) Trajectories, clustered
+
+(f) Trajectories, annealed
+
+Figure 3: Linear-Gaussian example with multimodal
+reward, shown in (c). The top two plots show samples
+of the 2D policy parameters, where (a) displays those
+samples taken without annealing, and (b) those with
+annealing. Simple averaging of the sampled parameters in (a) leads to an estimate given by the red triangle, whereas the green diamond is the point estimate
+found by clustering these same samples. Also shown
+(d-f) are sample trajectories under these 3 different estimates where the y-axis gives the discrete time index.
+given by
+πθ (p, ṗ) =
+
+k
+X
+i=1
+
+wi
+
+p − ri
+.
+kp − ri k3
+
+That is, each repeller pushes the particles directly
+away from it with a force inversely proportional to
+its distance from the particle. In our experiments the
+particle’s start position is uniformly distributed within
+a rectangular region (shown in yellow in Figures 4 and
+5). At each time step the particle’s position and velocity are updated using simple deterministic physical
+forward simulation and a small amount of Gaussian
+transition noise is added to the particle’s velocity.
+In Figure 4 we use this particle model to show the
+benefits of the proposed summed reward formulation
+(Equation (3)) over the target distribution which only
+uses rewards at the last time step (Equation (2)). We
+
+The reward model used in this example is composed
+of multiple circular reward zones. A high constant
+reward is awarded inside these zones and close to no
+reward outside. Note that the discontinuous and multimodal nature of this reward surface makes for a very
+challenging control problem. In this and the following
+experiments we are searching for the optimal placement and strengths of two repellers, resulting in a 6
+dimensional control problem. In our implementation
+we are updating the 6 policy components in 4 blocks
+for the positions and strengths of the two repellers.
+When evaluating the reward at the last step only, the
+sampler has difficulties crossing the gaps between the
+reward zones, as indicated by the relatively low acceptance ratios of birth and death moves, see Figure 4(b).
+This leads to the sampler getting stuck in local minima, resulting in poor policy estimates. The summed
+rewards formulation on the other hand allows for better mixing over path lengths, making it more likely to
+find the high reward zone at the bottom. This ultimately results in much better policies.
+Note how the policy found using our summed rewards
+approach and visualized in Figure 4(d) uses the two
+repellers to not only direct the particles towards the
+high reward zone but to also slow them down inside
+this zone in order to accumulate as much reward as
+possible.
+Figure 5 compares the algorithm described in this paper with the PEGASUS technique (Ng and Jordan,
+2000) using numerically computed gradients. In particular we are interested in learning using deterministic
+policies, and PEGASUS can be used directly in this
+setting. We compared 10 runs of each algorithm on
+the particle system model shown in the bottom two
+subplots, where the reward model is a single Gaussian in position-space. Even though the reward model
+is unimodal, the resulting expected reward surface is
+highly multimodal: two such modes are displayed in
+the bottom two subplots. The poor performance and
+high variance of PEGASUS is mainly due to these local
+maxima, as well as plateaus in the reward surface.
+Figure 6 uses the same problem from the previous
+experiment to compare the sampler based on the
+noise-variable formulation with the reversible jump approach used in (Hoffman et al., 2007a). By examining
+the resulting policy estimates we can see that the proposed reformulation significantly outperforms the previous method on this model. This results from the
+older method’s poor mixing over trajectories, as evidenced by the extremely low acceptance rate for path
+
+230
+
+HOFFMAN ET AL.
+
+(a)
+
+(b)
+
+UAI 2009
+
+(c)
+
+(d)
+
+(e)
+
+updates. In order to explore the space of trajectories at all, this method therefore needs to shrink trajectories using death moves and subsequently re-grow
+them using birth moves. However, the acceptance ratios for such birth and death moves are themselves
+significantly lower than for our proposed sampler, rendering this way of mixing in trajectory space inefficient
+as well. The earlier work of (Hoffman et al., 2007a)
+was able to avoid these inefficiencies by using a hand
+crafted proposal mechanism that helped to break the
+state-space dependencies. This proposal was chosen
+in an ad hoc, model-dependent manner, however, and
+unlike our approach is not applicable to more general
+problems.
+
+7
+
+Expected reward, J(θ)
+
+Figure 4: Comparison of a sampler evaluating the reward only at the last step of a simulated trajectory and our
+proposed sampler, which sums all rewards along the trajectory. The problem, shown in (a), features multiple
+reward zones, with the bottom-most zone yielding a 50 times higher reward than the others. The average
+acceptance ratios for both samplers are displayed in (b), while (c) compares the expected rewards for the policies
+found using 10 runs of each sampler. The final two plots visualize two of the computed policies; one for the
+summed reward formulation in (d) and one when only evaluating the reward at the last step in (e).
+
+15
+10
+5
+0
+0.0
+
+Auxiliary noise RJMDP
+PEGASUS
+0.5
+
+1.0
+
+1.5
+
+number of samples
+
+2.0
+
+2.5
+
+1e7
+
+Conclusion
+
+In this paper we have presented several important
+improvements to the approach of (Hoffman et al.,
+2007a) for solving general MDPs using reversible
+jump MCMC. The experiments provide clear evidence
+that the proposed modifications are needed to attack
+higher-dimensional stochastic decision problems. In
+particular, the experimental results show that significant improvements are obtained when incorporating
+more reward information (Figure 4) and when using
+the explicit noise variables to break state-space dependencies and reduce variance (Figure 6). It is also clear
+that the proposed simulated annealing and clustering
+techniques allow us to find better point estimates of
+the optimal policy (Figure 3). Finally, we observed favorable performance of the proposed approach in comparison to state-of-the-art techniques such as PEGASUS (Figure 5).
+The repellers example used a 4-dimensional state space
+and 6-dimensional policy space. Scaling to higher dimensional state spaces should be possible in principle.
+
+(a) “bad” policy
+
+(b) “good” policy
+
+Figure 5: Comparison with PEGASUS on the repellers
+model, averaged over 10 runs, where error-bars display
+one standard deviation. The x-axis displays the number of samples taken from the transition model. Also
+shown are (a) a “bad” local maxima found by PEGASUS, and (b) a “good” policy found by our sampler.
+
+As long as there is structure in the state space, one
+can adopt standard Rao-Blackwellization and blocking techniques to efficiently carry out inference in the
+Bayesian network. The main difficulty here lies in dealing with the dimensionality of the policy space, where
+often there seems to be much less structure to exploit.
+How to recruit more structure or gradients (when the
+model is differentiable) is an ongoing research direction.
+
+UAI 2009
+
+HOFFMAN ET AL.
+
+Acceptance ratio
+
+Final expected reward estimates Mean
+acc. ratio for birth/death moves
+1.0
+
+15
+
+5
+0
+
+Standard RJMDP
+Auxiliary noise RJMDP
+2000 4000
+
+6000 8000 10000
+
+Iteration
+
+Mean acc. ratio for update moves
+
+10
+
+standard
+
+aux.noise
+
+Acceptance ratio
+
+Expected reward, J(θ)
+
+20
+
+0.8
+0.6
+0.4
+0.2
+0.00
+
+0.8
+0.6
+0.4
+0.2
+0.0
+0
+
+Standard RJMDP
+Auxiliary noise RJMDP
+2000 4000
+
+6000 8000 10000
+
+Iteration
+
+231
+
+M. Hoffman, A. Doucet, N. de Freitas, and A. Jasra.
+On solving general state-space sequential decision
+problems using inference algorithms. Technical Report TR-2007-04, University of British Columbia,
+Computer Science, 2007b.
+M. Hoffman, N. de Freitas, A. Doucet, and J. Peters.
+An expectation maximization algorithm for continuous Markov Decision Processes with arbitrary reward. In AI-STATS, 2009.
+J. Kober and J. Peters. Policy search for motor primitives in robotics. In NIPS, 2008.
+
+Figure 6: Comparison between the explicit noise variable approach and the standard approach of (Hoffman
+et al., 2007a) on the particle system model. The leftmost plot shows the expected rewards for the final policies found by both methods across 10 runs. The right
+plots display the averaged acceptance ratios for birth
+and death moves and the acceptance ratios for trajectory update moves.
+
+P. Müller. Simulation based optimal design.
+Bayesian Statistics 6, 1998.
+
+Acknowledgements
+
+O. Papaspiliopoulos, G. Roberts, and M. Sköld. Noncentered parameterisations for hierarchical models
+and data augmentation. Bayesian Statistics, 7,
+2003.
+
+This work was supported by the Natural Sciences and
+Engineering Research Council of Canada (NSERC)
+and the Mathematics of Information Technology and
+Complex Systems (MITACS). M. Hoffman was also
+supported by a UBC Graduate Fellowship.
+
+References
+H. Attias. Planning by probabilistic inference. In UAI,
+2003.
+Y. Cheng. Mean shift, mode seeking, and clustering. IEEE Transactions on Pattern Analysis and
+Machine Intelligence, 17(8):790–799, 1995.
+P. Dayan and G. Hinton. Using EM for reinforcement
+learning. Neural Computation, 9:271–278, 1997.
+A. Doucet and V. Tadic. On solving integral equations
+using Markov Chain Monte Carlo methods. Technical Report CUED-F-INFENG 444, Cambridge University Engineering Department, 2004.
+A. Doucet, S. Godsill, and C. Robert. Marginal maximum a posteriori estimation using Markov chain
+Monte Carlo. Statistics and Computing, 12(1):77–
+84, 2002.
+P. Green. Reversible jump Markov Chain Monte
+Carlo computation and Bayesian model determination. Biometrika, 82(4):711–732, 1995.
+M. Hoffman, A. Doucet, N. de Freitas, and A. Jasra.
+Bayesian policy learning with trans-dimensional
+MCMC. In NIPS, 2007a.
+
+In
+
+P. Müller, B. Sansó, and M. de Iorio. Optimal Bayesian
+design by inhomogeneous Markov chain simulation.
+Journal of the American Statistical Association, 99:
+788–798, 2004.
+A. Ng and M. Jordan. PEGASUS: A policy search
+method for large MDPs and POMDPs. In UAI,
+pages 406–415, 2000.
+
+J. Peters and S. Schaal. Reinforcement learning for
+operational space control. In ICRA, 2007.
+J. Spall. Introduction to stochastic search and optimization: estimation, simulation, and control.
+Wiley-Interscience, 2005.
+M. Toussaint and A. Storkey. Probabilistic inference
+for solving discrete and continuous state Markov Decision Processes. In ICML, 2006.
+M. Toussaint, S. Harmeling, and A. Storkey. Probabilistic inference for solving (PO)MDPs. Technical
+Report EDI-INF-RR-0934, University of Edinburgh,
+School of Informatics, 2006.
+M. Toussaint, L. Charlin, and P. Poupart. Hierarchical
+POMDP controller optimization by likelihood maximization. In UAI, pages 562–570, 2008.
+D. Verma and R. Rao. Planning and acting in uncertain environments using probabilistic inference. In
+IROS, 2006.
+S. Vijayakumar, M. Toussaint, G. Petkos, and
+M. Howard. Planning and moving in dynamic environments: A statistical machine learning approach.
+In Sendhoff, Koerner, Sporns, Ritter, and Doya, editors, Creating Brain Like Intelligence: From Principles to Complex Intelligent Systems, LNAI-Vol.
+5436. Springer-Verlag, 2009.
+
+

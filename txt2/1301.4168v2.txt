@@ -1,0 +1,1836 @@
+algorithms; see for example [16, 9, 3, 22] and the references therein. In contrast, the design of deterministic algorithms for “sampling” from distributions is still in its inception [8, 13, 7, 20]. There are,
+however, many important reasons for pursuing this line of attack on the problem. From a theoretical perspective, this is a well defined mathematical challenge whose solution might have important
+consequences. It also brings us closer to reconciling the fact that we typically use pseudo-random
+number generators to run Monte Carlo algorithms on classical, Von Neumann architecture, computers. Moreover, the theory for some of the recently proposed deterministic sampling algorithms has
+taught us that they can achieve O(1/T
+√ ) convergence rates [8, 13], which are much faster than the
+standard Monte Carlo rates of O(1/ T ) for computing ergodic averages. From a practical perspective, the design of deterministic sampling algorithms creates an opportunity for researchers to apply
+a great body of knowledge on optimization to the problem of sampling; see for example [4] for an
+early example of this.
+The domain of application of currently existing deterministic sampling algorithms is still very narrow. Importantly, there do not exist deterministic tools for sampling from unnormalized multivariate
+probability distributions. This is very limiting because the problem of sampling from unnormalized
+distributions is at the heart of the field of Bayesian inference and the probabilistic programming
+approach to artificial intelligence [17, 6, 18, 11]. At the same time, despite great progress in Monte
+Carlo simulation, the celebrated Gibbs sampler continues to be one of the most widely-used algorithms. For, example it is the inference engine behind popular statistics packages [17], several tools
+for text analysis [21], and Boltzmann machines [2, 12]. The popularity of Gibbs stems from its
+simplicity of implementation and the fact that it is a very generic algorithm.
+Without any doubt, it would be remarkable if we could design generic deterministic Gibbs samplers with fast (theoretical and empirical) rates of convergence. In this paper, we take steps toward
+Authors are listed in alphabetical order.
+
+1
+
+achieving this goal by capitalizing on a recent idea for deterministic simulation known as herding.
+Herding [24, 23, 10] is a deterministic procedure for generating samples x ∈ X ⊆ Rn , such that the
+empirical moments µ of the data are matched. The herding procedure, at iteration t, is as follows:
+x(t)
+
+=
+
+arg maxhw(t−1) , φ(x)i
+x∈X
+
+w
+
+(t)
+
+= w
+
+(t−1)
+
++ µ − φ(x(t) ),
+
+(1)
+
+where φ : X → H is a feature map (statistic) from X to a Hilbert space H with inner product h·, ·i,
+w ∈ H is the vector of parameters, and µ ∈ H is the moment vector (expected value of φ over
+the data) that we want to match. If we choose normalized features by making kφ(x)k constant for
+all x, then the update to generate samples x(t) for t = 1, 2, . . . , T in Equation 1 is equivalent to
+minimizing the objective
+2
+
+T
+1X
+J(x1 , . . . , xT ) = µ −
+(2)
+φ(x(t) ) ,
+T t=1
+p
+where T may have no prior known value and k · k = h·, ·i is the naturally defined norm based
+upon the inner product of the space H [8, 4].
+
+Herding can be used to produce samples from normalized probability distributions. This is done
+as follows. Let µ denote a discrete, normalized probability distribution, with µi ∈ [0, 1] and
+P
+n
+i=1 µi = 1. A natural feature in this case is the vector φ(x) that has all entries equal to zero,
+except for the entry at the position indicated by x. For instance, if x = 2 and n = 5, we have
+P
+b = T −1 Tt=1 φ(x(t) ) is an empirical estimate of the distribution.
+φ(x) = (0, 1, 0, 0, 0)T . Hence, µ
+In this case, one step of the herding algorithm involves finding the largest component of the weight
+(t−1)
+vector (i? = arg maxi∈{1,2,...,n} wi
+), setting x(t) = i? , fixing the i? -entry of φ(x(t) ) to one
+and all other entries to zero, and updating the weight vector: w(t) = w(t−1) + (µ − φ(x(t) )). The
+b converges on the
+output is a set of samples {x(1) , . . . , x(T ) } for which the empirical estimate µ
+target distribution µ as O(1/T ).
+The herding method, as described thus far, only applies to normalized distributions or to problems
+where the objective is not to guarantee that the samples come from the right target, but to ensure that
+some moments are matched. An interpretation of herding in terms of Bayesian quadrature has been
+put forward recently by [14].
+In this paper, we will show that it is possible to use herding to generate samples from more complex
+unnormalized probability distributions. In particular, we introduce a deterministic variant of the
+popular Gibbs sampling algorithm, which we refer to as herded Gibbs. While Gibbs relies on drawing samples from the full-conditionals at random, herded Gibbs generates the samples by matching
+the full-conditionals. That is, one simply applies herding to all the full-conditional distributions.
+The experiments will demonstrate that the new algorithm outperforms Gibbs sampling and mean
+field methods in the domain of sampling from sparsely connected probabilistic graphical models,
+such as grid-lattice Markov random fields (MRFs) for image denoising and conditional random
+fields (CRFs) for natural language processing.
+We advance the theory by proving that the deterministic Gibbs algorithm converges for distributions
+of independent variables and fully-connected probabilistic graphical models. However, a proof establishing suitable conditions that ensure convergence of herded Gibbs sampling for sparsely connected probabilistic graphical models is still unavailable.
+
+2
+
+Herded Gibbs Sampling
+
+For a graph of discrete nodes G = (V, E), where the set of nodes are the random variables V =
+{Xi }N
+i=1 , Xi ∈ X , let π denote the target distribution defined on G.
+Gibbs sampling is one of the most popular methods to draw samples from π. Gibbs alternates (either
+systematically or randomly) the sampling of each variable Xi given XN (i) = xN (i) , where i is the
+index of the node, and N (i) denotes the neighbors of node i. That is, Gibbs generates each sample
+from its full-conditional distribution p(Xi |xN (i) ).
+2
+
+Algorithm 1 Herded Gibbs Sampling.
+Input: T .
+(0)
+Step 1: Set t = 0. Initialize X(0) in the support of π and wi,xN (i) in (π(Xi = 1|xN (i) ) −
+1, π(Xi = 1|xN (i) )).
+for t = 1 → T do
+(t−1)
+Step 2: Pick a node i according to some policy. Denote w = w (t−1) .
+i,xN (i)
+
+(t)
+xi
+
+(t)
+xi
+
+Step 3: If w > 0, set
+= 1, otherwise set
+= 0.
+(t)
+(t−1)
+(t−1)
+(t)
+Step 4: Update weight w (t) = w (t−1) + π(Xi = 1|xN (i) ) − xi
+i,xN (i)
+
+i,xN (i)
+
+(t)
+
+(t−1)
+
+Step 5: Keep the values of all the other nodes xj = xj
+(t)
+wj,xN (j)
+
+=
+
+(t−1)
+wj,xN (j) , ∀j
+
+6= i or xN (j) 6=
+
+, ∀j 6= i and all the other weights
+
+(t−1)
+xN (i) .
+
+end for
+Output: x(1) , . . . , x(T )
+
+Herded Gibbs replaces the sampling from full-conditionals with herding at the level of the fullconditionals. That is, it alternates a process of matching the full-conditional distributions p(Xi =
+xi |XN (i) ). To do this, herded Gibbs defines a set of auxiliary weights {wi,xN (i) } for any value of
+Xi = xi and XN (i) = xN (i) . For ease of presentation, we assume the domain of Xi is binary,
+X = {0, 1}, and we use one weight for every i and assignment to the neighbors xN (i) . Herded
+Gibbs can be trivially generalized to the multivariate setting by employing weight vectors in R|X |
+instead of scalars.
+If the binary variable Xi has four binary neighbors XN (i) , we must maintain 24 = 16 weight vectors.
+Only the weight vector corresponding to the current instantiation of the neighbors is updated, as
+illustrated in Algorithm 1. The memory complexity of herded Gibbs is exponential in the maximum
+node degree. Note the algorithm is a deterministic Markov process with state (X, W).
+The initialization in step 1 guarantees that X(t) always remains in the support of π. For a deterministic scan policy in step 2, we take the value of variables x(tN ) , t ∈ N as a sample sequence.
+Throughout the paper all experiments employ a fixed variable traversal for sample generation. We
+call one such traversal of the variables a sweep.
+
+3
+
+Analysis
+
+As herded Gibbs sampling is a deterministic algorithm, there is no stationary probability distribution
+of states. Instead, we examine the average of the sample states over time and hypothesize that it
+converges to the joint distribution, our target distribution, π. To make the treatment precise, we need
+the following definition:
+Definition 1. For a graph of discrete nodes G = (V, E), where the set of nodes V = {Xi }N
+i=1 ,
+(τ )
+Xi ∈ X , PT is the empirical estimate of the joint distribution obtained by averaging over T
+(τ )
+samples acquired from G. PT is derived from T samples, collected at the end of every sweep over
+N variables, starting from the τ th sweep:
+(τ )
+
+PT (X = x) =
+
+1
+T
+
+τ +T
+X−1
+
+I(X(kN ) = x)
+
+(3)
+
+k=τ
+
+Our goal is to prove that the limiting average sample distribution over time converges to the target
+distribution π. Specifically, we want to show the following:
+(τ )
+
+lim PT (x) = π(x), ∀τ ≥ 0
+
+T →∞
+
+If this holds, we also want to know what the convergence rate is.
+3
+
+(4)
+
+We begin the theoretical analysis with a graph of one binary variable. For this graph, there is only
+one weight w. Denote π(X = 1) as π for notational simplicity. The sequence of X is determined
+by the dynamics of w (shown in Figure 1):
+
+1 if w(t−1) > 0
+w(t) = w(t−1) + π − I(w(t−1) > 0), X (t) =
+(5)
+0 otherwise
+Lemma 3 in the appendix shows that (π − 1, π] is the invariant interval of the dynamics, and the
+state X = 1 is visited at a frequency close to π with an error:
+1
+(6)
+T
+This is known as the fast moment matching property in [24, 23, 10]. We will show in the next two
+theorems that the fast moment matching property also holds for two special types of graphs, with
+proofs provided in the appendix.
+(τ )
+
+|PT (X = 1) − π| ≤
+
+Figure 1: Herding dynamics for a single variable.
+In an empty graph, all the variables are independent of each other and herded Gibbs reduces to
+running N one-variable chains in parallel. Denote the marginal distribution πi := π(Xi = 1).
+Examples of failing convergence in the presence of rational ratios between the πi s were observed in
+[4]. There the need for further theoretical research on this matter was pointed out. The following
+theorem provides formal conditions for convergence in the restricted domain of empty graphs.
+Theorem 1. For an empty graph, when herded Gibbs has a fixed scanning order, and
+(τ )
+{1, π1 , . . . , πN } are rationally independent, the empirical distribution PT converges to the target distribution π as T → ∞ for any τ ≥ 0.
+A set of n real numbers, x1 , x2 , . . P
+. , xn , is said to be rationally independent if for any set of rational
+n
+numbers, a1 , a2 , . . . , an , we have i=1 ai xi = 0 ⇔ ai = 0, ∀1 ≤ i ≤ n. The proof of Theorem 1
+consists of first formulating the dynamics of the weight vector as a constant translation mapping in
+a circular unit cube, and then proving that the weights are uniformly distributed by making use of
+Kronecker-Weyl’s theorem [25].
+For fully-connected (complete) graphs, convergence is guaranteed even with rational ratios. In fact,
+herded Gibbs converges to the target joint distribution at a rate of O(1/T ) with a O(log(T )) burn-in
+period. This statement is formalized in Theorem 2.
+Theorem 2. For a fully-connected graph, when herded Gibbs has a fixed scanning order and a
+Dobrushin coefficient of the corresponding Gibbs sampler η < 1, there exist constants l > 0, and
+B > 0 such that
+λ
+, ∀T ≥ T ∗ , τ > τ ∗ (T )
+T
+
+
+(1+η)
+(1−η)lT
+2B
+∗
+∗
+2
+where λ = 2N
+, and dv (δπ) := 12 ||δπ||1 .
+l(1−η) , T = l , τ (T ) = log 1+η
+4N
+(τ )
+
+dv (PT
+
+− π) ≤
+
+(7)
+
+The constants l and B are defined in Equation 31 for Proposition 4 in the appendix. If we ignore the
+burn-in period and start collecting samples simply from the beginning, we achieve a convergence rate
+)
+of O( log(T
+) as stated in Corollary 10 in the appendix. The constant l in the convergence rate has an
+T
+exponential term, with N in the exponent. An exponentially large constant seems to be unavoidable
+for any sampling algorithm when considering the convergence to a joint distribution with 2N states.
+As for the marginal distributions, it is obvious that the convergence rate of herded Gibbs is also
+4
+
+O(1/T ) because marginal probabilities are linear functions of the joint distribution. However, in
+practice, we observe very rapid convergence results for the marginals, so stronger theoretical results
+about the convergence of the marginal distributions seem plausible.
+The proof proceeds by first bounding the discrepancy between the chain of empirical estimates of
+(s)
+the joint obtained by averaging over T herded Gibbs samples, {PT }, s ≥ τ , and a Gibbs chain
+(τ )
+initialized at PT . After one iteration, this discrepancy is bounded above by O(1/T ).
+The Gibbs chain has geometric convergence to π and the distance between the Gibbs and herded
+Gibbs chains is bounded by O(1/T ). The geometric convergence rate to π dominates the discrep(τ )
+ancy of herded Gibbs and thus we infer that PT converges to π geometrically. To round-off the
+proof, we must find a limiting value for τ . The proof concludes with an O(log(T )) burn-in for τ .
+However, for a generic graph we have no mathematical guarantees on the convergence rate of herded
+Gibbs. In fact, one can easily construct synthetic examples for which herded Gibbs does not seem
+to converge to the true marginals and joint distribution. For the examples covered by our theorems
+and for examples with real data, herded Gibbs demonstrates good behaviour. The exact conditions
+under which herded Gibbs converges for sparsely connected graphs are still unknown.
+
+4
+4.1
+
+Experiments
+Simple Complete Graph
+
+We begin with an illustration of how herded Gibbs substantially outperforms Gibbs on a simple
+complete graph. In particular, we consider a fully-connected model of two variables, X1 and X2 ,
+as shown in Figure 2; the joint distribution of these variables is shown in Table 1. Figure 3 shows
+the marginal distribution P (X1 = 1) approximated by both Gibbs and herded Gibbs for different
+. As  decreases, both approaches require more iterations to converge, but herded Gibbs clearly
+outperforms Gibbs. The figure also shows that Herding does indeed exhibit a linear convergence
+rate.
+X1 = 0 X1 = 1 P(X2 )
+X2 = 0 1/4 − 
+
+1/4
+X1
+X2
+
+3/4 − 
+3/4
+X2 = 1
+P(X1 )
+1/4
+3/4
+1
+Figure 2: Two-variable model.
+4.2
+
+Table 1: Joint distribution of the two-variable model.
+
+MRF for Image Denoising
+
+Next, we consider the standard setting of a grid-lattice MRF for image denoising. Let us assume
+that we have a binary image corrupted by noise, and that we want to infer the original clean image.
+Let Xi ∈ {−1, +1} denote the unknown true value of pixel i, and yi the observed, noise-corrupted
+value of this pixel. We take advantage of the fact that neighboring pixels are likely to have the same
+label by defining an MRF with an Ising prior. That is, we specify a rectangular 2D lattice with the
+following pair-wise clique potentials:
+ J
+
+e ij e−Jij
+ψij (xi , xj ) = −Jij
+(8)
+e
+eJij
+and joint distribution:
+
+p(x|J) =
+
+
+1X
+
+1
+1
+ψij (xi , xj ) =
+exp 
+Z(J) i∼j
+Z(J)
+2
+Y
+
+Jij xi xj  ,
+
+(9)
+
+i∼j
+
+where i ∼ j is used to indicate that nodes i and j are connected. The known parameters Jij establish
+the coupling strength between nodes i and j. Note that the matrix J is symmetric. If all the Jij > 0,
+then neighboring pixels are likely to be in the same state.
+5
+
+(a) Approximate marginals obtained via Gibbs (blue) and herded Gibbs (red).
+
+(b) Log-log plot of marginal approximation errors obtained via Gibbs (blue) and herded Gibbs (red).
+
+(c) Inverse of marginal approximation errors obtained via Gibbs (blue) and herded Gibbs (red).
+
+Figure 3: (a) Approximating a marginal distribution with Gibbs (blue) and herded Gibbs (red) for an
+MRF of two variables, constructed so as to make the move from state (0, 0) to (1, 1) progressively
+more difficult as  decreases. The four columns, from left to right, are for  = 0.1,  = 0.01,
+ = 0.001 and  = 0.0001. Table 1 provides the joint distribution for these variables. The error
+bars for Gibbs correspond to one standard deviation. Rows (b) and (c) illustrate that the empirical
+convergence rate of herded Gibbs matches the expected theoretical rate. In the plots of rows (b)
+and (c), the upper-bound in the error of herded Gibbs was used to remove the oscillations so as to
+illustrate the behaviour of the algorithm more clearly.
+The MRF model combines the Ising prior with a likelihood model as follows:
+ "
+
+#
+Y
+Y
+1
+p(x, y) = p(x)p(y|x) = 
+ψij (xi , xj ) .
+p(yi |xi )
+Z i∼j
+i
+
+(10)
+
+The potentials ψij encourage label smoothness. The likelihood terms p(yi |xi ) are conditionally
+independent (e.g. Gaussians with known variance σ 2 and mean µ centered at each value of xi ,
+denoted µxi ). In more precise terms,
+
+
+X
+X
+1
+1
+1
+p(x, y|J, µ, σ) =
+exp 
+(11)
+Jij xi xj − 2
+(yi − µxi )2  .
+Z(J, µ, σ)
+2 i∼j
+2σ i
+6
+
+Figure 4: Original image (left) and its corrupted version (right), with noise parameter σ = 4.
+
+Figure 5: Reconstruction errors for the image denoising task. The results are averaged across
+10 corrupted images with Gaussian noise N (0, 16). The error bars correspond to one standard
+deviation. Mean field requires the specification of the damping factor D.
+
+P
+When the coupling parameters Jij are identical, say Jij = J, we have
+ij Jij f (xi , xj ) =
+P
+J ij f (xi , xj ).
+Hence, different neighbor configurations result in the same value of
+P
+J ij f (xi , xj ). If we store the conditionals for configurations with the same sum together, we
+only need to store as many conditionals as different possible values that the sum could take. This
+enables us to develop a shared version of herded Gibbs that is more memory efficient where we only
+maintain and update weights for distinct states of the Markov blanket of each variable.
+In this exemplary image denoising experiment, noisy versions of the binary image, seen in Figure 4
+(left), were created through the addition of Gaussian noise, with varying σ. Figure 4 (right) shows a
+corrupted image with σ = 4. The L2 reconstruction errors as a function of the number of iterations,
+for this example, are shown in Figure 5. The plot compares the herded Gibbs method against Gibbs
+and two versions of mean field with different damping factors [19]. The results demonstrate that the
+herded Gibbs techiques are among the best methods for solving this task.
+A comparison for different values σ is presented in Table 2. As expected mean field does well in the
+low-noise scenario, but the performance of the shared version of herded Gibbs as the noise increases
+is significantly better.
+7
+
+Table 2: Errors of image denoising example after 30 iterations (all measurements have been scaled
+by ×10−3 ). We use an Ising prior with Jij = 1 and four Gaussian noise models with different
+σ’s. For each σ, we generated 10 corrupted images by adding Gaussian noise. The final results
+shown here are averages and standard deviations (in parentheses) across the 10 corrupted images. D
+denotes the damping factor in mean field.
+σ
+MethodPPP
+
+2
+
+4
+
+6
+
+8
+
+Herded Gibbs
+Herded Gibbs - shared
+Gibbs
+Mean field (D=0.5)
+Mean field (D=1)
+
+21.58(0.26)
+22.24(0.29)
+21.63(0.28)
+15.52(0.30)
+17.67(0.40)
+
+32.07(0.98)
+31.40(0.59)
+37.20(1.23)
+41.76(0.71)
+32.04(0.76)
+
+47.52(1.64)
+42.62(1.98)
+63.78(2.41)
+76.24(1.65)
+51.19(1.44)
+
+67.93(2.78)
+58.49(2.86)
+90.27(3.48)
+104.08(1.93)
+74.74(2.21)
+
+PP
+P
+
+Person
+
+Other
+
+Other
+
+Other
+
+Other
+
+Other
+
+Person
+
+Other
+
+Other
+
+Other
+
+Other
+
+Zed
+
+’
+
+s
+
+dead
+
+baby
+
+.
+
+Zed
+
+’
+
+s
+
+dead
+
+.
+
+Figure 6: Typical skip-chain CRF model for named entity recognition.
+
+4.3
+
+CRF for Named Entity Recognition
+
+Named Entity Recognition (NER) involves the identification of entities, such as people and locations, within a text sample. A conditional random fied (CRF) for NER models the relationship
+between entity labels and sentences with a conditional probability distribution: P (Y |X, θ), where
+X is a sentence, Y is a labeling, and θ is a vector of coupling parameters. The parameters, θ, are feature weights and model relationships between variables Yi and Xj or Yi and Yj . A chain CRF only
+employs relationships between adjacent variables, whereas a skip-chain CRF can employ relationships between variables where subscripts i and j differ dramatically. Skip-chain CRFs are important
+in language tasks, such as NER and semantic role labeling, because they allow us to model long
+dependencies in a stream of words, see Figure 6.
+Once the parameters have been learned, the CRF can be used for inference; a labeling for some
+sentence X is found by maximizing the above probability. Inference for CRF models in the NER
+domain is typically carried out with the Viterbi algorithm. However, if we want to accommodate long
+term dependencies, thus resulting in the so called skip-chain CRFs, Viterbi becomes prohibitively
+expensive. To surmount this problem, the Stanford named entity recognizer [15] makes use of
+annealed Gibbs sampling.
+To demonstrate herded Gibbs on a practical application of great interest in text mining, we modify
+the standard inference procedure of the Stanford named entity recognizer by replacing the annealed
+Gibbs sampler with the herded Gibbs sampler. The herded Gibbs sampler in not annealed. To find
+the maximum a posteriori sequence Y , we simply choose the sample with highest joint discrete
+probability. In order to be able to compare against Viterbi, we have purposely chosen to use singlechain CRFs. We remind the reader, however, that the herded Gibbs algorithm could be used in cases
+where Viterbi inference is not possible.
+We used the pre-trained 3-class CRF model in the Stanford NER package [15]. This model is a
+linear chain CRF with pre-defined features and pre-trained feature weights, θ. For the test set, we
+used
+the corpus for theNIST 1999 IE-ER Evaluation. Performance is measured in per-entity F1
+
+precision·recall
+. For all the methods, except Viterbi, we show F1 scores after 100, 400 and
+F1 = 2 · precision+recall
+800 iterations in Table 3. For Gibbs, the results shown are the averages and standard deviations
+over 5 random runs. We used a linear annealing schedule for Gibbs. As the results illustrate,
+8
+
+”Pumpkin” (Tim Roth) and ”Honey Bunny” (Amanda Plummer) are having breakfast in a
+diner. They decide to rob it after realizing they could make money off the customers as
+well as the business, as they did during their previous heist. Moments after they initiate
+the hold-up, the scene breaks off and the title credits roll. As Jules Winnfield (Samuel L.
+Jackson) drives, Vincent Vega (John Travolta) talks about his experiences in Europe, from
+where he has just returned: the hash bars in Amsterdam, the French McDonald’s and its
+”Royale with Cheese”.
+
+Figure 7: Results for the application of the NER CRF to a random Wikipedia sample [1]. Entities
+are automatically classified as Person, Location and Organization.
+
+herded Gibbs attains the same accuracy as Viterbi and it is faster than annealed Gibbs. Unlike
+Viterbi, herded Gibbs can be easily applied to skip-chain CRFs. After only 400 iterations (90.5
+seconds), herded Gibbs already achieves an F1 score of 84.75, while Gibbs, even after 800 iterations
+(115.9 seconds) only achieves an F1 score of 84.61. The experiment thus clearly demonstrates that
+(i) herded Gibbs does no worse than the optimal solution, Viterbi, and (ii) herded Gibbs yields
+more accurate results for the same amount of computation. Figure 7 provides a representative NER
+example of the performance of Gibbs, herded Gibbs and Viterbi (all methods produced the same
+annotation for this short example).
+Table 3: Gibbs, herded Gibbs and Viterbi for the NER task. The average computational time each
+approach took to do inference for the entire test set is listed (in square brackets). After only 400
+iterations (90.48 seconds), herded Gibbs already achieves an F1 score of 84.75, while Gibbs, even
+after 800 iterations (115.92 seconds) only achieves an F1 score of 84.61. For the same computation,
+herded Gibbs is more accurate than Gibbs.
+```
+```Iterations 100
+```
+Method
+`
+Annealed Gibbs
+Herded Gibbs
+Viterbi
+
+5
+
+84.36(0.16) [55.73s]
+84.70 [59.08s]
+
+400
+
+800
+
+84.51(0.10) [83.49s]
+84.75 [90.48s]
+
+84.61(0.05) [115.92s]
+84.81 [132.00s]
+84.81[46.74s]
+
+Conclusions and Future Work
+
+In this paper, we introduced herded Gibbs, a deterministic variant of the popular Gibbs sampling algorithm. While Gibbs relies on drawing samples from the full-conditionals at random, herded Gibbs
+generates the samples by matching the full-conditionals. Importantly, the herded Gibbs algorithm is
+very close to the Gibbs algorithm and hence retains its simplicity of implementation.
+The synthetic, denoising and named entity recognition experiments provided evidence that herded
+Gibbs outperforms Gibbs sampling. However, as discussed, herded Gibbs requires storage of the
+conditional distributions for all instantiations of the neighbors in the worst case. This storage requirement indicates that it is more suitable for sparse probabilistic graphical models, such as the
+CRFs used in information extraction. At the other extreme, the paper advanced the theory of deterministic sampling by showing that herded Gibbs converges with rate O(1/T ) for models with
+independent variables and fully-connected models. Thus, there is gap between theory and practice
+that needs to be narrowed. We do not anticipate that this will be an easy task, but it is certainly a key
+direction for future work.
+We should mention that it is also possible to design parallel versions of herded Gibbs in a Jacobi
+fashion. We have indeed studied this and found that these are less efficient than the Gauss-Seidel
+version of herded Gibbs discussed in this paper. However, if many cores are available, we strongly
+recommend the Jacobi (asynchronous) implementation as it will likely outperform the Gauss-Seidel
+(synchronous) implementation.
+9
+
+The design of efficient herding algorithms for densely connected probabilistic graphical models
+remains an important area for future research. Such algorithms, in conjunction with Rao Blackwellization, would enable us to attack many statistical inference tasks, including Bayesian variable
+selection and Dirichlet processes.
+There are also interesting connections with other algorithms to explore. If, for a fully connected
+graphical model, we build a new graph where every state is a node and directed connections exist
+between nodes that can be reached with a single herded Gibbs update, then herded Gibbs becomes
+equivalent to the Rotor-Router model of Alex Holroyd and Jim Propp1 [13]. This deterministic analogue of a random walk has provably superior concentration rates for quantities such as normalized
+hitting frequencies, hitting times and occupation frequencies. In line with our own convergence
+results,
+√ it is shown that discrepancies in these quantities decrease as O(1/T ) instead of the usual
+O(1/ T ). We expect that many of the results from this literature apply to herded Gibbs as well.
+The connection with the work of Art Owen and colleagues, see for example [7], also needs to
+be explored further. Their work uses completely uniformly distributed (CUD) sequences to drive
+Markov chain Monte Carlo schemes. It is not clear, following discussions with Art Owen, that CUD
+sequences can be constructed in a greedy way as in herding.
+
+References
+[1] Pulp fiction - wikipedia, the free encyclopedia @ONLINE, June 2012.
+[2] D. H. Ackley, G. Hinton, and T.. Sejnowski. A learning algorithm for Boltzmann machines.
+Cognitive Science, 9:147–169, 1985.
+[3] C. Andrieu, N. de Freitas, A. Doucet, and M. I. Jordan. An Introduction to MCMC for Machine
+Learning. Machine Learning, 50(1):5–43, 2003.
+[4] F. Bach, S. Lacoste-Julien, and G. Obozinski. On the equivalence between herding and conditional gradient algorithms. In International Conference on Machine Learning, 2012.
+[5] P. Brémaud. Markov chains: Gibbs fields, Monte Carlo simulation, and queues, volume 31.
+Springer, 1999.
+[6] P. Carbonetto, J. Kisynski, N. de Freitas, and D. Poole. Nonparametric Bayesian logic. In
+Uncertainty in Artificial Intelligence, pages 85–93, 2005.
+[7] S. Chen, J. Dick, and A. B. Owen. Consistency of Markov chain quasi-Monte Carlo on continuous state spaces. Annals of Statistics, 39(2):673–701, 2011.
+[8] Y. Chen, M. Welling, and A.J. Smola. Supersamples from kernel-herding. In Uncertainty in
+Artificial Intelligence, pages 109–116, 2010.
+[9] A. Doucet, N. de Freitas, and N. Gordon. Sequential Monte Carlo Methods in Practice. Statistics for Engineering and Information Science. Springer, 2001.
+[10] A. Gelfand, Y. Chen, L. van der Maaten, and M. Welling. On herding and the perceptron
+cycling theorem. In Advances in Neural Information Processing Systems, pages 694–702,
+2010.
+[11] N. D. Goodman, V. K. Mansinghka, D. M. Roy, K. Bonawitz, and J. B. Tenenbaum. Church:
+a language for generative models. Uncertainty in Artificial Intelligence, 2008.
+[12] G.E. Hinton and R.R. Salakhutdinov. Reducing the dimensionality of data with neural networks. Science, 313(5786):504–507, 2006.
+[13] Alexander E Holroyd and James Propp. Rotor walks and Markov chains. Algorithmic Probability and Combinatorics, 520:105–126, 2010.
+[14] F. Huszár and D. Duvenaud. Optimally-weighted herding is Bayesian quadrature. Arxiv
+preprint arXiv:1204.1664, 2012.
+[15] T. Grenager J. R. Finkel and C. Manning. Incorporating non-local information into information extraction systems by Gibbs sampling. In Proceedings of the 43rd Annual Meeting on
+Association for Computational Linguistics, ACL ’05, pages 363–370, Stroudsburg, PA, USA,
+2005. Association for Computational Linguistics.
+1
+
+We thank Art Owen for pointing out this connection.
+
+10
+
+[16] J. S. Liu. Monte Carlo strategies in scientific computing. Springer, 2001.
+[17] D. J. Lunn, A. Thomas, N. Best, and D. Spiegelhalter. WinBUGS a Bayesian modelling framework: Concepts, structure, and extensibility. Statistics and Computing, 10(4):325–337, 2000.
+[18] B. Milch and S. Russell. General-purpose MCMC inference over relational structures. In
+Uncertainty in Artificial Intelligence, pages 349–358, 2006.
+[19] K. P. Murphy. Machine Learning: a Probabilistic Perspective. MIT Press, 2012.
+[20] I. Murray and L. T. Elliott. Driving Markov chain Monte Carlo with a dependent random
+stream. Technical Report arXiv:1204.3187, 2012.
+[21] I. Porteous, D. Newman, A. Ihler, A. Asuncion, P. Smyth, and M. Welling. Fast collapsed
+Gibbs sampling for latent Dirichlet allocation. In ACM SIGKDD international conference on
+Knowledge discovery and data mining, pages 569–577, 2008.
+[22] C. P. Robert and G. Casella. Monte Carlo Statistical Methods. Springer, 2nd edition, 2004.
+[23] M. Welling. Herding dynamic weights for partially observed random field models. In Uncertainty in Artificial Intelligence, pages 599–606, 2009.
+[24] M. Welling. Herding dynamical weights to learn. In International Conference on Machine
+Learning, pages 1121–1128, 2009.
+[25] Hermann Weyl. Über die gleichverteilung von zahlen mod. eins. Mathematische Annalen,
+77:313–352, 1916.
+
+11
+
+A
+
+Proof of Theorem 1
+
+We first show that the weight dynamics of a one-variable herding algorithm are restricted to an
+invariant interval of length 1.
+Lemma 3. If w is the weight of the herding dynamics of a single binary variable X with probability
+P (X = 1) = π, and w(s) ∈ (π −1, π] at some step s ≥ 0, then w(t) ∈ (π −1, π], ∀t ≥ s. Moreover,
+for T ∈ N, we have:
+s+T
+X
+
+I[X (t) = 1] ∈ [T π − 1, T π + 1]
+
+(12)
+
+I[X (t) = 0] ∈ [T (1 − π) − 1, T (1 − π) + 1].
+
+(13)
+
+t=s+1
+s+T
+X
+t=s+1
+
+Proof. We first show that w ∈ (π − 1, π], ∀t ≥ s. This is easy to observe by induction as w(s) ∈
+(π − 1, π] and if w(t) ∈ (π − 1, π] for some t ≥ s, then, following Equation 5, we have:
+ (t)
+w + π − 1 ∈ (π − 1, 2π − 1] ⊆ (π − 1, π] if w(t) > 0
+(t+1)
+(14)
+w
+=
+w(t) + π ∈ (2π − 1, π] ⊆ (π − 1, π]
+otherwise.
+Summing up both sides of Equation 5 over t immediately gives us the result of Equation 12 since:
+Tπ −
+
+s+T
+X
+
+I[X (t) = 1] = w(s+T ) − w(s) ∈ [−1, 1].
+
+(15)
+
+t=s+1
+
+In addition, Equation 13 follows by observing that I[X (t) = 0] = 1 − I[X (t) = 1].
+When w is outside the invariant interval, it is easy to observe that w will move into it monotonically
+at a linear speed in a transient period. So we will always consider an initialization of w ∈ (π − 1, π]
+from now on.
+Equivalently, we can take a one-to-one mapping w ← w mod 1 (we define 1 mod 1 = 1) and
+think of w as updated by a constant translation vector in a circular unit interval (0, 1] as shown in
+Figure 8. That is,
+
+1 if w(t−1) < π
+(t)
+(t−1)
+(t)
+w = (w
++ π) mod 1, x =
+(16)
+0 otherwise
+
+Figure 8: Equivalent weight dynamics for
+a single variable.
+
+Figure 9: Dynamics of herding with two independent variables.
+
+We are now ready to give the proof of Theorem 1.
+12
+
+Proof of Theorem 1. For an empty graph of N independent vertices, the dynamics of the weight
+vector w are equivalent to a constant translation mapping in an N -dimensional circular unit space
+(0, 1], as shown in Figure 9:
+w(t)
+
+=
+
+(w(t−1) + π)
+
+=
+
+(w(0) + tπ)
+
+mod 1
+mod 1,
+
+(t)
+
+
+
+xi =
+
+1
+0
+
+(t−1)
+
+if wi
+< πi , ∀1 ≤ i ≤ N
+otherwise
+
+(17)
+
+The Kronecker-Weyl theorem [25] states that the sequence w̃(t) = tπ mod 1, t ∈ Z+ is equidistributed (or uniformly distributed) on (0, 1] if and only if (1, π1 , . . . , πN ) is rationally independent. Since we can define a one-to-one volume preserving transformation between w̃(t) and w(t)
+as (w̃(t) + w(0) ) mod 1 = w(t) , the sequence of weights {w(t) } is also uniformly distributed in
+(0, 1]N .
+Define the mapping from a state value xi to an interval of wi as
+
+(0, πi ] if x = 1
+Ai (x) =
+(πi , 1] if x = 0
+
+(18)
+
+and let |Ai | be its measure. We obtain the limiting distribution of the joint state as
+#
+"
+N
+T
+Y
+1X
+(τ )
+(t−1)
+lim PT (X = x) = lim
+Ai (xi )
+I w
+∈
+T →∞
+T →∞ T
+t=1
+i=1
+=
+
+N
+Y
+
+|Ai (xi )|
+
+i=1
+
+=
+
+N
+Y
+
+π(Xi = xi )
+
+i=1
+
+= π(X = x)
+
+13
+
+(19)
+
+B
+
+Proof of Theorem 2
+
+In this appendix, we give an upper bound for the convergence rate of the sampling distribution in
+fully connected graphs. As herded Gibbs sampling is deterministic, the distribution of a variable’s
+state at every iteration degenerates to a single state. As such, we study here the empirical distribution
+of a collection of samples.
+The structure of the proof is as follows (with notation defined in the next subsection): We study the
+distribution distance between the invariant distribution π and the empirical distribution of T samples
+(τ )
+collected starting from sweep τ , PT . We show that the distance decreases as τ ⇒ τ + 1 with the
+(τ )
+help of an auxiliary regular Gibbs sampling Markov chain initialized at π (0) = PT , as shown in
+Figure 10. On the one hand, the distance between the regular Gibbs chain after one iteration, π (1) ,
+and π decreases according to the geometric convergence property of MCMC algorithms on compact
+(τ +1)
+state spaces. On the other hand, we show that in one step the distance between PT
+and π (1)
+increases by at most O(1/T ). Since the O(1/T ) distance term dominates the exponentially small
+(τ +1)
+distance term, the distance between PT
+and π is bounded by O(1/T ). Moreover, after a short
+(τ +L)
+will have an approximation error
+burn-in period, L = O(log(T )), the empirical distribution PT
+in the order of O(1/T ).
+
+Figure 10: Transition kernels and relevant distances for the proof of Theorem 2.
+
+B.1
+
+Notation
+
+Assume without loss of generality that in the systematic scanning policy, the variables are sampled
+in the order 1, 2, · · · , N .
+B.1.1
+
+State Distribution
+• Denote by X+ the support of the distribution π, that is, the set of states with positive
+probability.
+• We use τ to denote the time in terms of sweeps over all of the N variables, and t to denote
+the time in terms of steps where one step constitutes the updating of one variable. For
+example, at the end of τ sweeps, we have t = τ N .
+(τ )
+
+• Recall the sample/empirical distribution, PT , presented in Definition 1. Figure 11 provides a visual interpretation of the definition.
+(τ )
+
+• Denote the sample/empirical distribution at the ith step within a sweep as PT,i , τ ≥ 0, T >
+0, 0 ≤ i ≤ N , as shown in Figure 12:
+(τ )
+
+PT,i (X = x) =
+
+1
+T
+14
+
+τ +T
+X−1
+k=τ
+
+I(X(kN +i) = x).
+
+Figure 11: Distribution over time at the end of every sweep.
+This is the distribution of T samples collected at the ith step of every sweep, starting from
+(τ )
+(τ )
+(τ −1)
+the τ th sweep. Clearly, PT = PT,0 = PT,N .
+
+Figure 12: Distribution over time within a sweep.
+• Denote the distribution of a regular Gibbs sampling Markov chain after L sweeps of updates
+over the N variables with π (L) , L ≥ 0.
+(τ )
+
+For a given time τ , we construct a Gibbs Markov chain with initial distribution π 0 = PT
+and the same scanning order of herded Gibbs, as shown in Figure 10.
+B.1.2
+
+Transition Kernel
+• Denote the transition kernel of regular Gibbs for the step of updating a variable Xi with Ti ,
+and for a whole sweep with T .
+By definition, π 0 T = π 1 . The transition kernel for a single step can be represented as a
+2N × 2N matrix:
+
+0 if x−i 6= y−i
+Ti (x, y) =
+, 1 ≤ i ≤ N, x, y ∈ {0, 1}N
+(20)
+π(Xi = yi |x−i ) otherwise
+where x is the current state vector of N variables, y is the state of the next step, and x−i
+denotes all the components of x excluding the ith component. If π(x−i ) = 0, the conditional probability is undefined and we set it with an arbitrary distribution. Consequently, T
+can also be represented as:
+T = T 1 T 2 · · · TN .
+• Denote the Dobrushin ergodic coefficient [5] of the regular Gibbs kernel with η ∈ [0, 1].
+When η < 1, the regular Gibbs sampler has a geometric rate of convergence of
+dv (π (1) − π) = dv (T π (0) − π) ≤ ηdv (π (0) − π), ∀π (0) .
+
+(21)
+
+A common sufficient condition for η < 1 is that π(X) is strictly positive.
+(τ )
+
+• Consider the sequence of sample distributions PT , τ = 0, 1, · · · in Figures 11 and 12. We
+(τ )
+define the transition kernel of herded Gibbs for the step of updating variable Xi with T̃T,i ,
+(τ )
+
+and for a whole sweep with T̃T .
+Unlike regular Gibbs, the transition kernel is not homogeneous. It depends on both the
+time τ and the sample size T . Nevertheless, we can still represent the single step transition
+15
+
+kernel as a matrix:
+
+(τ )
+T̃T,i (x, y) =
+
+0 if x−i 6= y−i
+, 1 ≤ i ≤ N, x, y ∈ {0, 1}N ,
+= yi |x−i ) if x−i = y−i
+(22)
+(τ )
+where PT,i (Xi = yi |x−i ) is defined as:
+(τ )
+PT,i (Xi
+
+(τ )
+
+PT,i (Xi = yi |x−i ) =
+
+Nnum
+Nden
+
+(τ )
+
+Nnum = T PT,i (X−i = x−i , Xi = yi ) =
+
+τ +T
+X−1
+
+(kN +i)
+
+I(X−i
+
+(kN +i)
+
+= x−i , Xi
+
+= yi )
+
+k=τ
+
+Nden =
+
+(τ )
+T PT,i−1 (X−i
+
+= x−i ) =
+
+τ +T
+X−1
+
+(kN +i−1)
+
+I(X−i
+
+= x−i ),
+
+(23)
+
+k=τ
+
+where Nnum is the number of occurrences of a joint state, and Nden is the number of occurrences of a conditioning state in the previous step. When π(x−i ) = 0, we know that
+(τ )
+Nden = 0 with a proper initialization of herded Gibbs, and we simply set T̃T,i = Ti for
+these entries. It is not hard to verify the following identity by expanding every term with
+its definition
+(τ )
+(τ )
+(τ )
+PT,i = PT,i−1 T̃T,i
+and consequently,
+(τ +1)
+
+PT
+with
+
+(τ )
+
+T̃T
+B.2
+
+(τ )
+
+(τ )
+
+= PT T̃T
+
+(τ )
+
+(τ )
+
+(τ )
+
+= T̃T,1 T̃T,2 · · · T̃T,N .
+
+Linear Visiting Rate
+
+We prove in this section that every joint state in the support of the target distribution is visited, at
+least, at a linear rate. This result will be used to measure the distance between the Gibbs and herded
+Gibbs transition kernels.
+Proposition 4. If a graph is fully connected, herded Gibbs sampling scans variables in a fixed order,
+and the corresponding Gibbs sampling Markov chain is irreducible, then for any state x ∈ X+ and
+any index i ∈ [1, N ], the state is visited at least at a linear rate. Specifically,
+∃l > 0, B > 0, s.t., ∀i ∈ [1, N ], x ∈ X+ , T ∈ N, s ∈ N
+s+T
+i
+X−1 h
+I X(t=N k+i) = x ≥ lT − B
+
+(24)
+
+k=s
+
+Denote the minimum nonzero conditional probability as
+πmin =
+
+min
+
+1≤i≤N,π(xi |x−i )>0
+
+π(xi |x−i ).
+
+The following lemma, which is needed to prove Proposition 4, gives an inequality between the
+number of visits of two sets of states in consecutive steps.
+Lemma 5. For any integer i ∈ [1, N ] and two sets of states X, Y ⊆ X+ with a mapping F : X → Y
+that satisfies the following condition:
+∀x ∈ X, F(x)−i = x−i ,
+
+∪x∈X F (x) = Y,
+
+(25)
+
+we have that, for any s ≥ 0 and T > 0, the number of times Y is visited in the set of steps
+Ci = {t = kN + i : s ≤ k ≤ k + T − 1} is lower bounded by a function of the number of times X
+is visited in the previous steps Ci−1 = {t = kN + i − 1 : s ≤ k ≤ k + T − 1} as:
+i
+i
+X h
+X h
+I X(t) ∈ Y ≥ πmin
+I X(t) ∈ X − |Y|
+(26)
+t∈Ci
+
+t∈Ci−1
+
+16
+
+Proof. As a complement to Condition 25, we can define F −1 as the inverse mapping from Y to
+subsets of X so that for any y ∈ Y, x ∈ F −1 (y), we have x−i = y−i , and ∪y∈Y F −1 (y) = X.
+Consider any state y ∈ Y, when y is visited in Ci , the weight wi,y−i is active. Let us denote
+the set of all the steps in [sN + 1, s(N + T ) + N ] when wi,y−i is active by Ci (y−i ), that is,
+(t)
+Ci (y−i ) = {t : t ∈ Ci , X−i = y−i }. Applying Lemma 3 we get
+i
+X h
+I X(t) = y ≥ π(yi |y−i )|Ci (y−i )| − 1 ≥ πmin |Ci (y−i )| − 1.
+
+(27)
+
+t∈Ci
+
+Since the variables X−i are not changed at steps in Ci , we have
+|Ci (y−i )| =
+
+X
+
+i
+h
+i
+X h
+(t)
+I X(t) ∈ F −1 (y) .
+I X−i = y−i ≥
+
+(28)
+
+t∈Ci−1
+
+t∈Ci−1
+
+Combining the fact that ∪y∈Y F −1 (y) = X and summing up both sides of Equation 27 over Y
+proves the lemma:
+
+
+i
+i
+i X
+X h
+X h
+X h
+πmin
+I X(t) ∈ F −1 (y) − 1 ≥ πmin
+I X(t) ∈ X −|Y|.
+I X(t) ∈ Y ≥
+t∈Ci
+
+y∈Y
+
+t∈Ci−1
+
+t∈Ci−1
+
+(29)
+
+Remark 6. A fully connected graph is a necessary condition for the application of Lemma 3 in the
+proof. If a graph is not fully connected (N (i) 6= −i), a weight wi,yN (i) may be shared by multiple
+full conditioning states. In this case Ci (y−i ) is no longer a consecutive sequence of times when the
+weight is updated, and Lemma 3 does not apply here.
+Now let us prove Proposition 4 by iteratively applying Lemma 5.
+
+Proof of Proposition 4. Because the corresponding Gibbs sampler is irreducible and any Gibbs sampler is aperiodic, there exists a constant t∗ > 0 such that for any state y ∈ X+ , and any step in a
+sweep, i, we can find a path of length t∗ for any state x ∈ X+ with a positive transition probability,
+P ath(x) = (x = x(0), x(1), . . . , x(t∗ ) = y), to connect from x to y, where each step of the path
+follows the Gibbs updating scheme. For a strictly positive distribution, the minimum value of t∗ is
+N.
+Denote τ ∗ = dt∗ /N e and the j th element of the path P ath(x) as P ath(x, j). We can define t∗ + 1
+subsets Sj ⊆ X+ , 0 ≤ j ≤ t∗ as the union of all the j th states in the path from any state in X+ :
+Sj = ∪x∈X+ P ath(x, j)
+By definition of these paths, we know S0 = X+ and St∗ = {y}, and there exits an integer i(j) and a
+mapping Fj : Sj−1 → Sj , ∀j that satisfy the condition in Lemma 5 (i(j) is the index of the variable
+to be updated, and the mapping is defined by the transition path). Also notice that any state in Sj
+∗
+can be different from y by at most min{N, t∗ − j} variables, and therefore |Sj | ≤ 2min{N,t −j} .
+17
+
+Let us apply Lemma 5 recursively from j = t∗ to 1 as
+s+T
+X−1
+
+h
+i
+I X(t=N k+i) = y ≥
+
+s+T
+X−1
+
+h
+i
+I X(t=N k+i) = y
+
+k=s+τ ∗
+
+k=s
+
+=
+
+s+T
+X−1
+
+h
+i
+I X(t=N k+i) ∈ St∗
+
+k=s+τ ∗
+
+≥ πmin
+
+s+T
+X−1
+
+h
+i
+I X(t=N k+i−1) ∈ St∗ −1 − |St∗ |
+
+k=s+τ ∗
+
+≥ ···
+∗
+
+t
+≥ πmin
+
+∗
+−1
+h
+i tX
+∗
+j
+I X(t=N k+i−t ) ∈ S0 = X+ −
+πmin
+|St∗ −j |
+
+s+T
+X−1
+k=s+τ ∗
+
+j=0
+∗
+
+∗
+
+t
+≥ πmin
+(T − τ ∗ ) −
+
+tX
+−1
+
+j
+πmin
+2min{N,j} .
+
+(30)
+
+j=0
+
+The proof is concluded by choosing the constants
+l=
+
+t∗
+πmin
+,
+
+B=
+
+t∗
+τ ∗ πmin
+
++
+
+∗
+tX
+−1
+
+j
+πmin
+2min{N,j} .
+
+(31)
+
+j=0
+
+B.3
+
+(τ )
+
+Herded Gibbs’s Transition Kernel T̃T
+(τ )
+
+The following proposition shows that T̃T
+sition kernel T with an error of O(1/T ).
+
+is an Approximation to T
+
+is an approximation to the regular Gibbs sampler’s tran-
+
+Proposition 7. For a fully connected graph, if the herded Gibbs has a fixed scanning order and the
+corresponding Gibbs sampling Markov chain is irreducible, then for any τ ≥ 0, T ≥ T ∗ := 2B
+l
+where l and B are the constants in Proposition 4, the following inequality holds:
+(τ )
+
+kT̃T
+
+− T k∞ ≤
+
+4N
+lT
+
+(32)
+
+(τ )
+
+Proof. When x 6∈ X+ , we have the equality T̃T,i (x, y) = Ti (x, y) by definition. When x ∈ X+
+(τ )
+
+but y 6∈ X+ , then Nden = 0 (see the notation of T̃T for definition of Nden ) as y will never be
+(τ )
+(τ )
+visited and thus T̃T,i (x, y) = 0 = Ti (x, y) also holds. Let us consider the entries in T̃T,i (x, y)
+with x, y ∈ X+ in the following.
+Because X−i is not updated at ith step of every sweep, we can replace i − 1 in the definition of Nden
+by i and get
+τ +T
+X−1
+(kN +i)
+Nden =
+I(X−i
+= x−i ).
+k=τ
+
+Notice that the set of times {t = kN + i : τ ≤ k ≤ τ + T − 1, Xt−i = x−i )}, whose size is Nden , is a
+consecutive set of times when wi,x−i is updated. By Lemma 3, we obtain a bound for the numerator
+Nnum ∈ [Nden π(Xi = yi |x−i ) − 1, Nden π(Xi = yi |x−i ) + 1] ⇔
+1
+Nnum
+(τ )
+|PT,i (Xi = yi |x−i ) − π(Xi = yi |x−i )| = |
+− π(Xi = yi |x−i )| ≤
+.
+Nden
+Nden
+
+(33)
+
+Also by Proposition 4, we know every state in X+ is visited at a linear rate, there hence exist
+constants l > 0 and B > 0, such that the number of occurrence of any conditioning state x−i , Nden ,
+18
+
+is bounded by
+Nden ≥
+
+τ +T
+X−1
+
+I(X(kN +i) = x) ≥ lT − B ≥
+
+k=τ
+
+l
+T,
+2
+
+∀T ≥
+
+2B
+.
+l
+
+(34)
+
+Combining equations (33) and (34), we obtain
+(τ )
+
+|PT,i (Xi = yi |x−i ) − π(Xi = yi |x−i )| ≤
+
+2
+,
+lT
+
+∀T ≥
+
+2B
+.
+l
+
+(35)
+
+(τ )
+
+Since the matrix T̃T,i and Ti differ only at those elements where x−i = y−i , we can bound the L1
+induced norm of the transposed matrix of their difference by
+X (τ )
+(τ )
+k(T̃T,i − Ti )T k1 = max
+|T̃T,i (x, y) − Ti (x, y)|
+x
+
+y
+
+= max
+x
+
+X
+
+(τ )
+
+|PT,i (Xi = yi |x−i ) − π(Xi = yi |x−i )|
+
+yi
+
+4
+,
+≤
+lT
+
+2B
+l
+
+∀T ≥
+
+(36)
+
+(τ )
+
+Observing that both T̃T and T are multiplications of N component transition matrices, and the
+(τ )
+transition matrices, T̃T and Ti , have a unit L1 induced norm as:
+X (τ )
+X (τ )
+(τ )
+(37)
+PT,i (Xi = yi |x−i ) = 1
+|T̃T,i (x, y)| = max
+k(T̃T,i )T k1 = max
+x
+
+T
+
+k(Ti ) k1 = max
+x
+
+x
+
+y
+
+X
+
+|Ti (x, y)| = max
+x
+
+y
+
+y
+
+X
+
+P (Xi = yi |x−i ) = 1
+
+(38)
+
+y
+(τ )
+
+we can further bound the L1 norm of the difference, (T̃T − T )T . Let P ∈ RN be any vector with
+nonzero norm. Using the triangular inequality, the difference of the resulting vectors after applying
+(τ )
+T̃T and T is bounded by
+(τ )
+
+kP (T̃T
+
+(τ )
+
+(τ )
+
+− T )k1 =kP T̃T,1 . . . T̃T,N − P T . . . TN k1
+(τ )
+
+(τ )
+
+(τ )
+
+(τ )
+
+(τ )
+
+≤kP T̃T,1 T̃T,2 . . . T̃T,N − P T1 T̃T,2 . . . T̃T,N k1 +
+(τ )
+
+(τ )
+
+(τ )
+
+(τ )
+
+(τ )
+
+kP T1 T̃T,2 T̃T,3 . . . T̃T,N − P T1 T2 T̃T,3 . . . T̃T,N k1 +
+...
+(τ )
+
+kP T1 . . . TN −1 T̃T,N − P T1 . . . TN −1 TN k1
+
+(39)
+
+where the i’th term is
+(τ )
+
+(τ )
+
+(τ )
+
+(τ )
+
+kP T1 . . . Ti−1 (T̃T,i − Ti )T̃T,i+1 . . . T̃T,N k1 ≤ kP T1 . . . Ti−1 (T̃T,i − Ti )k1
+4
+≤ kP T1 . . . Ti−1 k1
+lT
+4
+≤ kP k1
+lT
+(τ )
+
+Consequently, we get the L1 induced norm of (T̃T
+− T )T k = max
+P
+
+kP (T̃T − T )k1
+4N
+≤
+,
+kP k1
+lT
+
+19
+
+(Eqn. 36)
+(Unit L1 norm, Eqn. 38)
+(40)
+
+− T )T as
+
+(τ )
+
+(τ )
+
+k(T̃T
+
+(Unit L1 norm, Eqn. 37)
+
+∀T ≥
+
+2B
+,
+l
+
+(41)
+
+B.4
+
+Proof of Theorem 2
+
+When we initialize the herded Gibbs and regular Gibbs with the same distribution (see Figure 10),
+since the transition kernel of herded Gibbs is an approximation to regular Gibbs and the distribution
+of regular Gibbs converges to the invariant distribution, we expect that herded Gibbs also approaches
+the invariant distribution.
+Proof of Theorem 2. Construct an auxiliary regular Gibbs sampling Markov chain initialized with
+(τ )
+π (0) (X) = PT (X) and the same scanning order as herded Gibbs. As η < 1, the Gibbs Markov
+chain has uniform geometric convergence rate as shown in Equation (21).
+Also, the Gibbs Markov chain must be irreducible due to η < 1 and therefore Proposition 7 applies
+here. We can bound the distance between the distributions of herded Gibbs after one sweep of all
+(τ +1)
+variables, PT
+, and the distribution after one sweep of regular Gibbs sampling, π (1) by
+(τ +1)
+
+dv (PT
+≤
+
+(τ )
+
+− π (1) ) = dv (π (0) (T̃T
+
+2N
+2N (0)
+kπ k1 =
+,
+lT
+lT
+
+− T )) =
+
+1 (0) (τ )
+kπ (T̃T − T )k1
+2
+
+∀T ≥ T ∗ , τ ≥ 0.
+(τ )
+
+Now we study the change of discrepancy between PT
+
+(42)
+
+and π as a function as τ .
+
+Applying the triangle inequality of dv :
+(τ +1)
+
+(τ +1)
+
+(τ +1)
+
+dv (PT
+− π) = dv (PT
+− π (1) + π (1) − π) ≤ dv (PT
+− π (1) ) + dv (π (1) − π)
+2N
+(τ )
+≤
++ ηdv (PT − π), ∀T ≥ T ∗ , τ ≥ 0.
+(43)
+lT
+The last inequality follows Equations (21) and (42). When the sample distribution is outside a
+4N
+neighborhood of π, B1 (π), with 1 = (1−η)lT
+, i.e.
+(τ )
+
+dv (PT
+
+− π) ≥
+
+4N
+,
+(1 − η)lT
+
+(44)
+
+we get a geometric convergence rate toward the invariant distribution by combining the two equations above:
+1+η
+1−η
+(τ )
+(τ )
+(τ )
+(τ +1)
+dv (PT − π) + ηdv (PT − π) =
+dv (PT − π).
+(45)
+dv (PT
+− π) ≤
+2
+2
+So starting from τ = 0, we have a burn-in period for herded Gibbs to enter B1 (π) in a finite number
+of rounds. Denote the first time it enters the neighborhood by τ 0 . According to the geometric
+(0)
+convergence rate in Equations 45 and dv (PT − π) ≤ 1
+&
+'
+m
+l
+1
+0
+1+η (1 )
+)
+log
+= dτ ∗ (T )e.
+(46)
+τ ≤ log 1+η (
+≤
+(0)
+2
+2
+dv (PT − π)
+After that burn-in period, the herded Gibbs sampler will stay within a smaller neighborhood, B2 (π),
+1+η 2N
+with 2 = 1−η
+lT , i.e.
+1 + η 2N
+(τ )
+dv (PT − π) ≤
+, ∀τ > τ 0 .
+(47)
+1 − η lT
+This is proved by induction:
+(τ 0 )
+
+1. Equation (47) holds at τ = τ 0 + 1. This is because PT ∈ B1 (π) and following Eqn. 43
+we get
+2N
+(τ 0 +1)
+dv (PT
+− π) ≤
++ η1 = 2
+(48)
+lT
+(τ −1)
+
+(τ −1)
+
+2. For any τ ≥ τ 0 + 2, assume PT
+∈ B2 (π). Since 2 < 1 , PT
+is also in the ball
+(τ )
+B1 (π). We can apply the same computation as when τ = τ 0 + 1 to prove dv (PT − π) ≤
+2 . So inequality (47) is always satisfied by induction.
+20
+
+Consequently, Theorem 2 is proved when combining (47) with the inequality τ 0 ≤ dτ ∗ (T )e in
+Equation( 46).
+Remark 8. Similarly to the regular Gibbs sampler, the herded Gibbs sampler also has a burn-in
+period with geometric convergence rate. After that, the distribution discrepancy is in the order of
+O(1/T ), which is faster than the regular Gibbs sampler. Notice that the length of the burn-in period
+depends on T , specifically as a function of log(T ).
+Remark 9. Irrationality is not required to prove the convergence on a fully-connected graph.
+Corollary 10. When the conditions of Theorem 2 hold, and we start collecting samples at the end
+of every sweep from the beginning, the error of the sample distribution is bounded by:
+(τ =0)
+
+dv (PT
+
+− π) ≤
+
+λ + τ ∗ (T )
+log(T )
+= O(
+),
+T
+T
+
+∀T ≥ T ∗ + τ ∗ (T ∗ )
+
+(49)
+
+Proof. Since τ ∗ (T ) is a monotonically increasing function of T , for any T ≥ T ∗ + τ ∗ (T ∗ ), we can
+find a number t so that
+T = t + τ ∗ (t), t ≥ T ∗ .
+Partition the sample sequence S0,T = {X(kN ) : 0 ≤ k < T } into two parts: the burn-in period
+S0,τ ∗ (t) and the stable period Sτ ∗ (t),T . The discrepancy in the burn-in period is bounded by 1 and
+according to Theorem 2, the discrepancy in the stable period is bounded by
+λ
+.
+t
+is bounded by
+
+dv (P̃ (St,T ) − π) ≤
+
+Hence, the discrepancy of the whole set S0,T
+
+ ∗
+t
+τ (t)
+P̃ (S0,τ ∗ (t) ) + P̃ (Sτ ∗ (t),T ) − π
+dv (P̃ (S0,T ) − π) = dv
+T
+T
+ ∗
+
+
+
+τ (t)
+t
+≤ dv
+(P̃ (S0,τ ∗ (t) ) − π + dv
+(P̃ (Sτ ∗ (t),T ) − π
+T
+T
+t
+τ ∗ (t)
+dv (P̃ (S0,τ ∗ (t) ) − π) + dv (P̃ (Sτ ∗ (t),T ) − π)
+≤
+T
+T
+τ ∗ (t)
+t λ
+τ ∗ (T ) + λ
+≤
+·1+
+≤
+.
+T
+T t
+T
+
+21
+
+(50)
+
+

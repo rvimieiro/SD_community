@@ -1,0 +1,1106 @@
+processing to count the number of solutions to constraint
+satisfaction problems that arise during the probabilistic inference. Milch et al. (2008) adopt the shattering procedure,
+and avoid the need to use a constraint solver by requiring
+that the constraints be written in normal form.
+The impact of constraint processing on computational efficiency of lifted inference has been largely overlooked.
+In this paper we address this issue and compare the approaches to constraint processing listed above, both theoretically and empirically. We show that, in the worst case,
+shattering may have exponentially worse space and time
+complexity (in the number of parameters) than splitting as
+needed. Moreover, writing the constraints in normal form
+can lead to computational costs with a complexity that is
+even worse than exponential. Experiments confirm our theoretical results and stress the importance of informed constraint processing in lifted inference.
+We introduce key concepts and notation in Section 2 and
+give an overview of constraint processing during lifted inference in Section 3. In Section 4 we discuss how a specialized #CSP solver can be used during lifted inference.
+Theoretical results are presented in Section 5. Section 6
+contains results of experiments.
+
+2
+
+PRELIMINARIES
+
+In this section we introduce a definition of parameterized random variables, which are essential components of
+first-order probabilistic models. We also define parfactors (Poole, 2003), which are data structures used during
+lifted inference.
+
+294
+2.1
+
+KISYNSKI & POOLE
+
+UAI 2009
+g(x1)
+
+PARAMETERIZED RANDOM VARIABLES
+
+If S is a set, we denote by |S| the size of the set S.
+
+g(A)
+
+A population is a set of individuals. A population corresponds to a domain in logic.
+A parameter corresponds to a logical variable and is typed
+with a population. Given parameter X , we denote its population by D(X). Given a set of constraints C , we denote
+a set of individuals from D(X) that satisfy constraints in C
+by D(X) : C .
+A substitution is of the form {X1 /t1 . . . . , Xk /tk }, where the
+Xi are distinct parameters, and each term ti is a parameter
+typed with a population or a constant denoting an individual from a population. A ground substitution is a substitution, where each ti is a constant.
+A parameterized random variable is of the form
+f (t1 , . . . ,tk ), where f is a functor (either a function symbol
+or a predicate symbol) and ti are terms. Each functor has a
+set of values called the range of the functor. We denote the
+range of the functor f by range( f ). A parameterized random variable f (t1 , . . . ,tk ) represents a set of random variables, one for each possible ground substitution to all of its
+parameters. The range of the functor of the parameterized
+random variable is the domain of random variables represented by the parameterized random variable.
+Let v denote an assignment of values to random variables;
+v is a function that takes a random variable and returns its
+value. We extend v to also work on parameterized random
+variables, where we assume that free parameters are universally quantified.
+Example 1. Let A and B be parameters typed with a population D(A) =D(B) ={x1 , . . . , xn }. Let h be a functor with
+range {true, f alse}. Then h(A, B) is a parameterized random variable. It represents a set of n2 random variables
+with domains {true, f alse}, one for each ground substitution {A/x1 , B/x1 }, {A/x1 , B/x2 }, . . . ,{A/xn , B/xn }. A parameterized random variable h(x1 , B) represents a set of
+n random variables with domains {true, f alse}, one for
+each ground substitution {B/x1 }, . . . ,{B/xn }. Let v be an
+assignment of values to random variables. If v(h(x1 , B))
+equals true, each of the random variables represented by
+h(x1 , B), namely h(x1 , x1 ), . . . , h(x1 , xn ), is assigned the
+value true by v.
+2.2
+
+PARAMETRIC FACTORS
+
+A factor on a set of random variables represents a function
+that, given an assignment of a value to each random variable from the set, returns a real number. Factors are used
+in the variable elimination algorithm (Zhang and Poole,
+1994) to store initial conditional probabilities and intermediate results of computation during probabilistic inference
+in graphical models. Operations on factors include mul-
+
+g(xn)
+
+h(x1, x1)
+
+h(A, B)
+
+h(x1, xn)
+
+B
+A
+
+FIRST-ORDER
+
+h(xn , x1)
+
+h(xn , xn)
+
+PROPOSITIONAL
+
+Figure 1: A parameterized belief network and its equivalent
+belief network.
+tiplication of factors and summing out random variables
+from a factor.
+Let v be an assignment of values to random variables and
+let F be a factor on a set of random variables S. We extend
+v to factors and denote by v(F) the value of the factor F
+given v. If v does not assign values to all of the variables in
+S, v(F) denotes a factor on other variables.
+A parametric factor or parfactor is a triple hC , V, Fi where
+C is a set of inequality constraints on parameters, V is a set
+of parameterized random variables and F is a factor from
+the Cartesian product of ranges of parameterized random
+variables in V to the reals.
+A parfactor hC , V, Fi represents a set of factors, one for
+each ground substitution G to all free parameters in V that
+satisfies the constraints in C . Each such factor FG is a factor on the set of random variables obtained by applying a
+substitution G. Given an assignment v to random variables
+represented by V, v(FG ) = v(F).
+Parfactors are used to represent conditional probability distributions in directed first-order models and potentials in
+undirected first-order models as well as intermediate computation results during inference in first-order models.
+In the next example, which extends Example 1, we use parameterized belief networks (PBNs) (Poole, 2003) to illustrate representational power of parfactors. The PBNs are
+a simple first-order directed probabilistic model, we could
+have used parameterized Markov networks instead (as did
+de Salvo Braz et al. (2007) and Milch et al. (2008)). Our
+discussion of constraint processing in lifted inference is not
+limited to PBNs, it applies to any model for which the joint
+distribution can be expressed as a product of parfactors.
+Example 2. A PBN consists of a directed acyclic graph
+where the nodes are parameterized random variables, an
+assignment of a range to each functor, an assignment of
+a population to each parameter, and a probability distribution for each node given its parents. Consider the PBN
+graph presented in Figure 1 using plate notation (Buntine,
+
+UAI 2009
+
+KISYNSKI & POOLE
+
+1994). Let g be a functor with range {true, f alse}. Assume
+we do not have any specific knowledge about instances of
+g(A), but we have some specific knowledge about h(A, B)
+for case where A = x1 and for case where A 6= x1 and A = B.
+The probability P(g(A)) can be represented with a parfactor h0,
+/ {g(A)}, Fg i, where Fg is a factor from range(h) to
+the reals. The conditional probability P(h(A, B)|g(A)) can
+be represented with a parfactor h0,
+/ {g(x1 ), h(x1 , B)}, F1 i, a
+parfactor h{A 6= x1 }, {g(A), h(A, A)}, F2 i, and a parfactor
+h{A 6= x1 , A 6= B}, {g(A), h(A, B)}, F3 i, where F1 , F2 , and
+F3 are factors from range(g) × range(h) to the reals.
+Let C be a set of inequality constraints on parameters and
+X be a parameter. We denote by EXC the excluded set for X,
+that is, the set of terms t such that (X 6= t) ∈ C . A parfactor
+hC , V, FF i is in normal form (Milch et al., 2008) if for each
+inequality (X 6= Y ) ∈ C , where X and Y are parameters, we
+have EXC \{Y } = EYC \{X}.
+In a normal form parfactor, for all parameters X of parameterized random variables in V, | D(X): C | = | D(X) |−| EXC |.
+Example 3. Consider the parfactor h{A 6= x1 , A 6=
+B},{g(A), h(A, B)}, F3 i from Example 2. Let C denote
+a set of constraints from this parfactor. The set C contains only one inequality between parameters, namely
+A 6= B. We have EAC = {x1 , B} and EBC = {A}. As
+EAC \{B} 6= EBC \{A}, the parfactor is not in normal form.
+Recall that D(A) =D(B) ={x1 , . . . , xn }. The size of the
+set D(A) : C depends on the parameter B. It is equal
+n − 1 when B = x1 and n − 2 when B 6= x1 . Other parfactors from Example 2 are in normal form as they do
+not contain constraints between parameters. Consider
+a parfactor h{X 6= Y, X 6= a,Y 6= a}, {e(X), f (X,Y )}, Fe f i,
+where D(X) = D(Y ) and | D(X) | = n. Let C 0 denote a set
+0
+0
+of constraints from this parfactor. As EXC \{Y } = EYC \{X},
+the parfactor is in normal form and | D(X) : C 0 | = n − 2 and
+| D(Y ) : C 0 | = n − 2.
+
+3
+
+LIFTED INFERENCE AND
+CONSTRAINT PROCESSING
+
+In this section we give an overview of exact lifted
+probabilistic inference developed in (Poole, 2003),
+(de Salvo Braz et al., 2007), and (Milch et al., 2008) in
+context of constraints. For more details on other aspects of
+lifted inference we refer the reader to the above papers.
+Let Φ be a set of parfactors. Let J (Φ) denote a factor
+equal to the product of all factors represented by elements
+of Φ. Let U be the set of all random variables represented
+by parameterized random variables present in parfactors in
+Φ. Let Q be a subset of U. The marginal of J (Φ) on Q,
+denoted JQ (Φ), is defined as JQ (Φ) = ∑U\Q J (Φ).
+Given Φ and Q, the lifted inference procedure computes the
+marginal JQ (Φ) by summing out random variables from
+
+295
+
+Q, where possible in a lifted manner. Evidence can be handled by adding to Φ additional parfactors on observed random variables.
+Before a (ground) random variable can be summed out, a
+number of conditions must be satisfied. One is that a random variable can be summed out from a parfactor in Φ only
+if there are no other parfactors in Φ involving this random
+variable. To satisfy this condition, the inference procedure
+may need to multiply parfactors prior to summing out.
+Multiplication has a condition of its own: two parfactors
+hC1 , V1 , F1 i and hC2 , V2 , F2 i can be multiplied only if for
+each parameterized random variable from V1 and for each
+parameterized random variable from V2 , the sets of random
+variables represented by these two parameterized random
+variables in respective parfactors are identical or disjoint.
+This condition is trivially satisfied for parameterized random variables with different functors.
+Example 4. Consider the PBN from Figure 1 and set Φ
+containing parfactors introduced in Example 2. Assume
+that we want to compute the marginal of J (Φ) on instances
+of h(A, B), where A 6= x1 and A 6= B. We need to sum
+out random variables represented by g(A) from parfactor
+h{A 6= x1 , A 6= B}, {g(A), h(A, B)}, F3 i, but as they are also
+among random variables represented by g(A) in parfactor
+h0,
+/ g(A), Fg i, we have to first multiply these two parfactors. Sets of random variables represented by g(A) in these
+two parfactors are not disjoint and are not identical and the
+precondition for multiplication is not satisfied.
+3.1
+
+SPLITTING
+
+The precondition for parfactor multiplication may be satisfied through splitting parfactors on substitutions.
+Let Φ be a set of parfactors. Let p f = hC , V, FF i ∈ Φ.
+Let {X/t} be a substitution such that (X 6= t) ∈
+/ C and
+term t is a constant such that t ∈ D(X), or a parameter
+such that D(t) = D(X). A split of p f on {X/t} results in
+two parfactors: p f [X/t] that is a parfactor p f with all occurrences of X replaced by term t, and a parfactor p fr =
+hC ∪{X 6= t}, V, FF i. We have J (Φ) = J (Φ \ {p f }∪
+{p f [X/t], p fr }). We call p fr a residual parfactor.
+Given two parfactors that need to be multiplied, substitutions on which splitting is performed are determined by analyzing constraint sets C and sets of parameterized random
+variables V in these parfactors.
+Example 5. Let us continue Example 4.
+A split
+of h0,
+/ {g(A)}, Fg i on {A/x1 } results in h0,
+/ {g(x1 )}, Fg i
+and residual h{A 6= x1 }, {g(A)}, Fg i. The first parfactor
+can be ignored because it is not relevant to the query,
+while the residual needs to be multiplied by a parfactor
+h{A 6= x1 , A 6= B}, {g(A), h(A, B)}, F3 i. The precondition
+for multiplication is now satisfied as g(A) represents the
+same set of random variables in both parfactors.
+
+296
+3.2
+
+KISYNSKI & POOLE
+MULTIPLICATION
+
+Once the precondition for parfactor multiplication is satisfied, multiplication can be performed in a lifted manner.
+This means that, although parfactors participating in a multiplication as well as their product represent multiple factors, the computational cost of parfactor multiplication is
+limited to the cost of multiplying two factors. The only additional requirement is that the lifted inference procedure
+needs to know how many factors each parfactor involved
+in the multiplication represents and how many factors their
+product will represent. These numbers can be different because the product parfactor might involve more parameters
+than a parfactor participating in the multiplication. In such
+a case, a correction to values of a factor inside appropriate
+parfactors participating in multiplication is necessary. Detailed description of this correction is beyond the scope of
+this paper. For more information see Example 6 below and
+a discussion of the fusion operation in de Salvo Braz et al.
+(2007). For our purpose, the key point is that the lifted inference procedure needs to compute the number of factors
+represented by a parfactor.
+Given a parfactor hC , V, Fi, the number of factors it represents is equal to the number of solutions to the constraint
+satisfaction problem formed by constraints in C . This
+counting problem is written as #CSP (Dechter, 2003). If
+a parfactor is in normal form, each connected component
+of the underlying constraint graph is fully connected (see
+Proposition 1) and it is easy to compute the number of factors represented by the considered parfactor. If a parfactor
+is not in normal form, a #CSP solver is necessary to compute the number of factors the parfactor represents.
+Example 6. In Example 5 the parfactor h{A 6= x1 },
+{g(A)}, Fg i represents n − 1 factors, and needs to be multiplied by a parfactor h{A 6= x1 , A 6= B}, {g(A), h(A, B)}, F3 i,
+which represents (n − 1)2 factors. Their product p f∗ =
+hA 6= x1 , A 6= B, {g(A), h(A, B)}, F∗ i, where F∗ is a factor
+from range(g) × range(h) to the reals, represents (n − 1)2
+factors. Let v be an assignment of values to g(A) and
+(n−1)/(n−1)2
+
+h(A, B). We have v(F∗ ) = v(Fg )
+v(F3 ). Now
+we can sum out g(A) from p f∗ . The result needs to be
+represented with a counting formula (Milch et al., 2008),
+which is outside of the scope of this paper. What is important for the paper is that a parfactor involving counting
+formulas needs to be in normal form. Since p f∗ is not in
+normal form, we first split it on substitution {B/x1 } and
+then sum out g(A) from the two parfactors obtained through
+splitting.
+3.3
+
+SUMMING OUT
+
+During lifted summing out, a parameterized random variable is summed out from a parfactor hC , V, FF i, which
+means that a random variable is eliminated from each factor
+represented by the parfactor in one inference step. Lifted
+
+UAI 2009
+
+inference will perform summing out only once on the factor F. If some parameters only appear in the parameterized variable that is being eliminated, the resulting parfactor will represent fewer factors than the original one. As
+in the case of parfactor multiplication, the inference procedure needs to compensate for this difference. It needs to
+compute the size of the set X = (D(X1 ) × · · · × D(Xk )) : C ,
+where X1 , . . . , Xk are parameters that will disappear from
+the parfactor. This number tells us how many times fewer
+factors the result of summing out represents compared to
+the original parfactor.
+If the parfactor is in normal form, |X | does not depend on
+values of parameters remaining in the parfactor after summing out. The problem reduces to #CSP and, as we mentioned in Section 3.2, it is easy to solve. If the parfactor is
+not in normal form, |X | may depend on values of remaining
+parameters and a #CSP solver is necessary to compute all
+the sizes of the set X conditioned on values of parameters
+remaining in the parfactor.
+Example 7. Assume that we want to sum out f (X,Y )
+from a parfactor h{X 6= Y,Y 6= a}, {e(X), f (X,Y )}, Fe f i,
+where Fe f is a factor from range(e) × range( f ) to the reals. Let D(X) = D(Y ) and | D(X) | = n. The parfactor represents (n − 1)2 factors. Note that the parfactor is
+not in normal form and | D(Y ) : {X 6= Y,Y 6= a}| equals
+n − 1 if X = a and n − 2 if X 6= a. A #CSP solver could
+compute these numbers for us (see Example 9). After
+f (X,Y ) is summed out, Y is no longer among parameters of random variables and X remains the sole parameter. To represent the result of summation we need two
+parfactors: h0,
+/ e(a), Fe1 i and h{X 6= a}, e(X), Fe2 i, where
+Fe1 and Fe2 are factors from range(e) to the reals. Let
+y ∈ range(e), then Fe1 (y) = (∑z∈range( f ) Fe f (y, z))n−1 and
+Fe2 (y) = (∑z∈range( f ) Fe f (y, z))n−2 .
+3.4
+
+PROPOSITIONALIZATION
+
+During inference in first-order probabilistic models it may
+happen that none of lifted operations (including operations
+that are not described in this paper) can be applied. In such
+a situation the inference procedure substitutes appropriate
+parameterized random variables with random variables represented by them. This may be achieved through splitting
+as we demonstrate in an example below. Afterward, inference is performed, at least partially, at the propositional
+level. As it has a negative impact on the efficiency of inference, propositionalization is avoided as much as possible
+during inference in first-order models.
+Example 8. Consider a parfactor h0,
+/ {g(A)}, Fg i from Example 2. Assume we need to propositionalize g(A). Recall that D(A) ={x1 , . . . , xn }. Propositionalization results
+in a set of parfactors h0,
+/ {g(x1 )}, Fg i, h0,
+/ {g(x2 )}, Fg i, . . . ,
+h0,
+/ {g(xn−1 )}, Fg i, h0,
+/ {g(xn )}, Fg i. Each parameterized
+random variable in the above parfactors represents just one
+
+UAI 2009
+10
+
+10
+
+KISYNSKI & POOLE
+
+100w
+
+10w
+
+5w
+
+W
+
+W
+w
+
+3
+
+=
+
+2w
+
+W
+
+=
+
+X
+
+ϖw
+
+5
+
+10
+
+297
+
+Y
+
+X
+
+Z
+
+=
+
+=
+
+Y
+
+=
+
+X=Y
+=
+
+=
+
+=
+
+=
+
+=
+
+Z
+
+=
+
+Z
+0
+
+10
+
+0
+
+5
+
+10
+
+15
+w
+
+20
+
+25
+
+30
+
+Figure 2: Comparison of ϖw and exponential functions.
+random variable and each parfactor represents just one factor. The set could be produced by a sequence of splits.
+The above informal overview of lifted inference, together
+with simple examples, shows that constraint processing is
+an integral, important part of lifted inference.
+
+4
+
+#CSP SOLVER AND LIFTED
+INFERENCE
+
+In Section 3, we showed when a #CSP solver can be used
+during lifted probabilistic inference. A solver that enumerates all individuals from domains of parameters that
+form a CSP would contradict the core idea behind lifted
+inference, that is, performing probabilistic inference without explicitly considering every individual. In our experiments presented in Section 6 we used a solver (Kisyński
+and Poole, 2006) that addresses the above concern. It is a
+lifted solver based on the variable elimination algorithm for
+solving #CSP of Dechter (2003) and is optimized to handle
+problems that contain only inequality constraints. It is not
+possible to describe the algorithm in detail in this paper, but
+below we provide some intuition behind the solver.
+
+(a)
+
+(b)
+
+Figure 3: Constraint graph with a cycle (a) and the two
+cases that need to be analyzed (b).
+us to immediately solve the corresponding #CSP: we can
+assign the value to W in n ways, and are left with n − 1 possible values for X, and n − 1 possible values for Y and Z.
+Hence, there are n(n − 1)3 solutions to this CSP instance.
+Consider a set of constraints {W 6= X,W 6= Y, X 6= Z,Y 6=
+Z}, where all parameters have the same population of size
+n. The underlying graph has a cycle (see Figure 3 (a)),
+which makes the corresponding #CSP more difficult to
+solve than in the previous example. We can assign the value
+to W in n ways, and are left with n − 1 possible values for
+X and Y . For Z we need to consider two cases: X = Y and
+X 6= Y (see Figure 3 (b)). In the X = Y case, Z can take
+n − 1 values, while in the X 6= Y case, Z can have n − 2 different values. Hence, the number of solutions to this CSP
+instance is n(n − 1)2 + n(n − 1)(n − 2)2 . The first case corresponds to a partition {{X,Y }} of the set of parameters
+{X,Y }, while the second case corresponds to a partition
+{{X}, {Y }} of this set.
+
+First, we need to introduce a concept of a set partition. A
+partition of a set S is a collection {B1 , . . . , Bw } S
+of nonempty,
+pairwise disjoint subsets of S such that S = wi=1 Bi . The
+sets Bi are called blocks of the partition. Set partitions
+are intimately connected to equality. For any consistent set
+of equality assertions on parameters, there is a partition in
+which the parameters that are equal are in the same block,
+and the parameters that are not equal are in different blocks.
+If we consider a semantic mapping from parameters to individuals in the world, the inverse of this mapping, where
+two parameters that map to the same individual are in the
+same block, forms a partition of the parameters. The number of partitions of the set of size w is equal to the w-th
+Bell number ϖw . Bell numbers grow faster than any exponential function (see Lovász (2003)), but for small w’s
+they stay much smaller than exponential functions with a
+moderate base (see Figure 2).
+
+In general, to perform this kind of reasoning, we need
+to triangulate the constraint graph. This can be naturally
+achieved with a variable elimination algorithm. Each new
+edge adds two cases, one in which the edge corresponds to
+the equality constraint and one in which it corresponds to
+the inequality constraint. Some cases are inconsistent and
+can be ignored. When we have to analyze a fully connected
+subgraph of w new edges, we need to consider ϖw cases.
+This is because each such case corresponds to a partition of
+the parameters from the subgraph; those parameters in the
+same block of the partition are equal, and parameters in different blocks are not equal. The number of such partitions
+is equal to ϖw . The lifted #CSP solver analyzes ϖw partitions of parameters, rather than nw ground substitutions of
+individuals. Since we do not care about empty partitions,
+we will never have to consider more partitions than there
+are ground substitutions. As w corresponds to the induced
+width of a constraint graph (which we do not expect to be
+large) and n corresponds to the population size (potentially
+large), the difference between ϖw and nw can be very big
+(see Figure 2).
+
+Consider a set of constraints {W 6= X, X 6= Y, X 6= Z}, where
+all parameters have the same population of size n. The underlying constraint graph has a tree structure, which allows
+
+In practice, parameters can be typed with different populations (from the very beginning as well as because of unary
+constraints). In such a situation, we can apply the above
+
+298
+
+KISYNSKI & POOLE
+
+UAI 2009
+
+reasoning to any set of individuals that are indistinguishable as far as counting is concerned. For example, the intersection of all populations is a set of individuals for which
+we only need the size; there is no point in reasoning about
+each individual separately. Similarly, the elements from the
+population of a parameter that do not belong to the population of any other parameter can be grouped and treated
+together. In general, any individuals that are in the populations of the same group of parameters can be treated identically; all we need is to know how many there are.
+
+two parfactors are about to be multiplied and the precondition for multiplication is not satisfied.
+
+Example 9. In Example 7 we need to know the number | D(Y ) : {X 6= Y,Y 6= a}|, where D(X) = D(Y ) and
+| D(X) | = n. Let a1 denote set {a} and a2 denote set
+D(X) \{a}. The following factor has value 1 for substitutions to parameters X,Y that are solutions to the above
+CSP and 0 otherwise:
+
+Shattering simplifies design and implementation of lifted
+inference procedures, in particular, construction of elimination ordering heuristics. Unfortunately, as we show in
+Theorem 1, it may lead to creation of large number of parfactors that would not be created by following the splitting
+as needed approach.
+
+Y
+a2
+a2
+a2
+
+X
+a1
+a2
+a2
+
+Partition(s)
+{{X}} {{Y }}
+{{X,Y }}
+{{X}, {Y }}
+
+1 .
+0
+1
+
+After we eliminate Y from the above factor we obtain:
+X
+a1
+a2
+
+Partition(s)
+{{X}}
+{{X}}
+
+n−1 .
+n−2
+
+Numbers n − 1 and n − 2 are obtained through analysis
+of partitions of X and Y present in the original factor and
+knowledge that a1 represents 1 individual and a2 represents
+n − 1 individuals. From the second factor we can infer that
+| D(Y ) : {X 6= Y,Y 6= a}| equals n − 1 if X = a and n − 2 if
+X 6= a.
+If we assume that all populations of parameters forming a
+#CSP are sorted according to the same (arbitrary) ordering, sets of indistinguishable individuals can be generated
+through a single sweep of the populations. Each such set
+can be represented by listing all of its elements or by listing all elements from the corresponding population that do
+not belong to it. For each set we choose a more compact
+representation.
+
+An alternative, called shattering, was proposed by
+de Salvo Braz et al. (2007). They perform splitting at the
+beginning of the inference by doing all the splits that are
+required to ensure that for any two parameterized random
+variables present in considered parfactors the sets of random variables represented by them are either identical or
+disjoint.1 Shattering was also used in Milch et al. (2008).
+
+Theorem 1. Let Φ be a set of parfactors. Let Q be a subset of the set of all random variables represented by parameterized random variables present in parfactors in Φ.
+Assume we want to compute the marginal JQ (Φ). Then:
+(i) if neither of the algorithms performs propositionalization, then every split on substitution {X/t}, where t is
+a constant, performed by lifted inference with splitting
+as needed is also performed by lifted inference with
+shattering (subject to a renaming of parameters);
+(ii) lifted inference with shattering might create exponentially more (in the maximum number of parameters in
+a parfactor) parfactors than lifted inference with splitting as needed.
+Proof. We present a sketch of a proof of the first statement
+and a constructive proof of the second statement.
+(i) Assume that lifted inference with splitting as needed
+performs a split. We can track back the cause of this to
+the initial set of parfactors Φ. Further analysis shows that
+shattering the set Φ would also involve this split.
+(ii) Consider the following set of parfactors:
+Φ = {h0,
+/ {gQ (), g1 (X1 , X2 , . . . , Xk ),
+
+The answer from the solver needs to be translated to sets of
+substitutions and constraints accompanying each computed
+value. Standard combinatorial enumeration algorithms can
+do this task.
+
+5
+
+THEORETICAL RESULTS
+
+g2 (X2 , X3 , . . . , Xk ),
+...,
+gk (Xk ))}, F0 i,
+
+[0]
+
+h0,
+/ {g1 (a, X2 , . . . , Xk )}, F1 i,
+
+[1]
+
+h0,
+/ {g2 (a, X3 , . . . , Xk )}, F2 i,
+
+[2]
+
+...,
+In this section we discuss consequences of different approaches to constraint processing in lifted inference.
+5.1
+
+SPLITTING AS NEEDED VS. SHATTERING
+
+Poole (2003) proposed a scheme in which splitting is performed “as needed” through the process of inference when
+
+h0,
+/ {gk−1 (a, Xk )}, Fk−1 i,
+
+[k − 1]
+
+h0,
+/ {gk (a)}, Fk i,
+
+[k]
+
+and let Q be gQ ().
+1 Shattering might also be necessary in the middle of inference
+if propositionalization has been performed.
+
+UAI 2009
+
+KISYNSKI & POOLE
+
+For i = 1, . . . , k, a set of random variables represented by
+a parameterized random variable gi (Xi , . . . , Xk ) in a parfactor [0] is a proper superset of a set of random variables represented by a parameterized random variable
+gi (a, Xi+1 , . . . , Xk ) in a parfactor [i]. Therefore lifted inference with shattering needs to perform several splits. Since
+the order of splits during shattering does not matter here,
+assume that the first operation is a split of the parfactor [0]
+on a substitution {X1 /a} which creates a parfactor
+h0,
+/ {gQ (), g1 (a, X2 , . . . , Xk ), g2 (X2 , X3 , . . . , Xk ),
+. . . , gk (Xk ))}, F0 i
+
+[k + 1]
+
+and a residual parfactor
+h{X1 6= a}, {gQ (), g1 (X1 , X2 , . . . , Xk ),
+g2 (X2 , X3 , . . . , Xk ), . . . , gk (Xk ))}, F0 i.
+
+[k + 2]
+
+In both newly created parfactors, for i = 2, . . . , k, a set of
+random variables represented by a parameterized random
+variable gi (Xi , . . . , Xk ) is a proper superset of a set of random variables represented by a parameterized random variable gi (a, Xi+1 , . . . , Xk ) in a parfactor [i] and shattering proceeds with further splits of both parfactors. Assume that in
+next step parfactors [k + 1] and [k + 2] are split on a substitution {X2 /a}. The splits result in four new parfactors. The
+result of the split of the parfactor [k + 1] on {X2 /a} contains a parameterized random variable g1 (a, a, . . . , Xk ) and a
+parfactor [1] needs to be split on a substitution {X2 /a}. The
+shattering process continues following a scheme described
+above. It terminates after 2k+1 − k − 2 splits and results in
+2k+1 − 1 parfactors (each original parfactor [i], i = 0, . . . , k,
+is shattered into 2k−i parfactors). Assume that lifted inference proceeds with an elimination ordering g1 , . . . , gk
+(this elimination ordering does not introduce counting formulas, other do). To compute the marginal JgQ () (Φ), 2k
+lifted multiplications and 2k+1 − 2 lifted summations are
+performed.
+Consider lifted inference with splitting as needed. Assume
+it follows an elimination ordering g1 , . . . , gk . A set of random variables represented by a parameterized random variable g1 (X1 , . . . , Xk ) in a parfactor [0] is a proper superset
+of a set of random variables represented by a parameterized random variable g1 (a, X2 , . . . , Xk ) in a parfactor [1] and
+the parfactor [0] is split on a substitution {X1 /a}. The
+split results in parfactors identical to the parfactors [k + 1]
+and [k + 2] from the description of shattering above. The
+parfactor [k + 1] is multiplied by the parfactor [1] and all
+instances of g1 (a, X1 , . . . , Xk ) are summed out from their
+product while all instances of g1 (X1 , X2 , . . . , Xk ) (subject
+to a constraint X1 6= a) are summed out from the parfactor
+[k + 2]. The summations create two parfactors:
+h0,
+/ {gQ (), g2 (X2 , X3 , . . . , Xk ), . . . , gk (Xk ))}, FFk+3 i,
+
+[k + 3]
+
+h0,
+/ {gQ (), g2 (X2 , X3 , . . . , Xk ), . . . , gk (Xk ))}, FFk+4 i .
+
+[k + 4]
+
+299
+
+Instances of g2 are eliminated next. Parfactors [k + 3] and
+[k + 4] are split on a substitution {X2 /a}, the results of the
+splits and a parfactor [2] are multiplied together and the
+residual parfactors are multiplied together. Then, all instances of g2 (a, X3 , . . . , Xk ) are summed out from the first
+product product while all instances of g2 (X2 , . . . , Xk ) (subject to a constraint X2 6= a) are summed out from the second
+product. The elimination of g3 , . . . , gk looks the same as for
+g2 . In total, 2k − 1 splits, 3k − 2 lifted multiplications and
+2k lifted summations are performed. At any moment, the
+maximum number of parfactors is k + 3.
+The above theorem shows that shattering approach is never
+better and sometimes worse than splitting as needed. It is
+worth pointing out that splitting as needed approach complicates the design of an elimination ordering heuristic.
+5.2
+
+NORMAL FORM PARFACTORS VS. #CSP
+SOLVER
+
+Normal form parfactors were introduced by Milch et al.
+(2008) in the context of counting formulas. Counting formulas are parameterized random variables that let us compactly represent a special form of probabilistic dependencies between instances of a parameterized random variable. Milch et al. (2008) require all parfactors to be in normal form to eliminate the need to use a separate constraint
+solver to solve #CSP. The requirement is enforced by splitting parfactors that are not in normal form on appropriate
+substitutions. While parfactors that involve counting formulas must be in normal form, that is not necessary for
+parfactors without counting formulas. It might actually be
+quite expensive as we show in this section.
+Proposition 1. Let hC , V, Fi be a parfactor in normal
+form. Then each connected component of the constraint
+graph corresponding to C is fully connected.
+Proof. Proposition 1 is trivially true for components with
+one or two parameters. Let us consider a connected component with more than two parameters. Suppose, contrary to our claim, that there are two parameters X and Y
+with no edge between them. Since the component is connected, there exists a path X, Z1 , Z2 ..., Zm ,Y . As C is in normal form, EZCi \{Zi+1 } = EZCi+1 \{Zi }, i = 1, . . . , m − 1 and
+EZCm \{Y } = EYC \{Zm }. We have X ∈ EZC1 , and consequently
+X ∈ EYC . This contradicts our assumption that there is no
+edge between X and Y .
+While the above property simplifies solving #CSP for a set
+of constraints from a parfactor in normal form it also has
+negative consequences. If a parfactor is not in normal form,
+conversion to normal from might require several splits. For
+example we need three splits to convert a parfactor with
+the set of constraints shown in Figure 3 (a) to a set of four
+parfactors in normal form. The resulting sets of constraints
+
+300
+
+KISYNSKI & POOLE
+W
+
+W
+W =Z
+=
+X =Y
+
+=
+
+=
+
+W =Z
+
+X=Y
+
+=
+
+=
+
+X
+
+=
+
+X
+
+=
+
+=
+
+Y
+
+Y
+
+=
+=
+=
+
+=
+
+=
+Z
+
+Z
+
+Figure 4: Constraint graphs obtained through a conversion
+to normal form.
+are presented in Figure 4. If the underlying graph is sparse,
+conversion might be very expensive as we show in the example below.
+Example 10. Consider a parfactor h{X0 6= a, X0 6=
+X1 , . . . , X0 6= Xk }, {g0 (X0 ), g1 (X1 ), . . . , gn (Xk )}, Fi, where
+D(X0 ) = D(X1 ) = · · · = D(Xk ). Let C denote a set of constraints from this parfactor. We have EXC0 = {a, X1 , . . . , Xk }
+and EXCi = {X0 }, i = 1, . . . , k. The parfactor is not in normal form because EXC0 \{Xi } =
+6 EXCi \{X0 }, i = 1, . . . , k. As
+a result the size of the set D(X0 ) : C depends on other parameters in the parfactor. For instance, it differs for X1 = a
+and X1 6= a or for X1 = X2 and X1 6= X2 . A conversion of
+the considered parfactor to set of parfactors in normal form
+involves 2k − 1 splitson substitutions of the form {Xi /a},
+1 ≤ i ≤ k and ∑ki=2 ki (ϖi − 1) splits on substitutions of the
+
+form {Xi /X j }, 1 ≤ i, j ≤ k. It creates ∑ki=0 ki ϖi parfactors
+in normal form. In Example 11 we analyze how this conversion affects parfactor multiplication compared to the use
+of a #CSP solver.
+From the above example we can clearly see that the cost of
+converting a parfactor to normal form can be worse than exponential. Moreover, converting parfactors to normal form
+may be very inefficient when analyzed in context of parfactor multiplication (see Section 5.2.1) or summing out a
+parameterized random variable from a parfactor (see Section 5.2.1). Our empirical tests (see Section 6.2) confirm
+this observation.
+Note that splitting as needed can be used together with a
+#CSP solver (Poole, 2003), or with normal form parfactors.
+Shattering can be used with a #CSP solver (de Salvo Braz
+et al., 2007) or with normal form parfactors (Milch et al.,
+2008). The cost of converting parfactors to normal form
+might be amplified if it is combined with shattering.
+5.2.1
+
+Multiplication
+
+In the example below we demonstrate how the normal form
+requirement might lead to a lot of, otherwise unnecessary,
+parfactor multiplications.
+Example 11. Assume we would like to multiply the
+parfactor from Example 10 by a parfactor p f =
+h0,
+/ {g1 (X1 )}, F1 i. First, let us consider how it is done
+with a #CSP solver. A #CSP solver computes the num-
+
+UAI 2009
+
+ber of factors the parfactor from Example 10 represents,
+(| D(X0 ) | − 1)k+1 . Next the solver computes the number
+of factors represented by the parfactor p f , which is trivially | D(X1 ) |. A correction is applied to values of the factor F1 to compensate for the difference between these two
+numbers. Finally the two parfactors are multiplied. The
+whole operation involved two calls to a #CSP solver, one
+correction and one parfactor multiplication. Now, let us
+see how it can be done without the use of #CSP solver.
+
+The first parfactor is converted to a set Φ of ∑ki=0 ki ϖi
+parfactors in normal form, as presented in Example 10.
+Some of the parfactors in Φ contain a parameterized random variable g1 (a), the rest contains a parameterized random variable g1 (X) and a constraint X1 6= a, so the parfactor p f needs to be split on a substitution {X1 /a}. The
+split results in a parfactor h0,
+/ {g1 (a)}, F1 i and a residual
+h{X1 6= a}, {g1 (X1 )}, F1 i. Next, each parfactor from Φ is
+multiplied by either the result of the split or the residual.
+Thus ∑ki=0 ki ϖi parfactor multiplications need to be performed and most of these multiplication require a correction prior to the actual parfactor multiplication.
+There is an opportunity for some optimization, as factor
+components of parfactors multiplications for different corrections could be cached and reused instead of being recomputed. Still, even with such a caching mechanism, multiple parfactor multiplications would be performed compared to just one multiplication when a #CSP solver is used.
+5.2.2
+
+Summing Out
+
+Examples 7 and 9 demonstrate how summing out a parameterized variable from a parfactor that is not in normal form
+can be done with a help of a #CSP solver. In the example below we show how this operation would look if we
+convert the parfactor to a set of parfactors in normal form
+which does not require a #CSP solver.
+Example 12. Assume that we want to sum out f (X,Y )
+from the parfactor h{X 6= Y,Y 6= a}, {e(X), f (X,Y )}, Fe f i
+from the Example 7. First, we convert it to a set of
+parfactors in normal form by splitting on a substitutions {X/a}. We obtain two parfactors in normal form:
+h{Y 6= a}, {e(a), f (a,Y )}, Fe f i, which represents n−1 factors, and h{X 6= Y, X 6= a,Y 6= a}, {e(X), f (X,Y )}, Fe f i,
+which represents (n − 1)(n − 2) factors. Next we sum out
+f (a,Y ) from the first parfactor and f (X,Y ) from the second
+parfactor. In both cases a correction will be necessary, as Y
+will no longer among parameters of random variables and
+the resulting parfactors will represent fewer factors than the
+original parfactors.
+In general, as illustrated by Examples 7, 9 and 12, conversion to normal form and #CSP solver create the same number of parfactors. The difference is, that the first method,
+computes a factor component for the resulting parfactors
+once and then applies a different correction for each result-
+
+UAI 2009
+
+KISYNSKI & POOLE
+
+ing parfactor based on the answer from the #CSP solver.
+The second method computes the factor component multiple times, once for each resulting parfactor, but does not
+use a #CSP solver. As these factor components (before applying a correction) are identical, redundant computations
+could be eliminated by caching. We successfully adopted a
+caching mechanism in our empirical test (Section 6.2), but
+expect it to be less effective for larger problems.
+
+1.8
+1.6
+
+
+
+
+
+1.4
+
+
+
+1.2
+1
+
+As in the case of splitting as needed, it might be difficult
+to design an efficient elimination ordering heuristic that
+would work with a #CSP solver. This is because we do not
+known in advance how many parfactors will be obtained as
+a result of summing out. We need to run a #CSP solver to
+obtain this information.
+
+6
+
+10
+
+ 
+ 
+
+EXPERIMENTS
+
+We used Java implementations of tested lifted inference
+methods. Tests were performed on an Intel Core 2 Duo
+2.66GHz processor with 1GB of memory made available
+to the JVM.
+6.1
+
+SPLITTING AS NEEDED VS. SHATTERING
+
+In the first experiment we checked to what extent the overhead of the shattering approach can be minimized by using
+intensional representations and immutable objects that are
+shared whenever possible. We ran tests on the following
+set of parfactors:
+Φ = { h0,
+/ {gQ (), g1 (a)}, F0 i,
+
+[0]
+
+h{X 6= a}, {gQ (), g1 (X)}, F1 i,
+
+[1]
+
+h0,
+/ {g1 (X), g2 (X)}, F2 i,
+
+[2]
+
+h0,
+/ {g2 (X), g3 (X)}, F3 i,
+
+[3]
+
+...,
+h0,
+/ {gk−1 (X), gk (X)}, Fk i,
+
+[k]
+
+h0,
+/ {gk (X)}, Fk+1 i}
+
+[k + 1] .
+
+All functors had the range size 10 and we set Q to the instance of gQ (). We computed the marginal JQ (Φ). Lifted
+inference with shattering first performed total of k splits,
+then proceeded with 2k + 1 multiplications and 2k summations regardless of the elimination ordering. Lifted inference with splitting as needed performed 1 split, k + 2 multiplications and k + 1 summations (for the experiment we
+used the best elimination ordering, that is gk , gk−1 , . . . , g1 ).
+Figure 5 shows the results of the experiment where we varied k from 1 to 100. Even though lifted inference with shattering used virtually the same amount of memory as lifted
+inference with splitting, it was slower because it performed
+more arithmetic operations.
+
+20
+
+40
+
+60
+
+80
+
+100
+
+Figure 5: Speedup of splitting as needed over shattering.
+
+
+
+6
+
+301
+
+CONV−NFM−SUM
+NFM−SUM
+#CSP−SUM
+
+4
+
+10
+
+2
+
+10
+
+1
+
+10
+
+2
+
+10
+
+  
+
+3
+
+10
+
+Figure 6: Summing out with and without a #CSP solver.
+
+6.2
+
+NORMAL FORM PARFACTORS VS. #CSP
+SOLVER
+
+For experiment in this section we randomly generated sets
+of parfactors. There were up to 5 parameterized random
+variables in each parfactor with range sizes varying from 2
+to 10. Constraints sets contained very few (and very often
+zero) constraints and formed sparse CSPs. Most of parfactors were in normal form, which allowed us to account
+for #CSP solver overhead. There were up to 10 parameters present in each parfactor. Parameters were typed with
+the same population. We varied the size of this population
+from 5 to 1000 to verify how well #CSP solver scaled for
+larger populations.
+In this experiment we summed out a parameterized random variable from a parfactor. We compared summing
+out with a help of a #CSP solver (#CSP-SUM) to summing out achieved by converting a parfactor to a set of
+parfactors in normal form and summing out a parameterized random variable from each obtained parfactor without
+a #CSP solver. (We cached factor components as suggested
+in Section 5.2.2). For each population size we generated
+100 parfactors and reported a cumulative time. For the second approach, we reported time including (CONV-NFMSUM) and excluding (NFM-SUM) conversion to normal
+form. Results presented on Figure 6 show significant cost
+of conversion to normal form and advantage of #CSP solver
+for larger population sizes.
+
+302
+
+7
+
+KISYNSKI & POOLE
+
+CONCLUSIONS AND FUTURE WORK
+
+In this paper we analyzed the impact of constraint processing on the efficiency of lifted inference, and explained
+why we cannot ignore its role in lifted inference. We
+showed that a choice of constraint processing strategy has
+big impact on efficiency of lifted inference. In particular,
+we discovered that shattering (de Salvo Braz et al., 2007)
+is never better—and sometimes worse—than splitting as
+needed (Poole, 2003), and that the conversion of parfactors
+to normal form (Milch et al., 2008) is an expensive alternative to using a specialized #CSP solver. Although in this
+paper we focused on exact lifted inference, our results are
+applicable to approximate lifted inference. For example,
+see the recent work of (Singla and Domingos, 2008) that
+uses shattering.
+It is difficult to design an elimination ordering heuristic
+that works well with the splitting as needed approach and a
+#CSP solver. We plan to address this problem in our future
+research.
+Acknowledgments
+The authors wish to thank Brian Milch for discussing the CFOVE algorithm with us. Peter Carbonetto, Michael Chiang and Mark Crowley provided many helpful suggestions
+during the preparation of the paper. This work was supported by NSERC grant to David Poole.
+References
+J. S. Breese. Construction of belief and decision networks.
+Comput Intell, 8(4):624–647, 1992.
+W. L. Buntine. Operations for learning with graphical models. J Artif Intell Res, 2:159–225, 1994.
+L. De Raedt, P. Frasconi, K. Kersting, and S. H. Muggleton, editors. Probabilistic Inductive Logic Programming.
+Springer, 2008.
+R. de Salvo Braz, E. Amir, and D. Roth. Lifted first-order
+probabilistic inference. In Introduction to Statistical Relational Learning. MIT Press, 2007.
+R. Dechter. Constraint Processing. Morgan Kaufmann
+Publishers, 2003.
+L. Getoor and B. Taskar, editors. Introduction to Statistical
+Relational Learning. MIT Press, 2007.
+M. Horsch and D. Poole. A dynamic approach to probabilistic inference using Bayesian networks. In Proc. 6th
+UAI, 155–161, 1990.
+J. Kisyński and D. Poole.
+VE for IN #CSP Java
+package. http://www.cs.ubc.ca/~kisynski/
+code/ve_in_hcsp/, 2006.
+L. Lovász. Combinatorial Problems and Exercises. 2nd
+ed. North-Holland, 1993.
+
+UAI 2009
+
+B. Milch, L. S. Zettlemoyer, K. Kersting, M. Haimes,
+and L. P. Kaelbling. Lifted probabilistic inference with
+counting formulas. In Proc. 23rd AAAI, 1062–1068,
+2008.
+D. Poole. First-order probabilistic inference. In Proc. 18th
+IJCAI, 985–991, 2003.
+P. Singla and P. Domingos. Lifted first-order belief propagation. In Proc. 23rd AAAI, 1094–1099, 2008.
+N. L. Zhang and D. Poole. A simple approach to Bayesian
+network computations. In Proc. 10th AI, 171–178, 1994.
+
+

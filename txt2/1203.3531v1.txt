@@ -1,0 +1,1204 @@
+depth-first, backtracking manner using a meager amount of storage space (proportional to the
+depth of the tree). Moreover, branch-and-bound
+techniques can be employed to prune the search
+space and permit an evaluation without exhaustively traversing the entire tree... an influence diagram can be evaluated by sequentially instantiating the decision and observation nodes (in
+chronological order) while treating the remaining chance nodes as a Bayesian network that supplies the probabilistic parameters necessary for
+tree evaluation. (p. 311)
+However, neither Pearl nor anyone else appears to have
+followed up on this suggestion and implemented such an
+algorithm. The apparent reason is the difficulty of computing effective bounds to prune the search tree. Qi and
+Poole [17] proposed a similar search-based method for
+solving influence diagrams, but with no method for computing bounds; in fact, their implementation relied on the
+trivial infinity upper bound to guide the search. Recently,
+Marinescu [12] proposed a related search-based approach
+to influence diagram evaluation. But again, he proposed no
+method for computing bounds; his implementation relies
+on brute-force search. Even without bounds to prune the
+search space, note that both Qi and Poole and Marinescu
+argue that a search-based approach has advantages – for
+example, it can prune branches that have zero probability.
+
+In this paper, we describe an implemented depth-first
+branch-and-bound search algorithm for influence diagram
+evaluation that includes efficient techniques for computing bounds to prune the search tree. To compute effective bounds, our algorithm adapts and integrates two previous contributions. First, we adapt the work of Nilsson
+and Höhle [14] on computing an upper bound on the maximum expected utility of an influence diagram. The motivation for their work was to bound the quality of strategies
+found by an approximation algorithm for solving limitedmemory influence diagrams, and their bounds are not in
+a form that can be directly used for branch-and-bound
+search. We show how to adapt their approach to branchand-bound search. Second, we adapt the recent work of
+Yuan and Hansen [20] on solving the MAP problem for
+Bayesian networks using branch-and-bound search. Their
+work describes an incremental method for computing upper
+bounds based on join tree evaluation that we show allows
+such bounds to be computed efficiently during branch-andbound search. In addition, we describe some novel methods
+for constructing the search tree and computing probabilities
+and bounds that contribute to an efficient implementation.
+Our experimental results show that this approach leads to
+an exact algorithm for solving influence diagrams that outperforms existing methods for solving multistage influence
+diagrams.
+
+2
+
+Background
+
+We begin with a brief review of influence diagrams and
+algorithms for solving them. We also introduce an example
+of multi-stage decision making that will serve to illustrate
+the results of the paper.
+2.1
+
+Influence Diagrams
+
+An influence diagram is a directed acyclic graph G containing variables V of a decision domain. The variables can be
+classified into three groups, V = X ∪ D ∪ U, where X is
+the set of oval-shaped chance variables that specify the uncertain decision environment, D is the set of square-shaped
+decision variables that specify the possible decisions to be
+made in the domain, and U are the diamond-shaped utility variables representing a decision maker’s preferences.
+As in a Bayesian network, each chance variable Xi ∈ X
+is associated with a conditional probability distribution
+P (Xi |P a(Xi )), where P a(Xi ) is the set of parents of Xi
+in G. Each decision variable Dj ∈ D has multiple information states, where an information state is an instantiation of
+the variables with arcs leading into Dj ; the selected action
+is conditioned on the information state. Incoming arcs into
+a decision variable are called information arcs; variables at
+the origin of these arcs are assumed to be observed before
+the decision is made. These variables are called the information variables of the decision. No-forgetting is typically
+
+assumed for an influence diagram, which means the information variables of earlier decisions are also information
+variables of later decisions. We call these past information
+variables the history, and, for convenience, we assume that
+there are explicit information arcs from history information
+variables to decision variables. Finally, each utility node
+Ui ∈ U represents a function that maps each configuration
+of its parents to a utility value the represents the preference of the decision maker. (Utility variables typically do
+not have other variables as children except multi-attribute
+utility/super-value variables.)
+The decision variables in an influence diagram are typically
+assumed to be temporally ordered, i.e., the decisions have
+to be made in a particular order. Suppose there are n decision variables D1 , D2 , ..., Dn in an influence diagram. The
+decision variables partition the variables in X into a collection of disjoint sets I0 , I1 , ..., In . For each k, where
+0 < k < n, Ik is the set of chance variables that must
+be observed between Dk and Dk+1 . I0 is the set of initial
+evidence variables that must be observed before D1 . In is
+the set of variables left unobserved when decision Dn is
+made. Therefore, a partial order ≺ is defined on the influence diagram over X ∪ D, as follows:
+I0 ≺ D1 ≺ I1 ≺ ... ≺ Dn ≺ In .
+
+(1)
+
+A solution to the decision problem defined by an influence
+diagram is a series of decision rules for the decision variables. A decision rule for Dk is a mapping from each configuration of its parents to one of the actions defined by
+the decision variable. A decision policy (or strategy) is a
+series of decision rules with one decision rule for each decision variable. The goal of solving an influence diagram
+is to find an optimal decision policy that maximizes the expected utility. The maximum expected utility is equal to
+∑
+∑
+∑
+∑
+max
+P (X|D)
+Uj (P a(Uj )).
+max ...
+I0
+
+D1
+
+In−1
+
+Dn
+
+In
+
+j
+
+In general, the summations and maximizations are not
+commutable. The methods presented in Section 2.3 differ
+in the various techniques they use to carry out the summations and maximizations in this order.
+Recent research has begun to relax the assumption of ordered decisions. In particular, Jensen proposes the framework of unconstrained influence diagrams to allow a partial
+ordering among the decisions [9]. Other research relaxes
+the no-forgetting assumption, in particular, the framework
+of limited-memory influence diagrams [10]. Although the
+approach we develop can be extended to these frameworks,
+we do not consider the extension in this paper.
+2.2
+
+Example
+
+To illustrate decision making using multi-stage influence
+diagrams, consider a simple maze navigation problem [6,
+
+(1,1)
+
+ns_0 (2)
+
+x_0 (0)
+
+ns_1 (9)
+
+es_0 (3)
+
+x_1 (7)
+
+(7,9)
+
+(a)
+
+Figure 1: Two maze domains. A star represents the goal.
+14]. Figure 1 shows four instances of the problem. The
+shaded tiles represent walls, the white tiles represent movable space, and the white tiles with a star represent goal
+states. An agent is randomly placed in a non-goal state. It
+has five available actions that it can use to move toward the
+goal: it can move a single step in any of the four compass
+directions, or it can stay in place. The effect of a movement
+action is stochastic. The agent successfully moves in the
+intended direction with probability 0.89. It fails to move
+with probability 0.089, it moves sideways with probability 0.02 (0.01 for each side), and it moves backward with
+probability 0.001. If movement in some direction would
+take it into a wall, that movement has probability zero, and
+the remaining probabilities are normalized. The agent has
+four sensors, one for each direction, which sense whether
+the neighboring tile in that direction is a wall. Each sensor is noisy; it detects the presence of a wall correctly with
+probability 0.9 and mistakenly senses a wall when none is
+present with probability 0.05. The agent chooses an action
+at each of a sequence of stages. If the agent is in the goal
+state after the final stage, it receives a utility value of 1.0;
+otherwise, it receives a utility value of 0.0.
+Figure 2(a) shows the influence diagram for a two-stage
+version of the maze problem. The variables xi and yi represent the location coordinates of the agent at time i, the variables {nsi , esi , ssi , wsi } are the sensor readings in four
+directions at the same time point, and the variable di represents the action taken by the agent. The utility variable
+u assigns a value depending on whether or not the agent
+is in the goal state after the last action is taken. Since the
+same variables occur at each stage, we can make the influence diagram arbitrarily large by increasing the number of
+stages.
+2.3
+
+Evaluation algorithms
+
+Many approaches have been developed for solving influence diagrams. The simplest is to unfold an influence diagram into an equivalent decision tree and solve it in that
+form [7]. Another approach called arc reversal solves an
+influence diagram directly using techniques such as arcreversal and node-removal [15, 18]; when a decision variable is removed, we obtain the optimal decision rule for the
+decision. Several methods reduce influence diagrams into
+
+y_2 (15)
+
+y_1 (8)
+ss_0 (4)
+
+ss_1 (11)
+
+ws_0 (5)
+
+ws_1 (12)
+
+(b)
+
+u
+
+d_1 (13)
+
+d_0 (6)
+y_0 (1)
+
+x_2 (14)
+
+es_1 (10)
+
+(a)
+R2345678
+9 10 11 12 13
+
+01234
+5678
+
+7 8 13
+14 15
+
+(b)
+Figure 2: (a) An example influence diagram and (b) its
+strong join tree. The numbers in both figures stand for the
+indices of the variables. The node with “R” is the strong
+root.
+
+Bayesian networks by converting decision nodes into random variables such that the solution of an inference problem in the Bayesian network correspond to the optimal decision policy for the influence diagram [3, 21]. Another
+method [19] transforms an influence diagram into a valuation network and applies variable elimination to solve the
+valuation network. Recent work compiles influence diagrams into decision circuits and uses the decision circuits
+to compute optimal policies [2]; this approach takes advantage of local structure present in an influence diagram, such
+as deterministic relations.
+In the following, we describe a state-of-the-art method for
+solving an influence diagram using a strong join tree [8].
+This method is viewed by many as the fastest general algorithm, and we use its performance as a benchmark for our
+branch-and-bound approach. A join tree is strong if it has
+at least one clique, R, called the strong root, such that for
+any pair of adjacent cliques, C1 and C2 , with C1 closer to
+R than C2 , the variables in separator S = C1 ∩ C2 must
+appear earlier in the partial order defined in Equation (1)
+than C2 \ C1 . A strong join tree for the influence diagram
+in Figure 2(a) is shown in Figure 2(b).
+An influence diagram can be solved exactly by message
+passing on the strong join tree. Each clique C in the join
+tree contains two potentials, a probability potential ϕC and
+a utility potential ψC . For clique C2 to send a message to
+clique C1 , ϕC1 and ψC1 should be updated as follows [8]:
+
+′
+ϕ′C1 = ϕC1 × ψS ; ψC
+= ψC1 +
+1
+
+ψS
+;
+ϕS
+
+where
+ϕS =
+
+∑
+
+ϕC2 ; ψS = max ϕC2 × ψC2 .
+
+C2 \S
+
+C2 \S
+
+information arcs from each variable in R to D is guaranteed to have a maximum expected utility that is greater than
+or equal to the maximum expected utility for G. We call G∗
+an upper-bound influence diagram for G.
+
+In contrast to the join tree algorithm for Bayesian networks [11], only the collection phase of the algorithm is
+needed to solve an influence diagram. After the collection
+phase, we can obtain the maximum expected utility by carrying out the remaining summations and maximizations in
+the root. In addition, we can extract the optimal decision
+rules for the decision variables from some of the cliques
+that contain these variables.
+
+Use of an upper-bound influence diagram to compute
+bounds only makes sense if the upper-bound influence diagram is simpler and much easier to solve than the original
+influence diagram. In fact, adding information arcs to an
+influence diagram can simplify its evaluation by making
+some other information variables non-requisite. An information variable Ii is said to be non-requisite [10, 13] for a
+decision node D if
+
+Building a join tree for a Bayesian network may fail if the
+join tree is too large to fit in memory. This is also true
+for influence diagrams. In fact, the memory requirement of
+a strong join tree for an influence diagram is even higher
+because of the constrained order in Equation (1). Consequently, the join tree algorithm is typically infeasible for
+solving all but very small influence diagrams.
+
+Ii ⊥ (U ∩ de(D))|D ∪ (P a(D) \ {Ii }),
+
+3
+
+Computing bounds
+
+To implement a branch-and-bound algorithm for solving
+influence diagrams, we need a method for computing
+bounds – in particular, for computing upper bounds on the
+utility that can be achieved beginning at a particular stage
+of the problem, given the history up to that stage. A trivial upper bound is the largest state-dependent value of the
+utility node of the influence diagram. In this section, we
+discuss how to compute more informative bounds. There
+has been little previous work on this topic. Nilsson and
+Höhle [14] develop an approach to bounding the suboptimality of policies for limited-memory influence diagrams
+that are found by an approximation algorithm. Dechter [4]
+describes an approach to computing upper bounds in an
+influence diagram that is based on mini-bucket partitioning. Neither work considers how to use these bounds in a
+branch-and-bound search algorithm.
+The approach we develop in the rest of this paper is based
+on the work of Nilsson and Höhle [14], which we extend by
+showing how it can be used to compute bounds for branchand-bound search. The general strategy is to create an influence diagram with a value that is guaranteed to be an
+upper bound on the value of the original influence diagram,
+but that is also much easier to solve. We use the fact that
+additional information can only increase the value of an influence diagram. Since this reflects the well-known fact
+that information value is non-negative, we omit (for space
+reasons) a proof of the following theorem.
+Theorem 1. Let G be an influence diagram and D a decision variable in G. Let I be D’s information variables
+and R another set of random variables in G that are nondescendants of D. Then the influence diagram G∗ that results from making R into information variables by adding
+
+(2)
+
+where de(D) are the descendants of D. A reduction of
+an influence diagram is obtained by deleting all the nonrequisite information arcs [14].
+Because of the no-forgetting assumption, a decision variable at a late stage may have a large number of history information variables. For decision making under imperfect
+information, all of these information variables are typically
+requisite. As a result, the size of the decision rules grows
+exponentially as the number of decision stages increases,
+which is the primary reason multi-stage influence diagrams
+are very difficult to solve.
+In constructing an upper-bound influence diagram, we want
+to add information arcs that make some or all of the history
+information variables for a decision node non-requisite, in
+order to simplify the influence diagram and make it easier to solve. We adopt the strategy proposed by Nilsson
+and Höhle [14]. Let nd(X) be the non-descendant variables of variable X, let f a(X) = P a(X) ∪ {X} be the
+family of variable X (i.e., the variable and its parents), let
+f a(X) = ∪Xi ∈X f a(Xi ) be the family of the set of variables X (i.e., the variables and their parents), and let △j be
+{D1 , ...Dj } be a sequence of decision variables from stage
+1 to stage j. The following theorem is proved by Nilsson
+and Höhle [14].
+Theorem 2. For an influence diagram with the constrained
+order in Equation (1), if we add to each decision variable
+Dj the following new information variables in the order of
+j = n, ..., 1,
+Nj = arg minB⊆(Bj ∩nd(Dj )) {|B||f a(△j )
+⊥ (U ∩ de(Dj ))|(B ∪ {Dj })},
+
+(3)
+
+where
+
+{
+U∪D
+j=k,
+Bj =
+∩ki=j+1 {n ∈ V |n ⊥ (U ∩ de(Dj ))|f a(Di )} j<k,
+the following holds for any Dj in the resulting influence
+diagram:
+(de(Dj ) ∩ U) ⊥ f a(△i−1 )|f a(Dj ).
+
+(4)
+
+ns_0 (2)
+
+3
+Past state
+
+1
+
+Sufficient
+Information D
+Set
+
+Future state
+
+U
+
+2
+
+x_0 (0)
+
+ns_1 (9)
+
+es_0 (3)
+
+x_1 (7)
+
+ss_0 (4)
+
+ss_1 (11)
+
+ws_0 (5)
+
+ws_1 (12)
+
+(a)
+
+What this theorem means is that for each decision variable Dj in an influence diagram, there is a set of information variables Nj such that the optimal policy for Dj depends only on these information variables, and is otherwise
+history-independent. Note that the set Nj for decision variable Dj can contain both information variables from the
+original influence diagram and information variables created by adding new information arcs to the diagram. The
+set Nj of information variables can be interpreted as the
+current “state” of the decision problem, such that if the decision maker knows the current state, it does not need to
+know any previous history in order to select an optimal action; in this sense, the state satisfies the Markov property.
+
+(b)
+
+We call Nj a sufficient information set (SIS) for Dj . The intuition behind this approach is illustrated by Figure 3. The
+shaded oval shows the SIS set ND for decision D. The
+past state affects the variables in ND ∪ {D}, illustrated by
+the arc labeled 1, and ND ∪ {D} affects the future state,
+as illustrated by arc 2. The future state further determines
+the values of the utility variables. ND ∪ {D} d-separates
+the past and future states and prevents the direct influence
+shown by arc 3. The concept of a sufficient information set
+is related to the concept of extremality, as defined in [21],
+and the concept of blocking, as defined in [13].
+To construct an upper-bound influence diagram, we find the
+SIS set for each decision in the order of Dn , ..., D1 and
+make the variables in each SIS set information variables
+for the corresponding decisions. We then delete the nonrequisite information arcs. Consider the influence diagram
+in Figure 4(a) as an example. The information set for d1 is
+originally {ns0 , es0 , ss0 , ws0 , d0 , ns1 , es1 , ss1 , ws1 }. We
+find that its sufficient information (SIS) set is {x1 , y1 }. We
+
+y_2 (15)
+
+y_1 (8)
+
+Figure 3: Relations between past and future information
+states and the minimum sufficient information set.
+
+Consider a decision-making problem in a partially observable domain, such as the maze domain of Section 2.2. The
+agent cannot directly observe its location in the maze and
+must rely on imperfect sensor readings to infer its location.
+In this domain, adding information arcs from the location
+variables to a decision variable, so that the agent know the
+current location at the time it chooses an action, makes both
+current and history sensor readings non-requisite, which results in a much simpler influence diagram, which in this
+case serves as an upper-bound influence diagram.
+
+u
+
+d_1 (13)
+
+d_0 (6)
+y_0 (1)
+
+x_2 (14)
+
+es_1 (10)
+
+Figure 4: (a) the upper-bound influence diagram for the
+diagram in Figure 2(a), and (b) its strong join tree.
+
+also find that the SIS set for d0 is {x0 , y0 }. By making
+{x1 , y1 } and {x0 , y0 } information variables for d1 and d0
+respectively, and reducing the influence diagram, we obtain
+the much simpler influence diagram in Figure 4(a). The
+strong join tree for the new influence diagram is shown in
+Figure 4(b), which is also much smaller than the strong
+join tree for the original model. Since the upper-bound influence diagram assumes the actual location is directly observable to the agent, it effectively transforms a partially
+observable decision problem into a fully observable one.
+The resulting influence diagram and, hence, its join tree is
+much easier to solve.
+Finding the sufficient information set (SIS) for a decision
+variable in an influence diagram is equivalent to finding a
+minimum separating set in the moralized graph of the influence diagram [14]. Acid and de Campos [1] propose
+an algorithm based on the Max-flow Min-cut algorithm [5]
+for finding a minimum separating set between two sets of
+nodes in a Bayesian network with some of the separating
+variables being fixed. We use their algorithm to find the SIS
+sets. The two sets of nodes are f a(△j ) and U ∩ de(Dj ).
+The only fixed separating variable is Dj . The algorithm
+first introduces two dummy variables, source and sink, to
+the moralized graph. The source is connected to the neighboring variables of f a(△j ), and the sink to the variables in
+de(Dj ) ∩ an(U ∩ de(Dj )). We then create a max-flow network out of the undirected graph by assigning each edge
+capacity 1.0. A solution gives a minimum separating set
+between the sink and source that contains Dj .
+We briefly mention some issues that are not described by
+Nilsson and Höhle [14], but that need to be considered in
+an implementation. The first issue is how to define the size
+of an SIS set. Theorem 2 uses the cardinality of the SIS
+set as the minimization criterion. Another viable choice is
+to use weight, defined as the product of number of states,
+of the variables in an SIS set as the minimization criterion.
+
+The relation between these two criteria is similar to the relation between treewidth and weight in constructing a junction tree. While treewidth tells us how complex a Bayesian
+network is at the structure level, weight provides an idea
+on how large the potentials of the junction tree are at the
+quantitative level. Both methods have been used. In our
+implementation, we use the cardinality.
+A second issue is that multiple candidate SIS sets may exist
+for a decision variable. In that case, we need some criterion
+for selecting the best one. In our implementation, we select
+the candidate SIS set that is closest to the descendant utility
+variables of the decision. Note that other candidate sets are
+all d-separated from the utility node by the closest SIS set.
+This choice has the advantage that the resulting influence
+diagram is easiest to evaluate; however, other choices may
+result in an influence diagram that gives a tighter bound.
+
+4
+
+Branch-and-bound search
+
+In this section, we describe how to use the upper-bound
+influence diagram to compute bounds for a depth-first
+branch-and-bound search algorithm that solves the original influence diagram. We begin by showing how to represent the search space as an AND/OR tree. A naive approach to computing bounds requires evaluating the entire upper-bound influence diagram at each OR node of the
+search tree, which is computationally prohibitive. To make
+branch-and-bound search feasible, we rely on an incremental approach to computing bounds proposed by Yuan and
+Hansen [20] for solving the MAP problem in Bayesian networks using branch-and-bound search. We show how to
+adapt that approach in order to solve influence diagrams
+efficiently.
+4.1
+
+AND/OR tree search
+
+We represent the search space for influence diagram evaluation as an AND/OR tree. The nodes in an AND/OR tree
+are of two types: AND nodes and OR nodes. AND nodes
+correspond to chance variables; a probability is associated
+with each arc originating from an AND node and the probabilities of all the arcs from an AND node sum to 1.0. The
+OR nodes correspond to decision variables. Each of the
+leaf nodes of the tree has a utility value that is derived from
+the utility node of the influence diagram.
+Qi and Poole [17] create an AND/OR tree in which each
+layer of AND nodes alternates with a layer of OR nodes.
+Each AND node in this tree corresponds to the information
+set of a decision variable in the influence diagram, which
+is a set of information variables. To compute the probability for each arc emanating from an AND node in this
+tree, however, it is necessary to have the joint probability distributions of all the information sets; these are often
+not readily available, since variables in the same informa-
+
+ns0
+es0
+ss0
+
+ws0
+d0
+
+es0
+ss0
+
+ss0
+
+ws0
+
+ws0
+
+d0
+
+d0
+
+ss0
+
+ws0
+d0
+
+Figure 5: The AND/OR tree used in our approach. Ovalshaped nodes are AND nodes, and square-shaped nodes are
+OR nodes.
+tion set can belong to different clusters of a join tree. For
+computational convenience, our AND/OR tree is based on
+the structure of the strong join tree in Figure 4(b). For the
+maze example, we order the variables in the information set
+{ns0 , es0 , ss0 , ws0 } according to the order in Equation (5).
+Note that the join tree does not have a clique that contains
+all four variables; in fact, they are all in different cliques.
+So we consider the variables one by one. That means that
+our AND/OR tree allows several layers of AND nodes to
+alternate with a layer of OR nodes. See Figure 5 for an
+example of the kind of AND/OR tree constructed by our
+search algorithm, and note that the first four layers of this
+AND/OR tree are all AND layers.
+Each path from the root of the AND/OR tree to a leaf corresponds to a complete instantiation of the information variables and decision variables of the influence diagram, that
+is, a complete history. Since we use the AND/OR tree to
+find an optimal decision policy for the original influence
+diagram, we have to construct an AND/OR tree that is consistent with the original constrained order. For the influence
+diagram in Figure 2(a), the partial order is
+{ns0 , es0 , ss0 , ws0 } ≺ {d0 } ≺ {ns1 , es1 , ss1 , ws1 }
+≺ {d1 } ≺ {x0 , y0 , x1 , y1 , x2 , y2 , u},
+(5)
+and the decision variables must occur in this order along
+any branch.
+We define a valuation function for each node in an
+AND/OR tree as follows: (a) for a leaf node, the value is
+its utility value; (b) for an AND node, the value of is the
+sum of the values of its child nodes weighted by the probabilities of the outgoing arcs; (c) for an OR node, the value
+is the maximum of the summed utility values of each child
+node and corresponding arc. We use this valuation function
+to find an optimal strategy for the influence diagram.
+We represent a strategy for a multi-stage influence diagram
+as a policy tree that is defined as follows. A policy tree of
+an AND/OR tree is a subtree such that: (a) it consists of
+the root of the AND/OR tree; (b) if a non-terminal AND
+node is in the policy tree, all its children are in the policy
+tree; and (c) if a non-terminal OR node is in the policy
+
+tree, exactly one of its children is in the policy tree. Given
+an AND/OR tree that represents all possible histories and
+strategies for an influence diagram, the influence diagram
+is solved by finding a policy tree with the maximum value
+at the root, where the value of the policy tree is computed
+based on the valuation function. Depth-first branch-andbound search can be used to find an optimal policy tree.
+The AND/OR tree is constructed on-the-fly during the
+branch-and-bound search, and it is important to do so in a
+way that allows the probabilities and values to be computed
+as efficiently as possible. We use the maze problem and the
+AND/OR tree in Figure 5 as an example. (The upper-bound
+influence diagram and join tree are shown in Figure 4.) We
+have already pointed out that including more layers in our
+AND/OR tree allows us to more easily use the probabilities
+and utilities computed by the join tree. If we start by expanding ns0 (where expanding a node refers to generating
+its child nodes in the AND/OR tree), we need the probabilities of P (ns0 ) to label the outgoing arcs. We can readily
+look up the probabilities from clique (0, 1, 2) after an initial full join tree evaluation. Note that we use the join tree
+of the upper-bound influence diagram to compute the probabilities. We can do that because these probabilities are the
+same as those computed from the original influence diagram. This is due to the fact that the same set of actions
+will reduce both models into the same Bayesian networks.
+Adding information arcs to an influence diagram, in order
+to create an upper-bound influence diagram, only changes
+the expected utilities of the decision variables.
+After expanding ns0 , we expand any of {es0 , ss0 , ws0 }.
+Suppose the next variable is es0 , we need the conditional
+probabilities of es0 given ns0 . These probabilities can be
+computed by setting the state of ns0 as new evidence to
+the join tree and evaluating the join tree again. The same
+process is used in expanding {ss0 , ws0 }.
+Note that we do not have to expand one variable at a time.
+If a clique has multiple variables in the same information set, the variables can be expanded together because a
+joint probability distribution over them can be easily computed. Expanding them together also saves the need to
+do marginalization. For example, variables x1 , y1 , x2 , y2
+(7,8,14,15) are in the same information group and also reside in a same clique. In this case, we can expand them as
+a single layer in the AND/OR tree.
+After {ns0 , es0 , ss0 , ws0 } are expanded, we expand d0 as
+an OR layer. This is where the upper bounds are needed.
+We set the states of {ns0 , es0 , ss0 , ws0 } as evidence to the
+join tree and compute the expected utility values for d0 by
+reevaluating the join tree. The expected utilities of d0 are
+upper bounds for the same decision scenarios of the original model. We can use the upper bounds to select the most
+promising decision alternative to search first. The exact
+value will be returned once the subtree is searched. If the
+
+value is higher than the upper bounds of the remaining decision alternatives, these alternatives are immediately pruned
+because they cannot be part of an optimal decision policy.
+We repeat the above process until a complete policy tree is
+found.
+4.2
+
+Incremental join tree evaluation
+
+It is clear that repeated join tree evaluation has to be performed in computing the upper bounds and conditional
+probabilities. A naive approach is at each time to set the
+states of instantiated variables as evidence and perform a
+full join tree evaluation. However, that is too costly. We can
+use an efficient incremental join tree evaluation method to
+compute the probabilities and upper-bound utilities, based
+on the incremental join tree evaluation method proposed by
+Yuan and Hansen [20] for solving the MAP problem.
+The key idea is that we can choose a particular order of the
+variables that satisfies the constraints of Equation (5) such
+that an incremental join tree evaluation scheme can be used
+to compute the information. Given such an order, we know
+exactly which variables have been searched and which variable will be searched next at each search step. We only
+need to send messages from the parts of the join tree that
+contain the already searched variables to a clique with the
+next search variable. For example, after we search es0 , the
+only message needs to be sent to obtain P (ns0 |es0 ) is the
+message from clique (0, 1, 3) to (0, 1, 2). There is no need
+to evaluate the whole join tree. If we choose the following
+search order for the maze problem
+ns0 , es0 , ss0 , ws0 , d0 , ns1 , es1 , ss1 , ws1 , d1 , x0 , y0 ,
+x1 , y1 , x2 , y2 ,
+we can use an incremental message passing in the direction
+of the dashed arc in Figure 4(b) to compute the probabilities
+and upper bounds needed in one downward pass of a depthfirst search.
+Both message collection and distribution are needed in this
+new scheme, unlike evaluating a strong join tree for the
+original influence diagram. The messages being propagated contain two parts: utility potentials and probability
+potentials. The distribution phase is typically needed to
+compute the conditional probabilities. For example, suppose we decide to expand es0 before ns0 , we have to
+send a message from clique (0, 1, 3) to (0, 1, 2) to obtain
+P (ns0 |es0 ). We only need to send the probability potential in message distribution. We do not need to send utility
+potentials because past payoffs do not count towards the
+expected utilities of future decisions.
+4.3
+
+Efficient backtracking
+
+We use depth-first branch-and-bound (DFBnB) to utilize
+the efficient incremental bound computation. Depth-first
+
+a
+
+b
+
+stages
+2
+3
+4
+5
+2
+3
+4
+5
+
+Join tree
+time mem.
+15
+8.0
+640 238.4
+16
+8.0
+640 238.4
+-
+
+time
+125
+1s812
+59s610
+32m55s766
+109
+2s109
+43s641
+18m00s437
+
+mem.
+3.2
+4.7
+23.9
+343.0
+3.2
+4.7
+23.9
+323.1
+
+DFBnB
+policy
+783
+12,559
+200,975
+3,215,631
+783
+12,559
+200,975
+3,215,631
+
+#bounds
+816
+13,104
+446,255
+14,546,815
+816
+14,734
+325,820
+7,883,235
+
+#zeros
+0
+0
+0
+0
+0
+0
+0
+0
+
+Exhaustive search
+time mem. #zeros
+703
+3.1
+0
+43s218
+4.7
+0
+47m42s625
+25.1
+0
+688
+3.1
+0
+43s953
+4.7
+0
+49m00s516
+25.1
+0
+-
+
+Table 1: Comparison of three algorithms (join tree algorithm, DFBnB using the join tree bounds, and exhaustive search of
+the AND/OR tree) in solving maze problems a and b for different numbers of stages. The symbol ‘-’ indicates the problem
+could not be solved, due to memory limits in the case of the join tree algorithm, or due to a three-hour time limit in the
+case of the search algorithms. Running time is in hours (h), minutes (m), seconds (s) and milliseconds. Memory (mem.) is
+in megabytes and is the peak amount of memory used by the algorithm; “policy” is the count of nodes (both OR and AND
+nodes) in the part of the search tree containing the optimal policy tree – it is the same for both DFBnB and exhaustive
+search; “#bounds” is the count of times a branch from an OR node was pruned based on bounds; “#zeros” is the count of
+times a branch from an AND node was pruned because it had zero probability.
+search makes sure that the search need not jump to a different search branch before backtracking is needed. In other
+words, the join tree only needs to work with one search
+history at a time.
+We do need to backtrack to a previous search node once
+we finish a search branch or realize that a search branch is
+not promising and should be pruned. We need to retract all
+the newly set evidence since the generation of that search
+node and restore the join tree to a previous state. One way
+to achieve this is to reinitialize the join tree with correct
+evidence and perform a full join tree evaluation, which we
+have already pointed out is too costly. Instead, we cache
+the potentials and separators along the message propagation path before changing them by either setting evidence
+or overriding them with new messages. When backtracking, we simply restore the most recently cached potentials
+and separators in the reverse order. The join tree will be
+restored to the previous state with no additional computations. This backtracking method is much more efficient
+than reevaluating the whole join tree. For solving the MAP
+problem for Bayesian networks, Yuan and Hansen [20]
+show that the incremental method is more than ten times
+faster than full join tree evaluation in depth-first branchand-bound search.
+
+5
+
+Empirical Evaluation
+
+We compared the performance of our algorithm against
+both the join tree algorithm [8] and exhaustive search of
+the AND/OR tree (i.e., no bounds are used for pruning).
+Experiments were run on a 2.4 GHz Duo processor with 3
+gigabytes of RAM running Windows XP.
+The results in Table 1 are for the two maze problems in
+Figure 1, which we solved for different numbers of stages.
+When there are only two or three stages, the join tree al-
+
+gorithm is most efficient. This is because the strong join
+trees for these influence diagrams are rather small and can
+be built successfully. Once the join trees are built, only
+one collection phase is necessary to solve the influence diagram; by contrast, the depth-first branch-and-bound algorithm (DFBnB) algorithm must perform repeated message
+propagations to compute upper bounds and probabilities
+during the search. For more then three stages, however, the
+join tree algorithm cannot solve the maze models because
+the strong join trees are too large to fit in memory. Because the exhaustive search algorithm only needs to store
+the search tree and policy, it can solve the maze models
+for up to four stages, although it takes more then 45 minutes to do so. The DFBnB algorithm can solve the maze
+models for up to five stages in less time than it takes the
+exhaustive search algorithm to solve them for four stages,
+demonstrating the advantage of using bounds to prune the
+search tree. Table 1 includes the number of times a branch
+of the search tree is pruned based on bounds, as well as the
+number of times a branch with zero probability is pruned.
+For the maze models with their original parameter settings,
+every branch of the search tree has non-zero probability.
+Previous work has argued that one of the advantages of
+search algorithms for influence diagram evaluation is that
+they can prune branches of the search tree that have zero
+probability, even without bounds [12, 17]. To test this argument, as well as to illustrate the effect of different problem
+characteristics on algorithm performance, we modified the
+maze models described in Section 2.2. First, we removed
+some noise from the sensors. Each of the four sensors reports a wall in the corresponding direction of the compass.
+In the original problem, each sensor is noisy; it detects the
+presence of a wall correctly with probability 0.9 and mistakenly senses a wall when none is present with probability
+0.05. As a result, every sensor reading is possible in every state and there are no zero-probability branches. We
+
+stages
+2
+3
+4
+5
+6
+2
+3
+4
+5
+6
+
+a
+
+b
+
+a
+
+b
+
+stages
+2
+3
+4
+5
+6
+7
+2
+3
+4
+5
+6
+7
+
+Join tree
+time mem.
+16
+8.0
+641 238.4
+15
+8.0
+641 238.4
+-
+
+Maze domains modified by removing some noise from sensors
+DFBnB
+Exhaustive search
+time mem.
+policy #bounds
+#zeros
+time mem.
+#zeros
+140
+3.1
+224
+34
+246
+62
+3.1
+312
+1s172
+3.6
+849
+107
+2,598
+781
+3.5
+4,616
+15s281
+4.3
+2,843
+798
+28,282
+9s828
+4.1
+61,320
+2m25s266
+5.5
+9,076
+6,282
+325,146
+4m04s062
+4.3
+773,768
+12m03s828
+6.3 28,413
+41,921 2,885,925
+1h0m26s078
+7.9
+9,652,872
+109
+3.2
+261
+51
+175
+79
+3.1
+292
+1s203
+3.6
+1,136
+186
+2,507
+1s109
+3.5
+5,876
+14s203
+4.4
+4,244
+660
+29,458
+16s391
+4.3
+88,948
+1m39s046
+5.9 15,030
+2,302
+229,003
+7m59s218
+6.0
+1,255,284
+5m14s047
+10.0 52,240
+58,058 1,442,212 1h57m22s625
+10.9 17,418,100
+
+Maze domains modified by removing some noise from both actions and sensors
+Join tree
+DFBnB
+Exhaustive search
+time mem.
+time mem.
+policy #bounds
+#zeros
+time mem.
+#zeros
+16
+8.0
+110
+3.2
+177
+30
+206
+109
+3.1
+276
+594 238.4
+750
+3.7
+562
+99
+1,818
+1s015
+3.5
+3,192
+5s359
+4.1
+1,504
+276
+13,276
+10s234
+4.0
+33,660
+50s453
+4.8
+4,216
+807
+124,312
+1m44s406
+4.7
+343,843
+5m09s328
+6.0 11,198
+2,236
+767,084 17m39s812
+5.9 3,490,703
+- 36m59s906
+8.3 29,653
+5,947 4,821,057
+15
+8.0
+94
+3.1
+203
+45
+164
+156
+3.1
+278
+500 238.4
+672
+3.7
+727
+165
+1,602
+1s391
+3.5
+4,047
+5s297
+4.1
+2,029
+524
+13,601
+14s984
+4.0
+46,812
+27s688
+5.1
+5,540
+1,557
+72,518
+2m36s313
+4.9
+504,264
+2m04s812
+6.7 15,625
+4,941
+335,185 30m24s453
+6.6 5,312,539
+- 18m13s157
+10.5 43,673
+16,639 2,984,966
+-
+
+Table 2: Comparison of three algorithms (join tree algorithm, DFBnB using the join tree bounds, and exhaustive search
+of the AND/OR tree) in solving maze problems a and b with modified parameters; for the results in the top table, some
+noise is removed from the sensors only; for the results in the bottom table, some noise is removed from the actions and the
+sensors. Removing some noise from the actions and sensors results in more zero-probability branches that can be pruned,
+allowing the search algorithms (but not the join tree algorithm) to solve the problem for a larger number of stages.
+modified the model so that each sensor accurately detects
+whether a wall is present in its direction of the compass.
+With this change, the maze problem remains partially observable, but the search tree contains many zero-probability
+branches, as can be seen from the results in Table 2. Since
+the search algorithms can prune zero-probability branches,
+the exhaustive search algorithm can now solve the problem
+for up to five stages and the DFBnB algorithm can solve
+the problem for up to six stages.
+We next made an additional change to the transition probabilities for actions. In the original problem, the agent successfully moves in the intended direction with probability
+0.89 (as long as there is not a wall). It fails to move with
+probability 0.089, it moves sideways with probability 0.02
+(0.01 for each side), and it moves backward with probability 0.001. We modified these transition probabilities so that
+the agent still moves in the intended direction with probability 0.89; but otherwise, it stays in the same position with
+probability 0.11. The effects of the agent’s actions are still
+stochastic, but they are more predictable, and this allows
+the search tree to be pruned even further. As a result, the
+
+exhaustive search algorithm can solve the problem for up to
+six stages and the DFBnB algorithm can solve the problem
+for up to seven stages.
+Note that changing the problem characteristics has no effect on the performance of the join tree algorithm. The
+join tree algorithm solves the influence diagram for all information states, including those that have zero probability
+and those that are unreachable from the initial state; as a
+result, its memory requirements explode exponentially in
+the number of stages and the algorithm quickly becomes
+infeasible. Although the policy tree that is returned by the
+search algorithms can also grow exponentially in the number of stages, it does so much more slowly because so many
+branches can be pruned. As is vividly shown by the results
+for the two different mazes and for different parameter settings, the performance of the search algorithms is sensitive
+to problem characteristics – precisely because the search
+algorithms exploit a form of problem structure that is not
+exploited by the join tree algorithm. In addition, the results
+show the effectiveness of bounds in scaling up the searchbased approach.
+
+6
+
+Conclusion
+
+We have described the first implementation of a depthfirst branch-and-bound search algorithm for influence diagram evaluation. Although the idea has been proposed
+before, we adapted and integrated contributions from related work and introduced a number of new ideas to make
+the approach computationally feasible. In particular, we
+described an efficient approach for using the join tree algorithm to compute upper bounds to prune the search tree.
+The idea is to generate an upper-bound influence diagram
+by allowing each decision variable to be conditioned on additional information that makes the remaining history nonrequisite, thus simplifying the influence diagram. Then
+a join tree of the upper-bound influence diagram is used
+to incrementally compute upper bounds for the depth-first
+branch-and-bound search. We have also described a new
+approach to constructing the search tree based on the structure of the strong join tree of the upper-bound influence
+diagram. Experiments show that the resulting depth-first
+branch-and-bound search algorithm outperforms the stateof-the-art join tree algorithm in solving multistage influence diagrams, at least when there are more than three
+stages.
+We are currently considering how to extend this approach
+to solve limited-memory influence diagrams [10], which
+typically have many more stages. We are also exploring approaches to compute more accurate bounds for pruning the
+search tree. Finally, we are considering approximate and
+bounded-optimal search algorithms for solving larger influence diagrams using the same upper bounds and AND/OR
+search tree.
+Acknowledgments This research was support in part by
+NSF grants IIS-0953723 and EPS-0903787, and by the
+Mississippi Space Grant Consortium and NASA EPSCoR
+program.
+
+References
+
+Intelligence Planning Systems (AIPS-2000), Breckenridge,
+CO, USA, 2000.
+[5] L. R. Ford and D. R. Fulkerson. Maximal flow through a network. Canadian Journal of Mathematics, 8:399–404, 1956.
+[6] M. C. Horsch and D. Poole. An anytime algorithm for decision making under uncertainty. In Proceedings of the 14th
+Annual Conference on Uncertainty in Artificial Intelligence
+(UAI-98), 1998.
+[7] R. A. Howard and J. E. Matheson. Influence diagrams.
+In R. A. Howard and J. E. Matheson., editors, The Principles and Applications of Decision Analysis, pages 719–762,
+Menlo Park, CA, 1981.
+[8] F. Jensen, F. V. Jensen, and S. L. Dittmer. From influence
+diagrams to junction trees. In Proceedings of the Tenth Conference on Uncertainty in Artificial Intelligence, pages 367–
+373. Morgan Kaufmann, 1994.
+[9] F. V. Jensen. Unconstrained influence diagrams. In Proc.
+of the 18th International Conference on Uncertainty in Artificial Intelligence (UAI-02), pages 234–241. Morgan Kaufmann Publishers, 2002.
+[10] S. L. Lauritzen and D. Nilsson. Representing and solving
+decision problems with limited information. Management
+Science, 47:1235–1251, 2001.
+[11] S. L. Lauritzen and D. J. Spiegelhalter. Local computations
+with probabilities on graphical structures and their application to expert systems. Journal of the Royal Statistical Society, Series B (Methodological), 50(2):157–224, 1988.
+[12] R. Marinescu. A new approach to influence diagram evaluation. In Proceedings of the 29th SGAI International Conference on Innovative Techniques and Applications of Artificial
+Intelligence, Cambridge, UK, 2009.
+[13] T. D. Nielsen and F. V. Jensen. Welldefined decision scenarios. In Proceedings of the 15th Annual Conference on
+Uncertainty in Artificial Intelligence (UAI-99), pages 502–
+511, 1999.
+[14] D. Nilsson and M. Hohle. Computing bounds on expected
+utilities for optimal policies based on limited information.
+Technical Report 94, Dina Research, 2001.
+[15] S. M. Olmsted. On representing and solving decision
+problems. PhD thesis, Stanford University, EngineeringEconomic Systems Department, 1983.
+
+[1] S. Acid and L. de Campos. An algorithm for finding minimum d-separating sets in belief networks. In Proceedings of
+the 12th Annual Conference on Uncertainty in Artificial Intelligence (UAI-96), pages 3–10, San Francisco, CA, 1996.
+Morgan Kaufmann.
+
+[16] J. Pearl. Probabilistic Reasoning in Intelligent Systems:
+Networks of Plausible Inference. Morgan Kaufmann Publishers, Inc., San Mateo, CA, 1988.
+
+[2] D. Bhattacharjya and R. Shachter. Evaluating influence diagrams with decision circuits. In Proceedings of the TwentyThird Conference on Uncertainty in Artificial Intelligence,
+pages 9–16. AUAI Press, 2007.
+
+[18] R. D. Shachter. Evaluating influence diagrams. Oper. Res.,
+34(6):871–882, 1986.
+
+[3] G. Cooper. A method for using belief networks as influence
+diagrams. In Proceedings of the Fourth Conference on Uncertainty in Artificial Intelligence, pages 55–63, Minneapolis, MN, USA, 1988. Elsevier Science, New York, NY.
+[4] R. Dechter. An anytime approximation for optimizing policies under uncertainty. In Workshop on Decision Theoretic
+Planning, at the 5th International Conference on Artificial
+
+[17] R. Qi and D. Poole. A new method for influence diagram
+evaluation. Computational Intelligence, 11:498–528, 1995.
+
+[19] P. Shenoy. Valuation based systems for Bayesian decision
+analysis. Operations Research, 40:463–484, 1992.
+[20] C. Yuan and E. A. Hansen. Efficient computation of jointree bounds for systematic MAP search. In Proceedings
+of 21st International Joint Conference on Artificial Intelligence (IJCAI-09), pages 1982–1989, Pasadena, CA, 2009.
+[21] N. L. Zhang. Probabilistic inference in influence diagrams.
+In Computational Intelligence, pages 514–522, 1998.
+
+

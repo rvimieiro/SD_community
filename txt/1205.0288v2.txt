@@ -1,0 +1,1977 @@
+arXiv:1205.0288v2 [cs.LG] 7 Jan 2013
+
+A Randomized Mirror Descent Algorithm
+for Large Scale Multiple Kernel Learning
+
+Arash Afkanpour
+
+András György
+
+Csaba Szepesvári
+
+Michael Bowling
+
+Department of Computing Science
+University of Alberta
+Edmonton, AB
+{afkanpou,gyorgy,szepesva,mbowling}@ualberta.ca
+Abstract
+We consider the problem of simultaneously learning to linearly combine a very large
+number of kernels and learn a good predictor based on the learnt kernel. When the
+number of kernels d to be combined is very large, multiple kernel learning methods whose
+computational cost scales linearly in d are intractable. We propose a randomized version
+of the mirror descent algorithm to overcome this issue, under the objective of minimizing
+the group p-norm penalized empirical risk. The key to achieve the required exponential
+speed-up is the computationally efficient construction of low-variance estimates of the
+gradient. We propose importance sampling based estimates, and find that the ideal
+distribution samples a coordinate with a probability proportional to the magnitude of
+the corresponding gradient. We show the surprising result that in the case of learning
+the coefficients of a polynomial kernel, the combinatorial structure of the base kernels
+to be combined allows the implementation of sampling from this distribution to run
+in O(log(d)) time, making the total computational cost of the method to achieve an optimal solution to be O(log(d)/2 ), thereby allowing our method to operate for very large
+values of d. Experiments with simulated and real data confirm that the new algorithm is
+computationally more efficient than its state-of-the-art alternatives.
+
+1
+
+Introduction
+
+We look into the computational challenge of finding a good predictor in a multiple kernel
+learning (MKL) setting where the number of kernels is very large. In particular, we are
+interested in cases where the base kernels come from a space with combinatorial structure
+and thus their number d could be exponentially large. Just like some previous works (e.g.
+Rakotomamonjy et al., 2008; Xu et al., 2008; Nath et al., 2009) we start with the approach
+that views the MKL problem as a nested, large scale convex optimization problem, where
+the first layer optimizes the weights of the kernels to be combined. More specifically, as the
+1
+
+objective we minimize the group p-norm penalized empirical risk. However, as opposed to
+these works whose underlying iterative methods have a complexity of Ω(d) for just any one
+iteration, following (Nesterov, 2010, 2012; Shalev-Shwartz and Tewari, 2011; Richtárik and
+Takáĉ, 2011) we use a randomized coordinate descent method, which was effectively used in
+these works to decrease the per iteration complexity to O(1). The role of randomization in our
+method is to use it to build an unbiased estimate of the gradient at the most recent iteration.
+The issue then is how the variance (and so the number of iterations required) scales with d.
+As opposed to the above mentioned works, in this paper we propose to make the distribution
+over the updated coordinate dependent on the history. We will argue that sampling from a
+distribution that is proportional to the magnitude of the gradient vector is desirable to keep
+the variance (actually, second moment) low and in fact we will show that there are interesting
+cases of MKL (in particular, the case of combining kernels coming from a polynomial family
+of kernels) when efficient sampling (i.e., sampling at a cost of O(log d)) is feasible from this
+distribution. Then, the variance is controlled by the a priori weights put on the kernels,
+making it potentially independent of d. Under these favorable conditions (and in particular,
+for the polynomial kernel set with some specific prior weights), the complexity of the method
+as a function of d becomes logarithmic, which makes our MKL algorithm feasible even for
+large scale problems. This is to be contrasted to the approach of Nesterov (2010, 2012) where
+a fixed distribution is used and where the a priori bounds on the method’s convergence rate,
+and, hence, its computational cost to achieve a prescribed precision, will depend linearly on d
+(note that we are comparing upper bounds here, so the actual complexity could be smaller).
+Our algorithm is based on the mirror descent (or mirror descent) algorithm (similar to the
+work of Richtárik and Takáĉ (2011) who uses uniform distributions).
+It is important to mention that there are algorithms designed to handle the case of
+infinitely many kernels, for example, the algorithms by Argyriou et al. (2005, 2006); Gehler
+and Nowozin (2008). However, these methods lack convergence rate guarantees, and, for
+example, the consistency for the method of Gehler and Nowozin (2008) works only for “small”
+d. The algorithm of Bach (2008), though practically very efficient, suffers from the same
+deficiency. A very interesting proposal by Cortes et al. (2009) considers learning to combine
+a large number of kernels and comes with guarantees, though their algorithm restricts the
+family of kernels in a specific way.
+The rest of the paper is organized as follows. The problem is defined formally in Section 2.
+Our new algorithm is presented and analyzed in Section 3, while its specialized version
+for learning polynomial kernels is given in Section 4. Finally, experiments are provided in
+Section 5.
+
+2
+
+Preliminaries
+
+In this section we give the formal definition of our problem. Let I denote a finite index set,
+indexing the predictors (features)
+the set of predictors considered
+ to be combined, and define
+P
+over the input space X as F = fw : X → R : fw (x) = i∈I hwi , φi (x)i , x ∈ X . Here Wi
+is a Hilbert space over the reals, φi : X → Wi is a feature-map, hx, yi is the inner product
+.
+over the Hilbert space that x, y belong to and w = (wi )i∈I ∈ W = ×i∈I Wi (as an example,
+Wi may just be a finite dimensional Euclidean space). The problem we consider is to solve
+
+2
+
+the optimization problem
+minimize Ln (fw ) + Pen(fw )
+
+subject to w ∈ W ,
+and Ln (fw ) = n1
+convex losses `t
+
+(1)
+Pn
+
+where Pen(fw ) is a penalty that will be specified later,
+t=1 `t (fw (xt ))is the
+empirical risk of predictor fw , defined in terms of the
+: R → R (1 ≤ t ≤ n)
+and inputs xt ∈ X (1 ≤ t ≤ n). The solution w∗ of the above penalized empirical risk
+minimization problem is known to have favorable generalization properties under various
+conditions, see, e.g., Hastie et al. (2009). In supervised learning problems `t (y) = `(yt , y)
+for some loss function ` : R × R → R, such as the squared-loss, `(yt , y) = 21 (y − yt )2 , or the
+hinge-loss, `t (yt , y) = max(1 − yyt , 0), where in the former case yt ∈ R, while in the latter
+case yt ∈ {−1, +1}. We note in passing that for the sake of simplicity, we shall sometimes
+abuse notation and write Ln (w) for Ln (fw ) and even drop the index n when the sample-size
+is unimportant.
+As mentioned above, in this paper we consider the special case in (1) when the penalty
+is a so-called group p-norm penalty with 1 ≤ p ≤ 2, a case considered earlier, e.g., by Kloft
+et al. (2011). Thus our goal is to solve
+!2
+p
+1 X p
+p
+minimize Ln (w) +
+ρi kwi k2
+,
+(2)
+w∈W
+2
+i∈I
+
+where the scaling factors ρi > 0, i ∈ I, are assumed to be given. We introduce the notation
+u = (ui ) ∈ RI to denote the column vector obtained from the values ui .
+The rationale of using the squared weighted p-norm is that for 1 ≤ p < 2 it is expected to
+encourage sparsity at the group level which should allow one to handle cases when I is very
+large (and the case p = 2 comes for free from the same analysis). The actual form, however,
+is also chosen for reasons of computational convenience. In fact, the reason to use the 2-norm
+of the weights is to allow the algorithm to work even with infinite-dimensional feature vectors
+(and thus weights) by resorting to the kernel trick. To see how this works, just notice that
+the penalty in (2) can also be written as
+!2
+(
+)
+p
+2 kw k2
+X p
+X
+ρ
+i
+2
+i
+ρi kwi kp2
+= inf
+: θ∈∆ p
+,
+2−p
+θi
+i∈I
+
+i∈I
+
+where for ν ≥ 1, ∆ν = {θ ∈ [0, 1]|I| : kθkν ≤ 1} is the positive quadrant of the |I|-dimensional
+`ν -ball (see, e.g., Micchelli and Pontil, 2005, Lemma 26). Hence, defining
+1 X ρ2i kwi k22
+J(w, θ) = L(w) +
+2
+θi
+i∈I
+
+for any w ∈ W, θ ∈ [0, 1]|I| , an equivalent form of (2) is
+minimize J(w, θ)
+
+w∈W,θ∈∆ν
+
+(3)
+
+where ν = p/(2 − p) ∈ [1, ∞) and we define 0/0 = 0 and u/0 = ∞ for u > 0, which implies
+that wi = 0 if θi = 0. That this minimization problem is indeed equivalent to our original
+task (2) for the chosen value of ν follows from the fact that J(w, θ) is jointly convex in (w, θ).1
+1
+
+Here and in what follows by equivalence we mean that the set of optimums in terms of w (the primary
+optimization variable) is the same in the two problems.
+
+3
+
+Let κi : X × X → R be the reproducing kernel underlying φi : κi (x, x0 ) = hφi (x), φi (x0 )i
+(x, x0 ∈ X ) and let Hi = Hκi the corresponding reproducing kernel Hilbert space (RKHS).
+Then, for any given fixed value of θ, the above problem becomes an instance
+P of a standard
+penalized learning problem in the RKHS Hθ underlying the kernel κθ = i∈I θi ρ−2
+i κi . In
+particular, by the theorem on page 353 in Aronszajn (1950), the problem of finding w ∈ W
+for fixed θ can be seen to be equivalent to minimizef ∈Hθ L(f ) + 21 kf k2Hθ , and thus (2) is
+seen to be equivalent to minimizef ∈Hθ ,θ∈∆ν L(f ) + 21 kf k2Hθ . Thus, we see that the method
+can be thought of as finding the weights of a kernel κθ and a predictor minimizing the Hθ norm penalized empirical risk. This shows that our problem is an instance of multiple kernel
+learning (for an exhaustive survey of MKL, see, e.g., Gönen and Alpaydın, 2011 and the
+references therein).
+
+3
+
+The new approach
+
+When I is small, or moderate in size, the joint-convexity of J allows one to use off-the-shelf
+solvers to find the joint minimum of J. However, when I is large, off-the-shelf solvers might
+be slow or they may run out of memory. Targeting this situation we propose the following
+approach: Exploiting again that J(w, θ) is jointly convex in (w, θ), find the optimal weights
+by finding the minimizer of
+.
+J(θ) = inf J(w, θ),
+w
+
+.
+or, alternatively, J(θ) = J(w∗ (θ), θ), where w∗ (θ) = arg minw J(w, θ) (here we have slightly
+abused notation by reusing the symbol J). Note that J(θ) is convex by the joint convexity of
+J(w, θ). Also, note that w∗ (θ) exists and is well-defined as the minimizer of J(·, θ) is unique
+for any θ ∈ ∆ν (see also Proposition 3.2 below). Again, exploiting the joint convexity of
+J(w, θ), we find that if θ∗ is the minimizer of J(θ), then w∗ (θ∗ ) will be an optimal solution
+to the original problem (2). To optimize J(θ) we propose to use stochastic gradient descent
+with artificially injected randomness to avoid the need to fully evaluate the gradient of J.
+More precisely, our proposed algorithm is an instance of a randomized version of the mirror
+descent algorithm (Rockafellar, 1976; Martinet, 1978; Nemirovski and Yudin, 1998), where in
+each time step only one coordinate of the gradient is sampled.
+
+3.1
+
+A randomized mirror descent algorithm
+
+Before giving the algorithm, we need a few definitions. Let d = |I|, A ⊂ Rd be nonempty
+with a convex interior A◦ . We call the function Ψ : A → R a Legendre (or barrier) potential
+if it is strictly convex, its partial derivatives exist and are continuous, and for every sequence
+{xk } ⊂ A approaching the boundary of A, limk→∞ k∇Ψ(xk )k = ∞. Here ∇ is the gradient
+∂
+operator: ∇Ψ(x) = ( ∂x
+Ψ(x))> is the gradient of Ψ. When ∇ is applied to a non-smooth
+0
+convex function J (θ) (J may be such without additional assumptions) then ∇J 0 (θ) is defined
+as any subgradient of J 0 at θ. The corresponding Bregman-divergence DΨ : A × A◦ → R
+is defined as DΨ (θ, θ0 ) = Ψ(θ) − Ψ(θ0 ) − h∇Ψ(θ0 ), θ − θ0 i. The Bregman projection ΠΨ,K :
+A◦ → K corresponding to the Legendre potential Ψ and a closed convex set K ⊂ Rd such
+that K ∩ A 6= ∅ is defined, for all θ ∈ A◦ as ΠΨ,K (θ) = arg minθ0 ∈K∩A Dψ (θ0 , θ).
+Algorithm 1 shows a randomized version of the standard mirror descent method with an
+unbiased gradient estimate. By assumption, ηk > 0 is deterministic. Note that step 1 of the
+4
+
+Algorithm 1 Randomized mirror descent algorithm
+1: Input: A, K ⊂ Rd , where K is closed and convex with K ∩ A 6= ∅, Ψ : A → R Legendre,
+step sizes {ηk }, a subroutine, GradSampler, to sample the gradient of J at an arbitrary
+vector θ ≥ 0
+2: Initialization: θ (0) = arg minθ∈K∩A Ψ(θ), k = 0.
+3: repeat
+4:
+k = k + 1.
+(k−1) )
+5:
+Obtain ĝk = GradSampler(θ
+
+(k)
+6:
+θ̃ = arg minθ∈A ηk−1 hĝk , θi + DΨ (θ, θ(k−1) ) .
+7:
+θ(k) = ΠΨ,K (θ̃(k) ).
+8: until convergence.
+algorithm is well-defined since θ̃(k) ∈ A◦ by the assumption that k∇Ψ(x)k tends to infinity
+as x approaches the boundary of A. The performance of Algorithm 1 is bounded in the next
+theorem. The analysis follows the standard proof technique of analyzing the mirror descent
+algorithm (see, e.g., Beck and Teboulle, 2003), however, in a slightly more general form than
+what we have found in the literature. In particular, compared to (Nemirovski et al., 2009a;
+Nesterov, 2010, 2012; Shalev-Shwartz and Tewari, 2011; Richtárik and Takáĉ, 2011), our
+analysis allows for the conditional distribution of the noise in the gradient estimate to be
+history dependent. The proof is included in Section A in the appendix.
+Theorem 3.1. Assume that Ψ is α-strongly convex with respect to some norm k · k (with
+dual norm k · k∗ ) for some α > 0, that is, for any θ ∈ A◦ , θ0 ∈ A
+Ψ(θ0 ) − Ψ(θ) ≥ ∇Ψ(θ), θ0 − θ + α2 kθ0 − θk2 .
+
+(4)
+
+Suppose, furthermore, that Algorithm 1 is run for T time steps. For 0 ≤ k ≤ T − 1 let Fk
+denote the σ-algebra generated by θ1 , . . . , θk . Assume that, for all 1 ≤ k ≤ T , ĝk ∈ Rd is an
+unbiased estimate of ∇J(θ(k−1) ) given Fk−1 , that is,
+E [ ĝk | Fk−1 ] = ∇J(θ(k−1) ).
+
+(5)
+
+Further, assume that there exists a deterministic constant B ≥ 0 such that for all 1 ≤ k ≤ T ,
+
+
+E kĝk k2∗ Fk−1 ≤ B a.s.
+(6)
+Finally, assume that δ = supθ0 ∈K∩A Ψ(θ0 ) − Ψ(θ(0) ) is finite. Then, if ηk−1 =
+k ≥ 1, it holds that
+!#
+"
+r
+T
+1 X (k−1)
+2Bδ
+E J
+θ
+− inf J(θ) ≤
+.
+θ∈K∩A
+T
+αT
+
+q
+
+2αδ
+BT
+
+for all
+
+(7)
+
+k=1
+
+Furthermore, if
+kĝk k2∗ ≤ B 0
+
+5
+
+a.s.
+
+(8)
+
+B0
+
+for some deterministic constant
+and ηk−1 =
+it holds with probability at least 1 −  that
+J
+
+T
+1 X (k−1)
+θ
+T
+
+q
+
+2αδ
+B0T
+
+!
+
+r
+− inf J(θ) ≤
+
+k=1
+
+for all k ≥ 1 then, for any 0 <  < 1,
+
+2B 0 δ
+αT
+
+θ∈K∩A
+
+s
++4
+
+B 0 δ log 1
+.
+αT
+
+(9)
+
+The convergence rate in the above theorem can be improved if stronger assumptions are
+made on J, for example if J is assumed to be strongly convex, see, for example, (Hazan et al.,
+2007; Hazan and Kale, 2011).
+Efficient implementation of Algorithm 1 depends on efficient implementations of steps
+1-1, namely, computing an estimate of the gradient, solving the minimization for θ̃(k) , and
+projecting it into K. The first problem is related to the choice of gradient estimate we use,
+which, in turn, depends on the structure of the feature space, while the last two problems
+depend on the choice of the Legendre function. In the next subsections we examine how these
+choices can be made to get a practical variant of the algorithm.
+
+3.2
+
+Application to multiple kernel learning
+
+It remains to define the gradient estimates ĝk in Algorithm 1. We start by considering
+importance sampling based estimates. First, however, let us first verify whether the gradient
+exist. Along the way, we will also derive some explicit expressions which will help us later.
+Closed-form expressions for the gradient. Let us first consider how w∗ (θ) can be
+calculated for a fixed value of θ. As it will turn out, this calculation will be useful not
+only when the procedure is stopped (to construct the predictor fw∗ (θ) but also during the
+iterations when we will need to calculate the derivative of J with respect to θi . The following
+proposition summarizes how w∗ (θ) can be obtained. Note that this type of result is standard
+(see, e.g., Shawe-Taylor and Cristianini, 2004; Schölkopf and Smola, 2002), thus we include
+it only for the sake of completeness (the proof is included in Section A in the appendix).
+Proposition 3.2. For 1 ≤ t ≤ n, let `∗t : R → R denote the convex conjugate of `t : `∗t (v) =
+0 )i, and let K =
+supτ ∈R {vτ − `t (τ )}, v ∈ R. For i ∈ I, recall that κi (x, x0 ) = hφi (x), φi (xP
+i
+(κi (xt , xs ))1≤t,s≤n be the n × n kernel matrix underlying κi and let Kθ = i∈I ρθ2i Ki be the
+i
+P
+θi
+kernel matrix underlying κθ =
+κ
+.
+Then,
+for
+any
+fixed
+θ,
+the
+minimizer
+w∗ (θ) of
+i
+2
+i∈I ρi
+J(·, θ) satisfies
+n
+θi X ∗
+wi∗ (θ) = 2
+α (θ)φi (xt ), i ∈ I ,
+(10)
+ρi t=1 t
+where
+
+(
+α∗ (θ) = arg min
+α∈Rn
+
+n
+
+1 >
+1X ∗
+α Kθ α +
+`t (−nαt )
+2
+n
+
+)
+.
+
+(11)
+
+t=1
+
+Based on this proposition, we can compute the
+Ppredictor fw∗ (θ) usingPthe kernels {κi }i∈I
+and the dual variables (αt∗ (θ))1≤t≤n : fw∗ (θ) (x) = i∈I hwi∗ (θ), φi (x)i = nt=1 αt∗ (θ)κθ (xt , x) .
+
+6
+
+Let us now consider the differentiability of J = J(θ) and how to compute its derivatives.
+Under proper conditions with standard calculations (e.g., Rakotomamonjy et al., 2008) we
+find that J is differentiable over ∆ and its derivative can be written as2
+
+ ∗ >
+∂
+α (θ) Ki α∗ (θ)
+J(θ) = −
+.
+(12)
+∂θ
+ρ2i
+i∈I
+Importance sampling based estimates. Let d = |I| and let ei , i ∈ I denote the ith unit
+vector of the standard basis of Rd , that is, the ith coordinate of ei is 1 while the others are
+0. Introduce
+D
+E
+gk,i = ∇J(θ(k−1) ), ei , i ∈ I
+(13)
+to denote the ith component of the gradient of J in iteration k (that is, gk,i can be computed
+based on (12)). Let sk−1 ∈ [0, 1]I be a distribution over I, computed in some way based on
+the information available up to the end of iteration k − 1 of the algorithm (formally, sk−1 is
+Fk−1 -measurable). Define the importance sampling based gradient estimate to be
+ĝk,i =
+
+I{Ik =i}
+gk,Ik ,
+sk−1,Ik
+
+i ∈ I, where Ik ∼ sk−1,· .
+
+(14)
+
+That is, the gradient estimate is obtained by first sampling an index from sk−1,· and then
+setting the gradient estimate to be zero at all indices i ∈ I except when i = Ik in which
+gk,I
+case its value is set to be the ratio sk−1,Ik . It is easy to see that as long as sk−1,i > 0 holds
+k
+
+whenever gk,i 6= 0, then it holds that E [ ĝk | Fk−1 ] = ∇J(θ(k−1) ) a.s.
+Let us now derive the conditions under which the second moment of the gradient estimate
+stays bounded. Define Ck−1 = ∇J(θ(k−1) ) 1 . Given the expression for the gradient of J
+shown in (12), we see that supk≥1 Ck−1 < ∞ will always hold provided that α∗ (θ) is continuous
+since (θ(k−1) )k≥1 is guaranteed to belong to a compact set (the continuity of α∗ is discussed
+in Section B in the appendix).
+1
+Define the probability distribution qk−1,· as follows: qk−1,i = Ck−1
+|gk,i | , i ∈ I. Then
+2
+qk−1,I
+
+2
+2
+keIk k2∗ = s2 k Ck−1
+keIk k2∗ . Therefore, it also holds
+it holds that kĝk k2∗ = s2 1 gk,I
+k
+k−1,Ik
+k−1,Ik
+2
+
+
+P
+qk−1,i
+qk−1,i
+2
+2
+2
+2
+that E kĝk k2∗ Fk−1 = Ck−1
+i∈I sk−1,i kei k∗ ≤ Ck−1 maxi∈I sk−1,i kei k∗ . This shows that
+
+
+q
+supk≥1 E kĝk k2∗ Fk−1 < ∞ will hold as long as supk≥1 maxi∈I sk−1,i
+< ∞ and supk≥1 Ck−1 <
+k−1,i
+∞. Note that when sk−1 = qk−1 , the gradient estimate becomes ĝk,i = Ck−1 I{It =i} . That is,
+in this case we see that in order to be able to calculate ĝk,i , we need to be able to calculate
+Ck−1 efficiently.
+
+Choosing the potential Ψ. The efficient sampling of the gradient is not the only practical
+issue, since the choice of the Legendre function
+and the convex set K may also cause some
+P
+complications. For example, if Ψ(x) =
+i∈I xi (ln xi − 1), then the resulting algorithm
+is exponential weighting, and one needs to store and update |I| weights, which is clearly
+infeasible if |I| is very large (or infinite). On the other hand, if Ψ(x) = 12 kxk22 and we project
+2
+
+For completeness, the calculations are given in Section B in the appendix.
+
+7
+
+Algorithm 2 Projected stochastic gradient algorithm.
+1:
+2:
+3:
+4:
+5:
+6:
+
+(0)
+
+Initialization: Ψ(x) = 21 kxk22 , θi = 0 for all i ∈ I, k = 0, step sizes {ηk }.
+repeat
+k = k + 1.
+Sample a gradient estimate ĝk of g(θ(k−1 ) randomly according to (14).
+θ(k) = ΠΨ,∆2 (θ(k−1) − ηk−1 ĝk ).
+until convergence.
+
+to K = ∆2 , the positive quadrant of the `2 -ball (with A = [0, ∞)I ), we obtain a stochastic
+projected gradient method, shown in Algorithm 2. This is in fact the algorithm that we
+use in the experiments. Note that in (2) this corresponds to using p = 4/3. The reason we
+made this choice is because in this case projection is a simple scaling operation. Had we
+chosen K = ∆1 , the `2 -projection would very often cancel many of the nonzero components,
+resulting in an overall slow progress. Based on the above calculations and Theorem 3.1 we
+obtain the following performance bound for our algorithm.
+Corollary 3.3. Assume that α∗ (θ) is continuous on ∆2 . Then there exists a C > 0 such
+q
+∂
+that k ∂θ
+J(θ)k1 ≤ C for all θ ∈ ∆2 . Let B = 21 C 2 maxi∈I,1≤k≤T sk−1,i
+. If Algorithm 2 is run
+k−1,i
+√
+for T steps with ηk−1 = η = 1/ BT , k = 1, . . . , T , then, for all θ ∈ ∆2 ,
+!#
+"
+r
+T
+1 X (k−1)
+B
+− J(θ) ≤
+θ
+.
+E J
+T
+T
+k=1
+
+Note that to implement Algorithm 2 efficiently, one has to be able to sample from sk−1,·
+and compute the importance sampling ratio gk,i /sk,i efficiently for any k and i.
+
+4
+
+Example: Learning polynomial kernels
+
+In this section we show how our method can be applied in the context of multiple kernel learning. We provide an example when the kernels in I are tensor products of a set of base kernels
+(this we shall call learning polynomial kernels). The importance of this example follows from
+the observation of Gönen and Alpaydın (2011) that the non-linear kernel learning methods of
+Cortes et al. (2009), which can be viewed as a restricted form of learning polynomial kernels,
+are far the best MKL methods in practice and can significantly outperform state-of-the-art
+SVM with a single kernel or with the uniform combination of kernels.
+Assume that we are given a set of base kernels {κ1 , . . . , κr }. In this section we consider the
+set KD of product kernels of degree at most D: Choose I = {(r1 , . . . , rd ) : 0 ≤ Q
+d ≤ D, 1 ≤ ri ≤ r}
+and the multi-index r1:d = (r1 , . . . , rd ) ∈ I defines the kernel κr1:d (x, x0 ) = di=1 κri (x, x0 ).
+For d = 0 we define κr1:0 (x, x0 ) = 1. Note that indices that are the permutations of each
+other define the same kernel. On the language of statistical modeling, κr1:d models interactions of order d between the features underlying the base kernels κ1 , . . . , κr . Also note that
+|I| = Θ(rD ), that is, the cardinality of I grows exponentially fast in D.
+We assume that ρr1:d depends only on d, the order of interactions in κr1:d . By abusing
+
+8
+
+Algorithm 3 Polynomial kernel sampling. The symbol
+denotes the Hadamard product/power.
+1: Input: α ∈ Rn , the solution to the dual problem; kernel matrices {K1 , . . . , Kr }; the
+degree
+of the polynomial kernel, the weights (ρ20 , . . . , ρ2D ).
+PD
+r
+>
+2: S ←
+j=1 KDj , M ← αα
+E
+0
+−2
+3: δ(d0 ) ← ρd0 M, S d , d0 ∈ {0, . . . , D}
+PD
+4: Sample d from δ(·)/ d0 =0 δ(d0 )
+5: for i = 1 to d do
+tr(M S (d−i) K )
+6:
+π(j) ← tr(M S (d−i+1) j) , j ∈ {1, . . . , r}
+7:
+Sample zi from π(·)
+8:
+M ← M K zi
+9: end for
+10: return (z1 , . . . , zd )
+notation, we will write ρd in the rest of this section to emphasize this.3 Our proposed
+algorithm to sample from qk−1,· is shown in Algorithm 3. The algorithm is written to return
+a multi-index (z1 , . P
+. . , zd ) that isP
+drawn from qk−1,· . The key idea underlying the algorithm
+r
+d
+is to exploit that ( j=1 κj ) = r1:d ∈I κr1:d . The correctness of the algorithm is shown in
+Section 4.1. In the description of the algorithm
+denotes the matrix entrywise product
+(a.k.a. Schur, or Hadamard product) and A s denotes A
+.{z
+. . A}, and we set the priority
+|
+s
+
+of
+A
+
+to be higher than that of the ordinary matrix product (by definition, all the entries of
+0 are 1).
+Let us now discuss the complexity of Algorithm 3. For this, first note that computing all
+0
+the Hadamard products S d , d0 = 0, . . . , D requires O(Dn2 ) computations. Multiplication
+with Mk−1 can be done in O(n2 ) steps. Finally, note that each iteration of the for loop takes
+O(rn2 ) steps, which results in the overall worst-case complexity of O(rn2 D) if α∗ (θk−1 ) is
+readily available. The computational complexity of determining α∗ (θk−1 ) depends on the
+exact form of `t , and can be done efficiently in many situations: if, for example, `t is the
+squared loss, then α∗ can be computed in O(n3 ) time. An obvious improvement to the
+approach described here, however, would be to subsample the empirical loss Ln , which can
+bring further computational improvements. However, the exploration of this is left for future
+work.
+Finally, note that despite the exponential cardinality of |I|, due to the strong algebraic
+structure of the space of kernels, Ck−1 can be calculated
+In fact, it is not hard to
+P efficiently.
+0 ). This also shows that if ρ
+see that with the notation of the algorithm, Ck−1 = D
+δ(d
+0
+d
+d =0
+decays “fast enough”, Ck−1 can be bounded independently of the cardinality of I.
+
+4.1
+
+Correctness of the sampling procedure
+
+In this section we prove the correctness of Algorithm 3.
+As said earlier, we assume that ρr1:d depends only on d, the order of interactions in κr1:d
+3
+
+Using importance sampling, more general weights can also be accommodated, too without effecting the
+results as long as the range of weights (ρr1:d ) is kept under control for all d.
+
+9
+
+and, by abusing notation, we will write ρd to emphasize this. Let us
+P how one can
+Pnow consider
+sample from qk−1,· . The implementation relies on the fact that ( rj=1 κj )d = r1:d ∈I κr1:d .
+Remember that we denoted the kernel matrix underlying some kernel k by Kk , and recall
+that Kk is an n × n matrix. For brevity, in the rest of this section for κ = κr1:d we will write
+Kr1:d instead of Kκr1:d . Define Mk−1 = α∗ (θk−1 )α∗ (θk−1 )> . Thanks to (12) and the rotation
+property of trace, we have
+(15)
+gk,r1:d = −ρ−2
+d tr(Mk−1 Kr1:d ) .
+P
+The plan to sample from qk−1,· = |gk,· |/ r1:d ∈I |gk,r1:d | is as follows: We first draw the order
+of interactions, 0 ≤ dˆ ≤ D. Given dˆ = d, we restrict the draw of the random multi-index
+ˆ
+R1:d to the set {r1:d ∈ I}. A multi-index will be sampled in a d-step
+process: in each step
+we will randomly choose an index from the indices of base kernels according to the following
+distributions. Let S = K1 + . . . + Kr , let
+
+
+ρ−2 tr(Mk−1 S d )
+P dˆ = d|Fk−1 = PD d −2
+d0 )
+d0 =0 ρd0 tr(Mk−1 S
+and, with a slight abuse of notation, for any 1 ≤ i ≤ d define
+
+
+P Ri = ri |Fk−1 , dˆ = d, R1:i−1 = r1:i−1
+
+
+
+
+i
+(d−i)
+tr Mk−1
+K
+S
+j=1 rj
+
+
+
+
+= P
+r
+i−1
+(d−i)
+0
+tr
+M
+K
+K
+S
+0
+r
+k−1
+r
+j
+r =1
+j=1
+i
+i
+
+where we used the sequence notation (namely, s1:p denotes the sequence (s1 , . . . , sp )). We
+have, by the linearity of trace and the definition of S that
+r
+X
+
+
+tr Mk−1
+
+
+
+i−1
+j=1 Krj
+
+
+
+Kri0
+
+S
+
+(d−i)
+
+
+
+ri0 =1
+
+
+= tr Mk−1
+
+
+
+i−1
+j=1 Krj
+
+
+
+S
+
+(d−i+1)
+
+
+
+Thus, by telescoping,
+
+
+P dˆ = d, R1:d = r1:d |Fk−1
+=
+
+ρ−2
+. . . Krd−1 Krd )
+d tr(Mk−1 Kr1
+.
+PD
+−2
+d0 )
+d0 =0 ρd0 tr(Mk−1 S
+
+as desired. An optimized implementation of drawing these random variables is shown as
+Algorithm 3. The algorithm is written to return the multi-index R1:d .
+
+5
+
+Experiments
+
+In this section we apply our method
+P to the problem of multiple kernel learning in regression
+with the squared loss: L(w) = 21 nt=1 (fw (xt ) − yt )2 , where (xt , yt ) ∈ Rr × R are the inputoutput pairs in the data. In these experiments our aim is to learn polynomial kernels (cf.
+Section 4).
+10
+
+We compare our method against several kernel learning algorithms from the literature
+on synthetic and real data. In all experiments we report mean squared error over test sets.
+A constant feature is added to act as offset, and the inputs and output are normalized to
+have zero mean and unit variance. Each experiment is performed with 10 runs in which we
+randomly choose training, validation, and test sets. The results are averaged over these runs.
+
+5.1
+
+Convergence speed
+
+In this experiment we examine the speed of convergence of our method and compare it against
+one of the fastest standard multiple kernel learning algorithms, that is, the p-norm multiple
+kernel learning algorithm of Kloft et al. (2011) with p = 2,4 and the uniform coordinate
+descent algorithm that updates one coordinate per iteration uniformly at random (Nesterov,
+2010, 2012; Shalev-Shwartz and Tewari, 2011; Richtárik and Takáĉ, 2011). We aim to learn
+polynomial kernels of up to degree 3 with all algorithms. Our method uses Algorithm 3
+for sampling with D = 3. The set of provided base kernels is the linear kernels built from
+input variables, that is, κ(i) (x, x0 ) = x(i) x0(i) , where x(i) denotes the ith input variable. For
+the other two algorithms the kernel set consists of product kernels from monomial terms for
+D ∈ {0, 1, 2, 3} built from r base kernels, where r is the number of input variables. The
+number of distinct product kernels is r+D
+D . In this experiment for all algorithms we use
+ridge regression with its regularization parameter set to 10−5 . Experiments with other values
+of the regularization parameter achieved similar results.
+We compare these methods in four datasets from the UCI machine learning repository
+(Frank and Asuncion, 2010) and the Delve datasets5 . The specifications of these datasets are
+shown in Table 1. We run all algorithms for a fixed amount of time and measure the value
+Table 1: Specifications of datasets used in experiments.
+Dataset
+german
+ionosphere
+ringnorm
+sonar
+splice
+waveform
+
+# of variables
+20
+34
+20
+60
+60
+21
+
+Training size
+350
+140
+500
+83
+500
+500
+
+Validation size
+150
+36
+1000
+21
+1000
+1000
+
+Test size
+500
+175
+2000
+104
+1491
+2000
+
+of the objective function (1), that is, the sum of the empirical loss and the regularization
+term. Figure 1 shows the performance of these algorithms. In this figure Stoch represents
+our algorithms, Kloft represents the algorithm of Kloft et al. (2011), and UCD represents
+the uniform coordinate descent algorithm. The results show that our method consistently
+outperforms the other algorithms in convergence speed. Note that our stochastic method
+updates one kernel coefficient per iteration, while Kloft updates r+D
+kernel coefficients
+D
+per iteration. The difference between the two methods is analogous to the difference between stochastic gradient vs. full gradient algorithms. While UCD also updates one kernel
+4
+
+Note that p = 2 in Kloft et al. (2011) notation corresponds to p = 4/3 or ν = 2 in our notation, which
+gives the same objective function that we minimize with Algorithm 2.
+5
+See, www.cs.toronto.edu/~delve/data/datasets.html
+
+11
+
+10
+
+10
+
+german
+
+objective function
+
+ionosphere
+
+6
+
+10
+Kloft
+Stoch
+UCD
+
+ringnorm
+
+6
+
+10
+
+4
+
+4
+
+10
+
+waveform
+
+6
+
+10
+
+4
+
+10
+
+10
+
+5
+
+10
+
+2
+
+2
+
+10
+
+0
+
+10
+
+0
+
+10
+
+0
+
+2
+
+10
+
+0
+
+10
+
+10
+
+10
+
+−2
+
+−2
+
+10
+−5
+
+10
+
+0
+
+−4
+
+50
+100
+time (sec.)
+
+150
+
+10
+
+0
+
+−2
+
+10
+
+10
+
+−4
+
+5
+
+10
+15
+time (sec.)
+
+20
+
+10
+
+0
+
+−4
+
+100
+
+200
+300
+time (sec.)
+
+400
+
+10
+
+0
+
+100
+200
+time (sec.)
+
+300
+
+Figure 1: Convergence comparison of our method and other algorithms.
+coefficient per iteration its naive method of selecting coordinates results in a slower overall convergence compared to our algorithm. In the next section we compare our algorithm
+against several representative methods from the MKL literature.
+
+5.2
+
+Synthetic data
+
+In this experiment we examine the effect of the size of the kernel space on prediction accuracy
+and training time of MKL algorithms. We generated data for a regression problem. Let r
+denote the number of dimensions of the input space. The inputs are chosen uniformly at
+random from [−1, 1]r . The output of each instance is the uniform combination of 10 monomial
+terms of degree 3 or less. These terms are chosen uniformly at random among all possible
+terms. The outputs are noise free. We generated data for r ∈ {5, 10, 20, . . . , 100}, with 500
+training and 1000 test points. The regularization parameter of the ridge regression algorithm
+was tuned from {10−8 , . . . , 102 } using a separate validation set with 1000 data points.
+We compare our method (Stoch) against the algorithm of Kloft et al. (2011) (Kloft),
+the nonlinear kernel learning method of Cortes et al. (2009) (Cortes), and the hierarchical
+kernel learning algorithm of Bach (2008) (Bach).6 The set of base kernels consists of r linear
+kernels built from the input variables.
+P Recall that the method of Cortes et al. (2009) only
+considers kernels of the form κθ = ( ri=1 θi κi )D , where D is a predetermined integer that
+specifies the degree of nonlinear kernel. Note that adding a constant feature is equivalent
+to adding polynomial kernels of degree less than D to the combination too. We provide all
+possible product kernels of degree 0 to D to the kernel learning method of Kloft et al. (2011).
+For our method and the method of Bach (2008) we set the maximum kernel degree to D = 3.
+The results are shown in Figure 2, the mean squared errors are on the left plot, while the
+training times are on the right plot. In the training-time plot the numbers inside brackets
+6
+While several fast MKL algorithms are available in the literature, such as those of Sonnenburg et al. (2006);
+Rakotomamonjy et al. (2008); Xu et al. (2010); Orabona and Luo (2011); Kloft et al. (2011), a comparison of
+the reported experimental results shows that from among these algorithms the method of Kloft et al. (2011)
+has the best performance overall. Hence, we decided to compare against only this algorithm. Also note
+that the memory and computational cost of all these methods still scale linearly with the number of kernels,
+making them unsuitable for the case we are most interested in. Furthermore, to keep the focus of the paper
+we compare our algorithm to methods with sound theoretical guarantees. As such, it remains for future work
+to compare with other methods, such as the infinite kernel learning of Gehler and Nowozin (2008), which lack
+such guarantees but exhibit promising performance in practice.
+
+12
+
+1
+
+250
+Kloft
+Stoch
+Cortes
+Bach
+Uniform
+
+0.9
+0.8
+
+200
+training time (sec.)
+
+0.7
+
+MSE
+
+0.6
+0.5
+0.4
+0.3
+0.2
+
+150
+
+100
+
+50
+
+0.1
+0
+
+20
+40
+60
+80
+number of dimensions of input space
+
+0
+
+100
+
+20
+[1,771]
+
+40
+
+60
+
+80
+
+100
+
+[12,341]
+
+[39,711]
+
+[91,881]
+
+[176,851]
+
+Figure 2: Comparison of kernel learning methods in terms of test error (left) and training
+time (right).
+indicate the total number of distinct product kernels for each value of r. This is the number of
+kernels fed to the Kloft algorithm. Since this method deals with a large number of kernels,
+it was possible to precompute and keep the kernels in memory (8GB) for r ≤ 25. Therefore,
+we ran this algorithm for r ≤ 25. For r > 25, we could use on-the-fly implementation of this
+algorithm, however that further increases the training time. Note that the computational cost
+of this method depends linearly on the number of kernels, which in this experiment, is cubic
+in the number of input variables since D = 3. While the standard MKL algorithms, such
+as Kloft, cannot handle such large kernel spaces, in terms of time and space complexity,
+the other three algorithms can efficiently learn kernel combinations. However their predictive
+accuracies are quite different. Note that the performance of the method of Cortes et al.
+(2009) starts to degrade as r increases. This is due to the restricted family of kernels that
+this method considers. The method of Bach (2008), which is well-suited to learn sparse
+combination of product kernels, performs better than Cortes et al. (2009) for higher input
+dimensions. Among all methods, our method performs best in predictive accuracy while its
+computational cost is close to that of the other two competitors.
+
+5.3
+
+Real data
+
+In this experiment we aim to compare several MKL methods in real datasets. We compare
+our new algorithm (Stoch), the algorithm of Bach (2008) (Bach), and the algorithm of
+Cortes et al. (2009) (Cortes). For each algorithm we consider learning polynomial kernels
+of degree 2 and
+P 3. We also include uniform combination of product kernels of degree D,
+i.e. κD = ( ri=1 κi )D , for D ∈ {1, 2, 3} (Uniform). To find out if considering higherorder interaction of input variables results in improved performance we also included a MKL
+algorithm to which we only feed linear kernels (D = 1). We use the MKL algorithm of Kloft
+et al. (2011) with p ∈ {1, 2} (Kloft).
+We compare these methods on six datasets from the UCI machine learning repository
+
+13
+
+ionosphere
+
+german
+
+ringnorm
+
+0.78
+
+Bach (d=2)
+Bach (d=3)
+
+MSE
+
+Stoch (d=2)
+Stoch (d=3)
+Stoch (d=3, prior)
+
+0.8
+
+0.7
+
+0.76
+0.74
+
+0.6
+
+0.6
+0.72
+0.7
+
+0.4
+
+0.5
+
+0.68
+0.2
+
+Cortes (d=2)
+Cortes (d=3)
+Kloft (p=1)
+Kloft (p=2)
+Uniform (d=1)
+Uniform (d=2)
+Uniform (d=3)
+
+sonar
+
+splice
+
+waveform
+
+0.9
+
+0.8
+
+0.6
+
+0.5
+
+0.55
+
+0.45
+
+0.5
+
+0.4
+
+0.7
+
+0.45
+0.4
+
+0.35
+
+0.6
+
+0.35
+
+0.3
+
+Figure 3: Prediction error of different methods in the real data experiment
+and Delve datasets. In these datasets the number of dimensions of the input space is 20
+and above. The specifications of these datasets are shown in Table 1. The regularization
+parameter is selected from the set {10−4 , . . . , 103 } for all methods using a validation set. The
+results are shown in Figure 3.
+Overall, we observe that methods that consider non-linear variable interactions (Stoch,
+Bach, and Cortes) perform better than linear methods (Kloft). Among non-linear methods, Cortes performs worse than the other two. We believe that this is due to the restricted
+kernel space considered by this method. The performance of Stoch and Bach methods is
+similar overall.
+We observe that our method overfits when it considers kernels of degree 3. However, one
+can easily prevent overfitting by assigning larger ρ values to higher-degree kernels such that
+the stochastic algorithm selects lower-degree kernels more often. For this purpose, we repeat
+this experiment for D = 3 with a modified set of ρ values, where we use ρ2d = 1 for kernels of
+degree 2 or less and ρ2d = 4 for kernels of degree 3. With the new ρ coefficients we observe an
+improvement in algorithm’s performance. See Stoch (D = 3, prior) error values in Figure 3.
+
+6
+
+Conclusion
+
+We introduced a new method for learning a predictor by combining exponentially many linear
+predictors using a randomized mirror descent algorithm. We derived finite-time performance
+bounds that show that the method efficiently optimizes our proposed criterion. Our proposed
+method is a variant of a randomized stochastic coordinate descent algorithm, where the main
+trick is the careful construction of an unbiased randomized estimate of the gradient vector
+that keeps the variance of the method under control, and can be computed efficiently when
+the base kernels have a certain special combinatorial structure. The efficiency of our method
+14
+
+was demonstrated for the practically important problem of learning polynomial kernels on a
+variety of synthetic and real datasets comparing to a representative set of algorithms from
+the literature. For this case, our method is able to compute an optimal solution in polynomial
+time as a function of the logarithm of the number of base kernels. To our knowledge, ours is
+the first method for learning kernel combinations that achieve such an exponential reduction
+in complexity while satisfying strong performance guarantees, thus opening up the way to
+apply it to extremely large number of kernels. Furthermore, we believe that our method is
+applicable beyond the case studied in detail in our paper. For example, the method seems
+extendible to the case when infinitely many kernels are combined, such as the case of learning
+a combination of Gaussian kernels. However, the investigation of this important problem
+remains subject to future work.
+Acknowledgements
+This work was supported by Alberta Innovates Technology Futures and NSERC.
+
+A
+
+Proofs
+
+In this section we present the proofs of Theorem 3.1 and Proposition 3.2. The proof of
+Theorem 3.1 is based on the standard proof of the convergence rate of the proximal point
+algorithm, see, for example, (Beck and Teboulle, 2003), or the proof of Proposition 2.2 of
+Nemirovski et al. (2009b), which carry over the same argument to solve very similar but less
+general problems. We also provide some improvements and simplifications at the end. Before
+giving the actual proof, we need the following standard lemma:
+Lemma A.1 (Lemma 2.1 of Nemirovski et al. 2009b). Assume that Ψ is α-strongly convex
+with respect to some norm k · k (i.e., (4) holds). Let θ1 ∈ K ∩ A◦ , θ ∈ K ∩ A, and g ∈ Rd .
+Define θ2 = arg minθ0 ∈K∩A {hg, θ0 i + DΨ (θ0 , θ1 )}. Then
+hg, θ1 − θi ≤ DΨ (θ, θ1 ) − DΨ (θ, θ2 ) +
+
+kgk2∗
+.
+2α
+
+We provide an alternate proof that is based on the so-called 3-DIV lemma. The 3-DIV
+lemma (e.g., Lemma 11.1, Cesa-Bianchi and Lugosi, 2006) allows one to express the sum of
+the divergences between the vectors u, v and v, w in terms of the divergence between u and
+w and an additional “error term”, where u ∈ A, v, w ∈ A◦ :
+DΨ (u, v) + DΨ (v, w) = DΨ (u, w) + h∇ψ(w) − ∇ψ(v), u − vi .
+Proof. Note that θ2 ∈ A◦ due to behavior of Ψ at the boundary of A. Thus, Ψ is differentiable
+at θ2 and
+∇1 DΨ (θ2 , θ1 ) = ∇ψ(θ2 ) − ∇ψ(θ1 ) ,
+
+(16)
+
+where ∇1 denotes differentiation of DΨ w.r.t. its first variable. Let f (θ0 ) = hg, θ0 i+DΨ (θ0 , θ1 ).
+By the optimality property of θ2 and since θ ∈ K ∩ A, we have
+h∇f (θ2 ), θ2 − θi ≤ 0 .
+15
+
+Plugging in the definition of f together with the identity (16) gives
+hg + ∇ψ(θ2 ) − ∇ψ(θ1 ), θ2 − θi ≤ 0 .
+
+(17)
+
+Now, by the 3-DIV Lemma,
+DΨ (θ, θ2 ) + DΨ (θ2 , θ1 ) = DΨ (θ, θ1 ) + h∇Ψ(θ1 ) − ∇Ψ(θ2 ), θ − θ2 i
+= DΨ (θ, θ1 ) + hg + ∇Ψ(θ2 ) − ∇Ψ(θ1 ), θ2 − θi + hg, θ − θ2 i .
+Hence, by reordering and using the inequality (17) we get
+DΨ (θ, θ2 ) − DΨ (θ, θ1 ) ≤ hg, θ − θ2 i − DΨ (θ2 , θ1 )
+= hg, θ1 − θ2 i − DΨ (θ2 , θ1 ) + hg, θ − θ1 i
+≤
+
+kgk2∗
++ hg, θ − θ1 i ,
+2α
+
+where in the last line we used Young’s inequality7 and that due to the strong convexity of Ψ,
+
+DΨ (θ2 , θ1 ) ≥ α2 kθ2 − θ1 k2 .
+Theorem 3.1. Assume that Ψ is α-strongly convex with respect to some norm k · k (with
+dual norm k · k∗ ) for some α > 0, that is, for any θ ∈ A◦ , θ0 ∈ A
+Ψ(θ0 ) − Ψ(θ) ≥ ∇Ψ(θ), θ0 − θ + α2 kθ0 − θk2 .
+
+(4)
+
+Suppose, furthermore, that Algorithm 1 is run for T time steps. For 0 ≤ k ≤ T − 1 let Fk
+denote the σ-algebra generated by θ1 , . . . , θk . Assume that, for all 1 ≤ k ≤ T , ĝk ∈ Rd is an
+unbiased estimate of ∇J(θ(k−1) ) given Fk−1 , that is,
+E [ ĝk | Fk−1 ] = ∇J(θ(k−1) ).
+
+(5)
+
+Further, assume that there exists a deterministic constant B ≥ 0 such that for all 1 ≤ k ≤ T ,
+
+
+E kĝk k2∗ Fk−1 ≤ B a.s.
+(6)
+q
+Finally, assume that δ = supθ0 ∈K∩A Ψ(θ0 ) − Ψ(θ(0) ) is finite. Then, if ηk−1 = 2αδ
+BT for all
+k ≥ 1, it holds that
+"
+!#
+r
+T
+1 X (k−1)
+2Bδ
+E J
+θ
+− inf J(θ) ≤
+.
+(7)
+θ∈K∩A
+T
+αT
+k=1
+
+Furthermore, if
+kĝk k2∗ ≤ B 0 a.s.
+(8)
+q
+2αδ
+for some deterministic constant B 0 and ηk−1 = B
+0 T for all k ≥ 1 then, for any 0 <  < 1,
+it holds with probability at least 1 −  that
+s
+!
+r
+T
+B 0 δ log 1
+1 X (k−1)
+2B 0 δ
+J
+θ
+− inf J(θ) ≤
++4
+.
+(9)
+θ∈K∩A
+T
+αT
+αT
+k=1
+
+7
+
+Young’s inequality states that for any x, y vectors and α > 0, hx, yi ≤ kxk∗ kyk ≤
+
+16
+
+1
+2
+
+
+
+kxk2
+∗
+α
+
+
++ αkyk2 .
+
+P
+(T )
+Proof. Introduce the average learning rates η k = ηk / Tk=1 ηk−1 , k = 1, . . . , T , the averaged
+parameter estimates
+T
+X
+(T )
+θ̄(T −1) =
+η k−1 θ(k−1)
+k=1
+
+and choose some θ∗ ∈ K ∩ A. To prove the first part of the theorem,
+it suffices to show that
+
+(T
+−1)
+∗
+(k−1)
+the bound holds for J(θ̄
+) − J(θ ). Define gk = ∇J θ
+. By the convexity of J(θ),
+we have
+T
+
+
+ 
+
+
+X
+(T )
+η k−1 J θ(k−1) − J(θ∗ )
+J θ̄(T −1) − J(θ∗ ) ≤
+
+≤
+
+=
+
+k=1
+T
+X
+k=1
+T
+X
+
+D
+E
+(T )
+η k−1 gk , θ(k−1) − θ∗
+T
+E X
+E
+D
+D
+(T )
+(T )
+η k−1 ĝk , θ(k−1) − θ∗ +
+η k−1 gk − ĝk , θ(k−1) − θ∗ (18)
+k=1
+
+k=1
+
+Notice that the first term on the right hand side above is the sum of linearized losses appearing
+in the standard analysis of the proximal point algorithm with loss functions ĝk and learning
+(T )
+rates η k−1 , and the second sum contains the term that depends on how well ĝk estimates
+the gradient gk . Thus, in this way, it is separated how the proximal point algorithm and the
+gradient estimate effect the convergence rate of the algorithm. The first sum can be bounded
+by invoking the standard bound for the proximal point algorithm (we will give the very short
+proof for completeness, based on Lemma A.1), while the second sum can be analyzed by
+noticing that, by assumption (5), its elements form an {Fk }-adapted martingale-difference
+sequence.
+To bound the first sum, first note that the conditions of Lemma A.1 are satisfied for
+(T )
+θ1 = θ(k−1) , θ = θ∗ , g = η k−1 ĝk , since θ1 ∈ K ∩ A◦ (as mentioned beforehand, this follows
+from the behavior of Ψ at the boundary of A). Further, note that due to the so-called
+projection lemma (i.e., the DΨ -projection of the unconstrained optimizer is the same as the
+optimizer of the constrained optimization problem),we can conclude that θ(k) = θ2 , where θ2
+is defined in Lemma A.1. Thus, Lemma A.1 gives
+D
+E
+η 2 kĝk k2∗
+ηk−1 ĝk , θ(k−1) − θ∗ ≤ DΨ (θ∗ , θ(k−1) ) − DΨ (θ∗ , θ(k ) + k−1
+.
+2α
+Summing the above inequality for k = 1, . . . , T , the divergence terms cancel each other,
+yielding
+!
+T
+T
+D
+E
+X
+X
+1
+1
+(T )
+2
+η k−1 ĝk , θ(k−1) − θ∗ ≤ PT
+ηk−1
+kĝk k2∗ .
+DΨ (θ∗ , θ(0) ) − DΨ (θ∗ , θ(T ) ) +
+2α
+η
+k=1 k−1
+k=1
+k=1
+(19)
+Let us now turn to the second sum. We start with developing a bound on the expected
+(T )
+regret. For any 1 ≤ k ≤ T , by construction η k−1 and θ(k−1) are Fk−1 -measurable. This,
+together with (5) gives
+D
+D
+h
+E
+i
+E
+(T )
+(T )
+E η k−1 gk − ĝk , θ∗ − θ(k−1) Fk−1 = η k−1 gk − E [ ĝk | Fk−1 ] , θ∗ − θ(k−1) = 0 . (20)
+17
+
+Combining this result with (18) and (19) yields
+h 
+
+i
+E J θ̄(T ) − J(θ∗ ) ≤
+≤
+
+1
+
+∗
+
+DΨ (θ , θ
+η
+k−1
+k=1
+1 PT
+2
+δ + 2α
+k=1 ηk−1 B
+,
+PT
+k=1 ηk−1
+PT
+
+(0)
+
+∗
+
+) − DΨ (θ , θ
+
+(T )
+
+!
+T
+ 
+
+1 X 2
+2
+)+
+ηk−1 E E kĝk k∗ Fk−1
+2α
+k=1
+
+(21)
+
+where we used the tower rule to bring in the bound (6), the nonnegativity of Bregman
+divergences, and DΨ (θ, θ(0) ) ≤ Ψ(θ) − Ψ(θ(0) ); the latter holds as ∇Ψ(θ(0) ), θ − θ(0) ≥ 0
+q
+since θ(0) minimizes Ψ on K. Substituting ηk−1 = η = 2αδ
+BT , k = 1, . . . , T finishes the proof
+of (7).
+
+To prove the high probability result (9), notice that thanks to (5) ηk−1 gk − ĝk , θ∗ − θ(k−1)
+is an {Fk }-adapted martingale-difference sequence (cf. (20)). By the strong convexity of Ψ
+we have
+α (k−1)
+kθ
+− θ∗ k2 ≤ Ψ(θ(k−1) ) − Ψ(θ∗ ) ≤ δ.
+2
+Furthermore, conditions
+(5) and (8) imply that kgk k2∗ ≤ B 0 a.s., and so by (8) we have
+√
+kgk − ĝk k∗ ≤ 2 B 0 a.s. Then by Hölder’s inequality
+r
+E
+D
+2B 0 δ
+∗
+(k−1)
+∗
+(k−1)
+gk − ĝk , θ − θ
+≤ kgk − ĝk k∗ kθ − θ
+k≤2
+.
+α
+Thus, by the Hoeffding-Azuma inequality (see, e.g., Lemma A.7, Cesa-Bianchi and Lugosi,
+2006), for any 0 <  < 1 we have, with probability at least 1 − ,
+v
+!
+u
+T
+T
+D
+E
+u B0δ X
+X
+4
+1
+(T )
+∗
+(k−1)
+t
+2
+η k−1 gk − ĝk , θ − θ
+≤ PT
+ηk−1 ln .
+(22)
+α
+
+η
+k−1
+k=1
+k=1
+k=1
+Combining (19) with (8) implies an almost sure upper bound on the first sum on the right
+hand side of (18) as in (21) with B 0 in place of B. This, together
+q with (22) proves the required
+high probability bound (9) when substituting ηk−1 = η 0 =
+
+2αδ
+B0T .
+
+
+Proposition 3.2. For 1 ≤ t ≤ n, let `∗t : R → R denote the convex conjugate of `t : `∗t (v) =
+0 )i, and let K =
+supτ ∈R {vτ − `t (τ )}, v ∈ R. For i ∈ I, recall that κi (x, x0 ) = hφi (x), φi (xP
+i
+(κi (xt , xs ))1≤t,s≤n be the n × n kernel matrix underlying κi and let Kθ = i∈I ρθ2i Ki be the
+i
+P
+θi
+∗
+kernel matrix underlying κθ =
+i∈I ρ2i κi . Then, for any fixed θ, the minimizer w (θ) of
+J(·, θ) satisfies
+n
+θi X ∗
+wi∗ (θ) = 2
+α (θ)φi (xt ), i ∈ I ,
+(10)
+ρi t=1 t
+where
+
+(
+∗
+
+α (θ) = arg min
+α∈Rn
+
+n
+
+1 >
+1X ∗
+α Kθ α +
+`t (−nαt )
+2
+n
+t=1
+
+18
+
+)
+.
+
+(11)
+
+Proof. By introducing the variables τ = (τt )1≤t≤n ∈ Rn and using the definition of L we can
+write the optimization problem (3) as the constrained optimization problem
+n
+
+minimizen
+
+w∈W,τ ∈R
+
+1X
+1 X ρ2i kwi k22
+`t (τt ) +
+n
+2
+θi
+t=1
+
+s.t. τt =
+
+X
+
+hwi , φi (xt )i ,
+
+(23)
+
+i∈I
+
+i∈I
+
+In what follows, we call this problem the primal problem. The Lagrangian of this problem is
+(
+)
+n
+n
+X
+1 X ρ2i kwi k22 X
+. 1X
+hwi , φi (xt )i ,
+L(w, τ, α) =
+`t (τt ) +
++
+αt τt −
+n
+2
+θi
+t=1
+
+t=1
+
+i∈I
+
+i∈I
+
+Rn
+
+where α = (αt )1≤t≤n ∈
+is the vector of Lagrange multipliers (or dual variables) associated
+.
+with the n equality constraints. The Lagrange dual function, g(α) = inf w,τ L(w, τ, α), can be
+readily seen to satisfy
+!
+n
+1 >
+1X ∗
+g(α) = −
+α Kθ α +
+`t (−nαt ) .
+2
+n
+t=1
+
+Now, since the objective function of the primal problem is convex and the primal problem
+involves only affine equality constraints and the primal problem is clearly feasible, by Slater’s
+condition (p.226, Boyd and Vandenberghe, 2004), if α∗ (θ) is the maximizer of g(α) then
+w∗ (θ) = arg min infn L(w, τ, α∗ (θ))
+w∈W τ ∈R
+(
+)
+n
+X ρ2 kwi k2 X
+2
+i
+= arg min
+−
+αt hwi , φi (xt )i .
+2θi
+w∈W
+t=1
+
+i∈I
+
+The minimum of the last expression is readily seen to be equal to the expression given in (10),
+thus finishing the proof.
+
+
+B
+
+Calculating the derivative of J(θ)
+
+In this section we show that under mild conditions the derivative of J exist and we also give
+explicit forms. These derivations are quite standard and a similar argument can be found in
+the paper by (e.g.) Rakotomamonjy et al. (2008) specialized to the case when `t is the hinge
+loss.
+As it is well-known, thanks to the implicit function theorem (e.g., Brown and Page,
+∂2
+∂
+1970, Theorem 7.5.6), provided that J = J(w, θ) is such that ∂θ∂w
+J(w, θ) and ∂w
+J(w, θ)
+are continuous, the gradient of J(θ) can be computed by evaluating the partial derivative
+∂
+∂
+∗
+∂θ J(w, θ) of J(w, θ) with respect to θ at (w (θ), θ)), that is, ∂θ J(θ) = ∂θ J(w, θ)|w=w∗ (θ) .Note
+that the derivative is well-defined only if θ > 0, that is, when no coordinates of θ is zero, in
+which case
+ 2 ∗
+
+ρi kwi (θ)k22
+∂
+∗
+J(w (θ), θ) = −
+.
+(24)
+∂θ
+θi2
+i∈I
+If θi = 0 for some i ∈ I, we define the derivative in a continuous manner as
+∂
+J(θ) =
+∂θ
+
+lim
+0
+
+θ →θ
+
+θ0 ∈∆,θ0 >0
+
+19
+
+∂
+J(θ0 )
+∂θ
+
+(25)
+
+assuming that the limit exists. From (10) we get, for any i ∈ I, kwi∗ (θ)k22 =
+Combining with (24) we obtain
+
+ ∗ >
+∂
+α (θ) Ki α∗ (θ)
+∗
+.
+J(w (θ), θ) = −
+∂θ
+ρ2i
+i∈I
+
+θi2 ∗
+α (θ)> Ki α∗ (θ).
+ρ4i
+
+Now, by (25) and the implicit function theorem, α∗ (θ) is a continuous function of θ provided
+that the functions `∗t (1 ≤ t ≤ n) are twice continuously differentiable. This shows that under
+the conditions listed so far, the limit in (25) exists. In the application we shall be concerned
+with, these conditions can be readily verified.
+
+References
+Argyriou, A., Hauser, R., Micchelli, C., and Pontil, M. (2006). A DC-programming algorithm for kernel selection. In Proceedings of the 23rd International Conference on Machine
+Learning, pages 41–48.
+Argyriou, A., Micchelli, C., and Pontil, M. (2005). Learning convex combinations of continuously parameterized basic kernels. In Proceedings of the 18th Annual Conference on
+Learning Theory, pages 338–352.
+Aronszajn, N. (1950). Theory of reproducing kernels. Transactions of the American Mathematical Society, 68(3):337–404.
+Bach, F. (2008). Exploring large feature spaces with hierarchical multiple kernel learning. In
+Advances in Neural Information Processing Systems, volume 21, pages 105–112.
+Beck, A. and Teboulle, M. (2003). Mirror descent and nonlinear projected subgradient methods for convex optimization. Operations Research Letters, 31(3):167–175.
+Boyd, S. and Vandenberghe, L. (2004). Convex optimization. Cambridge University Press.
+Brown, A. and Page, A. (1970). Elements of Functional Analysis. Van Nostrand Reinhold
+Company, Windsor House, 46 Victoria Street, London S .W.1, England.
+Cesa-Bianchi, N. and Lugosi, G. (2006). Prediction, Learning, and Games. Cambridge
+University Press, New York, NY, USA.
+Cortes, C., Mohri, M., and Rostamizadeh, A. (2009). Learning non-linear combinations of
+kernels. In Advances in Neural Information Processing Systems, volume 22, pages 396–404.
+Frank, A. and Asuncion, A. (2010). UCI machine learning repository.
+Gehler, P. and Nowozin, S. (2008). Infinite kernel learning. Technical Report 178, Max
+Planck Institute For Biological Cybernetics.
+Gönen, M. and Alpaydın, E. (2011). Multiple kernel learning algorithms. Journal of Machine
+Learning Research, 12:2211–2268.
+Hastie, T., Tibshirani, R., and Friedman, J. (2009). The Elements of Statistical Learning:
+Data Mining, Inference, Prediction. Springer, 2nd edition.
+20
+
+Hazan, E., Agarwal, A., and Kale, S. (2007). Logarithmic regret algorithms for online convex
+optimization. Machine Learning Journal, 69(2-3):169–192.
+Hazan, E. and Kale, S. (2011). Beyond the regret minimization barrier: an optimal algorithm
+for stochastic strongly-convex optimization. In Proceedings of the 24th Annual Conference
+on Learning Theory, volume 19 of JMLR Workshop and Conference Proceedings, pages
+421–436.
+Kloft, M., Brefeld, U., Sonnenburg, S., and Zien, A. (2011). lp -norm multiple kernel learning.
+Journal of Machine Learning Research, 12:953–997.
+Martinet, B. (1978). Perturbation des méthodes d’optimisation. Applications. RAIRO Analyse Numérique, 12:153–171.
+Micchelli, C. and Pontil, M. (2005). Learning the kernel function via regularization. Journal
+of Machine Learning Research, 6:1099–1125.
+Nath, J., Dinesh, G., Raman, S., Bhattacharyya, C., Ben-Tal, A., and Ramakrishnan, K.
+(2009). On the algorithmics and applications of a mixed-norm based kernel learning formulation. In Advances in Neural Information Processing Systems, volume 22, pages 844–852.
+Nemirovski, A., Juditsky, A., Lan, G., and Shapiro, A. (2009a). Robust stochastic approximation approach to stochastic programming. SIAM J. Optimization, 4:1574–1609.
+Nemirovski, A., Juditsky, A., Lan, G., and Shapiro, A. (2009b). Robust stochastic approximation approach to stochastic programming. SIAM Journal on Optimization, 19(4):1574–
+1609.
+Nemirovski, A. and Yudin, D. (1998). Problem Complexity and Method Efficiency in Optimization. Wiley.
+Nesterov, Y. (2010). Efficiency of coordinate descent methods on huge-scale optimization
+problems. CORE Discussion paper, (2010/2).
+Nesterov, Y. (2012). Subgradient methods for huge-scale optimization problems. CORE
+Discussion paper, (2012/2).
+Orabona, F. and Luo, J. (2011). Ultra-fast optimization algorithm for sparse multi kernel
+learning. In Proceedings of the 28th International Conference on Machine Learning, pages
+249–256.
+Rakotomamonjy, A., Bach, F., Canu, S., and Grandvalet, Y. (2008). SimpleMKL. Journal
+of Machine Learning Research, 9:2491–2521.
+Richtárik, P. and Takáĉ, M. (2011). Iteration complexity of randomized block-coordinate
+descent methods for minimizing a composite function. (revised July 4, 2011) submitted to
+Mathematical Programming.
+Rockafellar, R. (1976). Monotone operators and the proximal point algorithm. SIAM Journal
+on Control and Optimization, 14(1):877–898.
+
+21
+
+Schölkopf, B. and Smola, A. (2002). Learning with Kernels: Support Vector Machines, Regularization, Optimization, and Beyond. MIT Press, Cambridge, MA, USA.
+Shalev-Shwartz, S. and Tewari, A. (2011). Stochastic methods for l1 -regularized loss minimization. Journal of Machine Learning Research, 12:1865–1892.
+Shawe-Taylor, J. and Cristianini, N. (2004). Kernel Methods for Pattern Analysis. Cambridge
+Univ Press.
+Sonnenburg, S., Rätsch, G., Schäfer, C., and Schölkopf, B. (2006). Large scale multiple kernel
+learning. The Journal of Machine Learning Research, 7:1531–1565.
+Xu, Z., Jin, R., King, I., and Lyu, M. (2008). An extended level method for efficient multiple
+kernel learning. In Advances in Neural Information Processing Systems, volume 21, pages
+1825–1832.
+Xu, Z., Jin, R., Yang, H., King, I., and Lyu, M. R. (2010). Simple and efficient multiple
+kernel learning by group lasso. In Proceedings of the 27th International Conference on
+Machine Learning, pages 1175–1182.
+
+22
+
+

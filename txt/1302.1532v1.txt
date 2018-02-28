@@ -1,0 +1,1163 @@
+116
+
+A Standard Approach for Optimizing Belief Network Inference using
+Query DAGs
+
+Adnan Darwiche
+
+Gregory Provan
+
+Department of Mathematics
+
+Department of Diagnostics
+
+American University of Beirut
+
+Rockwell Science Center
+
+PO Box 11- 236
+
+1049 Camino Dos Rios
+
+Beirut, Lebanon
+
+Thousand Oaks, Ca 91360
+
+darwiche@aub. edu.lb
+
+pro van@rise. rockwell. com
+
+Abstract
+This paper proposes a novel, algorithm­
+independent approach to optimizing belief
+network inference. Rather than designing op­
+timizations on an algorithm by algorithm ba­
+sis, we argue that one should use an unop­
+timized algorithm to generate a Q-DAG, a
+compiled graphical representation of the be­
+lief network, and then optimize the Q-DAG
+and its evaluator instead. We present a set
+of Q-DAG optimizations that supplant opti­
+mizations designed for traditional inference
+algorithms, including zero compression, net­
+work pruning and caching. We show that
+our Q-DAG optimizations require time linear
+in the Q-DAG size, and significantly simplify
+the process of designing algorithms for opti­
+mizing belief network inference.
+1
+
+Introduction
+
+Query DAGs (Q-DAGs) have been introduced recently
+to allow the cost-effective implementation of belief
+network inference on multiple software and hardware
+platforms (1, 2]. According to the Q-DAG approach,
+belief network inference is decomposed into two steps
+as shown in Figure 1. The first step takes place off­
+line and results in the generation of a Q-DAG that can
+answer a number of pre-specified probabilistic queries.
+The second step takes place on-line and involves the
+evaluation of a Q-DAG to compute answers to proba­
+bilistic queries in the context of some given evidence.
+A Q-DAG evaluator is a very simple piece of software,
+which allows one to implement it cost-effectively on
+multiple software and hardware platforms.
+Our initial discussion of Q-DAGs has focused on three
+key points: (a) Q-DAGs can be generated using modi­
+fied versions of standard belief network algorithms; (b)
+the time and space complexity of Q-DAG generation
+
+Olr-llne
+
+t Q.J>AG�r J
+I
+
+On-line
+
+Figure 1: The Query DAG framework.
+
+is the same as the time complexity of the underlying
+belief network algorithm; and (c) a Q-DAG evaluator
+is a very simple piece of software [1, 2].
+Our own experience, however, has revealed another
+important property of Q-DAGs that was not origi­
+nally intended but that seems to be as crucial as the
+multiple-platform feature. In a nutshell, when us­
+ing a belief network algorithm to generate a Q-DAG,
+one need not worry about optimizing the algorithm
+using techniques such as computation-caching, zero­
+compression, and network-pruning [3, 4, 5]. Similar, if
+not better, efficiency can be expected by simply using
+an unoptimized version of the algorithm to generate a
+Q-DAG and then optimizing inference at the Q-DAG
+level. This involves reducing the Q-DAG before evalu­
+ating it and implementing an optimized Q-DAG eval­
+uator. The same Q-DAG evaluator can be used with
+any generation algorithm and optimizations at the Q­
+DAG level seem to be much simpler to understand and
+implement since they deal with graphically represented
+arithmetic expressions, without having to invoke prob-
+
+Optimizing Belief Network Inference using Query DAGs
+
+ability or belief network theory. Therefore, the merits
+of this alternative approach are many, but most im­
+portantly: the Q-DAG alternative is systematic, sim­
+ple and accessible to a bigger class of algorithms and
+developers.
+The rest of this paper is structured as follows. First,
+we will review Q-DAGs and their semantics in Sec­
+tion 2. Next, we will present complete pseudocode for
+an optimized Q-DAG evaluator in Section 3 and dis­
+cuss its computational complexity. In Section 4, we
+present techniques and pseudocode for reducing the
+size of a Q-DAG and discuss its computational com­
+plexity. Section 5 is then dedicated to how Q-DAG
+reduction and evaluation account for many of the stan­
+dard optimization techniques that one seeks to realize
+in belief network algorithms. Moreover, we will argue
+in this section that the Q-DAG approach is not just
+an alternative, but a better alternative according to a
+number of measures that we shall also discuss. We fi­
+nally close in Section 6 with some concluding remarks.
+
+Query DAGs
+
+2
+
+We will review Q-DAGs using an example. Consider
+the belief network in Figure 2(a) and suppose we are
+interested in queries of the form Pr(b I c ) . Figure 2(c)
+depicts a Q-DAG for answering such queries, which
+is essentially a parameterized arithmetic expression
+where the value of parameters depend on the evidence
+obtained. This Q-DAG will actually answer queries
+of the form Pr(b, c), but we can use normalization to
+compute Pr(b I c ) . This Q-DAG was generated us­
+ing the join tree algorithm which builds a join tree as
+shown in Figure 2(b). Details of this generation pro­
+cess can be found in [1, 2].
+A number of observations are in order this Q-DAG:
+•
+
+•
+
+It has two leaf nodes labeled (B, ON) and
+(B, OFF). These are called query nodes be­
+cause their values represent answers to queries
+Pr(&ON,e) and Pr(&OFF , e) where e is the
+available evidence.
+It has two root nodes labeled ( C, 0 N) and
+(C, OFF). These are called Evidence-Specific
+Nodes {ESNs) since their values depend on the
+evidence collected about variable C on-line.
+
+According to the semantics of Q-DAGs, the value of
+evidence-specific node (V, v ) is l if variable V is ob­
+served to have value v or is unknown, and 0 otherwise.
+Once the values of ESNs are determined, we evaluate
+the remaining nodes of a Q-DAG using numeric multi­
+plication and addition. The numbers that get assigned
+
+117
+
+to query nodes as a result of this evaluation are the an­
+swers to queries represented by these nodes.
+For example, suppose that the evidence we have is
+C=ON. Then the value of ESN (C, ON) is set to 1
+and the value of ESN (C, OFF) is set to 0. The Q­
+DAG in Figure 2(c) is then evaluated as given in Fig­
+ure 3(a), thus leading to Pr(&ON, C=ON) = .3475
+and Pr(&OFF, C=ON) = . 2725,. If the evidence
+we have is C=OFF, however, then (C, ON) is set
+to 0 and (C, OFF) is set to 1. The Q-DAG in
+Figure 2(c) will then be evaluated as given in Fig­
+ure 3(b), thus leading to Pr(&ON, C=OFF) = . 2875
+and Pr(&OFF, O=OFF) = . 0925.
+If we have no evidence about variable C (the value of
+C is unknown), both evidence-specific nodes (C, ON)
+and (C, OFF) will then be set to 1 and the remaining
+nodes will be evaluated accordingly.
+Formally, a probabilistic Q-DAG is a directed acyclic
+graph. Each root node in a Q-DAG is either a nu­
+meric node, Num, which is labeled with a number p
+in [0, 1], or an evidence-specific node, Esn, which is la­
+beled with a pair (V, v ) where V is a variable and v is
+a value of the variable. Each non-root node is either
+a multiplication n ode , @,which is labeled with a *• or
+an addition node, EB, which is labeled with a+.
+In the rest of this paper, we assume the following func­
+tions for manipulating Q-DAGs: Children(n): the chil­
+dren of node n; Parents ( n) : the parents of node n;
+Type( n) : the type of node n, which is either 0, EB, Esn
+or Num; Label(n): the probability associated with a
+numeric node n; Value(n): the value of a Q-DAG node
+n. Given Values for evidence-specific nodes, the Value
+of nodes can be determined as follows. The Value of
+a numeric nodes is its Label; the Value of an addi­
+tion node is the addition of its parents' Values; the
+Value of a multiplication node is the multiplication of
+its parents' Values.
+We will also use N to represent the number of nodes
+in a Q-DAG and £ to represent the number of edges.
+3
+
+A Q-DAG Evaluator
+
+We now discuss an optimized Q-DAG evaluator that
+initializes the probabilities (values) of Q-DAG nodes
+and updates them as evidence changes. Evidence in
+this case is the setting of an evidence-specific node to
+either 0 or 1 according to Q-DAG semantics described
+in [1, 2) and reviewed in Section 2.
+There are two high level procedures for implementing
+the evaluator, the goal of which is to keep the function
+Value updated. This function assigns a probability
+Value(n) to each node n so that if n is a query node
+
+118
+
+Darwiche and Provan
+
+a)
+
+b)
+
+Pr(A�N)=.3
+
+sf.:\
+
+f.:\s2
+
+n
+
+c)
+
+]�
+
+A
+
+__:..:A-+C=:
+:;;=O�N
+.9
+ON
+
+OFF
+
+-�
+
+_A-+_B=O-'-N
+ON
+
+.25
+
+OFF
+
+.8
+
+C--QN
+
+ON
+
+.9
+
+OFF
+
+.5
+
+C=OFF
+.I
+.5
+
+A
+
+SoON
+
+B•OFF
+
+ON
+
+.25 • .3
+
+.75 '.3
+
+OFF
+
+.8 • .7
+
+.
+
+2 •.7
+
+(C.ON)
+
+(C.OFF)
+
+Figure 2: (a) A belief network; (b) a corresponding join tree; and (c) a Q-DAG generated using the join tree.
+
+(b)C=OFF
+
+(a) C=ON
+
+Figure 3: Q-DAG evaluation.
+labeled with (V,v), and if Value(n) = p, then we must
+have Pr(v,e) = p. The two procedures are:
+1.
+
+initialize-qdag (Figure 4): computes probabil­
+
+ities of nodes under the assumption that no evi­
+dence is collected (all evidence-specific nodes are
+set to 1).
+
+2. set-evidence (Figure 5): sets the value of an
+evidence-specific node n to v and updates the
+function Value accordingly.
+
+value is 1.1 And if n is a numeric node, then its initial
+value is simply the label associated with it. The ini­
+tialization algorithm takes 0(£) time and it computes
+the prior probability of each query node. 2
+Procedure set-evidence works by incrementally up­
+dating the probabilistic values of nodes. Specifically,
+suppose that the value of node n changes from Vt to
+v2 and consider a child m of n:
+•
+
+If m is an addition node, then its value will change
+by the amount v2 v1, which is also the change
+that node n has undergone. Therefore, we can
+update the value of node m by simply adding v2 v1 to its previous value. We must also update the
+children of m recursively.
+-
+
+One would use these procedures by first calling
+initialize-qdag to initialize the Q-DAG. As ev­
+idence becomes available, corresponding calls to
+set-evidence are made.
+Procedure initialize-qdag starts by initializing the
+probability of each query node. To initialize the prob­
+ability of a node n, one first initializes the probabili­
+ties of its parents recursively and then combines these
+probabilities depending on the type of node n. The
+boundary conditions occur when n is a root node (Esn
+or Num). If n is an evidence-specific node, its initial
+
+•
+
+If m is a multiplication node, and if v1 f. 0, we can
+
+1 When no evidence is available, all evidence-specific
+nodes have the value 1.
+
+2Note that initialization can be done off-line since it
+does not depend on any evidence. Therefore, it should
+not, in principle, be part of the Q-DAG evaluator but part
+of the Q-DAG compiler.
+
+119
+
+Optimizing Belief Network Inference using Query DAGs
+
+initialize-qdag()
+for every query node n do initialize-prob(n)
+initialize-prob(n)
+unless Value( n) is initialized do
+for every node m in Pare nt s ( n) do
+initialize-prob(m)
+case Type(n)
+
+set-evidence( n, NewValue)
+
+OldValue := Value(n)
+Value(n) :=NewValue
+propagate-change (n, OldValue, NewValue)
+
+propagate-change(n, Old Value, New Value)
+unless 0/dValue =New Value do
+for each node m in Children(n) do
+
+Num : Value(n) := Label(n)
+Esn : Value( n) := 1
+0: Value(n) := value-of-mul-node(n)
+EB: Va/ue(n) := value-of-add-node(n)
+
+0/dChildValue := Value(m)
+
+if Type(m)
+EB
+then Value(m) :=
+=
+
+Value(m)- Old Value+ New Value
+
+else if Old Value
+0
+then Value(m) : =
+value-of-mul-node(m)
+else Value(m) :=
+=
+
+value-of-mul-node(n)
+Value:= 1
+for all m in Paren ts( n) do
+
+Value := Value* Value(m)
+Value
+
+Value(m)/ OldValue* NewValue
+Old ChildValue, Value( m))
+
+return
+
+propagate-change ( m,
+
+value-of-addition-node(n)
+
+Value:= 0
+
+Figure 5: An optimized Q-DAG evaluator.
+
+Parents(n) do
+Value := Value+ Value( m)
+return Value
+
+for all m in
+
+Figure 4: Initializing a Q-DAG.
+•l
+
+update the value of node m by simply multiplying
+v2jv1 by its previous value. If Vt :::: 0, however,
+we cannot incrementally update the value of m .
+Instead, we have to recompute its value by mul­
+tiplying the values of its parent nodes, which is
+what function value-of-mul-node does.
+Procedure set-evidence takes 0(£) time in the worst
+case, but its average performance is better than linear
+since it will only visit those nodes that change their
+values.
+
+4
+
+Simplifying the Q-DAG
+
+One may reduce a Q-DAG by eliminating some of its
+nodes and arcs while maintaining its ability to answer
+probabilistic queries correctly. The motivation behind
+this simplification or reduction is twofold: faster eval­
+uation of Q-DAGs and less space to store them. Inter­
+estingly enough, we have observed that a few, simple
+reduction techniques tend in certain cases to subsume
+optimization techniques that have been influential in
+practical implementations of belief network systems.
+Therefore, reducing Q-DAGs can be very important
+practically.
+This section is structured as follows. First, we start
+by discussing three simple reduction techniques in the
+form of rew rite rules. Next, we provide pseudocode
+that implements these reductions and discuss their
+computational complexity. Finally, the implications
+of these reductions on optimizing belief network infer-
+
+<)
+
+x�-x� x�-x�
+x-\>'/ x�-\<
+Ql
+
+0
+
+pi
+
+Ql
+
+pl
+
+Fig ure
+
+Ql
+
+0
+
+pi
+
+Q2
+
+pl
+
+h)
+
+d)
+
+I
+
+Ql
+
+Ql
+
+I
+
+0
+
+Ql
+
+Q2
+
+0
+
+.
+
+Ql
+
+�
+
+Ql
+
+Q2
+
+·.
+
+Q2
+
+6: Q-DAG reduction techniques.
+
+ence are discussed at length in Section 5.
+The goal of Q-DAG reduction is to reduce the size of
+a Q-DAG while maintaining the arithmetic expression
+it represents .
+Definition 1
+
+Two Q-DAGs are equivalent iff they
+have the same set of evidence-specific nodes, the same
+set of query nodes, and they agree on the values of
+query nodes for all possible values of evidence-specific
+nodes.
+
+Figure 6 shows three basic reduction operations on
+Q-DAGs. Identity-elimination eliminates a numeric
+node if it is an identity element of its child (Fig­
+ures 6(a) and 6(b)). Numeric-reduction replaces a
+multiplication or addition node with a numeric node if
+all its parents are numeric nodes (Figure 6(c)). Zero­
+compression replaces a multiplication node by a nu­
+meric node if one of its parents is a numeric node with
+value zero (Figure 6(d)).
+Identity elimination is implemented by the straight­
+forward procedures eliminate-identity-zero and
+eliminate-identity-one in Figure 7, each of which
+takes O(N) time.
+
+120
+
+Darwiche and Provan
+
+eliminate-identity-·zero 0
+
+n do
+Type(n) = Num
+
+zero-compression()
+
+for each node
+if
+
+for each node
+and
+
+then for every node
+
+Label(n) = 0
+m in Chi/dren(n)
+
+Type(m) = I'll
+then Parents(m)
+
+if
+
+:=
+
+n
+
+do
+
+Value(n) = 0
+then Type(n) := Num
+Label(n) := 0
+Parents(n) := 0
+
+if
+do
+
+Parents(m) \ {n}
+
+eliminate-identity-one()
+for each node
+if
+
+Type(n)
+
+=
+
+n do
+Num
+
+and
+
+then for every node
+
+Label(n) = 1
+m in Children(n)
+
+Figure 9: Pseudocode for zero compression.
+do
+
+Type(m) = 0
+then Parents(m) := Parents(m) \ {n}
+
+if
+
+Figure 7: Pseudocode for identity elimination.
+numeric-reduction()
+
+initialize queue q
+
+for every node
+
+n
+
+Type(n)
+Num : add n to queue q
+0: InDegree(n) := I Parents(n) I
+I'll: JnDegree(n) := I Parents(n) I
+
+while queue q is not empty do
+
+n
+
+5
+
+Optimization using Q-DAGs
+
+do
+
+case
+
+get
+
+compression as depicted in Figure 6(d) because ev­
+ery multiplication node that has a zero parent will
+also have the value zero, and, therefore, will be con­
+verted to a numeric node. The time complexity of
+zero-compression is O(N).
+
+from queue q
+
+m in Children(n) do
+InDegree(m) :• InDegree(m) if In Degree(m) = 0
+then Type(m) := Num
+Labe/(m) := Value(m)
+Parents(m) := 0
+add m to queue q
+
+for each
+
+Figure 8: Pseudocode for numeric reduction.
+Numeric reduction is implemented by procedure
+in Figure 8, which maintains a
+queue of numeric nodes in the Q-DAG and a counter
+for each addition/multiplication node to count its par­
+ents. For each (numeric) node on the queue, the pro­
+cedure processes the node by decrementing the coun­
+ters of its children. If any of these counters reaches
+zero, that means all parents of the corresponding
+nodes are numeric and, therefore, it can be reduced
+into a numeric node. W hen the reduction is per­
+formed, the node is added to the queue, which al­
+lows the possible reduction of its children. Procedure
+numeric-reduction takes 0(&) time.
+numeric-reduction
+
+Zero-compression is implemented by the procedure
+in Figure 9. Note here that if
+any Q-DAG node attains the value zero after call­
+ing procedure initialize-qdag, it will maintain
+this value under any further evidence.3 Procedure
+zero-compression is complete with respect to zerozero-compression
+
+3 Accommodating evidence entails changing the values
+of some evidence-specific nodes from 1 to 0. This cannot
+increase the value of any Q-DAG node.
+
+The main proposal in this paper is as follows: Instead
+of implementing an optimized algorithm for belief net­
+work inference, use an unoptimized version ofthe algo­
+rithm to generate a Q-DAG, reduce the Q-DAG using
+the procedures in Figures 7-9, and evaluate it using
+the procedures in Figure 5.
+The benefits of the Q-DAG approach are: (1) the
+Q-DAG evaluator can be easily and cost-effectively
+implemented on various software and hardware plat­
+forms; (2) Q-DAG reduction and evaluation are
+algorithm-independent; (3) Q-DAG reduction sub­
+sumes the technique of zero-compression, and some
+forms of network pruning; (4) the Q-DAG evaluator
+implements a sophisticated scheme for computation
+caching, which is simpler and more refined than any of
+the caching schemes that are typically implemented in
+algorithms based on message passing; (5) the Q-DAG
+evaluator handles the retraction of evidence with mini­
+mal computations, while most caching mechanisms we
+are aware of seem to have difficulties in handling this
+kind of evidence efficiently.
+The first two points above are self evident and will
+not be discussed further. We focus in the rest of this
+section on the last three points, explaining them in
+detail and supporting them by examples.
+5.1
+
+Zero Compression
+
+Zero compression is an optimization technique that
+is typically implemented in algorithms based on join
+trees [5]. Zero compression is designed to take advan­
+tage of conditional probability tables which contain
+zero entries, implying some logical or functional rela­
+tionship between network variables. During initializa­
+tion of a join tree, each zero conditional probability
+is multiplied into some clique entry, which causes the
+corresponding entry in the clique to be zero as well.
+
+Optimizing Belief Network Inference using Query DAGs
+
+s1�____f'7"1_
+
+""'o"'�t-'c'?-:'"'-+N t""'c""•.=;:::._FF .:. . .,
+
+A P(a)
+ONI .6
+
+r:;)sl
+
+�
+
+OFF
+
+•)
+
+.5
+
+.)
+
+I
+
+A
+
+P(B=ONia)
+
+I
+f(C=ONib)
+ON
+ON
+OFF
+
+BoOFF
+.,
+
+B
+
+OFF
+
+.9
+.5
+
+.8
+.3
+
+121
+
+A 1 P(a)
+ON .6
+
+A
+
+ON
+OFF
+
+I
+
+P(B=ONia)
+.9
+.5
+
+(b)
+
+(a)
+
+Figure 11: Pruning Node C.
+,,
+
+dl
+P(A..ON.B-b)
+
+Figure 10: Zero compression at the Q-DAG level.
+
+After performing some message passing to propagate
+evidence, some of these zeros will propagate through­
+out the entire join tree. As more evidence is ob­
+tained and propagated, computational resources are
+expended adding and multiplying clique entries by ze­
+ros. Zero compression, as presented in [5], addresses
+this wasteful propagation by visiting entries in cliques
+to identify and annihilate the zero entries. The annihi­
+lation step should restructure the internals of cliques to
+exclude zero entries from subsequent message passes.
+The same optimization can also be implemented in the
+context of other algorithms, but the details would dif­
+fer.
+W hat is common, however, among different algorithms
+is that one can save computationally, sometimes signif­
+
+icantly, by avoiding multiplications by zeros whenever
+possible. As we demonstrate now, this zero compres­
+sion optimization is subsumed by our Q-DAG zero­
+compression technique that we discussed in Section 4.
+Consider the Q-DAG in Figure 2. Suppose that
+Pr(C = OFF I A = ON) :::::: 0 and Pr(B = ON I
+A = OFF) = 0 instead. The resulting join tree will
+then be as given in Figure lO(a) where each clique has
+a zero entry. The technique of zero compression aims
+at factoring out these entries so they do not enter into
+further computations when propagating messages.
+Alternatively, one could use a join tree algorithm that
+does not incorporate zero compression to generate the
+Q-DAG shown in Figure lO(b). One would then ini­
+tialize the Q-DAG to discover that some nodes will
+attain the value zero. Procedure zero-compression
+can then be applied to generate the Q-DAG in Fig­
+ure lO(c), which could further be reduced using Pro­
+cedure eliminate-identity-zero leading to the Q­
+DAG in Figure lO(d). Therefore, one need not worry
+about implementing zero compression in the chosen
+
+(a) Original Q-DA.G
+
+(b) Roducod Q-DAG
+
+Figure 12: Reducing a Q-DAG.
+belief network algorithm; one can rely on Q-DAG re­
+duction to achieve the same result as illustrated above.
+5.2
+
+Network Pruning
+
+Pruning is the process of deleting irrelevant parts of a
+belief network before invoking inference. Consider the
+network in Figure ll(a) for an example, where B is an
+evidence variable and A is a query variable. One can
+prune node C from the network, leading to the network
+in Figure ll(b). Any query of the form Pr(a I b) will
+have the same value with respect to either network, but
+working with the smaller network is clearly preferred.
+Now, if we generate a Q-DAG for the network in Fig­
+ure ll(a) using the polytree algorithm, we obtain the
+one in Figure 12(a). On the other hand, if we generate
+a Q-DAG for the network in Figure ll(b), we obtain
+the one in Figure 12(b), which is smaller as expected.
+The key observation, however, is that the optimized
+Q-DAG in Figure 12(b) can be obtained from the un­
+optimized one in Figure 12(a) using Q-DAG reduction.
+In particular, the nodes enclosed in dotted lines can be
+collapsed using numeric-reduction into a single node
+with value 1. Identity-elimination can then remove
+the resulting node, leading to the optimized Q-DAG
+in Figure 12(b).
+
+122
+
+Darwiche and Provan
+
+A \ Pr(A)
+
+ON
+
+A Pr(B=ONIA)
+I
+rC=ONIB)
+
+ON
+OFF
+
+o)
+
+.6
+
+B
+ON
+OFF
+
+A
+ON
+
+.9
+.5
+
+.8
+.3
+
+I
+
+B
+ON
+OFF
+
+b)
+
+Pr(B)
+.74
+
+fr(C=ONIB)
+
+'
+'
+'
+'
+'
+'
+
+.8
+.3
+
+.
+.
+.
+
+Global Retraction
+
+P("C..ON.B:.b)
+
+1\
+
+1\.
+(B.ON}
+
+1\'
+
+(B.OFF)
+
+.H
+
+singly-connected after pruning, thereby, reducing the
+complexity of inference. But using Q-DAG reduction,
+we still have to generate a Q-DAG using the multiply­
+connected network.
+5.3
+
+(a) DP1iQd Q-DAO
+
+P(V I e)
+
+Figure 15: Block diagram of the join tree algorithm.
+
+1\
+
+1\
+
+-�-
+
+:Global
+
+; Update
+
+Figure 13: Pruning Node A.
+P(C..ON,s..tl)
+
+'
+.
+.
+.
+
+Dynamic Evidence
+
+(b-) RcdliCIId Q.DAG
+
+Figure 14: Reducing a Q-DAG.
+To consider another example, suppose that we are in­
+terested in computing Pr(C = ON I b) in the net­
+work of Figure 13(a). One can prune node A from
+the network, leading to the network in Figure 13(b)
+where the priors of node B are computed as follows:
+Pr(b) = 2:a Pr(b I a)Pr(a). Any query of the form
+Pr(c I b) will have the same value with respect to ei­
+ther network, but working with the smaller network is
+clearly referred.
+If we generate a Q-DAG for the network in Fig­
+ure 13(a) using the polytree algorithm, we obtain the
+one in Figure 14(a). If we generate a Q-DAG for the
+network in Figure 13(b), we obtain the one m Fig­
+ure 14(b). Note, however, that the Q-DAG m Fig­
+ure 14(b) can be obtained from the Q-DAG m Fig­
+ure 14(a) using numeric-reduction.
+Therefore, some forms of network pruning are a by­
+product of Q-DAG reduction and, hence, one can de­
+cide to ignore them at the algorithmic level and expect
+that their effect will be realized if Q-DAG reduction
+is utilized. There are two caveats, however. First, it
+is not clear whether all forms of network pruning will
+be subsumed by Q-DAG reduction. Second, Q-DAG
+reduction will not reduce the computational complex­
+ity of inference, although network pruning may. For
+example, a multiply-connected network may become
+
+The proper handling of dynamic evidence is an es­
+sential property of practical belief network inference.
+Inference with dynamic evidence is typically imple­
+mented with a computation caching scheme that at­
+tempts to maximize the reuse of previous computa­
+tions to conduct new ones. Unfortunately, computa­
+tion caching is non-trivial, typically undocumented,
+and its details vary from one algorithm to another.
+The main objective of this section is to show that a Q­
+DAG framework allows us to handle dynamic evidence
+in a simple, uniform and sophisticated manner. Using
+this framework, we can (a) ignore dynamic evidence at
+the algorithmic level, (b) use the algorithm to generate
+a Q-DAG, and (c) handle dynamic evidence at the Q­
+DAG level. But before we substantiate these claims,
+we review how dynamic evidence is typically handled
+in the join tree algorithm [3, 4, 5].
+Figure 15, which is borrowed from [3], depicts the over­
+all control of the join tree algorithm. There are two
+important points to notice about this figure. First,
+the introduction of evidence leads to invalidating cer­
+tain computations, which leads to an inconsistent join
+tree. The goal is then to recover this consistency (val­
+idate probabilities) by doing the least amount of work
+possible. Second, there is a distinction between evi­
+dence update and evidence retraction, in that evidence
+retraction requires more work to accommodate.
+We apply evidence update to variable V if its current
+value is unknown but evidence suggests a new value v
+of V. We apply evidence retraction to variable V if it
+
+123
+
+Optimizing Belief Network Inference using Query DAGs
+
+has a current value v1 but evidence retracts this value
+or suggests a different value v2. In the join tree algo­
+rithm, evidence update requires recomputing certain
+messages which are passed between cliques. Moreover,
+the messages to be recomputed are decided upon by
+certain flags that indicate the validity of messages as
+evidence is collected. Evidence retraction requires in
+addition the te-initialization of certain clique poten­
+tials. Details of these operations are beyond the scope
+of this paper, but see [3] for a relatively comprehen­
+sive discussion. The metric we use for determining how
+well a system handles dynamic evidence is the amount
+of work needed to update probabilities.
+
+what one finds in other frameworks. Specifically, in ev­
+idence update, the condition OldValue = 0 will never
+be satisfied when calling the procedure set-evidence
+and procedure value-of-mul-node will never be in­
+voked. This follows since no node will increase its value
+given that no evidence-specific node has increased its
+value (in evidence update, the value of an evidence­
+specific node will never change from 0 to 1). The pro­
+cedure value-of-mul-node may only be invoked in
+case of evidence retraction, which is the only extra
+work needed to handle evidence retraction versus evi­
+dence update.
+
+First, we need to define evidence update and retraction
+formally in the context of a Q-DAG framework:
+
+6
+
+Definition 2 Evidence update
+occurs
+when
+each evidence-specific node either maintains its value
+or changes its value from 1 to 0. Evidence retraction
+occurs when some evidence-specific node changes its
+value from 0 to 1.
+
+Given the Q-DAG semantics of Section 2, evidence up­
+date occurs if and only if each variable either maintains
+its observed value or changes from unknown to ob­
+served. On the other hand, evidence retraction occurs
+if and only if some observed variable either becomes
+unknown or changes its observed value to a different
+one.
+Dynamic evidence is handled in the Q-DAG frame­
+work as follows. Both evidence update and retraction
+are handled using the same procedure set-evidence
+given in Figure 5. As far as simplicity is concerned,
+the pseudocode in Figure 5 speaks for itself. As far
+as uniformity is concerned, this code is independent of
+the algorithm used to generate the Q-DAG; therefore,
+it can be used with any Q-DAG generation algorithm.
+As far as efficiency is concerned, we have three points
+to make. First, set-evidence takes 0(£) time in the
+worst case but does much better on average since it
+only visits nodes that change their values. Second,
+the caching scheme implied by set-evidence is more
+refined than schemes based on message passing. Note
+that each message pass involves a number of arithmetic
+operations which correspond to some Q-DAG nodes. If
+a message becomes invalid, all of these operations must
+be re-applied although some of them may not lead to
+new values. In a Q-DAG framework, only nodes that
+change their values are re-evaluated, therefore leading
+to a more refined caching scheme. This level of refine­
+ment is missed in message passing algorithms since
+caching is done at the message level, not at the arith­
+metic operation level. Our final point is regarding the
+minor difference between evidence update and retrac­
+tion in the Q-DAG framework, which is contrary to
+
+Conclusion
+
+The message of this paper is simple: instead of opti­
+mizing belief network algorithms, (a) use plain, unopti­
+mized versions of the algorithms to generate a Q-DAG,
+(b) reduce the Q-DAG according to the procedures
+given in Figures 7-9; and (c) evaluate the Q-DAG us­
+ing the procedures given in Figure 5. This proposed
+alternative is cost-effective, uniform, relatively simple,
+and optimized as compared to the standard approach.
+
+References
+[ 1] Adnan Darwiche and Gregory Provan. Query
+DAGs: A practical paradigm for implementing
+belief network inference. In Proceedings of the
+12th Conference on Uncertainty in Artificial In­
+telligence (UAI), pages 203-210, 1996.
+
+[2] Adnan Darwiche and Gregory Provan. Query
+DAGs: A practical paradigm for implementing
+belief-network inference. Journal of Artificial In­
+telligence Research, 6:147-176, 1997.
+[3] Cecil Huang and Adnan Darwiche. Inference in
+belief networks: A procedural guide. International
+Journal of Approximate Reasoning, 1 5(3) : 225 26 3
+October, 1996.
+-
+
+,
+
+[4] F. V. Jensen, S.L. Lauritzen, and K.G. Olesen.
+Bayesian updating in recursive graphical models by
+local computation. Computational Statistics Quar­
+terly, 4:269-282, 1990.
+
+[5] Frank Jensen and Stig K. Andersen. Approxima­
+tions in Bayesian belief universes for knowledge
+based systems. In Proceedings of the Sixth Con­
+ference on Uncertainty in Artificial Intelligence
+(UAI), pages 162-169, Cambridge, MA, July 1990.
+
+

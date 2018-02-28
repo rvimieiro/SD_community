@@ -1,0 +1,3579 @@
+Online Stochastic Optimization under Correlated Bandit Feedback
+Mohammad Gheshlaghi Azar ∗1 , Alessandro Lazaric †2 , and Emma Brunskill ‡ 3
+
+arXiv:1402.0562v3 [stat.ML] 19 May 2014
+
+1
+
+Rehabilitation Institute of Chicago, Northwestern University, Chicago
+2
+Team SequeL, INRIA Nord Europe
+3
+School of Computer Science, Carnegie Mellon University, Pittsburgh
+May 20, 2014
+
+Abstract
+In this paper we consider the problem of online stochastic optimization of a locally smooth function under
+bandit feedback. We introduce the high-confidence tree (HCT) algorithm, a novel any-time X -armed bandit
+algorithm, and derive regret bounds matching the performance of existing state-of-the-art in terms of dependency
+on number of steps and smoothness factor. The main advantage of HCT is that it handles the challenging case
+of correlated rewards, whereas existing methods require that the reward-generating process of each arm is an
+identically and independent distributed (iid) random process. HCT also improves on the state-of-the-art in terms
+of its memory requirement as well as requiring a weaker smoothness assumption on the mean-reward function
+in compare to the previous anytime algorithms. Finally, we discuss how HCT can be applied to the problem of
+policy search in reinforcement learning and we report preliminary empirical results.
+
+1 Introduction
+We consider the problem of maximizing the sum of the rewards obtained by sequentially evaluating an unknown
+function, where the function itself may be stochastic. This is known as online stochastic optimization under bandit
+feedback or X -armed bandit, since each function evaluation can be viewed as pulling one of the arms in a general arm
+space X . Our objective is to minimize the cumulative regret relative to evaluating/executing at each time point the
+global maximum of the function. In particular, we focus on the case that the reward (function evaluation) of an arm
+may depend on prior history of evaluations and outcomes. This immediately implies that the reward, conditioned on
+its corresponding arm pull, is not an independent and identically distributed (iid) random variable, in contrast to the
+prior work on X -armed bandits (Bull, 2013; Djolonga et al., 2013; Bubeck et al., 2011a; Srinivas et al., 2009; Cope,
+2009; Kleinberg et al., 2008; Auer et al., 2007). X -armed bandit with correlated reward is relevant to many real
+world optimization applications, including internet auctions, adaptive routing, and online games. As one important
+example, we show that the problem of policy search in a Markov Decision Process (MDP), a popular approach to
+learning in unknown MDPs, can be framed as an instance of the setting we consider in this paper (Sect. 5). To the
+best of our knowledge, the algorithm introduced in this paper is the first to guarantee sub-linear regret in continuous
+state-action-policy space MDPs.
+Our approach builds on recent advances in X -armed bandits for iid settings (Bubeck et al., 2011a; Cope, 2009;
+Kleinberg et al., 2008; Auer et al., 2007). Under regularity assumptions on the mean-reward function (e.g. Lipschitzsmoothness), these methods provide formal guarantees in terms of bounds on the regret, which is proved to scale
+∗
+
+mohammad.azar@northwestern.edu
+alessandro.lazaric@inria.fr
+‡
+ebrun@cs.cmu.edu
+†
+
+1
+
+sub-linearly w.r.t. the number of steps n. To obtain this regret, these methods rely heavily on the iid assumption. To
+handle the correlated feedback, we introduce a new anytime X -armed bandit algorithm, called high confidence tree
+(HCT) (Sect. 3). Similar to the HOO algorithm of Bubeck et al. (2011a), HCT makes use of a covering binary tree
+for exploring the arm space. The tree is constructed incrementally in an optimistic fashion, exploring parts of the
+arm space guided by upper bounds on the potential best reward of the arms covered within a particular node.
+Our key insight is that to achieve good performance it is only necessary to expand the tree by refining an optimistic
+node when the estimate of the mean-reward of that node has become sufficiently accurate. This allows us to obtain an
+accurate estimate of the return of a particular arm even in the non-iid setting, under some mild ergodicity and mixing
+assumptions (Sect. 2). Despite handling a more general case of correlated feedback, our regret bounds matches
+(Sect. 4.1) that of HOO (Bubeck et al., 2011a) and zooming algorithm (Kleinberg et al., 2008), both of which only
+apply to iid setting, in terms of dependency on the number of steps n and the near-optimality dimension d (to be
+defined later). Furthermore, HCT also requires milder assumptions on the smoothness of the function, which is
+required to be Lipschitz only w.r.t. the maximum, whereas HOO assumes the mean-reward to be Lipschitz also
+between any pair of arms close to the maximum. An important part of our proof of this result (though we delay
+this and all proofs to the supplement, due to space considerations) is the development of concentration inequalities
+for non-iid episodic random variables. In addition to this main result, the structure of our HCT approach has a
+favorable sub-linear space complexity of O(nd/(d+2) (log n)2/(d+2) ) and a linearithmic runtime complexity, making
+it suitable for scaling to big data scenarios. These results meet or improve the space and time complexity of prior
+work designed for iid data (Sect. 4.2), and we will demonstrate this benefit in simulations (Sect. 6). We also show
+how our approach can lead to finite-sample guarantees for policy search method, and provide preliminary simulation
+results which show the advantage of our method in the case of MDPs.
+
+2 Preliminaries
+The optimization problem. Let X be a measurable space of arms. We formalize the optimization problem as an
+interaction between the learner and the environment. At each time step t, the learner pulls an arm xt in X and
+the environment returns a reward rt ∈ [0, 1] and possibly a context yt ∈ Y, with Y a measurable space (e.g., the
+state space of a Markov decision process). Whenever needed, we relate rt to the arm pulled by using the notation
+rt (x). The context yt and the reward rt may depend on the history of all previous rewards, pulls, contexts and the
+current pull xt . For any time step t > 0, the space of histories Ht := ([0, 1] × X × Y)t is defined as the space
+of past rewards, arms,and observations (with H0 = ∅). An environment M corresponds to an infinite sequence of
+time-dependent probability measures M = (Q1 , Q2 , . . . ), such that each Qt : Ht−1 × X → M([0, 1] × Y) is a
+mapping from the history Ht−1 and the arm space X to the space of probability measures on rewards and contexts.
+Let Z = ([0, 1] × X × Y), at each step t we define the random variable zt = (rt , xt , yt ) ∈ Z and we introduce
+the filtration Ft as a σ-algebra generated by (z1 , z2 , . . . , zt ). At each step t, the arm xt is Ft−1 -measurable since it
+is based on all the information available up to time t − 1. The pulling strategy of the learner can be expressed as
+an infinite sequence of measurable mappings (ψ1 , ψ2 , . . . ), where ψt : Ht−1 → M(X ) maps Ht−1 to the space of
+probability measures on arms. We refine this general setting with two assumptions on the reward-generating process.
+Definition 1 (Time average reward). For any x ∈ X , S > 0 and 0 < s ≤ S, the time average reward is
+S
+X
+1
+rs′ (x).
+r̄s→S (x) :=
+S−s+1 ′
+
+(1)
+
+s =s
+
+We now state our first assumption which guarantees that the mean of the process is well defined (ergodicity).
+Assumption 1 (Ergodicity). For any x ∈ X , any s > 0 and any sequence of prior pulls (x1 , x2 , . . . , xs−1 ), the
+process (zt )t>0 is such that the mean-reward function
+2
+
+f (x) := lim S→∞ E(r̄s→S (x)|Fs−1 )
+exists.
+This assumption implies that, regardless of the history of prior observations, if arm x is pulled infinitely many times
+from time s, then the time average reward converges in expectation to a fixed point which only depends on arm x and
+is independent from the past history. We also make the following mixing assumption (see e.g., Levin et al., 2006).
+Assumption 2 (Finite mixing time). There exists a constant Γ ≥ 0 (mixing time) such that for any x ∈ X , any
+S > 0, any 0 < s ≤ S and any sequence of prior pulls (x1 , x2 , . . . , xs−1 ), the process (zt )t>0 is such that we have
+that
+X
+S
+|E[
+s′ =s (rs′ (x) − f (x)) Fs−1 ]| ≤ Γ.
+
+(2)
+
+This assumption implies that the stochastic reward process induced by pulling arm x can not substantially deviate
+from f (x) in expectation for more than Γ transient steps. Note that both assumptions trivially hold if each arm is an
+iid process: in this case f (x) is the mean of x and Γ = 0.
+Given the mean-reward f , we assume that the maximizer x∗ = arg maxx f (x) exists and we denote the corresponding maximum f (x∗ ) by f ∗ . We measure the performance of the learner over n steps by its regret Rn w.r.t. the f ∗ ,
+defined as
+∗
+
+Rn := nf −
+
+n
+X
+
+rt .
+
+t=1
+
+The goal of learner, at every 0 ≤ t ≤ n, is to choose a strategy ψt such that the regret Rn is as small as possible.
+Relationship to other models. Although the learner observes a context yt at each time t, this problem differs
+from the contextual bandit setting (see e.g., the extensions of the zooming algorithm to contextual bandits by
+Slivkins, 2009). In contextual bandits, the context y ∈ Y is provided before selecting an arm x, and the immediate
+reward rt is defined to be a function only of the selected arm and input context, rt (x, y). The contextual bandit
+objective is typically to minimize the regret against the optimal arm in the context provided at each step, yt , i.e.
+x∗t = arg max rt (x, yt ). A key difference is that in our model the reward, and next context, may depend on the
+entire history of rewards, arms pulled, and contexts, instead of only the current context and arm, and we define
+f (x) only as the average reward obtained by pulling arm x. In this sense, our model is related to the reinforcement
+learning (RL) problem of trying to find a policy that maximizes the long run reward (see further discussion in Sect. 5).
+Among prior work in RL our setting is most similar to the general reinforcement learning model of Lattimore et al.
+(2013) which also considers an arbitrary temporal dependence between the rewards and observations. Our setting
+differs from that of Lattimore et al. (2013), since we consider the regret in undiscounted reward scenario, whereas
+Lattimore et al. (2013) focus on proving PAC-bounds in discounted reward case. Another difference is that in our
+model (unlike Lattimore et al., 2013) the space of observations and actions is not needed to be finite.
+The cover tree. Similar to recent optimization methods (e.g., Bubeck et al., 2011a), our approach seeks to minimize
+regret by smartly building an estimate of f using an infinite binary covering tree T , in which each node covers a
+subset of X .1 We denote by (h, i) the node at depth h and index i among the nodes at the same depth (e.g., the root
+node which covers X is indexed by (0, 1)). By convention (h + 1, 2i − 1) and (h + 1, 2i) refer to the two children
+of the node (h, i). The area corresponding to each node (h, i) is denoted by Ph,i ⊂ X . These regions must be
+measurable and, at each depth, they partition X with no overlap:
+1
+
+The reader is referred to Bubeck et al. (2011a) for a more detailed description of the covering tree.
+
+3
+
+P0,1 = X
+
+∀h ≥ 0 and 1 ≤ i ≤ 2h .
+
+Ph,i = Ph+1,2i−1 ∪ Ph,2i
+
+For each node (h, i), we define an arm xh,i ∈ Ph,i , which the algorithm pulls whenever the node (h, i) is selected.
+We now state a few additional geometrical assumptions.
+Assumption 3 (Dissimilarity). The space X is equipped with a dissimilarity function ℓ : X 2 → R such that
+ℓ(x, x′ ) ≥ 0 for all (x, x′ ) ∈ X 2 and ℓ(x, x) = 0.
+Given a dissimilarity ℓ, the diameter of a subset A ⊆ X is defined as diam(A) := supx,y∈A ℓ(x, y), while an ℓ–open
+ball of radius ε > 0 and center x ∈ X is defined as B(x, ε) := {x′ ∈ X : ℓ(x, x′ ) ≤ ε}.
+Assumption 4 (local smoothness). We assume that there exist constants ν2 , ν1 > 0 and 0 < ρ < 1 such that for all
+nodes (h, i):
+(a) diam(Ph,i ) ≤ ν1 ρh
+(b) ∃ xoh,i ∈ Ph,i s.t. Bh,i := B(xoh,i , ν2 ρh ) ⊂ Ph,i ,
+(c) Bh,i ∩ Bh,j = ∅,
+(d) For all x ∈ X , f ∗ − f (x) ≤ ℓ(x∗ , x).
+Local smoothness. These assumptions coincide with those in (Bubeck et al., 2011a), except for the local smoothness
+(Assumption 4.d), which is weaker than that of Bubeck et al. (2011a), where the function is assumed to be Lipschitz
+between any two arms x, x′ close to the maximum x∗ (i.e., |f (x) − f (x′ )| ≤ ℓ(x, x′ )), while here we only require
+the function to be Lipschitz w.r.t. the maximum.
+Finally, we characterize the complexity of the problem using the near-optimality dimension, which defines how large
+is the set of ǫ-optimal arms in X . For the sake of clarity, we consider a slightly simplified definition of near-optimality
+dimension w.r.t. Bubeck et al. (2011a).
+Assumption 5 (Near-optimality dimension). Let ǫ = 3ν1 ρh and ǫ′ = ν2 ρh < ǫ, for any
+ subset of ǫ-optimal nodes
+Xǫ = {x ∈ X : f ∗ − f (x) ≤ ǫ}, there exists a constant C such that N Xǫ , ℓ, ǫ′ ≤ C(ǫ′ )−d , where d is the
+near-optimality dimension of function f and N (Xǫ , ℓ, ǫ′ ) is the ǫ′ -cover number of the set Xǫ w.r.t. the dissimilarity
+measure ℓ.2
+
+3 The High Confidence Tree algorithm
+We now introduce the High Confidence Tree (HCT) algorithm for stochastic online optimization under bandit feedback. Throughout this discussion, a function evaluation is equivalent to the reward received from pulling an arm
+(since an arm corresponds to selecting an input to evaluate the function at). We first describe the general algorithm
+framework before discussing two particular variants: HCT-iid, designed for the case when rewards of a given arm
+are iid and HCT-Γ which handles the correlated feedback case, where the reward from pulling an arm may depend
+on all prior arms pulled and resulting outcomes. Alg. 1 shows the structure of the algorithm for HCT-iid and HCT-Γ,
+noting the minor modifications between the two.
+2
+Note that, in many cases, the near-optimality dimension d can be much smaller than D, the actual dimension of arm space X in the
+continuous case. In fact one can show that under some mild smoothness assumption the near optimality dimension of a function equals 0,
+regardless of the dimension of its input space X (see Munos, 2013; Valko et al., 2013, for a detailed discussion).
+
+4
+
+Algorithm 1 The HCT algorithm.
+Require: Parameters ν1 > 0, ρ ∈ (0, 1), c > 0, tree structure (Ph,i )h≥0,1≤i≤2i and confidence δ.
+Initialize t = 1, Tt = {(0, 1), (1, 1), (1, 2)}, H(t) = 1, U1,1 (t) = U1,2 (t) = +∞,
+loop
+if t = t+ then
+⊲ Refresh phase
+for all (h, i) ∈ Tt do
+r
+Uh,i (t) ← µ
+bh,i (t) + ν1 ρh +
+
+c2 log(1/δ̃(t+ ))
+Th,i (t)
+
+end for;
+for all (h, i) ∈ Tt Backward from H(t) do
+if (h, i) ∈ leaf(Tt ) then
+Bh,i (t) ← Uh,i (t)
+else
+
+
+Bh,i (t) ← min Uh,i (t), max Bh+1,j (t)
+j∈{2i−1,2i}
+
+end if
+end for
+end if;
+{(ht , it ), Pt } ← OptTraverse(Tt )
+if Algorithm HCT-iid then
+Pull arm xh,i and observe rt
+t=t+1
+else if Algorithm HCT-Γ then
+Tcur = Tht ,it (t)
+while Tht ,it (t) < 2Tcur AND t < t+ do
+Pull arm xh,i and observe rt
+(ht+1 , it+1 ) = (ht , it )
+t=t+1
+end while
+end if
+average µ
+bht ,it (t)
+Update counter Tht ,it (t) and empirical
+r
+bht ,it (t) + ν1 ρh +
+Uht ,it (t) ← µ
+
+c2 log(1/δ̃(t+ ))
+Tht ,it (t)
+
+UpdateB(Tt , Pt , (ht , it ))
+2
+
++
+
+δ̃(t )) −2ht
+ρ
+τh (t) = c log(1/
+ν12
+if Tht ,it (t) ≥ τht (t) AND (ht , it ) =leaf(T ) then
+It = {(ht + 1, 2it − 1), (ht + 1, 2it )}
+T ← T ∪ It
+Uht +1,2it −1 (t) = Uht +1,2it (t) = +∞
+end if
+end loop
+
+The general structure. The HCT algorithm relies on a binary covering tree T provided as input used to construct a
+hierarchical approximation of the mean-reward function f . At each node (h, i) of the tree, the algorithm keeps track
+of some statistics regarding the corresponding arm xh,i associated with the node (h, i). These include the empirical
+estimate µ
+bh,i (t) of the mean-reward function corresponding for arm xh,i at time step t computed as
+µ
+bh,i (t) := (1/Th,i (t))
+5
+
+XTh,i (t)
+s=1
+
+r s (xh,i ),
+
+(3)
+
+Algorithm 2 The OptTraverse function.
+Require: Tree T
+(h, i) ← (0, 1), P ← (0, 1)
+T0,1 = τ0 (t) = 1;
+while (h, i) ∈
+/ Leaf(T ) AND Th,i (t) ≥ τh (t) do
+if Bh+1,2i−1 ≥ Bh+1,2i then
+(h, i) ← (h + 1, 2i − 1)
+else
+(h, i) ← (h + 1, 2i)
+end if
+P ← P ∪ {(h, i)}
+end while
+return (h, i) and P
+Algorithm 3 The UpdateB function.
+Require: Tree T , the path Pt , selected node (ht , it )
+if (ht , it ) ∈ Leaf(T ) then
+Bht ,it (t) = Uht ,it (t)
+else
+
+
+max
+Bht +1,j (t)
+Bht ,it (t) = min Uht ,it (t),
+j∈{2it −1,2it }
+
+end if;
+for all (h, i) ∈ Pt −
+ (ht , it ) backward do
+
+Bh,i (t) = min Uh,i (t), max Bh+1,j (t)
+j∈{2i−1,2i}
+
+end for
+
+where Th,i (t) is the number of times node (h, i) has been selected in the past and r s (xh,i ) denotes the s-th reward
+observed after pulling xh,i (while we previously used rt to denote the t-th sample of the overall process). As
+explained in Sect. 2, although a node is associated to a single arm xh,i , it also covers a full portion of the input
+space X , i.e., the subset Ph,i . Thus, similar to the HOO algorithm (Bubeck et al., 2011a), HCT also maintains two
+upper-bounds, Uh,i and Bh,i , which are meant to bound the mean-reward f (x) of all the arms x ∈ Ph,i . In particular,
+for any node (h, i), the upper-bound Uh,i is computed directly from the observed reward for pulling xh,i as
+h
+
+Uh,i (t) := µ
+bh,i (t) + ν1 ρ +
+
+q
+
+c2 log(1/δ̃(t+ ))/Th,i (t),
+
+(4)
+
+where t+ = 2⌊log(t)⌋+1 and δ̃(t) := min{c1 δ/t, 1}. Intuitively speaking, the second term is related to the resolution
+of node (h, i) and the third term accounts for the uncertainty of µ
+bh,i (t) in estimating the mean-reward f (xh,i ). The
+B-values are designed to have a tighter upper bound on f (x) by taking the minimum between Uh,i for the current
+node, and the maximum upper bound of the node’s two child nodes, if present.3 More precisely,
+
+Bh,i (t) =
+
+
+
+
+Uh,i (t)
+
+(h, i) ∈ leaf(Tt )
+
+
+
+ min[Uh,i (t), max Bh+1,j (t)]
+j∈{2i−1,2i}
+
+(5)
+
+otherwise.
+
+To identify which arm to pull, the algorithm traverses the tree along a path Pt obtained by selecting nodes with
+maximum Bh,i until it reaches an optimistic node (ht , it ), which is either a leaf or a node which is not pulled
+3
+
+Since the node’s children together contain the same input space as the node (i.e., Ph,i = Ph+1,2i−1 ∪ Ph,2i ), the node’s maximum
+cannot be greater than the maximum of its children.
+
+6
+
+enough w.r.t. to a given threshold τh (t), i.e., Th,i (t) ≤ τh (t) (see function OptTraverse in Alg. 2). Then the arm
+xht ,it ∈ Pht ,it corresponding to selected node (ht , it ) is pulled.
+The key step of HCT is in deciding when to expand the tree. We expand a leaf node only if we have pulled its
+corresponding arm a sufficient number of times such that the uncertainty over the maximum value of the arms
+contained within that node is dominated by size of the subset of X it covers. Recall from Equation 4 that the upper
+bound Uh,i of a node (h, i) two additional terms added to the empirical average reward. The first ν1 ρh is a constant
+that depends only on the node depth, and bounds the possible difference in the mean-reward function between the
+representative arm for this node and all other arms also contained in this node, i.e., the difference between f (xh,i )
+and f (x) for any other x ∈ Ph,i (as follows from Assumptions 3 and 4). The second term depends only on t and
+decreases with the number of pulls to this node. At some point, the second term will become smaller than the first
+term, meaning that the uncertainty over the possible rewards of nodes in Ph,i becomes dominated by the potential
+difference in rewards amongst arms that are contained within the same node. This means that the domain Ph,i is too
+large, and thus the resolution of the current approximation of f in that region needs to be increased. Therefore our
+approach chooses the point at which these two terms become of the same magnitude to expand a node, which occurs
+when the the number of pulls Tht ,it (t) has exceeded a threshold
+
+τh (t) := c2 log(1/δ̃(t+ ))ρ−2ht /ν12 .
+
+(6)
+
+(see Sect. A of the supplement for further discussion). It is at this point that expanding the node to two children can
+lead to a more accurate approximation of f (x), since ν1 ρh+1 ≤ ν1 ρh . Therefore if Tht ,it (t) ≥ τh (t), the algorithm
+expands the leaf, creates both children leaves, and set their U -values to +∞. Furthermore, notice that this expansion
+only occurs for nodes which are likely to contain x∗ . In fact, OptTraverse does select nodes with big B-value, which
+in turn receive more pulls and are thus expanded first. The selected arm xht ,it is pulled either for a single time step
+(in HCT-iid) or for a full episode (in HCT-Γ), and then the statistics of all the nodes along the optimistic path Pt are
+updated backwards. The statistics of all the nodes outside the optimistic path remain unchanged.
+As HCT is an anytime algorithm, we periodically need to recalculate the node upper bounds to guarantee their validity with enough probability (see supplementary material for a more precise discussion). To do so, at the beginning of
+each step t, the algorithm verifies whether the B and U values need to be refreshed or not. In fact, in the definition
+of U in Eq. 4, the uncertainty term depends on the confidence δ̃(t+ ), which changes at t = 1, 2, 4, 8, . . .. Refreshing
+the U and B values triggers a “resampling phase” of the internal nodes of the tree Tt along the optimistic path. In
+fact, the second condition in the OptTraverse function (Alg. 2) forces HCT to pull arms that belong to the current
+optimistic path Pt until the number of pulls Th,i (t) becomes greater than τh (t) again. Notice that the choice of the
+confidence term δ̃ is particularly critical. For instance, choosing a more natural δ̃(t) would tend to trigger the refresh
+(and the resampling) phase too often thus increasing the computational complexity of the algorithm and seriously
+affecting its theoretical properties in the correlated feedback scenario. 4 On the other hand, the choice of δ̃(t+ )
+limits the need to refresh the U and B values to only O(log(n)) times over n rounds and guarantees that U and B
+are valid upper bounds with high probability.
+HCT-iid and HCT-Γ. The main difference between the two implementations of HCT is that, while HCT-iid pulls
+the selected arm for only one step before re-traversing the tree from the root to again find another optimistic node,
+HCT-Γ pulls the the representative arm of the optimistic node for an episode of Tcur steps, where Tcur is the number
+of pulls of arm xh,i at the beginning of episode. In other words, the algorithm doubles the number of pulls of each
+arm throughout the episode. Note that not all the episodes may actually finish after Tcur steps and double the number
+of pulls: The algorithm may interrupt the episode when the confidence bounds of B and U are not valid anymore
+(i.e., t ≥ t+ ) and perform a refresh phase.
+The reason for this change is that in order to accurately estimate the mean-reward given correlated bandit feedback,
+4
+
+If we refresh the upper-bound statistics at every time step the algorithm may select a different arm at every time step, whereas in correlated
+feedback scenario having a small number of switches is critical for the convergence of the algorithm.
+
+7
+
+it is necessary to pull an arm for a series of pulls rather than a single pull. Due to our assumption on the mixing
+time (Assumption. 2), pulling an arm for a sufficiently long sequence will provide an accurate estimate of the
+potential mean reward even in the correlated setting, thus ensuring that the empirical average rewards µ
+bh,i actually
+concentrates towards their mean value (see Lem. 7 in the supplementary material). It is this mechanism, coupled with
+only expanding the nodes after obtaining a good estimate of their mean reward, that allows us to handle correlated
+feedback setting. Although in this sense HCT-Γ is more general, we do however include the HCT-iid variant because
+whenever the rewards are iid it performs better than HCT-Γ. This is due to the fact that, unlike HCT-iid, HCT-Γ
+has to keep pulling an arm for a full episode even when there is evidence that another arm could be better. We also
+notice p
+that there is a small difference
+in the constants c1 and c betweenp
+HCT-iid and HCT-Γ: in the case
+p
+p of HCT-iid
+c1 := 8 ρ/(3ν1 ) and c := 2 1/(1 − ρ), whereas HCT-Γ uses c1 := 9 ρ/(4ν1 ) and c := 3(3Γ + 1) 1/(1 − ρ).
+
+4 Theoretical Analysis
+In this section we analyze the regret and the complexity of HCT. All the proofs are reported in the supplement.
+
+4.1 Regret Analysis
+We start by reporting a bound on the maximum depth of the trees generated by HCT.
+Lemma 1. Given the threshold τh (t) in Eq. 6, the depth H(n) of the tree Tn is bounded as
+H(n) ≤ Hmax (n) = 1/(1 − ρ) log(nν12 /(2(cρ)2 )).
+
+(7)
+
+This bound guarantees that HCT never expands trees beyond depth O(log n). This is ensured by the fact the HCT
+waits until the value of a node f (xh,i ) is sufficiently well estimated before expanding it and this implies that the
+number of pulls exponentially grows with the depth of tree, thus preventing the depth to grow linearly as in HOO.
+We report regret bounds in high probability, bounds in expectation can be obtained using standard techniques.
+Theorem 1 (Regret bound of HCT-iid). Pick a δ ∈ (0, 1). Assume that at each step t, the reward rt , conditioned
+on xt , is independent of all prior random events and the immediate mean reward f (x) = E(r|x) exists for every
+x ∈ X . Then under Assumptions 3–5 the regret of HCT-iid in n steps is, with probability (w.p.) 1 − δ,5
+Rn ≤ O
+
+log (n/δ)
+
+1/(d+2)
+
+
+n(d+1)/(d+2) .
+
+Remark (the bound). We notice that the bound perfectly matches the bound for HOO up to constants (see Thm. 6
+in (Bubeck et al., 2011a)). This represents a first sanity check w.r.t. the structure of HCT, since it shows that changing
+the structure of HOO and expanding nodes only when they are pulled enough, preserves the regret properties of the
+algorithm. Furthermore, this result holds under milder assumptions than HOO. In fact, Assumption 4-(d) only
+requires f to be Lipschitz w.r.t. to the maximum x∗ . Other advantages of HCT-iid are discussed in the Sect. 4.2
+and 6.
+Although the proof is mostly based on standard techniques and tools from bandit literature, HCT has a different
+structure from HOO (and similar algorithms) and moving from iid to correlated arms calls for the development of a
+significantly different proof technique. The main technical issue is to show that the empirical average µ
+bh,i computed
+by averaging rewards obtained across different episodes actually converges to f (xh,i ). In particular, we prove the
+following high-probability concentration inequality (see Lem. 7 in the supplement for further details).
+5
+
+Constants are provided in Sect. A of the supplement.
+
+8
+
+Lemma 2. Under Assumptions 1 and 2, for any fixed node (h, i) and step t, we have that, w.p. 1 − δ,
+s
+
+|b
+µh,i (t) − f (xh,i )| ≤ (3Γ + 1)
+
+2 log(5/δ) Γ log(t)
++
+.
+Th,i (t)
+Th,i (t)
+
+Furthermore Kh,i (t), the number of episodes in which (h, i) is selected, is bounded by log2 (4Th,i (t)) + log2 (t).
+This technical lemma is at the basis of the derivation of the following regret bound for HCT-Γ.
+Theorem 2 (Regret bound of HCT-Γ). We assume that Assumptions 1–5 hold and that rewards are generated
+according to the general model defined in Section 2. Then the regret of HCT-iid after n steps is, w.p. 1 − δ,
+Rn ≤ O
+
+
+
+log (n/δ)
+
+1/(d+2)
+
+
+n(d+1)/(d+2) .
+
+Remark (the bound). The most interesting aspect of this bound is that HCT-Γ achieves the same regret as HCT-iid
+when samples are non-iid. This represents a major step forward w.r.t. HOO since it shows that the very general case
+of correlated arms can be managed as well as the much simpler iid case. In the next section we also discuss how this
+result can be used in policy search for MDPs.
+
+4.2 Complexity
+Time complexity. The run time complexity of both versions of HCT is O(n log(n)). This is due to the boundedness
+of the depth H(n) and by the structure of the refresh phase. By Lem. 1, we have that the maximum depth is
+O(log(n)). As a result, at each step t, the cost of traversing the tree to select a node is at most O(log n), which also
+coincides with the cost of updating the B and U values of the nodes in the optimistic path Pt . Thus, the total cost
+of selecting, pulling, and updating nodes is no larger than O(n log n). Notice that in case of HCT-Γ, once a node is
+selected is pulled for an entire episode, which further reduces the total selection cost. Another computational cost is
+represented by the refresh phase where all the nodes in the tree are actually updated. Since the refresh is performed
+only when t = t+ , then the number of times all the nodes are refreshed is of order of O(log n) and the boundedness
+of the depth guarantees that the number of nodes to update cannot be larger than O(2log n ), which still corresponds
+to a total cost of O(n log n). This implies that HCT achieves the same run time as T-HOO (Bubeck et al., 2011a).
+Though unlike T-HOO, our algorithm is fully anytime and it does not suffer from the extra regret incurred due to the
+truncation and the doubling trick.
+Space complexity. The following theorem provides bound on space complexity of the HCT algorithm.
+Theorem 3. Under the same conditions of Thm. 2, let Nn denote the space complexity of HCT-Γ, then we have that
+E(Nn ) = O(log(n)2/(d+2) nd/(d+2) ).
+The previous theorem guarantees that the space complexity of HCT scales sub-linearly w.r.t. n. An important
+e 1/(d+2) ), than its regret. This
+observation is that the space complexity of HCT increases slower, by a factor of O(n
+implies that, for small values of d, HCT does not require to use a large memory space to achieve a good performance.
+An interesting special case is the class of problem with near-optimality dimension d = 0. For this class of problems
+the bound translates to a space complexity of O(log(n)), whereas the space complexity of alternative algorithms
+may be as large as n (see e.g., HOO). As it has been shown in (Valko et al., 2013) the case of d = 0 covers a rather
+large class of functions, since every function which satisfies some mild local smoothness assumption, around its
+9
+
+global optima, has a near-optimality dimension equal to 0 (see Valko et al., 2013, for further discussions). The fact
+that HCT can achieve a near-optimal performance, using only a relatively small memory space, which makes it a
+suitable choice for big-data applications, where the algorithms with linear space complexity can not be used due to
+very large size of the dataset.
+Switching frequency. Finally, we also remark another interesting feature of HCT-Γ. Since an arm is pulled for an
+entire episode before another arm could be selected, this drastically reduces the number of switches between arms.
+In many applications, notably in reinforcement learning (see next section), this can be a significant advantage since
+pulling an arm may correspond to the actual implementation of a complex solution (e.g., a position in a portfolio
+management problem) and continuously switch between different arms might not be feasible. More formally, since
+each node has a number of episodes bounded by O(log n) (Lem. 2), then the number of switches can be derived be
+the number of nodes in Thm. 3 multiplied by O(log n), which leads to O(log(n)(d+4)/(d+2) nd/(d+2) ).
+
+5 Application to Policy Search in MDPs
+As we discussed in Sect. 2, HCT is designed to handle the very general case of optimization in problems where there
+exists a strong correlation among the rewards, arm pulls, and contexts, at different time steps. An important subset
+of this general class is represented by the problem of policy search in infinite-horizon Markov decision processes.
+Notice that the extension to the case of partially observable MDPs is straightforward as long as the POMDP satisfies
+some ergodicity assumptions.
+A MDP M is defined as a tuple hS, A, P i where S is the set of states, A is the set of actions, P : S × A →
+M(S × [0, 1]) is the transition kernel mapping each state-action pair to a distribution over states and rewards. A
+(stochastic) policy π : S → M(A) is a mapping from states to distribution over actions. Policy search algorithms
+(Scherrer & Geist, 2013; Azar et al., 2013; Kober & Peters, 2011) aim at finding the policy in a given policy set
+which maximizes the long-term performance. Formally, a policy search algorithm receives as input a set of policies
+G = {πθ ; θ ∈ Θ}, each of them parameterized by a parameter vector θ in a given set Θ ⊂ ℜd . Any policy πθ ∈ G
+induces a state-reward transition kernel T : S × Θ → M(S × [0, 1]). T relates to the state-reward-action transition
+kernel P and the policy kernel πθ as follows
+′
+
+T (ds , dr|s, θ) :=
+
+Z
+
+P (ds′ , dr|s, u)πθ (du|s).
+u∈A
+
+For any πθ ∈ G and initial state s0 ∈ S, the time-average reward over n steps is
+µπθ (s0 , n) :=
+
+i
+1 hXn
+E
+rt ,
+t=1
+n
+
+where r1 , r2 , . . . , rn is the sequence of rewards observed by running πθ for n steps staring at s0 . If the Markov
+reward process induced by πθ is ergodic, µπθ (s0 , n) converges to a fixed point independent of the initial state s0 .
+The average reward of πθ is thus defined as
+µ(θ) := lim µπθ (s0 , n).
+n→∞
+
+The goal of policy search is to find the best θ ∗ = arg maxθ∈Θ µ(θ). Note that πθ∗ is optimal in the policy class G
+and it may not coincide with the optimal policy π ∗ of the MDP, when π ∗ is not covered by G.
+It is straightforward now to match the MDP scenario to the general setting in Sect. 2, notably mapping Θ to X and
+µ(θ) to f (x). More precisely the parameter space θ ∈ Θ corresponds to the space of arms X , since in the policy
+search we want to explore the parameter space Θ to learn the best parameter θ ∗ . Also the state space S in MDP
+10
+
+setting is the special from of context space of Sect. 2 where here the contexts evolve according to some controlled
+Markov process. Further the transition kernel T , which at each time step t determines the distribution on the current
+state and reward given the last state and θ is again a special case of of the more general (Qt )t which may depend
+on the entire history of prior observations. Likewise µ(θ), µ∗Θ and θ ∗ translate into f (θ), f ∗ and x∗ , respectively,
+using the notation of Sect. 2. The Asm. 1 and 2 in Sect. 2 are also the general version of the standard ergodicity and
+mixing assumption in MDPs, in which the notion of filtration in assumptions of Sect. 2 is simply replaced by the the
+initial state s0 ∈ S.
+This allows us to directly apply HCT-Γ to the problem of policy search. The advantage of HCT-Γ algorithm w.r.t.
+prior work is that, to the best of our knowledge, it is the first policy search algorithm which provides finite sample
+guarantees in the form of regret bounds on the performance loss of policy search in MDPs (see Thm. 2), which
+guarantee that HCT-Γ suffers from a small sub-linear regret w.r.t. πθ∗ . Also it is not difficult to prove that the policy
+induced by HCT-Γ has a small simple regret, that is, the average reward of the policy chosen by HCT-Γ converges to
+µ(θ ∗ ) with a polynomial rate.6 Another interesting feature of HCT-Γ is that can be readily used in large (continuous)
+state-action problems since it does not make any restrictive assumption on the size of state-action space.
+Prior regret bounds for continuous MDPs. A related work to HCT-Γ is the UCCRL algorithm by Ortner & Ryabko
+(2012), which extends the original UCRL algorithm (Jaksch et al., 2010) to continuous state spaces. Although a direct comparison between the two methods is not possible, it is interesting to notice that the assumptions used in
+UCCRL are stronger than for HCT-Γ, since they require both the dynamics and the reward function to be globally
+Lipschitz. Furthermore, UCCRL requires the action space to be finite, while HCT-Γ can deal with any continuous
+policy space. Finally, while HCT-Γ is guaranteed to minimize the regret against the best policy in the policy class
+G, UCCRL targets the performance of the actual optimal policy of the MDP at hand. Another relevant work is the
+OMDP algorithm of Abbasi et al. (2013) which deals with the problem of RL in continuous state-action MDPs with
+adversarial rewards. OMDP achieves a sub-linear regret under the assumption that the space of policies is finite,
+whereas in HCT the space of policy can be continuous.
+
+6 Numerical Results
+While our primary contribution is the definition of HCT and its technical analysis, we also give some preliminary
+simulation results to demonstrate some of its properties.
+Setup. We
+p focus on minimizing the regret across repeated noisy evaluations of the garland function f (x) = x(1 −
+x)(4 − | sin(60x)|) relative to repeatedly selecting its global optima.We select this function due to its several
+interesting properties: (1) it contains many local optima, (2) it is locally smooth around its global optima x∗ (it
+behaves as f ∗ − c|x − x∗ |α , for c = 2 and α = 1/2), (3) it is also possible to show that the near-optimality
+dimension d of f equals 0.
+en = Rn /n. Each run is n = 105
+We evaluate the performances of each algorithm in terms of the per-step regret, R
+steps and we average the performance on 10 runs. For all the algorithms compared in the following, parameters7 are
+optimized to maximize their performance.
+I.i.d. setting. For our first experiment
+we compare HCT-iid to the truncated hierarchical optimistic optimization (T-HOO) algorithm Bubeck et al. (2011a).
+T-HOO is a state-of-the-art X -armed bandit algorithm, developed as a computationally-efficient alternative of HOO.
+In Fig. 1(a) we show the per-step regret, the runtime, and the space requirements of each approach. As predicted
+en of both HCT-iid and truncated HOO decrease rapidly with number
+by the theoretical bounds, the per-step regret R
+of steps. Though the big O theoretical bounds are identical for both approaches, empirically we observe in this
+6
+
+Refer to Bubeck et al. (2011a); Munos (2013) for how to transform bounds on accumulated regret to simple regret bounds.
+For both HCT and T-HOO we introduce a tuning parameter used to multiply the upper bounds, while for PoWER we optimize the
+window for computing the weighted average.
+7
+
+11
+
+0
+
+0
+
+10
+
+HCT−iid
+T−HOO
+
+−1
+
+10
+
+10
+
+−2
+
+10
+
+0
+
+HCT−iid
+T−HOO
+
+−1
+
+en
+R
+
+en
+R
+
+10
+
+−2
+
+2
+
+4
+
+n
+
+6
+
+8
+
+10
+
+10
+4
+x 10
+
+0
+
+50
+
+100
+
+150
+
+cpu time (sec.)
+
+(a)
+
+200
+
+250
+
+(b)
+5
+
+10
+
+HCT−iid
+T−HOO
+
+4
+
+10
+
+space
+
+3
+
+10
+
+2
+
+10
+
+1
+
+10
+
+0
+
+10 0
+10
+
+1
+
+2
+
+10
+
+10
+
+3
+
+n
+
+4
+
+10
+
+5
+
+10
+
+10
+
+(c)
+
+Figure 1: Comparison of the Performance of HCT-iid and the Previous Methods under the iid Bandit Feedback.
+
+0
+
+0
+
+10
+
+10
+
+HCT−Γ
+T−HOO
+PoWER
+
+en
+R
+
+en
+R
+
+HCT−Γ
+T−HOO
+PoWER
+
+−1
+
+10
+
+−1
+
+10
+0
+
+2
+
+4
+
+n
+
+6
+
+8
+
+10
+4
+x 10
+
+0
+
+10
+
+20
+
+cpu time (sec.)
+
+(a)
+
+30
+
+40
+
+(b)
+5
+
+10
+
+HCT−Γ
+T−HOO
+PoWER
+
+4
+
+10
+
+space
+
+3
+
+10
+
+2
+
+10
+
+1
+
+10
+
+0
+
+10
+
+0
+
+10
+
+1
+
+10
+
+2
+
+10
+
+3
+
+n
+
+10
+
+4
+
+10
+
+5
+
+10
+
+(c)
+
+Figure 2: Comparison of the Performance of HCT − Γ and the Previous Methods under Correlated Bandit Feedback
+(MDP setting)
+
+12
+
+1
+
+0.8
+
+f (x)
+
+0.6
+
+0.4
+
+0.2
+
+0
+0
+
+0.2
+
+0.4
+
+x
+
+0.6
+
+0.8
+
+1
+
+Figure 3: The garland function.
+
+example that HCT-iid outperforms T-HOO by a large margin. Similarly, though the computational complexity of
+both approaches matches in the dependence on the number of time steps, empirically we observe that our approach
+outperforms T-HOO (Fig. 1(b)). Perhaps the most significant expected advantage of HCT-iid over T-HOO for iid
+settings is in the space requirements. HCT-iid has a space requirement for this domain that scales logarithmically
+with the time step n, as predicted by Thm. 3. since the near-optimality dimension d = 0). In contrast, a brief analysis
+of T-HOO suggests that its space requirements can grow polynomially, and indeed in this domain we observe a
+polynomial growth of memory usage for T-HOO. These patterns mean that HCT-iid can achieve a very small regret
+using a sparse decision tree with only few hundred nodes, whereas truncated HOO requires orders of magnitude
+more nodes than HCT-iid.
+Correlated setting. We create a continuous-state-action MDP out of the previously described Garland function by
+introducing the state of the environment s. Upon taking continuous-valued action x, the state of the environment
+changes deterministically to st+1 = (1 − β)st + βx, where we set β = 0.2. The agent receives a stochastic
+reward for being in state s, which is (the Garland function) f (s) + ε, where as before ε is drawn randomly from
+[0, 1]. The initial state s0 is also drawn randomly from [0, 1]. A priori, the agent does not know the transition or
+reward function, making this a reinforcement learning problem. Though not a standard benchmark RL instance, this
+problem has multiple local optima and therefore is a interesting case for policy search, where Θ = X is the policy
+set (which coincides with the action set in this case).
+In this setting, we compare HCT-Γ to a PoWER, a standard RL policy search algorithm Kober & Peters (2011)
+on the above MDP problem MDP constructed out of garland function.PoWER uses an Expectation Maximization
+approach to optimize the policy parameters and is therefore not guaranteed to find the global optima. We also
+compare our algorithm with T-HOO, though this algorithm is specifically designed for iid setting and one may
+expect that it may fail to converge to global optima under correlated bandit feedback. Fig. 2(a) shows per-step regret
+of the 3 approaches in the MDP. Only HCT-Γ succeeds in finding the globally optimal policy, as is evident because
+only in the case of HCT-Γ does the average regret tends to converge to zero (which is as predicted from Thm. 2).
+The PoWER method finds worse solutions than both stochastic optimization approaches for the same amount of
+computational time, likely due to using EM which is known to be susceptible to local optima. On the other hand, its
+primary advantage is that it has a very small memory requirement. Overall this suggests the benefit of our proposed
+approach to be used for online MDP policy search, since it quickly (as a function of samples and runtime) can find
+a global optima, and is, to our knowledge, one of the only policy search methods guaranteed to do so.
+
+13
+
+7 Discussion and Future Work
+In the current version of HCT we assume that the learner has access to the information regarding the smoothness
+of function f (x) and the mixing time Γ. In many problems those information are not available to the learner. In
+the future it would be interesting to build on prior work that handles unknown smoothness in iid settings and extend
+it to correlated feedback. For example, Bubeck et al. (2011b) require a stronger global Lipschitz assumption and
+propose an algorithm to estimate the Lipschitz constant. Other work on the iid setting include Valko et al. (2013)
+and Munos (2011), which are limited to the simple regret scenario, but who only use the mild local smoothness
+assumption we define in Asm. 4, and do not require knowledge of the dissimilarity measure ℓ. On the other hand,
+Slivkins (2011) and Bull (2013) study the cumulative regret but consider a different definition of smoothness related
+to the zooming concept introduced by Kleinberg et al. (2008). Finally, we notice that to deal with unknown mixing
+time, one may rely on data-dependent tail’s inequalities, such as empirical Bernstein inequality (Tolstikhin & Seldin,
+2013; Maurer & Pontil, 2009), replacing the mixing time with the empirical variance of the rewards.
+In the future we also wish to explore using HCT to optimize other problems that can be modeled using correlated bandit feedback. For example, HCT may be used for policy search in partially observable MDPs (Vlassis & Toussaint,
+2009; Baxter & Bartlett, 2000), as long as the POMDP is ergodic.
+To conclude, in this paper we introduce a new X -armed bandit algorithm, called HCT, for optimization under bandit
+feedback and prove regret bounds and simulation results for it. Our approach improves on existing results to handle
+the important case of correlated bandit feedback. This allows HCT to be applied to a broader range of problems
+than prior X -armed bandit algorithms, such as we demonstrate by using it to perform policy search for continuous
+MDPs.
+
+Appendices
+A
+
+Proof of Thm. 1
+
+In this section we report the full proof of the regret bound of HCT-iid.
+We begin by introducing some additional notation, required for the analysis of both algorithms. We denote the
+indicator function of an event E by IE . For all 1 ≤ h ≤ H(t) and t > 0, we denote by Ih (t) the set of all nodes
+created by the algorithm at depth h up to time t and by Ih+ (t) the subset of Ih (t) including only the internal nodes
+(i.e., nodes that are not leaves), which corresponds to nodes at depth h which have been expanded before time t. At
+each time step t, we denote by (ht , it ) the node selected by the algorithm. For every (h, i) ∈ T , we define the set of
+time steps when (h, i) has been selected as Ch,i := {t = 1, . .S
+. , n : (ht , it ) = (h, i)}. We also define the set of times
+c := C
+Ch+1,2i . We need to introduce three important steps
+that a child of (h, i) has been selected as Ch,i
+h+1,2i−1
+related to node (h, i):
+• t̄h,i := maxt∈Ch,i t is the last time (h, i) has been selected,
+c t is the last time when any of the two children of (h, i) has been selected,
+• t̃h,i := maxt∈Ch,i
+
+• th,i := min{t : Th,i (t) > τh (t)} is the step when (h, i) is expanded.
+The choice of τh . The threshold on the the number of pulls needed before expanding a node at depth h is determined
+
+14
+
+so that, at each time t, the two confidence terms in the definition of U (Eq. 4) are roughly equivalent, that is
+s
+log(1/δ̃(t+ ))
+c2 log(1/δ̃(t+ )) −2h
+ρ .
+ν 1 ρh = c
+=⇒ τh (t) =
+τh (t)
+ν12
+Furthermore, since t ≤ t+ ≤ 2t then
+c2 −2h c2 log(1/δ̃(t)) −2h
+c2 log(2/δ̃(t)) −2h
+ρ
+≤
+ρ
+≤
+τ
+(t)
+≤
+ρ ,
+h
+ν12
+ν12
+ν12
+
+(8)
+
+where we used the fact that 0 < δ̃(t) ≤ 1 for all t > 0. As described in Section 3, the idea is that the expansion of
+a node, which corresponds to an increase in the resolution of the approximation of f , should not be performed until
+the empirical estimate µ
+bh,i of f (xh,i ) is accurate enough. Notice that the number of pulls Th,i (t) for an expanded
+node (h, i) does not necessarily coincide with τh (t), since t might correspond to a time step when some leaves have
+not been pulled until τh (t) and other nodes have not been fully resampled after a refresh phase.
+We begin our analysis by bounding the maximum depth of the trees constructed by HCT-iid.
+Lemma 1 Given the number of samples τh (t) required for the expansion of nodes at depth h in Eq. 6, the depth
+H(n) of the tree Tn is bounded as
+H(n) ≤ Hmax (n) =
+
+ nν 2 
+1
+1
+log
+.
+1−ρ
+2(cρ)2
+
+Proof. The deepest tree that can be developed by HCT-iid is a linear tree, where at each depth h only one node is
+expanded, that is , |Ih+ (n)| = 1 and |Ih (n)| = 2 for all h < H(n). Thus we have
+H(n)
+
+n=
+
+X X
+
+h=0 i∈Ih (n)
+
+(1)
+
+≥
+
+H(n)−1
+
+X
+h=0
+
+H(n)−1
+
+Th,i (n) ≥
+
+X
+
+i∈Ih+ (n)
+
+X
+h=0
+
+X
+
+H(n)−1
+
+i∈Ih (n)
+
+Th,i (n) ≥
+
+X
+h=0
+
+X
+
+i∈Ih+ (n)
+
+H(n)−1
+
+Th,i (n) ≥
+
+X
+h=0
+
+X
+
+Th,i (th,i )
+
+i∈Ih+ (n)
+
+H(n)−1
+X c2
+(cρ)2 −2H(n) X −2(h−H(n)+1)
+−2h
+ρ
+≥
+ρ
+ρ
+,
+ν12
+ν12
+
+H(n)−1
+
+τh,i (th,i ) ≥
+
+h=1
+
+h=1
+
+where inequality (1) follows from the fact that a node (h, i) is expanded at time th,i only when it is pulled enough,
+i.e., Th,i (th,i ) ≥ τh (th,i ). Since all the elements in the summation over h are positive, then we can lower-bound the
+sum by its last element (h = H(n)), which is 1, and obtain
+n≥2
+
+(cρ)2
+(cρ)2 −2H(n)
+−2H(n)
+H(n)ρ
+≥
+2
+ρ
+,
+ν12
+ν12
+
+where we used the fact that H(n) ≥ 1. By solving the previous expression we obtain
+ρ−2H(n) ≤ n
+
+ν12
+2(cρ)2
+
+=⇒
+
+H(n) ≤
+
+ nν 2 
+1
+1
+log
+/ log(1/ρ).
+2
+2(cρ)2
+
+Finally, the statement follows using log(1/ρ) ≥ 1 − ρ.
+We now introduce a high probability event under which the mean reward for all the expanded nodes is within a
+confidence interval of the empirical estimates at a fixed time t.
+
+15
+
+Lemma 3 (High-probability event). We define the set of all the possible nodes in trees of maximum depth Hmax (t)
+as
+[
+Lt =
+Nodes(T ).
+T :Depth(T )≤Hmax (t)
+
+We introduce the event
+Et =
+
+
+
+s
+
+bh,i (t) − f (xh,i ) ≤ c
+∀(h, i) ∈ Lt , ∀Th,i (t) = 1..t : µ
+
+
+log(1/δ̃(t))
+,
+Th,i (t)
+
+where xh,i ∈ Ph,i is the arm corresponding to node (h, i). If
+r
+r
+1
+δ 8 ρ
+c=2
+and δ̃(t) =
+,
+1−ρ
+t 3ν1
+
+then for any fixed t, the event Et holds with probability at least 1 − δ/t6 .
+
+Proof. We upper bound the probability of the complementary event as
+s
+
+
+t
+X
+X
+log(1/δ̃(t))
+c
+bh,i (t) − µh,i ≥ c
+P µ
+P[Et ] ≤
+Th,i (t)
+(h,i)∈Lt Th,i (t)=1
+
+≤
+
+X
+
+t
+X
+
+(h,i)∈Lt Th,i (t)=1
+
+2 exp
+
+
+
+2 log(1/δ̃(t))
+
+− 2Th,i (t)c
+
+
+= 2 exp − 2c2 log(1/δ̃(t)) t|Lt |,
+
+Th.i (t)
+
+
+
+where the first inequality is an application of a union bound and the second inequality follows from the ChernoffHoeffding inequality. We upper bound the number of nodes in Lt by the largest binary tree with a maximum depth
+Hmax (t), i.e., |Lt | ≤ 2Hmax (t)+1 . Thus
+2
+
+P[Etc ] ≤ 2(δ̃(t))2c t2Hmax (t)+1 .
+We first derive a bound on the the term 2Hmax (t) as
+! 
+1
+
+
+ 1
+2 log2 (e)(1−ρ)
+2(1−ρ)
+tν12
+tν12
+Hmax (t)
+≤
+,
+2
+≤ pow 2, log 2
+2(cρ)2
+2(cρ)2
+where we used the upper bound Hmax (t) from Lemma 1 and log2 (e) > 1. This leads to
+
+ 1
+2(1−ρ)
+2c2
+tν12
+c
+P[Et ] ≤ 4t δ̃(t)
+.
+2(cρ)2
+The choice of c and δ̃(t) as in the statement leads to
+
+ 1
+ 8  2
+p
+1−ρ
+tν1 (1 − ρ) 2(1−ρ)
+8
+c
+ρ/(3ν1 )δ/t
+P[Et ] ≤ 4t
+8ρ2
+ 1
+ √
+1
+ 1
+ 8
+ν1 1 − ρ 1−ρ
+1−ρ
+1−ρ 2(1−ρ)
+√
+ρ/(3ν1 )
+t
+= 4t δ/t
+8ρ
+ 1
+√
+1 − ρ 1−ρ
+1− 8 + 1
+√
+≤ 4δt 1−ρ 2(1−ρ)
+3 8
+−2ρ−13
+4
+≤ √ δt 2(1−ρ) ≤ δt−13/2 ≤ δ/t6 ,
+3 8
+
+which completes the proof.
+16
+
+Recalling the definition the regret from Sect. s:preliminaries, we decompose the regret of HCT-iid in two terms
+depending on whether event Et holds or not (i.e., failing confidence intervals). Let the instantaneous regret be
+∆t = f ∗ − rt , then we rewrite the regret as
+Rn =
+
+n
+X
+
+∆t =
+
+n
+X
+t=1
+
+t=1
+
+∆t IEt +
+
+n
+X
+t=1
+
+∆t IEtc = RnE + RnE .
+c
+
+(9)
+
+We first study the regret in the case of failing confidence intervals.
+Lemma 4 (Failing confidence intervals). Given the parameters c and δ̃(t) as in Lemma 3, the regret of HCT-iid
+when confidence intervals fail to hold is bounded as
+√
+c
+RnE ≤ n,
+with probability 1 −
+
+δ
+.
+5n2
+
+Proof. We first split the time horizon n in two phases: the first phase until
+Ec
+
+Rn =
+
+n
+X
+t=1
+
+√
+
+∆t IEtc =
+
+n
+X
+t=1
+
+∆t IEtc +
+
+n
+X
+
+√
+n and the rest. Thus the regret becomes
+
+√
+t= n+1
+
+∆t IEtc .
+
+√
+We trivially bound the regret of first term by n. So in order to prove the result it suffices to show that event Etc
+√
+never happens after n, which implies that the remaining term is zero with high probability. By summing up the
+√
+probabilities P[Etc ] from n + 1 to n and applying union bound we deduce
+P
+
+
+
+n
+[
+
+√
+t= n+1
+
+
+Etc ≤
+
+n
+X
+
+√
+t= n+1
+
+P[Etc ] ≤
+
+Z +∞
+n
+X
+δ
+δ
+δ
+δ
+≤
+dt ≤ 5/2 ≤ 2 .
+√
+6
+6
+t
+5n
+5n
+√
+n t
+n+1
+
+In words this result implies that w.p. ≥ 1 − δ/(5n2 ) we can not have a failing confidence interval after time
+√
+√
+This combined with the trivial bound of n for the first n steps completes the proof.
+
+√
+
+n.
+
+We are now ready to prove the main theorem, which only requires to study the regret term under events {Et }.
+p
+p
+Theorem 1 (Regret bound of HCT-iid). Let δ ∈ (0, 1), δ̃(t) = 8 ρ/(3ν1 )δ/t, and c = 2 1/(1 − ρ). We assume
+that Assumptions 3–5 hold and that at each step t, the reward rt is independent of all prior random events and
+E(rt |xt ) = f (xt ). Then the regret of HCT-iid after n steps is
+1
+ 2d+7 2(d+1) −d d  1 
+ 2n r 3ν  d+2
+p
+d+1
+2
+ν1
+Cν2 ρ d+2
+1
+8
+Rn ≤ 3
+n d+2 + 2 n log(4n/δ),
+log
+d+7
+(1 − ρ)
+δ
+ρ
+
+with probability 1 − δ.
+
+Proof. Step 1: Decomposition of the regret. We start by further decomposing the regret in two terms. We rewrite
+the instantaneous regret ∆t as
+b t,
+∆t = f ∗ − rt = f ∗ − f (xht ,it ) + f (xht ,it ) − rt = ∆ht ,it + ∆
+
+which leads to a regret (see Eq. 9)
+RnE =
+
+n
+X
+t=1
+
+∆ht ,it IEt +
+
+n
+X
+t=1
+
+b t IEt ≤
+∆
+
+n
+X
+t=1
+
+17
+
+∆ht ,it IEt +
+
+n
+X
+t=1
+
+bt = R
+enE + R
+bnE .
+∆
+
+(10)
+
+b t }n is a bounded martingale difference seWe start bounding the second term. We notice that the sequence {∆
+t=1
+b t |Ft−1 ) = 0 and |∆
+b t | ≤ 1. Therefore, an immediate application of the Azuma’s inequality leads
+quence since E(∆
+to
+n
+X
+p
+E
+b
+b t ≤ 2 n log(4n/δ),
+Rn =
+∆
+(11)
+t=1
+
+with probability 1 −
+
+δ/(4n2 ).
+
+Step 2: Preliminary bound on the regret of selected nodes and their parents. We now proceed with the study
+enE , which refers to the regret of the selected nodes as measured by its mean-reward. We start by
+of the first term R
+characterizing which nodes are actually selected by the algorithm under event Et . Let (ht , it ) be the node chosen
+at time t and Pt be the path from the root to the selected node. Let (h′ , i′ ) ∈ Pt and (h′′ , i′′ ) be the node which
+immediately follows (h′ , i′ ) in Pt (i.e., h′′ = h′ + 1). By definition of B and U values, we have that
+h
+
+i
+Bh′ ,i′ (t) = min Uh′ ,i′ (t); max Bh′ +1,2i′ −1 (t); Bh′ +1,2i′ (t) ≤ max Bh′ +1,2i′ −1 (t); Bh′ +1,2i′ (t) = Bh′′ ,i′′ (t),
+(12)
+
+where the last equality follows from the fact that the OptTraverse function selects the node with the largest B value.
+By iterating the previous inequality for all the nodes in Pt until the selected node (ht , it ) and its parent (hpt , ipt ), we
+obtain that
+Bh′ ,i′ (t) ≤ Bht ,it (t) ≤ Uht ,it (t),
+
+Bh′ ,i′ (t) ≤ Bhpt ,ipt (t) ≤ Uhpt ,ipt (t),
+
+∀(h′ , i′ ) ∈ Pt
+
+∀(h′ , i′ ) ∈ Pt − (ht , it )
+
+by definition of B-values. Thus for any node (h, i) ∈ Pt }, we have that Uht ,it (t) ≥ Bh,i (t). Furthermore, since the
+root node (0, 1) which covers the whole arm space X is in Pt , thus there exists at least one node (h∗ , i∗ ) in the set
+Pt which includes the maximizer x∗ (i.e., x∗ ∈ Ph∗ ,i∗ ) and has the the depth h∗ ≤ hpt < ht .8 Thus
+Uht ,it (t) ≥ Bh∗ ,i∗ (t).
+
+(13)
+
+Uhpt ,ipt (t) ≥ Bh∗ ,i∗ (t)
+
+Notice that in the set Pt we may have multiple nodes (h∗ , i∗ ) which contain x∗ and that for all of them we have the
+following sequence of inequalities holds
+∗
+
+f ∗ − f (xh∗ ,i∗ ) ≤ ℓ(x∗ , xh∗ ,i∗ ) ≤ diam(Ph∗ ,i∗ ) ≤ ν1 ρh ,
+
+(14)
+
+where the second inequality holds since x∗ ∈ Ph∗ ,i∗ .
+Now we expand the inequality in Eq. 13 on both sides using the high-probability event Et . First we have
+s
+s
+s
++
+log(1/δ̃(t ))
+log(1/δ̃(t))
+log(1/δ̃(t+ ))
+bht ,it (t) + ν1 ρht + c
+Uht ,it (t) = µ
+≤ f (xht ,it ) + c
++ ν 1 ρh t + c
+Tht ,it (t)
+Tht ,it (t)
+Tht ,it (t)
+s
+log(1/δ̃(t+ ))
+≤ f (xht ,it ) + ν1 ρht + 2c
+,
+(15)
+Tht ,it (t)
+where the first inequality holds on E by definition of U and the second by the fact that t+ ≥ t (and log(1/δ̃(t)) ≤
+log(1/δ̃(t+ ))). The same result also holds for (hpt , ipt ) at time t:
+s
+p
+log(1/δ̃(t+ ))
+.
+(16)
+Uhpt ,ipt (t) ≤ f (xhpt ,ipt ) + ν1 ρht + 2c
+Thpt ,ipt (t)
+8
+
+Note that we never pull the root node (0, 1), therefore ht > 0.
+
+18
+
+We now show that for any node (h∗ , i∗ ) such that x∗ ∈ Ph∗ ,i∗ , then Uh∗ ,i∗ (t) is a valid upper bound on f ∗ :
+s
+s
++ )) (1)
+∗
+log(1/
+δ̃(t
+log(1/δ̃(t))
+≥µ
+bh∗ ,i∗ (t) + ν1 ρh + c
+bh∗ ,i∗ (t) + ν1 ρh + c
+Uh∗ ,i∗ (t) = µ
+Th∗ ,i∗ (t)
+Th∗ ,i∗ (t)
+(2)
+
+∗
+
+(3)
+
+≥ f (xh∗ ,i∗ ) + ν1 ρh ≥ f ∗ ,
+
+where (1) follows from the fact that t+ ≥ t, on (2) we rely on the fact that the event Et holds at time t and on (3)
+we use the regularity of the function w.r.t. the maximum f ∗ from Eq. 14. If an optimal node (h∗ , i∗ ) is a leaf, then
+Bh∗ ,i∗ (t) = Uh∗ ,i∗ (t) ≥ f ∗ . In the case that (h∗ , i∗ ) is not a leaf, there always exists a leaf (h+ , i+ ) such that
+x∗ ∈ Ph+ ,i+ for which (h∗ , i∗ ) is its ancestor, since all the optimal nodes with h > h∗ are descendants of (h∗ , i∗ ).
+Now by propagating the bound backward from (h+ , i+ ) to (h∗ , i∗ ) through Eq. 5 (see Eq. 12) we can show that
+Bh∗ ,i∗ (t) is still a valid upper bound of the optimal value f ∗ . Thus for any optimal node (h∗ , i∗ ) at time t under the
+event Et we have
+Bh∗ ,i∗ (t) ≥ f ∗ .
+Combining this with Eq. 15, Eq. 16 and Eq. 13 , we obtain that on event Et the selected node (ht , it ) and its parent
+(hpt , ipt ) at any time t is such that
+s
+log(1/δ̃(t+ ))
+.
+∆ht ,it = f ∗ − f (xht ,it ) ≤ ν1 ρht + 2c
+Tht ,it (t)
+(17)
+s
++ ))
+p
+log(1/
+δ̃(t
+∆hpt ,ipt = f ∗ − f (xhpt ,ipt ) ≤ ν1 ρht + 2c
+.
+Thpt ,ipt (t)
+Furthermore, since HCT-iid only selects nodes with Th,i (t) < τh (t) the previous expression can be further simplified
+as
+s
+log(2/δ̃(t))
+,
+(18)
+∆ht ,it ≤ 3c
+Tht ,it (t)
+where we also used that t+ ≤ 2t for any t. Although this provides a preliminary bound on the instantaneous regret
+of the selected nodes, we need to further refine this bound.
+In the case of parent (hpt , ipt ), since Thpt ,ipt (t) ≥ τhpt (t), we deduce
+
+hpt
+
+∆hpt ,ipt ≤ ν1 ρ
+
+s
+
++ 2c
+
+p
+log(1/δ̃(t+ ))
+= 3ν1 ρht ,
+τhpt (t)
+
+This implies that every selected node (ht , it ) has a 3ν1 ρht −1 -optimal parent under the event Et .
+
+(19)
+
+eE over different depths. Let 1 ≤ H ≤ H(n) a
+Step 3: Bound on the cumulative regret. We first decompose R
+n
+
+19
+
+constant to be chosen later, then we have
+enE =
+R
+
+(1)
+
+n
+X
+t=1
+
+H(n)
+
+∆ht ,it IEt ≤
+
+n
+X X X
+h=0 i∈Ih (n) t=1
+
+H(n)
+
+n
+X X X
+
+∆h,i I(ht ,it )=(h,i) IEt
+
+s
+
+(2)
+
+Th,i (n)
+
+H(n)
+
+X X
+
+X
+
+s
+
+log(2/δ̃(t̄h,i ))
+log(2/δ̃(t))
+≤
+I
+3c
+Th,i (t) (ht ,it )=(h,i)
+s
+h=0 i∈Ih (n) t=1
+h=0 i∈Ih (n) s=1
+s
+H(n)
+H(n)
+q
+X X
+X X Z Th,i (n)
+log(2/δ̃(t̄h,i ))
+ds ≤
+6c Th,i (n) log(2/δ̃(t̄h,i ))
+3c
+≤
+s
+1
+≤
+
+3c
+
+h=0 i∈Ih (n)
+
+h=0 i∈Ih (n)
+
+= 6c
+
+(20)
+
+H(n)
+H
+X
+X
+X q
+Th,i (n) log(2/δ̃(t̄h,i )) +6c
+h=0 i∈Ih (n)
+
+{z
+
+|
+
+Th,i (n) log(2/δ̃(t̄h,i ))
+
+h=H+1 i∈Ih (n)
+
+}
+
+(a)
+
+X q
+
+|
+
+{z
+
+}
+
+(b)
+
+where in (1) we rely on the definition of event Et and Eq. 18 and in (2) we rely on the fact that at any time step t
+when the algorithm pulls the arm (h, i), Th,i is incremented by 1 and that by definition of t̄h,i we have that t ≤ t̄h,i .
+We now bound the two terms in the RHS of Eq. 20. We first simplify the first term as
+X X q
+
+H(n)
+
+(a) =
+
+h=0 i∈Ih (n)
+
+=
+
+H
+X
+h=0
+
+Th,i (n) log(2/δ̃(t̄h,i )) ≤
+
+q
+|Ih (n)| τh (n) log(2/δ̃(n)),
+
+H
+X
+X q
+
+τh (n) log(2/δ̃(n))
+
+h=0 i∈Ih (n)
+
+(21)
+
+where the inequality follows from Th,i (n) ≤ τh (n) and t̄h,i ≤ n. We now need to provide a bound on the number of
+nodes at each depth h. We first notice that since T is a binary tree, the number of nodes at depth h is at most twice
++
+the number of nodes at depth h − 1 that have been expanded (i.e., the parent nodes), i.e., |Ih (n)| ≤ 2|Ih−1
+(n)|. We
+p p
+also recall the result of Eq. 19 which guarantees that (ht , it ), the parent of the selected node (ht , it ), is 3ν1 ρht −1
+optimal, that is, HCT never selects a node (ht , it ) unless its parent is 3ν1 ρht −1 optimal. From Asm. 5 we have that
+the number of 3ν1 ρh -optimal nodes is bounded by the covering number N (3ν1 /ν2 ε, l, ε) with ε = ν1 ρh . Thus we
+obtain the bound
++
+(n)| ≤ 2C(ν2 ρ(h−1) )−d ,
+|Ih (n)| ≤ 2|Ih−1
+
+(22)
+
+where d is the near-optimality dimension of f around x∗ . This bound combined with Eq. 21 implies that
+s
+q
+H
+H
+X
+X
+c2 log(1/δ̃(n+ )) −2h
+(a) ≤
+ρ
+log(2/δ̃(n))
+2Cν2−d ρ−(h−1)d τh (n) log(2/δ̃(n)) ≤
+2Cν2−d ρ−(h−1)d
+ν12
+h=0
+
+≤ 2Cν2−d
+
+h=0
+
+c log(2/δ̃(n+ )) d
+ρ
+ν1
+
+H
+X
+
+h=0
+
+ρ−h(d+1) ≤ 2Cν2−d
+
+We now bound the second term of Eq. 20 as
+v
+v
+u H(n)
+u H(n)
+u
+u X
+X
+(1)u X
+u
+(b) ≤ t
+log(2/δ(t̄h,i ))t
+h=H+1 i∈Ih (n)
+
+c log(2/δ̃(n+ )) d ρ−H(d+1)
+.
+ρ
+ν1
+1−ρ
+
+v
+u H(n)
+X
+(2) u
+u X
+Th,i (n) ≤ t
+
+h=H+1 i∈Ih (n)
+
+20
+
+X
+
+h=H+1 i∈Ih (n)
+
+√
+log(2/δ̃(t̄h,i )) n
+
+(23)
+
+(24)
+
+where in (1) we make use of Cauchy-Schwarz inequality and in (2) we simply bound the total number of samples by
+n. We now focus on the summation in the first square root. We recall that we denote by t̃h,i the last time when any
+of the two children of node (h, i) has been pulled. Then we have the following sequence of inequalities.
+H(n)−1
+
+H(n)
+
+n=
+
+X X
+
+h=0 i∈Ih (n)
+H(n)−1
+
+≥
+≥
+
+X
+
+h=H
+
+Th,i (n) ≥
+
+i∈Ih+ (n)
+
+i∈Ih+ (n)
+
+h=0
+
+τh (t̃h,i ) ≥
+2(H−h)
+
+ρ
+
+H(n)−1
+
+X
+
+H(n)−1
+
+X
+
+H(n)−1
+c2 ρ−2H X
+
+ν12
+
+X
+
+X
+
+Th,i (n) ≥
+
+X
+
+i∈Ih+ (n)
+
+(1)
+
+H(n)−1
+
+Th,i (t̃h,i ) ≥
+
+X
+h=0
+
+X
+
+(25)
+
+ν12
+
+log(1/δ̃(t̃+
+h,i ))
+
+c2 ρ−2H
+≥
+ν12
+
+(2)
+
+H(n)−1
+
+X
+
+τh (t̃h,i )
+
+i∈Ih+ (n)
+
+ρ−2h c2 log(1/δ̃(t̃+
+h,i ))
+
+X
+
+i∈Ih+ (n)
+
+h=H
+
+h=0
+
+i∈Ih+ (n)
+
+h=H
+
+X
+
+X
+
+X
+
+log(1/δ̃(t̃+
+h,i ))),
+
+h=H i∈Ih+ (n)
+
+where in (1) we rely on the fact that, at each time step t, HCT-iid only selects a node when Th,i (t) ≥ τh,i (t) for its
+parent and in (2) we used that ρ2(H−h) ≥ 1 for all h ≥ H. We notice that, by definition of t̃h,i , for any internal
+node (h, i) t̃h,i = max(t̄h+1,2i−1 , t̄h+1,2i ). We also notice that for any t1 , t2 > 0 we have that [max(t1 , t2 )]+ =
++
+max(t+
+1 , t2 ). This implies that
+c2 ρ−2H
+n≥
+ν12
+
+H(n)−1
+
+X
+
+H(n)−1
+
+c2 ρ−2H
+≥
+ν12
+
+H(n)−1
+
+(2)
+
+(3)
+
+=
+
+c2 ρ−2H
+2ν12
+
+c2 ρ−2H
+=
+2ν12
+
+(4)
+
+log(1/δ̃([max(t̄h+1,2i−1 , t̄h+1,2i )]+ ))
+
+h=H i∈Ih+ (n)
+
+c2 ρ−2H
+=
+ν12
+
+(1)
+
+X
+
+X
+
+X
+
++
+max(log(1/δ̃(t̄+
+h+1,2i−1 )), log(1/δ̃(t̄h+1,2i−1 )))
+
+h=H i∈Ih+ (n)
+
+X
+
++
+X log(1/δ̃(t̄+
+h+1,2i−1 )) + log(1/δ̃(t̄h+1,2i ))
+
+h=H
+
+i∈Ih+ (n)
+
+H(n)
+
+X
+
+X
+
+2
+
+(26)
+
++
+log(1/δ̃(t̄+
+h′ ,2i−1 )) + log(1/δ̃(t̄h′ ,2i ))
+
+h′ =H+1 i∈Ih+′ −1 (n)
+H(n)
+
+X
+
+X
+
+log(1/δ̃(t̄+
+h′ ,i′ )),
+
+h′ =H+1 i′ ∈Ih′ (n)
+
+where in (1) we rely on the fact that, for any t > 0, log(1/δ̃(t)) is an increasing function of t. Therefore we have
+that log(1/δ̃(max(t1 , t2 ))) = max(log(1/δ̃(t1 )), log(1/δ̃(t2 ))) for any t1 , t2 > 0 . In (2) we rely on the fact that
+the maximum of some random variables is always larger than their average. We introduce a new variable h′ = h + 1
+to derive (3). For proving (4) we rely on the argument that, for any h > 0, Ih+ (n) covers all the internal nodes at
+layer h. This implies that the set of the children of Ih+ (n) covers Ih+1 (n). This combined with fact that the inner
+sum in (3) is essentially taken on the set of the children of Ih+′ −1 (n) proves (4).
+Inverting Eq. 26 we have
+H(n)
+
+X
+
+X
+
+h=H+1 i∈Ih (n)
+
+log(1/δ̃(t̄+
+h,i )) ≤
+
+21
+
+2ν12 ρ2H n
+.
+c2
+
+(27)
+
+By plugging Eq. 27 into Eq. 24 we deduce
+v
+v
+u H(n)
+u H(n)
+u X X
+u X X
+√
+√
+u
+u
+t
+n
+≤
+log(2/δ̃(t̄+
+))
+2 log(1/δ̃(t̄+
+(b) ≤ t
+h,i
+h,i )) n
+≤
+
+s
+
+h=H+1 i∈Ih
+
+h=H+1 i∈Ih
+
+4ν12 ρ2H n √
+2
+n = ν1 ρH n.
+c2
+c
+
+en :
+This combined with Eq. 23 provides the following bound on R
+#
+"
+Cc2 ν2−d ρd log(2/δ̃(n)) −H(d+1)
+H
+E
+e
++ρ n .
+ρ
+Rn ≤ 12ν1
+ν12 (1 − ρ)
+
+We then choose H to minimize the previous bound. Notably we equalize the two terms in the bound by choosing
+ρ
+
+H
+
+
+
+=
+
+c2 Cν2−d ρd log(2/δ̃(n))
+n
+(1 − ρ)ν12
+
+
+
+1
+d+2
+
+,
+
+which, once plugged into the previous regret bound, leads to
+enE ≤ 24ν1
+R
+c
+
+
+
+c2 Cν2−d ρd
+(1 − ρ)ν12
+
+
+
+1
+d+2
+
+ 1 d+1
+log(2/δ̃(n)) d+2 n d+2 .
+
+Using the values of δ̃(t) and c defined in Lemma 3, the previous expression becomes
+eE
+R
+n
+
+1
+ 2(d+3) 2(d+1) −d d  1 
+ 2n r 3ν  d+2
+d+1
+2
+ν1
+Cν2 ρ d+2
+1
+8
+d+2 .
+n
+log
+≤3
+δ
+ρ
+(1 − ρ)d/2+3
+
+This combined with the regret bound of Eq. 11 and the result of Lem. 4 and a union bound on all n ∈ {1, 2, 3, . . . }
+proves the final result with a probability at least 1 − δ.
+
+B Correlated Bandit feedback
+We begin the analysis of HCT-Γ by proving some useful concentration inequalities for non-iid random variables
+under the mixing assumptions of Sect. 2.
+
+B.1
+
+Concentration Inequality for non-iid Episodic Random Variables
+
+In this section we extend the result in (Azar et al., 2013) and we derive a concentration inequality for averages of
+non-iid random variables grouped in episodes. In fact, given the structure of the HCT-Γ algorithm, the rewards
+observed from an arm x are not necessarily consecutive but they are obtained over multiple episodes. This result is
+of independent interest, thus we first report it in its general form and we later apply it to HCT-Γ.
+In HCT-Γ, once an arm is selected, it is pulled for a number of consecutive steps and many steps may pass before it
+is selected again. As a result, the rewards observed from one arm are obtained through a series of episodes. Given a
+fixed horizon n, let Kn (x) be the total number of episodes when arm x has been selected, we denote by tk (x), with
+k = 1, . . . , Kn (x), the step when k-th episode of arm x has started and by vk (x) the length of episode k. Finally,
+22
+
+PK (x)
+Tn (x) = k n vk (x) is the total number of samples from arm x. The objective is to study the concentration of
+the empirical mean built using all the samples
+µ
+bn (x) =
+
+Kn (x) tk (x)+vk (x)
+X
+X
+1
+rt (x),
+Tn (x)
+k=1
+
+t=tk (x)
+
+towards the mean-reward f (x) of the arm. In order to simplify the notation, in the following we drop the dependency
+from n and x and we use K, tk , and vk . We first introduce two quantities. For any t = 1, . . . , n and for any
+k = 1, . . . , K, we define
+Mtk (x)
+
+=E
+
++vk
+h tkX
+t′ =tk
+
+i
+rt′ Ft ,
+
+as the expectation of the sum of rewards within episode k, conditioned on the filtration Ft up to time t (see definition
+in Section 2),9 and the residual
+k
+(x).
+εkt (x) = Mtk (x) − Mt−1
+
+We prove the following.
+Lemma 5. For any x ∈ X , k = 1, . . . , K, and t = 1, . . . , n, εkt (x) is a bounded martingale sequence difference,
+i.e., εkt (x) ≤ 2Γ + 1 and E[εkt (x)|Ft−1 ] = 0.
+Proof. Given the definition of Mtk (x) we have that
+k
+εkt (x) = Mtk (x) − Mt−1
+(x) = E
+
+=
+
+t
+X
+
+rt′ + E
+
+t′ =tk
+
+= rt + E
+
++vk
+h tkX
+
+t′ =t+1
+
++vk
+h tkX
+
+t′ =t+1
+
+= rt − f (x) + E
+≤ 1 + Γ + Γ.
+
++vk
+h tkX
+t′ =tk
+
++vk
+i
+i
+h tkX
+rt′ Ft−1
+rt′ Ft − E
+t′ =tk
+
++vk
+t−1
+h tkX
+i X
+i
+rt′ − E
+rt′ Ft −
+rt′ Ft−1
+t′ =tk
+
+t′ =t
+
++vk
+i
+h tkX
+i
+rt′ Ft − E
+rt′ Ft−1
+t′ =t
+
++vk
+h tkX
+
+t′ =t+1
+
++vk
+i
+h tkX
+i
+rt′ Ft − (tk + vk − t)f (x) + (tk + vk − t + 1)f (x) − E
+rt′ Ft−1
+t′ =t
+
+Since the previous inequality holds both ways, we obtain that |εkt (x)| ≤ 2Γ + 1. Furthermore, we have that
+
+
+
+k
+E εkt (x)|Ft−1 ] = E Mtk (x) − Mt−1
+(x)|Ft−1
+
+
++vk
++vk
+h tkX
+i
+h tkX
+i
+= E rt + E
+rt′ Ft Ft−1 − E
+rt′ Ft−1 = 0.
+t′ =t+1
+
+t′ =t
+
+We can now proceed to derive a high-probability concentration inequality for the average reward of each arm x.
+9
+
+Notice that the index t of the filtration can be before, within, or after the k-th episode.
+
+23
+
+Lemma 6. For any x ∈ X pulled K(x) episodes, each of length vk (x), for a total number of T (x) samples, we
+have that
+s
+K(x) t +v
+2 log(2/δ) K(x)Γ
+1 X kXk
+rt − f (x) ≤ (2Γ + 1)
++
+,
+(28)
+T (x)
+T (x)
+T (x)
+t=t
+k=1
+
+k
+
+with probability 1 − δ.
+Proof. We first notice that for any episode k10
+tkX
++vk
+
+rt = Mtkk +vk ,
+
+t=tk
+
+hP
+i
+tk +vk
+′ Ft +v
+since Mtkk +vk = E
+r
+and the filtration completely determines all the rewards. We can further
+′
+t
+k
+k
+t =tk
+develop the previous expression using a telescopic expansion which allows us to rewrite the sum of the rewards as a
+sum of residuals εkt as
+tkX
++vk
+t=tk
+
+rt = Mtkk +vk = Mtkk +vk − Mtkk +vk −1 + Mtkk +vk −1 − Mtkk +vk −2 + Mtkk +vk −2 + · · · − Mtkk + Mtkk
+= εktk +vk + εktk +vk −1 + · · · + εktk +1 + Mtkk =
+
+tkX
++vk
+
+εkt + Mtkk .
+
+t=tk +1
+
+Thus we can proceed by bounding
+K(x)  tk +vk
+
+X
+k=1
+
+X
+
+t=tk
+
+K(x) 
+K(x) tk +vk
+
+
+X
+X X
+k
+k
+rt − vk f (x) ≤
+εt +
+Mtk − vk f (x)
+k=1 t=tk +1
+
+≤
+
+K(x) tk +vk
+X X
+
+k=1
+
+εkt + K(x)Γ.
+
+k=1 t=tk +1
+
+By Lem. 5 εkt is a bounded martingale sequence difference, thus we can directly apply the Azuma’s inequality and
+obtain that
+K(x) tk +vk
+X X
+
+k=1 t=tk +1
+
+p
+εkt ≤ (2Γ + 1) 2T (x) log(2/δ).
+
+Grouping all the terms together and dividing by T (x) leads to the statement.
+
+B.2
+
+Proof of Thm. 2
+
+The notation needed in this section is the same as in Section A. We only need to restate the notation about the
+episodes from previous section to HCT-Γ. We denote by Kh,i (n) the number of episodes for node (h, i) up to time
+n, by th,i (k) the step when episode k is started, and by vh,i (k) the number of steps of episode k.
+We first notice that Lemma 1 holds
+also for HCT-Γ, thus bounding the maximum depth of an HCT tree
+
+ unchanged
+nν12
+1
+to H(n) ≤ Hmax (n) = 1−ρ log 2(cρ)2 . We begin the main analysis by applying the result of Lem. 6 to bound the
+estimation error of µ
+bh,i (t) at each time step t.
+10
+
+We drop the dependency of M on x.
+
+24
+
+Lemma 7. Under Assumptions 1 and 2, for any fixed node (h, i) and step t, we have that
+s
+log(5/δ) Γ log(t)
++
+.
+|b
+µh,i (t) − f (xh,i )| ≤ (3Γ + 1) 2
+Th,i (t)
+Th,i (t)
+with probability 1 − δ. Furthermore, the previous expression can be conveniently restated for any 0 < ε ≤ 1 as
+P(|b
+µh,i (t) − f (xh,i )| > ǫ) ≤ 5t
+
+1/3
+
+
+
+Th,i (t)ε2
+exp −
+2(3Γ + 1)2
+
+
+
+Proof. As a direct consequence of Lem. 6 we have w.p. 1 − δ,
+s
+
+|b
+µh,i (t) − f (xh,i )| ≤ (2Γ + 1)
+
+2 log(2/δ) Kh,i (t)Γ
++
+,
+Th,i (t)
+Th,i (t)
+
+where Kh,i (t) is the number of episodes in which we pull arm xh,i . At each episode in which xh,i is selected,
+its number of pulls Th,i is doubled w.r.t. the previous episode, except for those episodes where the current time
+s becomes larger than s+ , which triggers the termination of the episode. However since s+ doubles whenever s
+becomes larger than s+ , the total number of times when episodes are interrupted because of s ≥ s+ can be at
+maximum log2 (t) withing a time horizon of t. This means that the total number of times an episode finishes without
+doubling Th,i (t) is bounded by log2 (t). Thus we have
+Kh,i (t)−log2 (t)−1
+
+Th,i (t) ≥
+
+X
+
+2k−1 ≥ 2Kh,i (t)−log 2 (t)−2 ,
+
+k=1
+
+where in the second inequality we simply keep the last term of the summation. Inverting the previous inequality we
+obtain that
+Kh,i (t) ≤ log2 (4Th,i (t)) + log2 (t),
+which bounds the number of episodes w.r.t. the number of pulls and the time horizon t. Combining this result with
+the high probability bound of Lem. 6, we obtain
+s
+log (4Th,i (t))
+log(t)
+2 log(2/δ)
++Γ 2
++Γ
+,
+|b
+µh,i (t) − f (xh,i )| ≤ (2Γ + 1)
+Th,i (t)
+Th,i (t)
+Th,i (t)
+with probability 1 − δ. The statement of the Lemma is obtained by further simplifying the second term in the right
+hand side with the objective of achieving a more homogeneous expression. In particular, we have that
+q
+q
+q
+log2 (4Th,i (t)) = 2 log2 (2 Th,i (t)) = 2(log2 ( Th,i (t)) + 1) ≤ 2 Th,i (t),
+and
+
+s
+
+|b
+µh,i (t) − f (xh,i )| ≤ (2Γ + 1)
+
+s
+
+p
+2 log(2/δ) 2Γ Th,i (t) Γ log(t)
++
++
+Th,i (t)
+Th,i (t)
+Th,i (t)
+
+2 log(5/δ) Γ log(t)
++
+.
+Th,i (t)
+Th,i (t)
+q
+Γ log(t)
+To prove the second statement we choose ε := (3Γ + 1) 2 log(5/δ)
+Th,i (t) + Th,i (t) and we solve the previous expression
+w.r.t. δ:
+≤ (3Γ + 1)
+
+25
+
+
+
+
+Th,i (t)(ε − Γ log(t)/Th,i (t))2
+δ = 5 exp −
+.
+2(3Γ + 1)2
+The following sequence of inequalities then follows
+
+
+
+
+
+Th,i (t)(ε − Γ log(t)/Th,i (t))2
+Th,i (t)(ε2 − 2εΓ log(t)/Th,i (t))
+P(|b
+µh,i (t) − f (xh,i )| > ε) ≤ δ = 5 exp −
+≤ 5 exp −
+2(3Γ + 1)2
+2(3Γ + 1)2
+
+
+
+
+Th,i (t)ε2
+Th,i (t)(ε2 − 2Γ log(t)/Th,i (t))
+2Γ log(t)
++
+=
+5
+exp
+−
+≤ 5 exp −
+2(3Γ + 1)2
+(3Γ + 1)2 2(3Γ + 1)2
+
+
+
+
+Th,i (t)ε2
+Th,i (t)ε2
+2Γ log(t)
+1/6
++
++ log(t ) ,
+≤ 5 exp −
+= 5 exp −
+(3Γ + 1)2
+12Γ
+2(3Γ + 1)2
+which concludes the proof.
+The result of Lem. 7 facilitates the adaption of the previous results of iid case to the case of correlated rewards, since
+this bound is similar to those of standard tail’s inequality such as Hoeffding and Azuma’s inequality. Based on this
+result we can extend the results of previous section to the case of dependent arms.
+We now introduce the high probability event Et,n under which the mean reward for all the selected nodes in the
+interval [t, n] is within a confidence interval of the empirical estimates at every time step in the interval. The event
+Et,n is needed to concentrate the sum of obtained rewards around the sum of their corresponding arm means. Note
+that unlike the previous theorem where we could make use of a simple martingale argument to concentrate the
+rewards around their means, here the rewards are not unbiased samples of the arm means. Therefore, we need a
+more advanced technique than the Azuma’s inequality for concentration of measure.
+Lemma 8 (High-probability event). We define the set of all the possible nodes in trees of maximum depth Hmax (t)
+as
+[
+Lt =
+Nodes(T ).
+T :Depth(T )≤Hmax (t)
+
+We introduce the event
+s
+
+
+log(1/δ̃(t))
+,
+Ωt = ∀(h, i) ∈ Lt , ∀Th,i (t) = 1, . . . , t : µ
+bh,i (t) − f (xh,i ) ≤ c
+Th,i (t)
+T
+where xh,i ∈ Ph,i is the arm corresponding to node (h, i), and the event Et,n = ns=t Ωs . If
+r
+r
+δ 9 ρ
+1
+and δ̃(t) =
+,
+c = 6(3Γ + 1)
+1−ρ
+t 4ν1
+
+then for any fixed t, the event Ωt holds with probability 1 − δ/t7 and the joint event Et,n holds with probability at
+least 1 − δ/(6t6 ).
+Proof. We upper bound the probability of complementary event of Ωt after t steps
+s
+
+
+t
+X
+X
+log(1/δ̃(t))
+c
+bh,i (t) − f (xh,i ) ≥ c
+P[Ωt ] =
+P µ
+Th,i (t)
+(h,i)∈Lt Th,i (t)=1
+
+≤
+
+X
+
+t
+X
+
+(h,i)∈Lt Th,i (t)=1
+
+5t
+
+1/3
+
+exp
+
+
+
+log(1/δ̃(t))
+− Th,i (t)c
+(3Γ + 1)2 Th,i (t)
+2
+
+≤ 5 exp(−c2 /(3Γ + 1)2 log(1/δ̃(t)))t4/3 |Lt |,
+26
+
+
+
+Similar to the proof of Lem. 4, we have that |Lt | ≤ 2Hmax (t)+1 . Thus
+2
+
+P[Ωct ] ≤ 5(δ̃(t))(c/(3Γ+1)) t4/3 2Hmax (t)+1 .
+We first derive a bound on the the term 2Hmax (t) as
+Hmax (t)
+
+2
+
+≤ pow 2, log 2
+
+
+
+tν12
+2(cρ)2
+
+
+
+1
+2 log2 (e)(1−ρ)
+
+!
+
+≤
+
+
+
+tν12
+2(cρ)2
+
+
+
+1
+2(1−ρ)
+
+,
+
+where we used the definition of the upper bound Hmax (t). which leads to
+P[Ωct ]
+
+≤ 10t
+
+4/3
+
+(c/(3Γ+1))2
+δ̃(t)
+
+The choice of c and δ̃(t) as in the statement leads to P[Ωct ] ≤
+
+δ
+t7
+
+
+
+tν12
+2(cρ)2
+
+
+
+1
+2(1−ρ)
+
+.
+
+(steps are similar to Lemma 3) .
+
+The bound on the joint event Et,n follows from a union bound as
+n
+n
+h[
+i X
+ c 
+P Et,n
+=P
+P(Ωcs ) ≤
+Ωcs ≤
+s=t
+
+s=t
+
+Z
+
+t
+
+∞
+
+δ
+δ
+ds = 6 .
+s7
+6t
+
+Recalling the definition of regret from Sect. 2, we decompose the regret of HCT-iid in two terms depending on
+whether event Et holds or not (i.e., failing confidence intervals). Let the instantaneous regret be ∆t = f ∗ − rt , then
+we rewrite the regret as
+n
+n
+n
+X
+X
+X
+c
+∆t IEtc = RnE + RnE .
+(29)
+∆t IEt +
+∆t =
+Rn =
+t=1
+
+t=1
+
+t=1
+
+We first study the regret in the case of failing confidence intervals.
+
+Lemma 9 (Failing confidence intervals). Given the parameters c and δ̃(t) as in Lemma 8, the regret of HCT-iid
+when confidence intervals fail to hold is bounded as
+√
+c
+RnE ≤ n,
+with probability 1 −
+
+δ
+.
+30n2
+
+Proof. The proof is the same as in Lemma 4 expect for the union bound which is applied to Et,n for t =
+
+√
+
+n, . . . , n.
+
+We are now ready to prove the main theorem, which only requires to study the regret term under events {Et,n }.
+p
+Theorem 2 (Regret bound of HCT-Γ). Let δ ∈ (0, 1) and c := 6(3Γ + 1) 1/(1 − ρ). We assume that Assumptions 1–5 hold and that rewards are generated according to the general model defined in Section 2. Then the regret
+of HCT-Γ after n steps is
+1
+ 2 −2 −d d  1 
+ 2n r 3ν  d+2
+√
+d+1
+√
+c Cν1 ν2 ρ d+2
+1
+9
+n d+2 + n,
+log
+Rn ≤ 2(3 2 + 4)
+1−ρ
+δ
+ρ
+
+with probability 1 − δ.
+
+27
+
+Proof. The structure of the proof is exactly the same as in Thm. 1. Thus, here we report only the main differences
+in each step.
+Step 1: Decomposition of the regret. We first decompose the regret in two terms. We rewrite the instantaneous
+regret ∆t as
+b t,
+∆t = f ∗ − rt = f ∗ − f (xht ,it ) + f (xht ,it ) − rt = ∆ht ,it + ∆
+
+which leads to a regret
+
+RnE
+
+=
+
+n
+X
+t=1
+
+∆ht ,it IEt,n +
+
+n
+X
+t=1
+
+b t IEt,n = R
+enE + R
+bnE .
+∆
+
+(30)
+
+bnE still requires the event IEt,n and the sequence {∆
+b t }n is no longer a bounded
+Unlike in Thm. 1, the definition of R
+t=1
+b t |Ft−1 ) 6= 0 since the expected value of rt does not coincide with the
+martingale difference sequence. In fact, E(∆
+mean-reward value of the corresponding node f (xht ,it ). This prevents from directly using the Azuma inequality and
+extra care is needed to derive a bound. We have that
+bnE =
+R
+=
+
+n
+X
+t=1
+
+H(n)
+
+b t IEt,n ≤
+∆
+
+n
+X X X
+h=0 i∈Ih (n) t=1
+
+H(n)
+
+n
+X X X
+h=0 i∈Ih (n) t=1
+
+(2)
+
+=
+
+≤
+
+H(n)
+
+n
+X X X
+(f (xh,i ) − rt )IΩth,i ,n I(ht ,it )=(h,i)
+≤
+
+(1)
+
+(f (xh,i ) − rt )IEt,n I(ht ,it )=(h,i)
+
+h=0 i∈Ih (n) t=1
+
+H(n)
+
+X X
+
+h=0 i∈Ih (n)
+
+(3)
+
+b t IEt,n I(h ,i )=(h,i)
+∆
+t t
+
+H(n)
+
+X X
+
+Th,i (t̄h,i )(f (xh,i ) − µ
+bh,i (t̄h,i ))IΩt̄
+s
+
+cTh,i (t̄h,i )
+
+h=0 i∈Ih (n)
+
+≤c
+
+H
+X
+X q
+h=0 i∈Ih (n)
+
+|
+
+h,i
+
+H(n)
+X X q
+log(2/δ̃(t̄h,i ))
+c Th,i (t̄h,i ) log(2/δ̃(t̄h,i ))
+≤
+Th,i (t̄h,i )
+h=0 i∈Ih (n)
+
+X q
+Th,i (n) log(2/δ̃(t̄h,i )),
+
+H(n)
+
+Th,i (n) log(2/δ̃(t̄h,i )) +c
+{z
+
+(a)
+
+(31)
+
+}
+
+X
+
+h=H+1 i∈Ih (n)
+
+|
+
+{z
+
+(b)
+
+}
+
+T
+where (1) follows from the definition of Et,n = ns=t Ωs , thus if Et,n holds at time t then Ωs also holds at s =
+t̄h,i ≥ t. Step (2) follows
+bh,i : First we notice that for the node (hn , in ) we have that
+P from the definition of µ
+µhn ,in (n) = nt=1 rt I(ht ,it )=(hn ,in ) since we update the statistics at the end. for every other node we have
+Thn ,in (n)b
+that the last selection time t̄h,i and the end of last episode coincides together . Now since
+Pwe update the statistics of
+the selected node at the end of every episode, thus, we have that Th,i (t̄h,i )b
+µh,i (t̄h,i ) = nt=1 rt I(ht ,it )=(h,i) also for
+(h, i) 6= (hn , in ). Step (3) follows from the definition of Ωs . The resulting bound matches the one in Eq. 20 up to
+constants and it can be bound similarly.
+#
+"
+2 ν −d ρd log(2/δ̃(n))
+Cc
+2
+bE ≤ 2ν1
+ρ−H(d+1) + ρH n .
+R
+n
+ν12 (1 − ρ)
+Step 2: Preliminary bound on the regret of selected nodes. The second step follows exactly the same steps as
+in the proof of Thm. 1 with the only difference that here we use the high-probability event Et,n . As a result the
+following inequalities hold for the node (ht , it ) selected at time t and its parent (hpt , ipt )
+s
+log(2/δ̃(t))
+∆ht ,it ≤ 3c
+.
+Tht ,it (t)
+(32)
+∆hpt ,ipt ≤ 3ν1 ρht −1 .
+28
+
+eE should be analyzed
+Step 3: Bound on the cumulative regret. Unlike in the proof of Thm. 1, the total regret R
+n
+with extra care since here we do not update the selected arm as well as the statistics Th,i (t) and µ
+bh,i (t) for the the
+e
+entire length of episode, whereas in Thm. 1 we update at every step. Thus the development of RnE slightly differs
+from Eq. 20. Let 1 ≤ H ≤ H(n) a constant to be chosen later, then we have
+enE (1)
+R
+=
+(2)
+
+≤
+
+n
+X
+t=1
+
+∆ht ,it IEt,n =
+
+H(n)
+
+X X
+
+h=0 i∈Ih (n) t=1
+
+Kh,i (n) th,i (k)+vh,i (k)
+
+X
+
+h=0 i∈Ih (n)
+
+H(n)
+
+≤
+
+n
+X X X
+
+k=1
+
+X
+
+t=th,i (k)
+
+h=0 i∈Ih
+
+∆h,i I(ht ,it )=(h,i) IEt,n =
+
+ s
+3c
+
+
+
+log(2/δ̃(t))  (3)
+=
+Th,i (t)
+
+Kh,i (n)
+q
+X
+vh,i (k)
+p
+3c log(2/δ̃(t̄h,i ))
+Th,i (th,i (k))
+k=1
+(n)
+
+X X
+
+Kh,i (n) th,i (k)+vh,i (k)
+
+H(n)
+
+H(n)
+
+X X
+
+h=0 i∈Ih (n)
+
+H(n)
+
+X X
+
+h=0 i∈Ih (n)
+
+X
+
+X
+k=1
+
+t=th,i (k)
+
+ s
+
+Kh,i (n)
+
+X
+k=1
+
+vh,i (k) 3c
+
+∆h,i IEt,n
+
+
+log(2/δ̃(th,i (k))) 
+Th,i (th,i (k))
+
+H(n)
+H(n)
+X X q
+X X q
+√
+√
+log(2/δ̃(t̄h,i ))Th,i (th,i (Kh,i (n))) ≤ 3( 2 + 1)c
+log(2/δ̃(t̄h,i ))Th,i (n)
+≤ 3( 2 + 1)c
+
+(4)
+
+h=0 i∈Ih (n)
+
+h=0 i∈Ih (n)
+
+H(n)
+H
+X
+X
+X q
+√
+√
+= 3( 2 + 1)c
+Th,i (n) log(2/δ̃(t̄h,i )) +3( 2 + 1)c
+h=0 i∈Ih (n)
+
+|
+
+{z
+
+(a)
+
+X q
+
+h=H+1 i∈Ih (n)
+
+}
+
+|
+
+Th,i (n) log(2/δ̃(t̄h,i )),
+{z
+
+(b)
+
+}
+
+(33)
+
+where the first sequence of equalities in (1) simply follows from the definition of episodes. In (2) we bound the
+instantaneous regret by Eq. 32. Step (3) follows from the fact that when (h, i) is selected, its statistics, including
+Th,i , are not changed until the end of the episode. Step (4) is an immediate application of Lemma 19 in Jaksch et al.
+(2010).
+Constants apart the terms (a) and (b) coincides with the terms defined in Eq. 20 and similar bounds can be derived.
+bnE and R
+enE together leads to
+Putting the bounds on R
+"
+#
+2 ν −d ρd log(2/δ̃(n))
+√
+Cc
+2
+RnE ≤ 2(3 2 + 4)ν1
+ρ−H(d+1) + ρH n .
+ν12 (1 − ρ)
+It is not difficult to prove that for a suitable choice H, we obtain the final bound of O(log(n)1/(d+2) n(d+1)/(d+2) ) on
+Rn . This combined with the result of Lem. 8 and a union bound on all n ∈ {1, 2, 3, . . . } proves the final result.
+
+B.3
+
+Proof of Thm. 3
+
+p
+p
+Theorem 3 Let δ ∈ (0, 1), δ̃(n) = 9 ρ/(4ν1 )δ/n, and c = 3(3Γ+1) 1/(1 − ρ). We assume that Assumptions 1–5
+hold and that rewards are generated according to the general model defined in Section 2. Then if δ = 1/n the space
+complexity of HCT-Γ is
+E(Nn ) = O(log(n)2/(d+2) nd/(d+2) ).
+Proof. We assume that the space requirement for each node (i.e., storing variables such as µ
+bh,i , Th.i ) is a unit. Let
+Bt denote the event corresponding to the branching/expansion of the node (ht , it ) selected at time t, then the space
+29
+
+complexity is Nn =
+
+Pn
+
+t=1 IBt .
+
+Similar to the regret analysis, we decompose Nn depending on events Et,n , that is
+Nn =
+
+n
+X
+t=1
+
+IBt IEt,n +
+
+n
+X
+t=1
+
+c
+IBt IEt,n
+= NnE + NnE .
+c
+
+(34)
+
+Since we are targeting the expected space complexity, we take the expectation of the previous expression and the
+second term can be easily bounded as
+n
+n
+n
+X
+X
+ c X
+δ
+c
+≤ C,
+P[Etc ] ≤
+IBt P[Et,n
+]≤
+E NnE =
+6t6
+t=1
+t=1
+t=1
+
+(35)
+
+where the last inequality follows from Lemma 8 and C is a constant independent from n. We now focus on the first
+term NnE . We first rewrite it as the total number of nodes |Tn | generated by HCT over n steps. For any depth H > 0
+we have
+H(n)
+
+NnE
+
+=
+
+X
+h=0
+
+|Ih (n)| = 1 +
+
+H
+X
+h=1
+
+H(n)
+
+H(n)
+
+|Ih (n)| +
+
+X
+
+h=H+1
+
+|Ih (n)| ≤ 1 + H|IH (n)| +
+| {z }
+(c)
+
+A bound on term (d) can be recovered through the following sequence of inequalities
+H(n)
+
+n=
+
+H(n)
+
+X X
+
+h=0 i∈Ih (n)
+(2)
+
+≥
+
+H(n)
+
+X
+
+X
+
+X
+
+Th,i (n) ≥
+
+h=0 i∈I + (n)
+h
+
+h=0
+
+X
+
+i∈Ih+ (n)
+
+(1)
+
+Th,i (n) ≥
+
+H(n)
+
+X
+h=0
+
+X
+
+X
+
+h=H+1
+
+|
+
+|Ih (n)| .
+
+{z
+
+(d)
+
+(36)
+
+}
+
+τh,i (th,i )
+
+i∈Ih+ (n)
+
+H(n)−1
+H(n)−1
+1 −2H X
+c2 −2h (3) 1 X
++
+−2h
+ρ
+≥
+ρ
+|I
+(n)|ρ
+=
+|Ih+ (n)|ρ2(H −h)
+h
+ν12
+ν12
+ν12
+h=H
+
+(37)
+
+h=H
+
+H(n)−1
+H(n)
+X
+(4) 1
+1 −2H X
++
+−2H
+|Ih (n)| ≥
+|Ih (n)|,
+≥ 2ρ
+ρ
+ν1
+2ν12
+h=H
+
+h=H+1
+
+where (1) follows from the fact that nodes in Ih+ (n) have been expanded at time th,i when their number of pulls
+Th,i (th,i ) ≤ Th,i (n) exceeded the threshold τh,i (th,i ). Step (2) follows from Eq. 8, while (3) from the definition of
+c > 1. Finally, step (4) follows from the fact that the number of nodes at depth h cannot be larger than twice the
+parent nodes at depth h − 1. By inverting the previous inequality, we obtain
+(d) ≤ 2ν12 nρ2H .
+On other hand, in order to bound (c), we need to use the same the high-probability events Et,n and similar passages
++
+(n)| ≤ 2C(ν2 ρ(h−1) )−d . Plugging these results back in Eq. 36 leads
+as in Eq. 22, which leads to |Ih (n)| ≤ 2|Ih−1
+to
+NnE ≤ 1 + 2HC(ν2 ρ(H−1) )−d + 2ν12 nρ2H ,
+with high probability. Together with NnE we obtain
+c
+
+ 
+E Nn ≤ 1 + 2HC(ν2 ρ(H−1) )−d + 2ν12 nρ2H + C ≤ 1 + 2Hmax (n)C(ν2 ρ(H−1) )−d + 2ν12 nρ2H + C,
+
+where Hmax (n) is the upper bound on the depth of the tree in Lemma 1. Optimizing H in the remaining terms leads
+to the statement.
+
+30
+
+References
+Abbasi, Yasin, Bartlett, Peter, Kanade, Varun, Seldin, Yevgeny, and Szepesvari, Csaba. Online learning in markov
+decision processes with adversarially chosen transition probability distributions. In Burges, C.J.C., Bottou, L.,
+Welling, M., Ghahramani, Z., and Weinberger, K.Q. (eds.), Advances in Neural Information Processing Systems
+26, pp. 2508–2516. 2013.
+Auer, Peter, Ortner, Ronald, and Szepesvári, Csaba. Improved rates for the stochastic continuum-armed bandit
+problem. In COLT, pp. 454–468, 2007.
+Azar, Mohammad Gheshlaghi, Lazaric, Alessandro, and Brunskill, Emma. Regret bounds for reinforcement learning
+with policy advice. In ECML/PKDD, pp. 97–112, 2013.
+Baxter, Jonathan and Bartlett, Peter L. Reinforcement learning in pomdp’s via direct gradient ascent. In ICML, pp.
+41–48, 2000.
+Bubeck, Sébastien, Munos, Rémi, Stoltz, Gilles, and Szepesvári, Csaba. X-armed bandits. Journal of Machine
+Learning Research, 12:1655–1695, 2011a.
+Bubeck, Sébastien, Stoltz, Gilles, and Yu, Jia Yuan. Lipschitz bandits without the lipschitz constant. In ALT, pp.
+144–158, 2011b.
+Bull, Adam. Adaptive-tree bandits. arXiv preprint arXiv:1302.2489, 2013.
+Cope, Eric. Regret and convergence bounds for immediate-reward reinforcement learning with continuous action
+spaces. IEEE Transactions on Automatic Control, 54(6):1243–1253, 2009.
+Djolonga, Josip, Krause, Andreas, and Cevher, Volkan. High dimensional gaussian process bandits. In Neural
+Information Processing Systems (NIPS), 2013.
+Jaksch, Thomas, Ortner, Ronald, and Auer, Peter. Near-optimal regret bounds for reinforcement learning. Journal
+of Machine Learning Research, 11:1563–1600, 2010.
+Kleinberg, Robert, Slivkins, Aleksandrs, and Upfal, Eli. Multi-armed bandits in metric spaces. In STOC, pp. 681–
+690, 2008.
+Kober, Jens and Peters, Jan. Policy search for motor primitives in robotics. Machine Learning, 84(1-2):171–203,
+2011.
+Lattimore, Tor, Hutter, Marcus, and Sunehag, Peter. The sample-complexity of general reinforcement learning. In
+Proceedings of Thirtieth International Conference on Machine Learning (ICML), 2013.
+Levin, David A., Peres, Yuval, and Wilmer, Elizabeth L. Markov chains and mixing times. American Mathematical
+Society, 2006.
+Maurer, Andreas and Pontil, Massimiliano. Empirical bernstein bounds and sample variance penalization. arXiv
+preprint arXiv:0907.3740, 2009.
+Munos, Rémi. Optimistic optimization of a deterministic function without the knowledge of its smoothness. In
+NIPS, pp. 783–791, 2011.
+Munos, Rémi. From bandits to monte-carlo tree search: The optimistic principle applied to optimization and planning. Foundations and Trends in Machine Learning, 2013.
+Ortner, Ronald and Ryabko, Daniil. Online regret bounds for undiscounted continuous reinforcement learning. In
+Bartlett, P., Pereira, F.c.n., Burges, C.j.c., Bottou, L., and Weinberger, K.q. (eds.), Advances in Neural Information
+Processing Systems 25, pp. 1772–1780, 2012.
+31
+
+Scherrer, Bruno and Geist, Matthieu. Policy search: Any local optimum enjoys a global performance guarantee.
+arXiv preprint arXiv:1306.1520, 2013.
+Slivkins, Aleksandrs. Contextual bandits with similarity information. CoRR, abs/0907.3986, 2009.
+Slivkins, Aleksandrs. Multi-armed bandits on implicit metric spaces. In Advances in Neural Information Processing
+Systems, pp. 1602–1610, 2011.
+Srinivas, Niranjan, Krause, Andreas, Kakade, Sham M., and Seeger, Matthias. Gaussian process bandits without
+regret: An experimental design approach. CoRR, abs/0912.3995, 2009.
+Tolstikhin, Ilya O and Seldin, Yevgeny. PAC-bayes-empirical-bernstein inequality. In Advances in Neural Information Processing Systems, pp. 109–117, 2013.
+Valko, Michal, Carpentier, Alexandra, and Munos, Rémi. Stochastic simultaneous optimistic optimization. In
+Proceedings of the 30th International Conference on Machine Learning (ICML-13), pp. 19–27, 2013.
+Vlassis, Nikos and Toussaint, Marc. Model-free reinforcement learning as mixture learning. In Proceedings of the
+26th Annual International Conference on Machine Learning, pp. 1081–1088, 2009.
+
+32
+
+

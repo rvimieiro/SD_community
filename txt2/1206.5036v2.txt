@@ -1,0 +1,2243 @@
+associated with it. The objective function for the parameter estimation is convex and contains an `1 -penalty
+term for each added parameter. These penalties encourage sparsity by potentially making many of the added
+parameters vanish. We show that if the true distribution is within the exponential family model with the
+chosen statistics, then as the sample size increases, all parameters associated with the added local features
+vanish and our approach converges to the true distribution. If the true distribution is not from the chosen
+exponential family, then, our approach provides a close approximation to the unknown density, comparable
+to KDEs.
+Our work is in part motivated by a problem of learning distributions over graphs from examples of
+observed networks, typically from a single network. Such data arises in many domains, including social
+sciences, bioinformatics, and systems sciences. Among the approaches to this problem, one of the perhaps
+most-studied is the exponential random graph model (ERGM, or in the social network literature, p?, e.g.,
+Frank and Strauss, 1986, Holland and Leinhardt, 1981, Wasserman and Pattison, 1996). ERGMs use graph
+statistics as features to define an exponential family distribution over all possible graphs with a given number
+of nodes. Such models have the desirable property of learning a distribution that matches the observed graph
+statistics. However, ERGMs often suffer from issues of degeneracy (Handcock, 2003, Lunga and Kirshner,
+2011, Rinaldo et al., 2009) manifested in placing most of the probability mass on unrealistic graphs (e.g., an
+empty or a complete graph), very dissimilar to the observed graph(s). As an illustration of our approach, we
+propose a modification to ERGMs which alleviates the above issue of degeneracy in moderate-sized graphs.
+
+1
+
+The main contributions of this paper are a novel framework for non-parametric estimation of densities
+with exponential family models that is applicable when the number of data points is relatively small, analysis
+of of its convergence properties, and a modification of ERGMs that remedies one of the degeneracy issues.
+The paper is structured as follows. In Section 2, we briefly describe the exponential family models. In
+Section 3 we introduce the features we use to constrain the probability mass around the data points and
+derive a formulation for a new model from first principles. In Section 3.3, we derive some of the new model’s
+properties, and then discuss the resulting parameter-estimation optimization problem and our approach to
+solving it in Section 3.4. In Section 4, we propose a new model for distributions over networks with a
+moderate number of nodes. We explore the properties of our estimator for 1-dimensional densities and for
+modeling network data via an empirical study in Section 5, and finally discuss our findings and outline
+possible future directions in Section 6.
+
+2
+
+Exponential Family
+
+We briefly introduce the exponential family of distributions before describing our contribution, a nonparametric exponential family.
+Suppose X is a vector of random variables with support X ⊆ Rm . A distribution for X belongs to the
+exponential family of distributions with sufficient statistics t : X → H ⊆ Rd , if its probability density has
+a functional form:1
+1
+q (x) exp hλ, t (x)i where
+Z (λ)
+Z
+Z (λ) =
+q (x) exp hλ, t (x)i d x < ∞
+
+f E (x|λ) =
+
+(1)
+
+X
+
+is a partition function, λ is a vector of canonical parameters, q : X → R is a base measure, and h·, ·i denotes
+the Euclidean inner product. We further assume that the exponential family is regular (i.e. the canonical
+parameter space is open). Assuming q is fixed, let EF t denote the set of all possible distributions of the
+form (1) with the set of sufficient statistics t.
+ i.i.d
+Given samples x1:n , x1 , . . . , xn ∼ f where f : X → R is an unknown density with the same
+
+
+P
+support as q. Let fˆn : X → R be the empirical distribution for x1:n , fˆn x|x1:n = n1 ni=1 δ xi where
+δ (x) is a Dirac delta function. Exponential families can be obtained as a solution to the optimization
+problem of minimizing the relative entropy subject to matching the moment constraints of the empirical and
+the estimated distributions:
+
+fnE (x) = arg min KL f E k q subj to
+(2)
+f E ∈F
+
+EfnE (x) [t (x)] = Efˆn (x|x1:n ) [t (x)] .
+
+(3)
+
+
+
+A distribution fnE x|λ̂n ∈ EF t satisfying (3) can be found by maximizing the log-likelihood l (λ) =
+
+P
+λ, n1 ni=1 t xi − log Z (λ), and provided t? = Efˆn (x|x1:n ) [t (x)] ∈ rint (conv (H)), a maximum
+likelihood estimate (MLE) λ̂n satisfying (3) exists (Wainwright and Jordan, 2008), and will be unique if
+p
+EF t is minimal (Brown, 1986). If f ∈ EF t , then λ̂n → λ (van der Vaart, 1998).
+However, if the true distribution does not fall within the chosen exponential family, f 6∈ EF t , the
+estimated model may provide a poor approximation to the true density. As will be illustrated in Section 4,
+for the case of discrete random vectors X from the exponential family with a bounded support H, finding
+1
+
+For notational convenience, we denote X = x by x.
+
+2
+
+Figure 1: Density estimation from samples from a t-distribution. Black x’s are samples; the black solid line
+is the true density, the blue dashed line is the fitted Gaussian density, and the red dashed line is the fitted
+non-parametric Gaussian density with non-parametric exponential family model with Gaussian kernel with
+width 1.5.
+the MLE under the wrong modeling assumption f ∈ EF t may assign very little probability mass to the
+observed samples x1:n .
+
+3
+
+Non-parametric Exponential Family
+
+In this section, we propose a new family of distributions, a modification to the exponential family EF t .
+Our proposed approach modifies the set of features so that the estimated density (or a probability mass
+function for discrete vectors) places approximately the same amount of mass around each sample xi , i =
+1, . . . , n as the empirical distribution. This approach allows using exponential family models to approximate
+distributions outside of the exponential family (e.g., mixtures, heavy-tailed distributions). This approach can
+also be used to avoid degeneracy in cases where the set of features is poorly chosen (e.g., modeling of graphs
+with ERGMs).
+
+3.1
+
+Motivation
+
+Suppose a set of samples from an unknown density “looks” Gaussian except perhaps for a few outliers in the
+tails (Figure 1). Should we fit a Gaussian? If not, should we use a non-parametric approach?
+ Our approach
+combines both by using the exponential family with given features (e.g. t (x) = x, x2 in the case of a
+univariate Gaussian) as a starting point and then adding features for each data point. It draws inspiration
+from KDEs (also known as Parzen windows, Parzen, 1962),
+n
+ 1X
+
+fnKDE x|x1:n =
+KH x; xi where
+n
+i=1
+
+
+
+1
+1
+KH x; xi = |H|− 2 K H− 2 x − xi .
+
+3
+
+K is a univariate kernel function, a bounded probability density function on R. KH is a multivariate
+kernel function with a symmetric positive definite bandwidth matrix H; in this paper, we assume H = h2 Id
+(assuming x ∈ Rd ).
+
+
+The uniform kernel is an indicator function on − 12 , 12 :
+1
+KU (x) = 1 if |x| ≤ , and 0 otherwise,
+2
+where a multi-dimensional version is a weighted indicator function for the hypercube centered at xi with
+each side equal to h2 . Most other kernels used with KDE are smooth approximations of KU , e.g., Gaussian
+2
+kernel KN (x) = √12π e−x /2 . KDE matches the mass around each data point (weighted according to the
+kernel) to that of the empirical distribution. Since the empirical distribution approaches the true distribution
+as n increases, the accuracy of KDE approximation improves with the increase in the number of data points
+and the decrease of bandwidth parameter h. The resulting representation however requires keeping all of the
+observations as parameters and requires exponentially many data points in the dimension d to approximate
+the underlying density well.
+
+3.2
+
+Formulation
+
+Our approach preserves the mass around each data point by introducing additional moment constraints.
+Let B ⊆ X be a region in the support of X, and let IB (x) = 1 if x ∈B, and IB (x) = 0 otherwise
+denote an indicator function for B. Given metric space (X , σ), let Bi = x ∈ X : σ xi , x ≤ ε be an
+ε-neighborhood of xi . Then the probability mass for density f in the ε-neighborhood Bi of xi is P (Bi ) =
+Ef [IBi ]. We propose adding constraints to (3) which would approximately match the probability masses
+for Bi (i = 1, . . . , n) between the empirical and the estimated distributions (fˆn and fn respectively):
+Efˆn (x|x1:n ) [IBi (x)] − Efn (x|x1:n ) [IBi (x)] ≤ βi ,
+
+(4)
+
+where βi ≥ 0 determine how closely the masses
+should match. Similar to KDEs, IBi in (4) may be replaced
+
+i
+with a multidimensional kernel KH x ; x , which assigns decaying importance of mass away from the cen
+
+
+ter (e.g., a smoothed version of IBi ). We will use tia , KH xi ; x , and use ta (x) , t1a (x) , . . . , tna (x)
+to augment the statistics t in estimating densities.2 In addition to the canonical parameters λ for sufficient
+statistics, we add augmented parameters λa for the augmented statistics ta (x).
+Our proposed density approximation (fnN E (x)) is a solution to
+
+
+fnN E x|x1:n = arg min KL f N E k q subj to
+f N E ∈F
+
+EfnN E (x|x1:n ) [t (x)] = Efˆn (x|x1:n ) [t (x)] ,
+
+
+
+
+EfnN E tia (x) − Efˆn tia (x) ≤ βi , i = 1, . . . , n.
+
+(5)
+
+fnN E falls within the generalized MaxEnt framework (Dudik et al., 2007):
+1
+q (x) exp [hλ, t (x)i + hλa , ta (x)i]
+Z (λ, λa )
+Z
+Z (λ, λa ) =
+q (x) exp [hλ, t (x)i + hλa , ta (x)i] d x.
+f (x) =
+
+X
+2
+
+We omit h from
+
+tia
+
+for the simplicity of notation. It is a tuning parameter that may be set globally for all i = 1, . . . , n.
+
+4
+
+(6)
+
+Let s (x) , (t (x) , ta (x)) and θ , (λ, λa ) be a combined set of statistics and parameters, respectively, for
+the augmented model. A specific set of parameter values for the distribution in (6) satisfying the constraints
+in (5) can be found by maximizing the penalized log-likelihood
+*
++
+n
+n
+X
+
+1X
+i
+l (θ) = θ,
+(7)
+s x
+− ln Z (θ) −
+βi λia .
+n
+i=1
+
+i=1
+
+Note that the distribution fnN E 3 satisfying the constraint in (5) will always exist since fˆn satisfies all of the
+above constraints.
+We refer to the above class of models as non-parametric exponential family models, since the number
+of non-zero parameters θ = (λ, λa ) may increase with the number of available data points. We will
+denotethis family
+ by N EF s . Clearly EF t ⊆ N EF s as all the augmented parameters can be set to 0. Let
+θ̂ n = λ̃n , λ̃a,n be the MLE of (λ, λa ) for the case of n samples. The `1 -penalty in (7) is known to be
+sparsity-inducing (e.g., Bach et al., 2011), so in practice, many of λ̃ia,n = 0.
+Note that the framework in (5) allows matching the moments of the estimated distribution to some
+predetermined vector t? ∈ rint (conv (H)) instead of the empirical moments Efˆn (x|x1:n ) [t (x)], leading
+
+P
+to the same functional form for the density (6), but with an additional linear term λ, t? − n1 ni=1 t xi
+in (7) (Dudik et al., 2007). Thus, our non-parametric density estimator is capable of satisfying global
+constraints (matching a set of provided moments, e.g., learning a distribution with a given covariance). We
+are not aware of other non-parametric methods with this capability.
+
+3.3
+
+Theoretical Properties
+
+The proofs appear in the Appendix A.
+Theorem 3.1. Suppose a vector of random variables X with support on X has a density f ∈ EF t with
+d
+1
+n
+1:n
+features t : X → H ⊆ Rd and a vector of canonical parameters
+ λ ∈ C ∈ R . Suppose x , . . . , x , x
+is a sequence of i.i.d. random vectors drawn from f . Let fnN E x|θ̂ n , x1:n ∈ N EF s be the MLE solution
+
+
+of (5), θ̂ n = λ̃n , λ̃a,n , with all βi = β > 0, i = 1, . . . , n. Assuming
+1. X is compact,
+2. t is continuous,
+3. EF t is a family of uniformly equicontinuous functions w.r.t x,
+P
+−γn|H|
+4. Kernel K has bounded variation and has a bandwidth parameter H such that the series ∞
+n=1 e
+converges for every positive value of γ,
+p
+p
+then as n → ∞, λ̃ia,n → 0, ∀i = 1, . . . , n and λ̃n → λ.
+Intuitively, uniform convergence is required because we need the n additional constraints be satisfied
+with fixed threshold β as long as n > N . We use Assumption 2 to relate the pointwise
+convergence of the
+
+MLE λ in regular exponential families to pointwise convergence of fnE x|λ̂n . Assumptions 1 and 3 are
+further employed to convert the pointwise convergence to uniform convergence of fnE by considering X , C
+to be subsets of the original regular exponential family.4 Assumption 4 is the requirement used by Nadaraya
+(1965) for the uniform convergence of KDE satisfied by common kernels. Uponhthese uniform
+convergence
+i
+results, the augmented constraints will be satisfied by the original MLE estimate λ̂n , 0 . Further, the nature
+3 NE
+fn
+
+
+x|θ, x1:n ’s functional form depends on both x1:n and θ, for convenience, we sometimes omit θ and x1:n in notation
+when referring to fnN E .
+4
+For example, Theorem 3.1 applies to the exponential family N (µ, σ 2 ) with σ ∈ [a, b], ∀b > a > 0, but not if σ 2 ∈ (0, ∞).
+
+5
+
+h
+i
+of λ̂n being a maximum entropy solution guarantees that λ̂n , 0 is a maximum entropy solution under the
+additional constraints.
+Theorem 3.1 shows that if the true distribution falls within the exponential family, then as sample size
+increases, the estimated density from the non-parametric exponential family will have vanishing reliance on
+the augmented parameters.
+
+
+Theorem 3.2. Given a probability density function f (x) : X → R, let fnN E x|θ̂n , x1:n ∈ N EF s be a
+solution satisfying (5). If
+1. f is uniformly continuous on X ,
+2. KH (x) is uniformly continuous on X ,
+3. supx∈X KH (x) < ∞,
+m
+Q
+4. lim KH (x)
+xi = 0,
+kxk→∞
+
+i=1
+1
+2
+
+5. lim |H| = 0,
+n→∞
+
+1
+
+6. lim n |H| 2 = ∞,
+n→∞
+
+ p
+then fnN E x|θ̂ n , x1:n → f (x) pointwise on X .
+Assumptions 3-6 are required for pointwise convergence of KDE (Parzen, 1962) at specific points x1:n .
+We then extend this pointwise convergence from x1:n to X , considering the probability of sampling a new
+x ∈ X far away from existing x1:n under the true density f . The monotone convergence theorem and the
+p
+uniform continuity assumptions (1 and 2) lead to the pointwise convergence fnN E → f on X .
+Theorem 3.2 indicates the weak consistency of the non-parametric exponential family density estimator. Thus our proposed non-parametric approach can be used to approximate densities which are not from
+exponential families.
+
+3.4
+
+Estimating Parameters for Non-Parametric Exponential Families
+
+Recently there have been a number of methods developed for optimization of convex non-smooth functions,
+some of them specifically aimed at log-linear problems such as (7) (e.g., Bach et al., 2011, Shalev-Shwartz
+and Tewari, 2011, Wu and Lange, 2008). We employed a coordinate descent algorithm similar to the SUMMET algorithm of Dudik et al. (2007) (see Algorithm 1), primarily, due to its simplicity. Other possible
+approaches can be employed as well and may end up more efficient for this formulation.
+The proposed algorithm iterates between optimizing canonical parameters λ (by setting Efˆn [t (x)] =
+Ef N E (x|θ(k) ) [t (x)]) and sequentially optimizing the augmented parameters λa so that the Karush-Kuhnn
+Tucker conditions (e.g., Nocedal and Wright, 2006) are satisfied:
+
+{β }
+λia > 0,
+i
+
+i
+  i
+Efˆn ta (x) − EfnN E (x|θ) ta (x) ∈ {−βi }
+λia < 0,
+
+
+(−βi , βi ) βai = 0.
+(k)
+
+Algorithm 1 belies the inherent difficulty of: (1) calculation of the partial derivative gi , and (2) an
+j,(k)
+implicit search procedure to update λa , both involve calculating intractable integrals. If the support is
+low-dimensional and the mass is contained in a small volume, then the partition function (and thus the
+gradient) can be computed by numerical integration (quadrature). Alternatively, a common approach to
+MLE with an intractable partition function Z (θ) is Markov Chain Monte Carlo MLE (MCMC-MLE, Geyer
+and Thompson, 1992). For example, the time complexity at each iteration k is O(Sn2 ), where S is the
+6
+
+Algorithm 1 Non-Parametric Exponential Family Coordinate Descent
+INPUT: Samples x1 , . . . , xn ∈ Rd , sufficient statistics t : X → H, augmented features tia : H → R,
+i = 1, . . . , n, `1 regularization parameters β 
+OUTPUT: MLE θ = λ1 , . . . , λd , λ1a , . . . , λna
+Initialize θ (0)
+Compute the sufficient statistics Efˆn (x|x1:n ) [t (x)]
+repeat
+iteration k = k + 1, θ (k) = θ (k−1)
+for i = 1, . . . , d do
+
+
+
+
+(k)
+gi = Efˆn ti (x) − Ef N E (x|θ(k) ) ti (x)
+n
+
+(k)
+
+Perform line search along gi to update λi,(k)
+end for
+for j = 1 . . . n do
+j
+j,−
+j,+
+Solve two equations
+for
+h
+i λa (λah andiλa , respectively):
+Ef N E (x|θ(k) ) tja (x) = Efˆn tja (x) − βj
+n
+h
+i
+h
+i
+j
+j
+Ef N E (x|θ(k) ) ta (x) = Efˆn ta (x) + βj
+n
+
+j,(k)
+
+j,−
+choose λa = λj,−
+a if λa > 0
+j,(k)
+j,+
+choose λa = λa if λj,+
+a <0
+j,(k)
+choose λa = 0 otherwise
+end for
+until convergence
+return θ (k)
+
+number of Monte-Carlo samples we choose to use. However, we believe developments in optimization
+(Bach et al., 2011, Shalev-Shwartz and Tewari, 2011, e.g.) will help us find an efficient solution.
+
+4
+
+Application to Modeling of Graphs
+
+In this section, we turn our attention to a problem of learning a distribution over X = Gn , a set of undirected
+graphs with n vertices and no self-loops, from a single observed instance G? ∈ Gn , an important branch
+in the analysis of social networks because of complicated relational structure (e.g. Goodreau, 2007). A
+commonly used approach to this problem which arises in the analysis of social networks is to estimate a
+distribution using exponential random graph models (ERGMs, e.g., Handcock, 2003, Robins et al., 2007a,b,
+Wasserman and Pattison, 1996, Wasserman and Robins, 2004). This approach however suffers from the
+model degeneracy, with estimated models placing probability mass on unrealistic graphs (e.g., complete
+or empty) and away from the observed instance. We propose a modification to ERGMs utilizing the nonparametric exponential family approach from Section 3 which alleviates the above issue of degeneracy.
+
+4.1
+
+Exponential Random Graph Models
+
+An ERGM (or p? model) is an exponential family model over Gn which uses graph statistics as its features5 .
+These features are typically motivated by the properties of the networks that are of interest to domain scientists (e.g., sociologists), and may include (among other local and global features) the number of edges
+5
+
+sufficient statistics for the exponential family
+
+7
+
+ERGM for (E=22,T=29)
+
+MPERGM for (E=22,T=29)
+
+60
+
+60
+
+0.047
+
+0.096
+
+40
+
+0.031
+0.023
+
+20
+
+0.016
+
+0.080
+# of triangles
+
+(a) The graph
+with 22 edges
+and 29 triangles
+
+# of triangles
+
+0.039
+40
+
+0.064
+0.048
+
+20
+
+0.032
+
+0.008
+0
+0
+
+10
+20
+# of edges
+
+0.000
+
+30
+
+(b) Probability mass for ERGM
+
+0.016
+0
+0
+
+10
+20
+# of edges
+
+30
+
+0.000
+
+(c) Probability mass for MPERGM
+
+Figure 2: Degenerate ERGM and Non-degenerate MPERGM. The models are trained based on the observation te (G? ) = 22, t4 (G? ) = 29. The orange × is the observed statistics, and the red + is the mode of the
+learned model. The color bar on the right from red to blue represents the probability mass changing from
+high to low.
+PP
+PPP
+(te (G) =
+1≤i<j≤n eij ) and triangles (t4 (G) =
+1≤i<j<k≤n eij eik ejk ), where eij = 1 if there
+is edge between nodes i and j, and 0 otherwise. The probability mass for a graph G ∈ Gn is defined as
+1
+exp hλ, t (G)i ,
+Z (λ)
+X
+Z (λ) =
+exp hλ, t (G)i .
+
+
+
+P G|λ̂ =
+
+(8)
+
+G∈Gn
+
+The MLE λ̂ makes mean statistics of the distribution match that of the observed graph: EP (G|λ) [t (G)] =
+t (G? ).
+
+4.2
+
+Degeneracy
+
+Let H = {t (G) : G ∈ Gn } be the set of all possible values for features. Even though in theory if the feature
+vector for the observed graph is in the relative interior of the convex hull t (G? ) ∈ rint (conv (H)), MLE
+λ̂ exists (and is unique if the set of features is linearly independent or minimal), in practice ERGMs often
+suffer from degeneracy (Handcock, 2003) manifested in one of the following ways: (1) MLE procedure
+does not converge due to numerical instabilities, and (2) MLE is found, but the resulting probability mass is
+placed mostly on unrealistic graphs (i.e., empty or complete graphs) and little mass is placed in the vicinity
+of the observed graph (around t (G? ) in H, c.f. Figure 2).
+We focus on addressing the second type of degeneracy; for more information of the reasons of the first
+type of degeneracy see Handcock (2003), Rinaldo et al. (2009). Several attempts have been made to address
+the second type of degeneracy issue: Handcock et al. (2008) proposed to use domain knowledge specific
+feature sets in addition to edge and triangle features; Hunter and Handcock (2006), Hunter et al. (2008)
+used curved exponential families for ERGMs; Caimo and Friel (2010) suggested Bayesian ERGMs, and Jin
+and Liang (2012) devised an estimation procedure on stochastic approximation with varying truncation in
+parameter space. Lunga and Kirshner (2011) suggested the degeneracy issue for interior points may be due
+to the bounded support H, and proposed spherical features for modifying the geometry of H. In summary,
+there are two main approaches towards fixing degeneracy: 1) modifying the geometry (Handcock et al.,
+2008, Hunter et al., 2008, Lunga and Kirshner, 2011), and 2) limiting exploration in the canonical parameter
+space (Caimo and Friel, 2010, Jin and Liang, 2012). Our approach belongs in the first category.
+
+8
+
+4.3
+
+Mass-Preserving ERGMs
+
+To modify ERGMs, we solve the optimization problem in (5) with the uniform base measure q (G) over
+possible graphs G ∈ Gn . Let ta (G) = KH (t (G? ) ; t (G)), a smoothed mass indicator in the neighborhood
+of the feature values for the observed graph. The solution is an exponential family probability mass function
+1
+exp [hλ, t (G)i + hλa , ta (G)i]
+Z (λ, λa )
+X
+Z (λ, λa ) =
+exp [hλ, t (G)i + hλa , ta (G)i] .
+f (G) =
+
+G∈Gn
+
+which we refer to as mass-preserving ERGM (MPERGM). The corresponding objective function
+l (λ, λa ) = hλ, t (G? )i + hλa , ta (G? )i − ln Z (λ, λa ) − β |λa |
+is concave.
+There are several challenges with parameter estimation, most encountered before in ERGM fitting (e.g.,
+Hunter et al., 2008). As in the continuous case, the gradient cannot be computed in closed form except
+for graphs of small size (Gn for n ≤ 11). We therefore apply MCMC-MLE approach
+of Hunter
+ and
+P
+Handcock (2006), computing Ef [t (G)] in Algorithm 1 as a sampled average S1 Si=1 t Gi where
+i.i.d
+
+G1:S ∼ f (G|λ, λa ). There are, however, two complications with this approach. One, graph sampling
+from ERGMs is performed using Gibbs sampling and is computationally expensive. Therefore, graphs G1:S
+are re-sampled only once in several iterations, and reused for other iterations with weights equal to the posterior probabilities. Two, the resulting distribution over graphs can be multi-modal, and according to Hunter
+and Handcock (2006), Jin and Liang (2012), the sampler can get stuck around the closest mode leading to
+an incorrect estimate of the gradient. Instead of performing line search, we use the direction of the gradient
+with a predefined step-size.
+
+5
+
+Experimental Evaluation
+
+5.1
+
+Non-Parametric Exponential Family Density Estimation
+
+We illustrate the behavior of the proposed non-parametric
+ density estimator matching first and second order
+2
+moment constraints (NPGaussian, i.e. t(x) = x, x ) in the univariate setting. Normal density (in EF,
+N (0, 1)), mixture of two normals (not in EF, 21 N (−3, 1) + 12 N (3, 1)), and a t-distribution (not in EF,
+df=6) are used for simulating i.i.d samples. We vary the sample size from 10 to 1000 for training and
+compute the out-of-sample likelihood with an evaluation set of 100000 samples for testing. We compared
+the performance of our non-parametric approach, the model from the true functional family, and another nonparametric approach (KDE). There are two sets of tuning parameters, bandwidth h and the box constraint
+parameter β, assumed to be the same for all i = 1, . . . , n. β was set according to a fixed schedule β(n) =
+√
+O(1/ n). h (both for KDE and for our approach) was determined based on cross-validated log-likelihood.6
+Gaussian kernel function is used for NPGaussian and for KDE. For estimating mixture distribution, the
+estimated NPGaussian model provides an approximation better than KDE, and perhaps not surprisingly,
+better than GMM when the training sample size is small (Figure 3(a)). For estimating normal density, the
+NPGaussian model quickly converges to the normal density as suggested by Theorem 3.1 (Figure 3(b)). We
+also consider the case when the true sufficient statistics are given to us (constrained NPGaussian, CNPG).
+6
+
+Similar to KDE, the choice of kernel width h is important for obtaining good estimates. To test how the non-parametric
+exponential family is affected by the choice of h, we employed the same Gaussian kernel function to do density estimation with
+both KDE and non-parametric Gaussian. It appears that the best bandwidth are different.
+
+9
+
+The CNPG model shows improvement over NPGaussian for small n. However, as the training sample
+size increases, both CNPG and NPGaussian show similar performance as the moment constraints t(x) are
+more accurately approximated. We also experimented with O(1/ log(n)) regularization schedule for βs to
+estimate the mixed normal distribution. As n increase, the solution for NPGaussian is too sparse and gives
+a worse performance than KDE (Figure 3(a)). However, it also enjoys a sparse set of augmented parameters
+√
+λa (Figure 3(d)), whereas with schedule O(1/ n), NPGaussian keeps adding non-zero λa s.
+5
+
+5
+
+x 10
+
+5
+
+x 10
+
+x 10
+
+0.9
+
+−2.2
+−2.25
+
+True
+KDE
+GMM
+NPG
+CNPG
+NPG−lgN
+
+−2.3
+−2.35
+−2.4
+
+10
+
+20
+
+50
+
+100
+
+200
+
+500 1000
+
+number of training points (n)
+
+(a)
+
+−1.4
+
+−1.45
+
+−1.5
+
+−1.55
+True
+KDE
+Normal
+NPG
+CNPG
+
+−1.6
+
+−1.65
+10
+
+20
+
+50
+
+100
+
+200
+
+500
+
+0.8
+−1.6
+−1.65
+−1.7
+−1.75
+−1.8
+True
+KDE
+t−fit
+NPG
+CNPG
+
+−1.85
+−1.9
+
+1000
+
+number of training points (n)
+
+10
+
+20
+
+50
+
+100
+
+200
+
+500
+
+number of training points (n)
+
+(b)
+
+(c)
+
+1000
+
+proportion of non−zeros
+
+−2.15
+
+Out−of−sample log−likelihood
+
+−2.1
+
+Out−of−sample log−likelihood
+
+Out−of−sample log−likelihood
+
+−1.55
+
+0.7
+0.6
+0.5
+0.4
+0.3
+NPG−t
+NPG−n
+NPG
+CNPG
+NPG−lgN
+
+0.2
+0.1
+0
+
+10
+
+20
+
+50
+
+100
+
+200
+
+500
+
+1000
+
+number of training points (n)
+
+(d)
+
+Figure 3: Estimating simple one dimensional densities. Results are averaged over 20 runs. The x axis
+is in log scale. (a) Mixed normal distribution (b) Normal distribution (c) t distribution (d) Number of
+√
+non-zero λa s. In Figure(a,b,c), NPG: NPGaussian with O(1/ n) schedule, NPG-lgN: NPGaussian with
+O(1/ log(n)) schedule, CNPG: constrained NPGaussian with true global moment statistics. In (d), NPG-t:
+number of non-zeros for estimating t distribution with NPG, NPG-n: number of non-zeros for estimating
+normal distribution with NPG, NPG: number of non-zeros for estimating mixed normal distribution with
+NPG, CNPG: number of non-zeros for estimating mixed normal distribution with CNPG, NPG-lgN: number
+of non-zeros for estimating mixed normal distribution with NPG-lgN.
+
+5.2
+
+Modeling Graphs with MPERGMs
+
+We evaluate the fit of the estimated models by comparing local statistics of the observed graph to that of the
+samples generated from the estimated distribution.7
+We make use of three sets of local statistics commonly used as goodness-of-fit measures for ERGMs
+Hunter et al. (2008): the degree distribution (the proportion of nodes with exactly k neighbors), edgewise
+shared partner distribution (the proportion of edges joining nodes with exactly k neighbors in common),
+and the minimum geodesic distance (the proportion of connected node-pairs which has a minimum distance
+of k).
+We consider the number of edges and triangles as sufficient statistics, t (G) = (te (G) , t4 (G)). First,
+we consider the toy domain of graphs with 8 nodes, G8 . We enumerate all possible K = 12346 nonisomorphic graphs and resulting feature tuples, and compute probability mass entries π1 , . . . , πK . We
+trained our MPERGM with a Gaussian kernel function with h = 8, β = 0.2. Figure 2 shows that MPERGM
+puts larger probability mass around G? .
+We also estimated MPERGMs for several social network data sets, ranging in the number of nodes
+from 16 to 1024, and with varying density of edges. Since the number of nodes n for these graphs are
+too large to enumerate Gn , the graphs are drawn using Gibbs sampler, and the parameters for MPERGMs
+(and ERGMs, using the R package ergm (Hunter et al., 2008)) are estimated using MCMC-MLE. Then
+100 samples were generated using the Markov Chain with learned parameters. For MPERGM, the Markov
+7
+
+See Hunter et al. (2008) for a discussion on the evaluation of fit for social networks.
+
+10
+
+Table 1: Social network data sets. g8: The 8-node graph as in Figure 2(a); Do: The dolphins data set
+(Lusseau et al., 2003); Kp: The Kapferer data set (Hunter et al., 2008); Fl: The Florentine Business data set
+(Hunter et al., 2008); Fa: The Faux.Mesa.High data set (Hunter et al., 2008); Ja: The Jazz data set (Gleiser
+and Danon, 2003); Ad: The AddHealth data set (Harris, 2008); Fb: The Facebook data set (Moreno and
+Neville, 2009); Em: The Email data set (Guimera et al., 2003).
+g8 Do
+Kp
+Fl
+Fa
+Ja
+Ad
+Fb
+Em
+|V |
+8
+62
+39
+16 206
+198
+803 1024 1133
+te (G? )
+22 159 158 15 203 2742 1985 1012 5451
+t4 (G? )
+29 95 201
+5
+62 17899 649
+116 5343
+No. unique sampled graph 99 100 100 100 100
+100
+100
+96
+100
+No. unique features
+33 33
+30
+27
+14
+70
+72
+74
+70
+No. max hop of samples
+22 306 263 39 341 1435
+999
+385 1275
+
+proportion of edges
+
+g8
+
+Dolphins
+
+FauxHigh
+
+Florentine
+
+0.5
+
+0.05
+
+0.5
+
+0.8
+
+0.4
+
+0.4
+
+0.04
+
+0.4
+
+0.6
+
+0.3
+
+0.3
+
+0.03
+
+0.3
+
+0.4
+
+0.4
+
+0.2
+
+0.2
+
+0.02
+
+0.2
+
+0.3
+
+0.2
+
+0.1
+
+0.1
+
+0.01
+
+0.1
+
+0
+
+0
+
+0
+
+0
+
+0
+
+0.6
+0.5
+
+0.2
+
+0
+
+2
+
+4
+
+6
+
+8
+
+1
+
+proportion of dyads
+
+Jazz
+
+0.5
+
+0
+
+edge−wise shared partners
+
+2
+
+4
+
+6
+
+8
+
+0
+
+2
+
+4
+
+6
+
+8
+
+0
+
+2
+
+4
+
+6
+
+8
+
+0.5
+
+0.8
+
+0.6
+
+0.4
+
+0.6
+
+0.1
+0
+
+2
+
+4
+
+6
+
+8
+
+0
+
+0.5
+
+0.5
+
+0.4
+
+0.4
+
+0.3
+
+0.3
+
+0.2
+
+0.2
+
+0.1
+
+0.1
+
+0
+
+2
+
+4
+
+6
+
+8
+
+0
+
+2
+
+4
+
+6
+
+8
+
+0
+
+2
+
+4
+
+6
+
+8
+
+0.5
+0.6
+
+0.3
+
+0.4
+
+0.4
+
+0.2
+
+0.3
+
+0.4
+
+0.2
+0.2
+0
+
+0.1
+0
+
+2
+
+4
+
+6
+
+0
+
+8
+
+min geodesic dist
+1
+
+proportion of nodes
+
+Kapferer
+
+1
+
+0.2
+
+0.1
+0
+
+2
+
+4
+
+6
+
+8
+
+0
+
+0
+
+2
+
+4
+
+6
+
+0
+
+8
+
+0.5
+
+0.8
+
+0.25
+
+0.4
+
+0.6
+
+0.2
+
+0.3
+
+0
+
+2
+
+4
+
+6
+
+8
+
+0
+
+0
+
+2
+
+4
+
+6
+
+8
+
+0
+
+0.1
+
+0.5
+
+0.5
+
+0.08
+
+0.4
+
+0.4
+
+0.06
+
+0.3
+
+0.3
+
+0.04
+
+0.2
+
+0.2
+
+0.02
+
+0.1
+
+0.1
+
+0.15
+0.4
+
+0.2
+
+0.2
+
+0.1
+
+0
+
+0
+
+2
+
+4
+
+6
+
+8
+
+degree distribution
+
+0
+
+0.1
+0.05
+0
+
+2
+
+4
+
+6
+
+8
+
+0
+
+0
+
+2
+
+4
+
+6
+
+8
+
+0
+
+0
+
+2
+
+4
+
+6
+
+8
+
+0
+
+0
+
+2
+
+4
+
+6
+
+8
+
+0
+
+Figure 4: Goodness of fit for small graphs. Gaussian kernel functions are used for MPERGM. ERGM is
+shown in blue dashed lines, and MPERGM is shown in red dashed lines. Black lines are the statistics for
+G? , being closer to black line means better fit.
+chain was initialized with the example graph, whereas we are not sure what initial state was used by ergm.
+We then run the chain for a burn-in of 1000 iterations and then use 100 iterations between each draw. The
+100 samples are then used to plot the graph statistics for goodness-of-fit test in Figure 4 and Figure 5. For
+each estimated model, the statistics in Figure 4 & 5 were generated from 100 sampled graphs obtained
+by running Gibbs with 1000 iterations for burn-in and 100 iterations between samples. We initialized our
+11
+
+AddHealth
+
+Facebook
+
+proportion of edges
+
+0.5
+
+Email
+
+0.5
+
+0.5
+
+0.4
+
+0.4
+
+0.4
+
+0.3
+
+0.3
+
+0.3
+
+0.2
+
+0.2
+
+0.2
+
+0.1
+
+0.1
+
+0.1
+
+0
+
+0
+
+5
+
+10
+
+15
+
+0
+
+edge−wise shared partners
+
+0
+
+5
+
+10
+
+15
+
+0
+
+0
+
+5
+
+10
+
+15
+
+0
+
+5
+
+10
+
+15
+
+0
+
+5
+
+10
+
+15
+
+proportion of dyads
+
+0.5
+0.25
+
+0.4
+
+0.3
+0.2
+0.2
+
+0.3
+
+0.15
+0.2
+0.1
+
+0.1
+
+0.1
+
+0.05
+0
+
+0
+
+5
+
+10
+
+min geodesic dist
+
+15
+
+0
+
+0
+
+5
+
+10
+
+15
+
+0
+
+0.5
+
+proportion of nodes
+
+0.4
+
+0.4
+0.4
+
+0.3
+
+0.3
+0.3
+
+0.2
+0.1
+0
+
+0.2
+
+0.2
+
+0.1
+
+0.1
+
+0
+
+5
+
+10
+
+degree distribution
+
+15
+
+0
+
+0
+
+5
+
+10
+
+15
+
+0
+
+Figure 5: Goodness of fit for large graphs. Gaussian kernel functions are used for MPERGM. ERGM is
+shown in blue dashed lines, and MPERGM is shown in red dashed lines.
+Markov chain with the example graph, whereas we are not sure what initial state did ergm use. We used a set
+of hand-tuned step-size and h for different data sets, and re-scaled the edge and triangle features by a factor
+1
+1
+of te (G
+? ) and t (G? ) . Empirically, we find h ≈ 8 and a predefined step-size 10 works well for small graphs.
+4
+For graphs with several thousands of nodes, the pre-defined step-size and h needs to be larger to guarantee
+reasonable variance and concentration of the model. In Figure 4, ERGM is degenerate for the Florentine
+and Dolphins dataset, because most sampled graphs have 0-degree nodes (third row), while MPERGM
+is able to generate samples scoring a similar set of graph statistics. In order to investigate the variance
+of the learned MPERGM, we count the number of samples that are different in structure (not counting
+isomorphism) or different in features (number of edges and triangles), while recording the maximum number
+of unique edge-flips needed to get from the initial state to the sampled graph (number of max hops). The
+results in Table 1 suggests that our sampler explores Gn with a considerable range.
+
+6
+
+Discussion and Conclusions
+
+We have proposed a non-parametric exponential family model that is capable of approximating distributions
+that do not fall within the exponential family empirically. As the data size increases, this model can approximate arbitrary (continuous) densities with tuning parameters controlling the sparsity. And if the true density
+falls within the exponential family characterized by the chosen features, the estimated non-parametric model
+converges to the parametric one. The proposed framework results in a non-parametric density estimator
+12
+
+which admits global constraints; if available, this information may require fewer data points to approximate
+the underlying density. The resulting MLE optimization problem is concave with `1 penalty term, but raises
+a computational challenge because the number of inequality constraints is proportional to the number of
+data points. We also adapted the approach to modify exponential random graph models for graphs to come
+up with an exponential family model averse to model degeneracy.
+As future directions, we would like to investigate the rules for selecting bandwidth parameters, the
+acceleration of the optimization problem, and efficient sampling techniques for sampling from the nonparametric exponential family.
+
+Acknowledgements
+The authors thank Anthony Quas (via mathoverflow.net) and Herman Rubin for their help with proofs of
+the theoretical results. This research was supported by the NSF Award IIS-0916686.
+
+13
+
+References
+F. Bach, R. Jenatton, J. Mairal, and G. Obozinski. Convex optimization with sparsity-inducing norms. In
+S. Sra, S. Nowozin, and S. J. Wright., editors, Optimization for Machine Learning, chapter 2. MIT press,
+2011.
+O. Barndorff-Nielsen. Information and Exponential Families in Statistical Theory. Wiley, New York, 1978.
+R. E. Bellman. Dynamic Programming. Princeton University Press, 1957.
+L. D. Brown. Fundamentals of Statistical Exponential Families, volume 9 of Lecture Notes – Monograph
+Series. Institute of Mathematical Statistics, Hayward, CA, 1986.
+A. Caimo and N. Friel. Bayesian inference for exponential random graph models. ArXiv e-prints, July 2010.
+M. Dudik, S.J. Phillips, and R.E. Schapire. Maximum entropy density estimation with generalized regularization and an application to species distribution modeling. Journal of Machine Learning Research, 8:
+1217–1260, Jun 2007.
+O. Frank and D. Strauss. Markov graphs. Journal of the American Statistical Association, 81(395), September 1986.
+C. J. Geyer and E. A. Thompson. Constrained monte carlo maximum likelihood for dependent data. Journal
+of the Royal Statistical Society, 54(3):pp. 657–699, 1992.
+P. Gleiser and L. Danon. List of edges of the network of jazz musicians. Adv. Complex Syst. 6,565, 2003.
+S. Goodreau. Advances in exponential random graph (p) models applied to a large social network. Social
+Networks, 29(2):231–248, May 2007. ISSN 03788733.
+R. Guimera, L. Danon, A. Diaz-Guilera, F. Giralt, and A. Arenas. List of edges of the network of email interchanges between members of the univeristy rovira i virgili (tarragona). Physics Review E, 68
+(065103(R)), 2003.
+M. S. Handcock. Assessing degeneracy in statistical models of social networks. Technical Report 39, Center
+for Statistics and the Social Sciences, University of Washington, 2003.
+M. S. Handcock, D. R. Hunter, C. T. Butts, S. M. Goodreau, and M. Morris. statnet: Software tools for
+the representation, visualization, analysis and simulation of network data. Journal of Statistical Software,
+24(3), 2008.
+K. Harris. The national longitudinal study of adolescent health (addhealth), waves i & ii, 1994–1996; wave
+iii, 2001–2002, 2008.
+P. W. Holland and S. Leinhardt. An exponential family of probability distributions for directed graphs (with
+discussion). American Statistical Association, 76(373), 1981.
+D. R. Hunter and M.S. Handcock. Inference in curved exponential family models for networks. ASA,
+Journal of Computational and Graphical Statistics, 15(2), 2006.
+D. R. Hunter, M. S. Handcock, C. T. Butts, S. M. Goodreau, and M. Morris. ergm: A package to fit, simulate
+and diagnose exponential-family models for networks. Journal of Statistical Software, 24(3), 2008.
+
+14
+
+I. H. Jin and F. Liang. Fitting social network models using varying truncation stochastic approximation
+MCMC algorithm. Journal of Computational and Graphical Statistics, In Press, 2012.
+D. Lunga and S. Kirshner. Generating similar graphs from spherical features. In Ninth Workshop on Mining
+and Learning with Graphs (MLG’11), San Diego, CA, August 2011.
+D. Lusseau, K. Schneider, O. J. Boisseau, P. Haase, E. Slooten, and Dawson S. M. The bottlenose dolphin community of Doubtful Sound features a large proportion of long-lasting associations. Behavioral
+Ecology and Sociobiology, 54, 2003.
+S. Moreno and J. Neville. An Investigation of the Distributional Characteristics of Generative Graph Models.
+In Proceedings of the 1st Workshop on Information in Networks, February 2009.
+É. A. Nadaraya. On Non-Parametric Estimates of Density Functions and Regression Curves. Theory of
+Probability and its Applications, 10:186–190, 1965.
+J. Nocedal and S. J. Wright. Numerical Optimization. Springer Series in Operations Research. Springer,
+2nd edition, 2006.
+E. Parzen. On Estimation of a Probability Density Function and Mode. The Annals of Mathematical Statistics, 33(3):1065–1076, 1962.
+A. Rinaldo, S. E. Fienberg, and Y. Zhou. On the geometry of discrete exponential families with application
+to exponential random graph models. Electronic Journal of Statistics, 3:446–484, 2009.
+G. Robins, P. Pattison, Y. Kalish, and D. Lusher. An introduction to exponential random graph (p*) models
+for social networks. Social Networks, 29(2):173 – 191, 2007a.
+G. Robins, T. Snijders, P. Wang, M. Handcock, and P. Pattison. Recent developments in exponential random
+graph (p*) models for social networks. Social Networks, 29(2):192 – 215, 2007b.
+H. L. Royden. Real Analysis. Prentice Hall, 3rd edition, 1988.
+S. Shalev-Shwartz and A. Tewari. Stochastic methods for l1 regularized loss minimization. Journal of
+Machine Learning Research, 12:1865–1892, June 2011.
+A. W. van der Vaart. Asymptotic Statistics. Cambridge Series in Statistical and Probabilistic Mathematics.
+Cambridge University Press, 1998.
+M. J. Wainwright and M. I. Jordan. Graphical models, exponential families, and variational inference.
+Foundations and Trends in Machine Learning, 1(1-2):1–305, 2008.
+S. Wasserman and P. Pattison. Logit models and logistic regression for social networks: An introduction to
+Markov graphs and p* model. Psychometrii, 61(3), September 1996.
+S. Wasserman and G. Robins. An introduction to random graphs, dependence graphs, and p*,. In P. J. Carrington, J. Scott, and S. Wasserman, editors, Models and Methods in Social Network Analysis. Cambridge
+University Press, 2004.
+T. Wu and K. Lange. Coordinate descent algorithms for lasso penalized regression. The Annals of Applied
+Statistics, 2(1):224–244, March 2008.
+
+15
+
+A
+
+Proofs
+
+A.1
+
+Theorem 3.1
+
+To prove Theorem 3.1, let’s take a closer look at the augmented constraints. First consider the augmented
+i
+statistics ti,?
+a for sample x .
+
+
+
+Lemma A.1. Efˆn (x|x1:n ) tia (x) = fnKDE xi |x1:n
+Proof.
+n
+i
+ 1X
+
+
+Efˆn (x|x1:n ) ta (x) =
+KH xi ; xj = fnKDE xi |x1:n ,
+n
+j=1
+
+i.e., the augmented statistics are the KDE estimates for samples x1 . . . xn respectively. Parzen (1962)
+proved the pointwise convergence of KDEs and Nadaraya (1965) proved the uniform convergence for KDEs
+under further assumptions. We include the first half of (Nadaraya, 1965, Theorem 1) below since it is
+essential for proving both Theorem 3.1 and Theorem 3.2.
+
+
+KDE
+Theorem A.2. Let f n
+(x) = Ef (y1:n ) fnKDE x|y 1:n be the expected value of the KDE density given
+i.i.d
+
+sample points y 1:n ∼ f .
+Suppose KH (x) : x ∈ X →
+is a function of bounded variation and f (x) is a uniformly continuous
+PR
+∞
+density function, and the series n=1 e−γn|H| converges for every positive value of γ.
+ a.s. KDE
+Then fnKDE x|x1:n → f n
+(x) uniformly on X .
+KDE
+
+That is, supx∈X fnKDE (x) − f n
+
+a.s.
+
+(x) → 0.
+i.i.d
+
+Remark 1. It is helpful to note that given x1 . . . xn ∼ f ,
+KDE
+fn
+
+i
+
+x
+
+
+
+Z
+
+n
+Y
+
+x1 ...xn
+n
+X
+
+j=1
+
+=
+1
+=
+n
+
+n
+
+
+1X
+f (x )
+KH xi ; xj d x1 . . . xn
+n
+
+Z
+
+j
+
+j=1
+i
+
+KH x ; x
+
+j
+
+
+
+f x
+
+j
+
+
+
+j
+
+Z
+
+dx =
+
+j=1 j
+x ∈X
+
+
+
+
+KH xi ; x f (x) d x = Ef tia (x) .
+
+x∈X
+
+Theorem 3.1 For a density f (x) ∈ EF t , with domain space X , feature space H, and canonical parameters
+λ ∈ C ∈ Rd . Suppose 
+x1 , . . . , xn , x1:n is a sequence of independent and identical
+ random
+ vectors
+N
+E
+1:n
+drawn from f . Let fn
+x|θ̂ n , x
+∈ N EF s be the MLE solution of (5) θ̂ n = λ̃n , λ̃a,n , with all
+βi = β > 0, i = 1, . . . , n. Assuming
+1. X is compact,
+2. t is continuous,
+3. EF t is a family of uniformly equicontinuous functions w.r.t x,
+P
+−γn|H|
+4. Kernel K has bounded variation and has a bandwidth parameter H such that the series ∞
+n=1 e
+converges for every positive value of γ,
+p
+p
+then as n → ∞, λ̃ia,n → 0, ∀i = 1, . . . , n and λ̃n → λ.
+
+16
+
+
+
+
+
+Proof. Consider the estimated densities fnE x|λ̂n ∈ EF t and fnN E x|θ̂ n , x1:n ∈ N EF s .
+p
+
+MLE for regular exponential families converges in probability to the true values of parameters, λ̂n → λ.
+(e.g. Wainwright and Jordan, 2008, Chapter 6),(e.g. van der Vaart, 1998,Chapter 5.2)
+p
+Since f (x|λ) is continuous w.r.t λ, given any x ∈ X , fnE x|λ̂n → f (x|λ). Because EF t is an
+p
+
+equicontinuous family, and X is compact, according to (Royden, 1988, Problem 9.6), fnE → f uniformly
+on X .
+
+
+Thus given any δ, β > 0, there exists N s.t. when n > N , ∀x ∈ X , P ( fnE x|λ̂n − f (x|λ) > β2 ) <
+δ. Then, we have
+
+Z
+
+
+
+
+i
+
+i
+
+β
+β
+E
+i
+=P
+fn x|λ̂n − f (x|λ) ta (x) d x >
+P Ef E (x|λ̂n ) ta (x) − Ef ta (x) >
+n
+2
+2
+
+Zx∈X
+
+
+β
+E
+i
+≤P
+sup fn x|λ̂n − f (x|λ) ta (x) d x >
+2
+x∈X x∈X
+
+
+
+
+β
+= P sup fnE x|λ̂n − f (x|λ) >
+2
+x∈X
+< δ.
+Thus for all xi ∈ X , given any δ1 , β2 > 0, there exist N1 , such that when n > N1 ,
+
+
+i
+
+i
+
+β
+P Ef E (x|λ̂n ) ta (x) − Ef ta (x) >
+< δ1 .
+n
+2
+
+
+Meanwhile, since we have Efˆn (x|x1:n ) tia (x) for the box constraints in (5), we would like to have
+
+
+
+
+Efˆn (x|x1:n ) tia (x) →Ef tia (x)
+for any xi ∈ X uniformly as well. This is satisfied under assumptions of Theorem A.2. Then we would
+have
+
+ a.s.
+
+
+Efˆn (x|x1:n ) tia (x) → Ef tia (x)
+for all i = 1 . . . n. Because almost sure convergence implies convergence in probability, we have: for all
+xi ∈ X , given any δ2 , β2 > 0, there exists N2 , s.t. when n > N2 ,
+
+
+
+
+
+
+β
+< δ2 .
+P Efˆn (x|x1:n ) tia (x) − Ef tia (x) >
+2
+Thus using Triangle Inequality and Boole Inequality, when n > N = max(N1 , N2 ),
+
+
+
+
+
+
+P Efˆn (x|x1:n ) tia (x) − Ef E (x|λ̂n ) tia (x) > β ≤ δ1 + δ2 .
+n
+This means that the additional constraints will be matched by [λ̂, 0] in probability. Because λ̂n is the
+solution to (3) without the additional constraints, thus it will have smaller KL divergence (larger entropy)
+p
+p
+than θ̂ n . Therefore [λ̂n , 0] is bound to be the MLE solution to (5). Since λ̂n → λ, we have λ̃ia,n → 0, ∀i =
+p
+
+1, . . . , n and λ̃n → λ.
+Remark 2. It can be noted that a sufficient condition for EF t to be an equicontinuous exponential family is
+that X and C are both compact. Since in reality, we rarely deal with probability density functions with infinite
+density values, the conditions for Theorem 3.1, though look restrictive, do not constrain the application
+domain much. However, since for any regular exponential family the canonical parameter space is open
+(Brown, 1986, Theorem 3.6), this means Theorem 3.1 for non-parametric exponential family works only on
+a closed subset C, of the original canonical parameter space.
+17
+
+A.2
+
+Theorem 3.2
+
+To prove the pointwise convergence result for our non-parametric exponential family, we rely on the convergence of KDEs and Triangle Inequalities. We start off by introducing several lemmas.
+
+
+Lemma A.3. Let f˜nKDE (x) = Ef N E (y1:n |θ̂n ,x1:n ) fnKDE x|y 1:n be the expected value of the KDE
+n
+
+
+
+
+
+i.i.d
+density given sample points y 1:n ∼ fnN E x|θ̂ n , x1:n . Then f˜nKDE xi = Ef N E (x|θ̂n ,x1:n ) tia (x) .
+n
+Proof. Similar as Remark 1,
+Z
+
+n
+Y
+
+x1 ...xn
+n
+X
+
+j=1
+
+
+f˜nKDE xi =
+
+=
+=
+
+1
+n
+
+fnN E xj
+
+Z
+
+n
+1X
+
+KH xi ; xj d x1 . . . xn
+n
+j=1
+
+Z
+
+
+
+KH xi ; xj fnN E xj d xj =
+
+j=1 j
+x ∈X
+
+x∈X
+
+EfnN E (x) tia (x)
+
+
+
+KH xi ; x fnN E (x|) d x
+
+
+
+.
+
+A pointwise convergence result for the expected KDE density can be found in Parzen (1962):
+Theorem A.4. Suppose f (x) is any probability density function which is continuous at point x0 . Let
+
+
+KDE
+fn
+(x) = Ef (y1:n ) fnKDE x|y 1:n be the expected value of the KDE density given sample points
+i.i.d
+
+y 1:n ∼ f .
+Suppose KH (x) : x ∈ X ⊂ Rm → R is a probability density function which satisfies:
+sup KH (x) < ∞,
+
+(9)
+
+x∈X
+
+lim KH (x)
+
+kxk→∞
+
+m
+Y
+
+xi = 0,
+
+i=1
+1
+
+lim |H| 2 = 0.
+
+n→∞
+KDE
+
+Then lim f n
+n→∞
+
+(10)
+(11)
+
+
+
+x0 = f x0 .
+
+That is, the expected KDE density at continuity point x0 converges to the sampling probability density
+function f at x0 .
+
+
+
+Corollary A.5. Given a sample xi , lim EfnN E (x) tia (x) = fnN E xi if KH (x) is continuous and
+n→∞
+(9),(10),(11) are satisfied.
+Proof. If KH (x) is continuous, then fnN E satisfies Theorem A.4’s conditions for f . Combining Lemma
+A.3, we have then have Corollary A.5.
+In addition, we have the mean-square convergence of the KDE density stated in Parzen (1962) as well:
+
+18
+
+Theorem A.6. Suppose KH (x) : x ∈ X ⊂ Rm → R is a probability density function which in addition to
+(9),(10),(11), also satisfies:
+1
+
+lim n |H| 2 = ∞
+
+n→∞
+
+(12)
+
+and f (x) is probability
+which is continuous
+at point x0 .
+h density function
+i
+
+
+2
+Then lim Ef (x1:n ) fnKDE x0 |x1:n − f x0
+= 0.
+n→∞
+
+That is, the KDE density at continuity point x0 converges in mean square to the true density f at x0 .
+Lemma A.7.
+
+ p
+
+fnN E xi → f xi
+
+if
+1. KH (x) is continuous,
+2. and (9),(10),(11),(12) are satisfied,
+3. and lim βi = 0, ∀i = 1 . . . n.
+n→∞
+
+Proof. By the Triangle Inequality,
+
+
+
+
+
+
+fnN E xi − f xi ≤ fnN E xi − f˜nKDE xi + fnKDE xi − f xi
+
+
++ f˜nKDE xi − fnKDE xi |x1:n .
+Fix ξ, ζ > 0. Find N1 using Corollary A.5,N2 using Theorem A.6, N3 by the schedule of β s.t.
+
+
+
+
+P fnN E xi − f˜nKDE xi > ξ/3 < ζ/3,
+
+
+
+P fnKDE xi − f xi > ξ/3 < ζ/3,
+
+
+
+
+KDE
+i
+KDE
+i 1:n
+˜
+P fn
+x − fn
+x |x
+> ξ/3 < ζ/3,
+for all n ≥ N1 , n ≥ N2 , and n ≥ N3 , respectively. Set N = max {N1 , N2 , N3 }. Then by Boole Inequality,
+when n > N ,
+
+
+
+
+
+
+
+P fnN E xi − f xi > ξ ≤ P fnN E xi − f˜nKDE xi > ξ/3
+
+
+
++ P fnKDE xi |x1:n − f xi > ξ/3
+
+
+
+
++ P f˜nKDE xi − fnKDE xi |x1:n > ξ/3 < ζ.
+So ∀ξ > 0, limn→∞ P
+
+
+
+
+fnN E xi − f xi > ξ = 0.
+
+Lemma A.8. Given any uniformly continuous probability density function f : X → R, and n samples
+i.i.d
+x1 . . . xn ∼ f . ∀ξ > 0, if we draw a new sample x ∼ f ,
+
+
+
+
+arg mini=1..n kx−xi k
+lim P f (x) − f x
+> ξ = 0.
+n→∞
+
+Proof. Since f is uniformly continuous, given any ξ > 0, there exists ε > 0,
+ s.t. ∀x, y ∈ X andi kx
+ − yk <
+arg
+min
+kx−x
+k
+i=1..n
+ε, we have |f (x) − f (y)| < ξ. Therefore, let A be the event f (x) − f x
+> ξ, let
+i
+
+B be the event x − xarg mini=1..n kx−x k > ε then A ⊂ B. Thus P (A) < P (B), i.e.
+P
+
+
+
+
+
+
+
+
+i
+i
+f (x) − f xarg mini=1..n kx−x k > ξ < P x − xarg mini=1..n kx−x k > ε .
+19
+
+If we divide X into countable number
+of hypercubes with each side length being ε, and index the
+R
+hypercubes as Q1 . . . Qk . . . . Let pk = x∈Qk f (x) d x. Then the probability for event B to happen is that
+P
+pk (1 − pk )n . Because pk (1 − pk )n → 0,
+x is the first sample to drop in Qk , ∀k ∈ Z. That is, Pn (B) ,
+k∈Z
+
+and is monotonically decreasing, using monotone convergence theorem, we have lim Pn (B) = 0.
+n→∞
+Therefore,
+
+lim P
+
+n→∞
+
+
+
+
+
+
+
+
+i
+i
+f (x) − f xarg mini=1..n kx−x k > ξ < lim P x − xarg mini=1..n kx−x k > ε
+n→∞
+
+= 0.
+
+Now we are ready to prove Theorem 3.2 with Lemma A.7 and Lemma A.8.
+
+Theorem 3.2 Given a probability density function f (x) : X → R, let fnN E x|θ̂n , x1:n ∈ N EF s be a
+solution satisfying (5). If
+1. f is uniformly continuous on X ,
+2. KH (x) is uniformly continuous on X ,
+3. and (9),(10),(11),(12) holds,
+4. lim βi = 0, ∀i = 1 . . . n,
+n→∞
+
+ p
+then fnN E x|θ̂ n , x1:n → f (x) pointwise on X .
+i.i.d
+
+Proof. By the Triangle Inequality, given any x ∈ X , and fnN E (x) trained on n samples x1:n ∼ f , let
+i0 , arg mini=1..n kx − xi k.
+ 0
+ 0
+ 0
+ 0
+fnN E (x) − f (x) ≤ fnN E xi − f xi + fnN E (x) − fnN E xi + f (x) − f xi .
+Fix ξ, ζ > 0, use Lemma A.7 to find N1 ∈ N and Lemma A.8 to find N2 , N3 ∈ N s.t.
+
+ 0
+ 0
+
+P fnN E xi − f xi
+> ξ/3 < ζ/3,
+
+ 0
+
+P fnN E (x) − fnN E xi
+> ξ/3 < ζ/3,
+
+ 0
+
+P f (x) − f xi
+> ξ/3 < ζ/3,
+for all n ≥ N1 , n ≥ N2 , and n ≥ N3 , respectively. Set N = max {N1 , N2 , N3 }. Then by Boole Inequality,
+when n > N ,
+
+ 0
+ 0
+
+
+P fnN E (x) − f (x) > ξ ≤ P fnN E xi − f xi
+> ξ/3
+
+ 0
+
+
+ 0
+
++ P fnN E (x) − fnN E xi
+> ξ/3 + P f (x) − f xi
+> ξ/3
+< ζ.
+So ∀ξ > 0, limn→∞ P
+
+
+fnN E (x) − f (x) > ξ = 0.
+
+20
+
+

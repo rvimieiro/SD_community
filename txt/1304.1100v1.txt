@@ -1,0 +1,854 @@
+155
+
+I
+I
+
+A Dynamic Approach to Probabilistic Inference using Bayesian
+Networks
+
+I
+
+Michael C. Horsch and David Poole*
+Department of Computer Science
+University of British Columbia
+
+I
+
+Vancouver, British Columbia
+Canada
+email: horsch@cs. ubc.ca, poole@cs. ubc.ca
+
+I
+
+Abstract
+
+In this paper we present a framework
+for dynamically constructing Bayesian net­
+works. We introduce the notion of a back­
+ground knowledge base of �chemata, �hich
+.
+is a collection of parameterized conditiOnal
+probability statements. These schemata
+explicitly separate the general knowledge of
+properties an individual may have from the
+specific knowledge of particular individuals
+that may have these properties. Knowledge
+of individuals can be combined with this
+background knowledge to create Bayesian
+networks, which can then be used in any
+propagation scheme.
+We discuss the theory and assumptions
+necessary for the implementation of dy­
+namic Bayesian networks, and indicate
+where our approach may be useful.
+
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+
+1
+
+Motivation
+
+Bayesian networks are used in AI applications to
+model uncertainty and perform inference. They
+are often used in expert systems [Andreassen et
+al., 1987], and decision analysis[Schachter, 1988,
+Howard and Matheson, 1981], in which the network
+is engineered to perform a highly specialized analysis
+task.
+A Bayesian network often implicitly combines gen­
+eral knowledge with specific knowledge. For exam­
+ple, a Bayesian network with an arc as in Figure 1
+refers to a specific individual (a house or a tree or
+dinner or whatever), exhibiting a somewhat gener­
+alized property (fire causes smoke).
+Our dynamic approach is m �tivated by the '?b­
+servation that a knowledge engmeer has expertise
+in a domain, but may not be able to anticipate t.he
+individuals in the model. By separating properties
+from individuals the knowledge engineer can write
+a knowledge base which is independent of the in� i­
+viduals; the system user can tell the system which
+*This research is
+
+#OGP0044121.
+
+supported
+
+in
+
+part by NSERC grant
+
+individuals to consider, because she can make this
+observation at run time. The system user doesn't
+have to be an expert in the domain, to create an
+appropriate network.
+As an example, suppose we are using Bayesian
+networks to model probabilistically the response of
+several people to the sound of an alarm. Our ap­
+proach allows the observation of any number of peo­
+ple. The same knowledge about how people respond
+to alarms is used for each person.
+There are two parts to our approach. First, we
+provide a collection of schemata, which are param­
+.
+eterized, and can be used when necessary given
+.the
+details of the problem. In particular, the same piece
+of knowledge may be instantiated several times in a
+single dynamically created network.
+Second an automatic process bmlds a Bayesian
+network by combining the observation of individu­
+als with the schemata. Thus, if we want to reason
+about a situation involving a fire alarm, given that
+three different people all hear the same alarm, this
+information, provided as evidence to our inference
+engine, causes the appropriate network to be cre­
+ated.
+The Bayesian network constructed dynami­
+cally can absorb evidence (conditioning) to P ro­
+.
+vide posterior probabilities using any propagatiOn
+scheme[Pearl, 1988, Lauritzen and Spiegelhalter,
+1988, Schachter, 1988].
+We now proceed with a cursory introduction to
+Bayesian networks, followed by a presentation of our
+dynamic approach, giving some examples of how dy­
+namic networks can be used. Finally, we draw some
+conclusions concerning the applicability of dynamic
+networks to particular domains.
+·
+
+.
+
+.
+
+2
+
+Bayesian Networks
+
+A Bayesian network is a directed acyclic graph which
+represents in graphical form the joint probability dis­
+tribution, and the statistical independence assump­
+tions, for a set of random variables.
+A node in the graph represents a variable, and an
+arc indicates that the node at the head of the arc is
+directly dependent on, or conditioned by the node at
+
+156
+
+I
+I
+I
+
+Figure 1: A simple arc implicitly representing an
+individual.
+
+I
+
+the tail. The collection of arcs directed to a variable
+give the independenc� assu�ption� for the. de�en­
+dent variable. Associated with this collection IS a
+prior probability distribution, or contingency table,
+which quantifies the effects of observing events for
+the conditioning variables on the probability of the
+dependent variable.
+The graphical representation is used in various
+ways to calculate posterior joint probabilities. Pearl
+[Pearl, 1988] uses the arcs to propagate � ausal
+and diagnostic support values throughout a smgly­
+connected network. Lauritzen and Spiegelhalter
+[Lauritzen and Spiegelhalter, 1988] perform evi­
+dence absorption and propagation by constructing
+a triangulated graph based on the Bayesian net­
+work that models the domain knowledge. Schachter
+[Schachter, 1988] uses the arcs to perform node re­
+duction on the network.I Poole and Neufeld [Poole
+and Neufeld, 1989] implement an axiomatization of
+probability theory in Prolog which uses the arcs of
+the network to calculate probabilities using "reason­
+ing by cases" with the conditioning variables. Our
+current implementation uses the work of Poole and
+Neufeld, but is not dependent on it.
+
+I
+
+3
+
+Representation Issues
+
+Creating networks automatically raises several issues
+which we discuss in this section. First, we need to
+represent our background knowledge in a way which
+preserves a coherent joint distribution defined by
+Bayesian networks, and which also facilitates its use
+in arbitrary situations. Furthermore, there are sit­
+uations in which using the background knowledge
+may lead to ambiguity, and our approach must also
+deal with this.
+Before we get into our discussion, a short section
+dealing with syntactic conventions will help make
+things clearer.
+3.1
+
+Some syntax
+
+In this section we clarify the distinction between our
+background knowledge and Bayesian networks.
+1Schachter's influence diagrams contain decision and
+test nodes, as well as other devices not being considered
+in this paper. We are only looking at probabilistic nodes
+at present.
+
+Figure 2: A simple instantiation of a schema.
+In our Bayesian networks, random variables are
+propositions written like ground Prolog terms. For
+example, the random variable fties{e127} cou.ld rep­
+resent the proposition that individual e127 fhes.
+A schema is part of the background knowledge
+base, and describes qualitatively the direct depen­
+dencies of a random variable. In this paper, a
+schema is stated declaratively in sans serif font.
+A schema can be defined constructively: a param­
+eterized atom is written as a Prolog term with pa­
+rameters capitalized. A schema is represented by the
+following:
+... , Bn -->b
+where the arrow � indicates that the parameter­
+ized atom, b, on the left side is directly dependent
+on the parameterized atoms, ai, on the right.
+An instantiation of a parameter is the substitution
+of a parameter by a constant representing an indi­
+vidual. We indicate this in our examples by listing
+the individuals in a set, as in {el27}. Instantiating a
+parameterized atom creates a proposition that can
+be used in a Bayesian network.
+A schema is instantiated when all parameters have
+been instantiated, and an instantiated schema be­
+comes a part of the Bayesian network, indicating a
+directed arc from the instantiation. of each ai and
+the instantiation of b.
+For example, the schema:
+a1,
+
+foo(Xa), bar(a) - foobar (X)
+{b}
+instantiating
+the parameter X, creates the
+with
+network2 shown in Figure 2.
+The schemata in the background knowledge
+base are isolated pieces of information, whereas a
+Bayesian network is a single entity. An interpreta­
+tion is that a Bayesian network defines a joint distri­
+bution, whereas the schemata in a knowledge base
+2In our examples, Bayesian networks are pictured as
+encircled node labels connected by directed arrows, as in
+Figure 2.
+
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+
+157
+
+I
+I
+I
+I
+I
+I
+I
+I
+I
+
+define conditional probability factors of which in­
+stances are used to compute a joint probability dis­
+tribution.
+A schema is incomplete without the contingency
+table which quantifies the connection between the
+dependent variable and its conditioning parents. 3
+These tables have the following form, and follow
+the same syntactic assumptions as the symbolic
+schemata:
+=
+p(foobar(X) I foo(X.a), bar(a))
+0.95
+=
+0.666
+p(foobar(X) I foo(X.a), -,bar(a))
+=
+p(foobar(X) I -,foo(X.a), bar(a))
+0.25
+p(foobar(X) I -,foc(X.a), -,bar(a)) = 0.15
+By writing a parameterized schema, we are licens­
+ing a construction process to instantiate the param­
+eters in the schema for any individual. This requires
+that the knowledge we provide as schemata must be
+written generally.
+The parameters in the schema and the contingent
+probability information should not be interpreted
+with any kind of implicit quantification. Rather,
+they are intended to apply to a "typical" individ­
+ual. Furthermore, when this parameterized infor­
+mation is used, the parameters should be replaced
+with constants which do not convey any intrinsic in­
+formation. By designing schemata carefully, we can
+avoid the "Ace of Spades" problem [Schubert, 1988].
+4
+
+Dynamic Instantiation
+
+I
+
+A general schema with parameters can be instanti­
+ated for more than one individual. There are three
+cases:
+
+I
+
+Unique schemata
+These are schema which have no parameters, or
+which have the same parameters occurring on both
+sides of the arc. For example:
+a(X), b -+c(X).
+For the constants {x,y} instantiating the parameter
+X, the network building process puts two arcs in our
+network, as in Figure 3.
+
+I
+I
+I
+I
+I
+I
+I
+I
+
+4.1
+
+Right-multiple schemata
+In the second case, there are parameters on the right
+side of the schema which do not occur on the left
+side, as in a,b -+c(Y). (Note that, in addition, there
+may be parameters which occur on both sides of the
+arc ). Instantiating the parameter Y in the above
+schema with values {x, y, z} creates the network
+shown in Figure 4.
+Example 4-1:
+Pearl [Pearl, 1988, Chapter 2]
+presents an extended example, about burglar alarms
+and testimonies from several people, a.s motivation
+for the use of Bayesian networks in an automated
+4.2
+
+31n our examples, we do not provide the table explic­
+itly, we assume its existence implicitly.
+
+Figure 3: The network created by instantiating the
+parameterized unique schemata from Section 4.1.
+reasoning system. The following schemata can spec­
+ify this problem:
+burglary, earthquake - alarm..sound
+- newsJepat
+earthquake
+- testimony(X)
+alarm..sound
+alarm..sound
+- caii(Y)
+Note the use of right-multiple schemata. This allows
+us to specify multiple cases for testimonies from dif­
+ferent people. In particular, we could tell the system
+that we are investigating the hypothesis that a bur­
+glary occurred based on testimonies from Dr Watson
+and Mrs Gibbons. people, by supplying the con­
+stants representing these individuals at run time. D
+
+r------.e
+G)
+f---•9
+Figure 4: The network created by instantiating
+the parameterized right-multiple schema from Sec­
+.tion 4.2.
+
+158
+
+of the fire alarm may cause others to leave the build­
+ing.
+This situation shows the usefulness of an existen­
+tial combination over individuals in the problem. We
+want to combine the effects of each individual into
+a single variable which relates the likelihood that at
+least one of the individuals satisfied the condition.
+The following schema represents this notion syntac­
+tically:
+
+·
+
+3Xetype·a(X) -+b.
+The existential schema serves as a short-hand no­
+tation for a dynamic Or-rule structure. For exam­
+ple, when it is given that {xl, .x2, . . , xn} are mem­
+bers of the set type, the schema above expands into a
+network structure as in Figure 6, where the contin­
+gency table for 3Xetype.a(X) is unity if any of a(X) is
+known to be true, and zero if they are all false. The
+Or-rule is indicated in the diagram by the circular
+arc on the inputs to the existential node.
+This schema requires a contingency table such as:
+.
+
+Figure 5: The network created by instantiating
+the parameterized left-multiple schema from Sec­
+tion 4.3.
+
+4.3
+
+Left-multiple schemata
+
+The remaining case is characterized by parameters
+occurring on the left side of the schema which do not
+occur on the right side. For example:
+
+a(X) -+b
+Instantiating the parameter X with a number o f in­
+dividuals {xl, . . , xn} creates a network structure as
+shown in Figure 5 . The conditional probability for
+b must be stated in terms of multiple instances of
+the node a(X). To use the multiple instantiation of a
+left-multiple schema, we need to be able to provide
+contingencies for any arbitrary number of individ­
+uals. This is problematic because it is not reason­
+able to provide this kind of information (in terms
+of contingency tables, for example), as background
+knowledge: we would require a table for every possi­
+ble set of individuals. To be useful, the contingency
+tables for left-multiple schemata must allow for any
+number of instantiations.
+.
+
+p( b I 3Xetype-a(X))
+p( b I -.3XEtype·a(X))
+
+Existential Combination
+Consider the following example: A person who
+smells smoke may set off a fire alarm, and the sound
+
+=
+
+which describes the effect on b for the case where
+at least one known individual satisfies a(X), and the
+case where no known individual does (these numbers
+are arbitrary).
+Example 4-2:
+The example about fire alarms,
+given at the beginning of this section, can be repre­
+sented by the following background knowledge base:
+
+fire
+smells..smoke(X)
+3YEperson·sets.Dff..alarm(Y)
+alari'TUounds
+
+- smells.smoke(X)
+- sets_off..alarrr(X)
+- alarnuound s
+- leaves..building(Z)
+Suppose we are given that john and mary are the
+only known members of the set person. This infor­
+mation creates the network shown in Figure 7. 0
+There are several points which should be made:
+
+1. The variable 3XEtype·a(X) is propositional, and
+when it is true, it should be interpreted as the
+fact that some known individual satisfies the
+proposition a(X). When this existential com­
+bination is false, the interpretation should be
+that no known individual satisfies the proposi­
+tion a(X), although there may be an individual
+satisfying the proposition who is unknown to
+the system.
+
+It would be representationally restrictive to disal­
+low the use of left-multiple schemata, because some­
+times we do want to allow an unspecified number of
+variables to condition a dependent variable. For ex­
+ample, we may want to include in our knowledge
+base the idea that any number of people may call
+the fire department to report a fire.
+We provide two mechanisms, called existential
+and universal combination, which specify how an
+unknown number of possible conditioning variables
+affects another variable. These are based on the
+Canonical Models of Multicausal Interactions sug­
+gested by Pearl [Pearl, 1988].
+
+=
+
+0.7665
+0."0332
+
+2.
+
+The proposition 3Xetype·a(X) can be considered
+a schema on it's own, acting like a variable
+which is disjunctively influenced by a(c) for ev­
+ery constant c in the set type. The intermedi­
+ate Bayesian arcs are not written as part of the
+knowledge base.
+
+3. The set type, from which the individuals for this
+schema are taken, serves two purposes: to con­
+strain the applicability of the individuals to the
+
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+
+159
+
+I
+I
+I
+I
+I
+I
+I
+I
+I
+
+Figure
+
+6:
+
+The instantiation of the existential combination node from Section
+
+schema, and to facilitate the dynamic specifi­
+cation of individuals. In this way, all and only
+those individuals who are known to satisfy the
+type requirement will be included in this com­
+bination.
+
+Universal combination can be used in situations
+for which all individuals of a certain type must sat­
+isfy a condition to affect a consequent. For example,
+a board of directors meeting can begin only when all
+the members who are going to come are present.
+
+I
+
+We represent this idea with a schema with the
+following syntax:
+
+I
+
+The discussion concerning the existential combi­
+nation applies here, with the only exception be­
+ing the interpretation of the schema. The variable
+VXetype·a(X) is true if a(X) is true for every mem­
+ber of the set type. We treat the combination as a
+dynamic And-rule over all members of the set type.
+The And-rule contingency table is unity if all the
+
+I
+I
+I
+I
+I
+I
+I
+I
+
+VXEtype·a(X) -b
+
+members satisfy the condition
+
+a(X),
+
+and zero other­
+
+wise.
+A board meeting for a lar:ge
+Example 4-3:
+corporation requires the presence of all board mem­
+bers, and the meeting may result in some actions,
+say, buying out a smaller company. A board member
+may attend the meeting, depending on her reliability
+and state of health.
+
+VXE board .members· p resent(X)
+meeting
+sick(X), reliable(X)
+
+appropriate network. Evidence concerning the reli­
+ability and health of any board member can then
+be submitted to the network, providing appropriate
+conditioning for queries. 0
+
+5
+
+Universal Combination
+
+--+
+--+
+·--+
+
+meeting
+buy..out
+present( X)
+
+We note that at the time the schemata are written,
+it is not important to know how many board mem­
+bers there may be. However, we must know exactly
+who is a member on the board before the network
+can be created. This information is supplied at run
+time, and the construction process can construct the
+
+4.3.
+
+Creating Bayesian networks
+
+To create a Bayesian network, the schemata in our
+knowledge base must be combined with the individ­
+uals the process knows about. The process by which
+this is accomplished in our implementation has been
+kept simple, and syntactic.
+Every schema in the knowledge base is instanti­
+ated by substituting ground atoms representing the
+individuals known to be part of the model. Each in­
+stantiation of a schema is an arc in the Bayesian net­
+work. The contingency table associated with each
+schema is also instantiated, providing the prior prob­
+ability information we require.
+This procedure creates the collection of Bayesian
+arcs we use as the Bayesian network for our model.
+
+6
+
+Current and Future Work
+
+These proceedings report simultaneous and indepen­
+dent research on building Bayesian networks dynam­
+ically. Goldman and Charniak [Goldman and Char­
+niak, 1990] use a sophisticated rule base to construct
+Bayesian networks using more 'semantic' knowledge.
+As well, their approach handles cases where arcs are
+added to a ·network which has already absorbed ev­
+idence.
+We have outlined only two ways in which the ef­
+fects of an unknown number of individuals can be
+combined. These could be extended to include other
+types of combination.
+This paper describes how knowledge of individuals
+can be used to create a Bayesian network. There are
+times when we want to use observations about the
+individuals to add arcs to the network. For instance,
+observing the topology of an electronic circuit should
+
+160
+
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+
+Figure 7: The Bayesian network created for Example
+
+help structure the Bayesian network which models
+the uncertainty in diagnosing faults. These obser­
+vations have a unusual property: they can be used
+to structure a network if they are observed to be
+true, and yield no exploitable structural information
+if they are observed false. We are looking at how we
+might implement this idea.
+The process, described in this paper, which cre­
+ates the Bayesian network from the knowledge base
+is very simple, and many improvements could be
+made. One way to limit the size of our networks
+is to delay the creation of the network until all the
+evidence available has been observed. This would
+allow the exploitation of conditional independence
+at the level of the structure of the network, mak­
+ing the network smaller and easier to evaluate. This
+idea is not exploited by many systems (for example,
+Lauritzen and Spiegelhalter [Lauritzen and Spiegel-
+
+halter,
+
+4-2
+
+1988] mention the idea, but
+
+I
+argue against it) .
+
+The ideas in this paper have been implemented
+and tested using toy problems. Currently, larger
+applications are being built in more sophisticated
+domains, including circuit diagnosis and the inter­
+pretation of sketch maps.
+
+7
+
+Conclusions
+
+In this paper we have presented a dynamic ap­
+proach to the use of Bayesian networks which sepa­
+rates background and specific knowledge. Bayesian
+networks are created by combining parameterized
+schemata with the knowledge of individuals in the
+model.
+Our approach to the use of Bayesian networks
+has been from the viewpoint of providing an auto­
+mated tool for probabilistic reasoning, and is useful
+
+I
+I
+I
+I
+I
+I
+I
+
+161
+
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I
+I·
+I
+
+for modelling problems for domains in which many
+details of the problem cannot be exhaustively antic­
+ipated by the designer of the probabilistic model.
+Such domains include expert systems, diagnosis,
+story understanding, natural language processing
+and others.
+An implementation of this approach has been
+completed in Prolog.
+
+References
+
+[Andreassen et al., 1987] S Andreassen,
+bye, B. Falck, and S.K. Andersen.
+
+M. Wold­
+Munin-a
+causal probabilistic network for interpretation of
+electromyographic findings. In Procedings of the
+Tenth International Joint Conference on Artificial
+Intelligence, pages 366-372, 1987.
+
+[Goldman and Charniak, 1990]
+
+Robert P. Goldman
+and Eugene Charniak. Dynamic construction of
+belief networks. In Proceedings Workshop on Un­
+certainty and Probability in AI, 1990.
+
+[Howard and
+
+Matheson, 1981] R.A. Howard and
+J.E. Matheson. T h e Principles and Applications
+
+of Decision Analysis. Strategic Decisions Group,
+CA, 1981.
+
+[Lauritzen and Spiegelhalter, 1988] S. L. Lauritzen
+and D. J. Spiegelhalter. Local computation with
+probabilities on graphical structures and their ap­
+plication to expert systems. J. R. Statist Soc ·B,
+
+50(2):157-224, 1988.
+[Pearl, 1988] Judea Pearl.
+
+Probabilistic Reasoning
+in Intelligent Systems: Networks of Plausible Rea­
+soning. Morgan Kauffman Publishers, Los Altos,
+
+1988.
+
+[Poole and
+
+Neufeld, 1989] David Poole and Eric
+Neufeld. Sound probabilistic inference in prolog:
+An executible specification of bayesian networks.
+
+1989.
+[Schachter, 1988]
+
+Ross D. Schachter. Probabilistic
+Opns Rsch,
+inference and influence diagrams.
+
+36(4):589-604, 1988.
+[Schubert, 1988] J. K.
+travesty of truth.
+
+4(1):118-121, 1988.
+
+Schubert.
+Cheeseman: A
+Computational Intelligence,
+
+

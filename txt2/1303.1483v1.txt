@@ -1,0 +1,1077 @@
+them in complex domains: there is a knowledge engi­
+neering bottleneck. Clearly, it would be extremely use­
+ful if the construction process could be fully or partly
+*Wai Lam's work was supported by an OGS scholarship.
+His e-mail address is wlam11Dmath. uwaterloo. ca
+tFahiem Bacchus's work was supported by NSERC and
+by IRIS. His e-mail address is
+fbacchus�Dlogos.uwaterloo.ca
+
+Fahiem Bacchus t
+
+Department of Computer Science
+University of Waterloo
+Waterloo, Ontario,
+Canada, N2L 3G 1
+automated. A useful approach, that has recently be­
+ing pursued by a number of authors, is to attempt to
+build, or learn, a network model from raw data. In
+practice, raw data is often available from databases of
+records.
+We have developed a new approach to learning
+Bayesian network models [LB93b]. Our approach
+is based on Rissanen's Minimal Description Length
+(MDL) [Ris78] principle. The MDL principle offers a
+means for trading off model complexity and accuracy,
+and our experiments have demonstrated its suitabil­
+ity for this task. In this paper we present some sig­
+nificant improvements to our original system [LB93b:
+which (1) make it more efficient, (2) allow it to take
+into consideration domain information about causa
+tion and ordering, and (3) allow local refinement of an
+existing network.
+These improvements are mainly based on a new anal
+ysis of the description length parameter that show,,;
+how we can evaluate the description length of a pro
+posed network via local computations involving only
+a node and its parents. This localized evaluation of
+description length allows us to develop an improved
+searching mechanism that performs well even in fairly
+large domains. In addition, it allows us to modify our
+search procedure so that it can take into consideration
+domain knowledge of direct causes as well as partial or­
+derings among the variables. Such partial information
+about the structure of the domain is quite common
+and in many cases it can reduce the complexity of the
+searching process during learning.
+The localized evaluation of description length also al­
+lows us to modify an existing Bayesian network by
+refining a local part of it. By refining the network we
+obtain a more accurate model, or adapt an existing
+model to an environment that has changed over time
+In the sequel we will first describe, briefly, the key fea
+tures of our previous work, concentrating in particula
+on the advantages of the MDL approach. Then we de­
+rive a new localized version of the description lengtl:
+computation. Using this we develop an algorithm tha,
+searches for a good network model, taking into consid
+eration causal and ordering information about the do
+
+244
+
+Lam and Bacchus
+
+main. Finally, we discuss the results of various exper­
+iments we have run that demonstrate the effectiveness
+of our approach. The experimental results of our work
+on local refinement of an existing network are not yet
+complete, but we will close with a brief discussion of
+the method. The experiment results will be reported
+in our full report [LB93a].
+Learning Bayesian Networks
+
+2
+
+Much early work on learning Bayesian networks shares
+the common disadvantage of relying on assumptions
+about the underlying distribution being learned. For
+example, Chow and Liu [CL68] developed methods
+that construct tree structured networks; hence their
+method provides no guarantees about the accuracy
+of the learned structure if the underlying distribution
+cannot be expressed by a tree structure. The ap­
+proach of Rebane and Pearl [RP87], as well as that
+of Geiger et. al. [GPP90], suffers from the same criti­
+cism, except that they are able to construct singly con­
+nected networks. Sprites et al.[SS90] as well as Verma
+and Pearl [VP90, PV91] develop approaches that are
+able to construct multiply connected networks, but
+they require the underlying distribution to be dag­
+isomorphic.1
+The problem with making an assumption about the
+underlying distribution is that generally we do not
+have sufficient information to test our assumption.
+The underlying distribution is unknown; all we have is
+a collection of records in the form of variable instantia­
+tions. Hence, in practice these methods offer no guar­
+antees about the accuracy of the learned model except
+in the rare circumstances where we know something
+about the underlying distribution.
+Our approach can construct an accurate model from
+an unrestricted range of underlying distributions, and
+it is capable of constructing networks of arbitrary
+topology, i.e., it can construct multiply connected net­
+works. The ability to construct a multiply connected
+networks is sometimes essential if the network is to be
+a sufficiently accurate model of the underlying distri­
+bution.
+Although multiply connected networks allow us to
+more accurately model the underlying distribution
+they have computational as well as conceptual dis­
+advantages. Exact belief updating procedures are, in
+the worst case, computationally intractable over mul­
+tiply connected networks [Coo90]. Moreover, even if
+an approximation algorithm is used, e.g., the stochas­
+tic simulation methods of [CC90, Pea87, SP90], highly
+connected networks still require the storage and esti­
+mation of an exponential number of conditional prob­
+ability parameters. 2 Hence, even if a highly connected
+A distribution is dag-isomorphic if there is some dag
+that displays all of its dependencies and independencies
+[Pea88].
+2The number of parameters required is exponential in
+1
+
+network is more accurate, in practice it might not be
+as useful a model as a simpler albeit slightly less ac­
+curate model. In addition to the computational dis­
+advantages the causal relationships between the vari­
+ables are conceptually more difficult to understand in
+a complex network.
+Hence, we are faced with a tradeoff. More complex
+networks allow for more accurate models, but at the
+same time such models may be of less practical use
+than simpler models. The MDL principle allows us
+to balance this tradeoff: our method will learn a less
+complex network if that network is sufficiently accu­
+rate, and at the same time it is still capable of learning
+a complex network if no simpler one is sufficiently ac­
+curate. This seems to be a particularly appropriate
+approach to take in light of the fact that we only have
+a sample of data points from the underlying distribu­
+tion. That is, it seems inappropriate to try to learn
+the "most accurate" model of the underlying distribu··
+tion given that the raw data only provides us with an
+approximate picture of it.
+Among other works on learning Bayesian networks, th·
+most closely related is that of Cooper and Herskovit•
+[CH91]. They use a Bayesian approach that, like ours,
+is capable of learning multiply connected networks.
+However, as with all Bayesian approaches they must
+choose some prior distribution over the space of possi­
+ble networks. One way of viewing the MDL principle is
+as a. mechanism for choosing a. reasonable prior that is
+biased towards simpler models. Cooper and Herskovits
+[CH91] investigate a number of different priors, but it
+is unclear how any particular choice will influence the
+end result. The MDL principle, on the other hand,
+allows the system designer (who can choose different
+ways of encoding the network) to choose a. prior based
+on principles of computational efficiency. For exam·
+ple, if we prefer to learn networks in which no node
+has more than 5 parents, we can choose an encoding
+scheme that imposes a high penalty on networks that
+violate this constraint.
+2.1
+
+Applying the MDL Principle
+
+The MDL principle is based on the idea that the best
+model representing a collection of data items is the
+model that minimizes the sum of
+1. the length of the encoding of the model, and
+2. the length of the encoding of the data given the
+model,
+both of which can be measured in bits. A detailed
+description of the MDL principle with numerous ex­
+amples of its application can be found in [Ris89).
+To apply the MDL principle to the task of learning
+Bayesian networks we need to specify how we can per­
+form the two encodings, the network itself (item 1) and
+the maximum number of parents of node.
+
+Using Causal Information and Local Measures to Learn Bayesian Networks
+
+the raw data given a network (item
+
+2).
+
+Encoding the Network Our encoding scheme for
+the networks has the property that the higher the
+topological complexity of the network the longer will
+be its encoding. To represent the structure of a
+Bayesian network we need for each node a list of its
+parents and a list of its conditional probability param­
+eters.
+
+Suppose there are n nodes in the problem domain. For
+a node with k parents, we need k log 2 (n) bits to list
+its parents. To represent the conditional probabilities,
+the encoding length will be the product of the number
+of bits required to store the numerical value of each
+conditional probability and the total number of con­
+ditional probabilities that are required. In a Bayesian
+network, a conditional probability is needed for every
+distinct instantiation of the parent nodes and node it­
+self (except that one of these conditional probabilities
+can be computed from the others due to the fact that
+they all sum to 1). For example, if a node that can
+take on 4 distinct values has 2 parents each of which
+can take on 3 distinct values, we will need 3 2 X ( 4- 1)
+conditional probabilities.
+Hence, the total description length for a particular net­
+work will be:
+i=l
+
+iEF;
+
+where there are n nodes; for node i, ki is the number
+of its parent nodes, Si is the number of values it can
+take on, and Fi is the' set of its parents; and d repre­
+sents the number of bits required to store a numerical
+value. For a particular problem domain, n and d will
+be constants. This is not the only encoding scheme
+possible, but it is simple and it performs well in our
+experiments.
+By looking at this equation, we see that highly con­
+nected networks require longer encodings. First, for
+many nodes the list of parents will become larger, and
+second the list of conditional probabilities we need to
+store for that node will also increase. In addition, net­
+works ir.. which nodes that have a larger number of
+values have parents with a large number of values will
+require longer encodings. Hence, the MDL principle,
+which is trying to minimize the sum of the encoding
+lengths, will tend to favor networks in which the nodes
+have a smaller number of parents (i.e., networks that
+are less connected) and also networks in which nodes
+taking on a large number of values are not parents of
+nodes that also take on a large number of values.
+In Bayesian networks the degree of connectivity is
+closely related to the computational complexity of
+using the network, both space and time complexity.
+Hence, our encoding scheme generates a preference for
+more efficient networks. That is, since the encoding
+length of the model is included in our evaluation of
+description length, we are enforcing a preference for
+
+245
+
+networks that require the storage of fewer probabiliij
+parameters and on which exact algorithms are more
+efficient.
+Encoding the Data Using the Model The task is
+to learn the joint distribution of a collection of random
+variables X = {Xt, ... ' Xn}· Each variable xi has
+an associated collection of values {x}, ..., xi'} that it
+can take on, where the number of values Si depends on
+i. Every distinct choice of values for all the variables
+in X defines an atomic event in the underlying joint
+distribution and is assigned a particular probability by
+that distribution.
+
+We assume that the data points in the raw data are
+all atomic events. That is, each data point specifies a
+value for every random variable in X. Furthermore,
+we assume that the data points are the result of in­
+dependent random trials. Hence, we would expect,
+via the central limit theorem, that each particular in­
+stantiation of the variables would eventually appear in
+the database with a relative frequency approximately
+equal to its probability. These are standard assump­
+tions.
+Given a collection of N data points we want to encode,
+or store, the data as a binary string. There are various
+ways in which this encoding can be done, but here we
+are only interested in using the length of the en cod·
+ing as a metric, via item 2 in the MDL principle, for
+comparing the merit of candidate Bayesian Networks.
+Hence, we can limit our attention to character codes
+[CLR89, pp. 337]. W ith character codes each atomic
+event is assigned a unique binary string. Each of the
+data points, which are all atomic events, is converted
+to its character code, and the N points are represented
+by the string formed by concatenating these character
+codes together. To minimize the total length of the
+encoding we assign shorter codes to events that oc­
+cur more frequently. This is the basis for Huffman's
+encoding scheme. It is well known that Huffman's al­
+gorithm yields the shortest encoding of the N data
+points [LH87].
+Say that in the underlying distribution each atomi,'
+event ei has probability Pi and we construct, via some
+learning scheme, a particular Bayesian network from
+the raw data. This Bayesian network acts as a model of
+the underlying distribution and it also assigns a prob­
+ability, say qi, to every atomic event ei. Of course,
+in general qi will not be equal to Pi, as the learning
+scheme cannot guarantee that it will construct a per
+fectly accurate network. Nevertheless, the aim is for q.
+to be close to Pi,- and the closer it is the more accurate
+is our model.
+The constructed Bayesian network is intended as our
+best "guess" representation of the underlying distribu­
+tion. Hence, given that the probabilities qi determined
+by the network are our best guess of the true values Pi
+it makes sense to design our Huffman code using thesf
+probabilities. Using the qi probabilities the Huffman
+
+246
+
+Lam and Bacchus
+
+algorithm will assign event ei a codeword of length ap­
+proximately -log2(qi)· If we had the true probabilities
+Pi, the algorithm would have assigned ei and optimal
+codeword of length -l og2 (Pi ) instead. Despite our use
+of the values qi in assigning codewords, the raw data
+will continue to be determined by the true probabil­
+ities Pi· That is, we still expect that for large N we
+will have NPi occurrences of event ei 1 as Pi is the true
+probability of ei occurring. Therefore, when we use
+the learned Bayesian network to encode the data the
+length of the string encoding the database will be ap­
+proximately
+{2)
+
+where we are summing over all atomic events. How
+does this encoding length compare to the encoding
+length if we had access to the true probabilities Pi?
+An old theorem due originally to Gibbs gives us the
+answer.
+(Gibbs) Let Pi and qi, i = 1, .. . , t, be
+non-negative real numbers that sum to 1. Then
+
+Theorem 2.1
+t
+
+t
+
+- 2:Pi log 2(Pi) � - 2:Pi log2 (qi) ,
+i =l
+i=l
+with equality holding if and only if \fi.pi = qi. In the
+summation we take Olog2 (0) to be 0.
+
+In other words, this theorem shows that the encoding
+using the estimated probabilities qi will be longer than
+the encoding using the true probabilities Pi· It also
+says that the true probabilities achieve the minimal
+encoding length possible.
+The MDL principle says that we must choose a net­
+work that minimizes the sum of its own encoding
+length, which depends on the complexity of the net­
+work, and the encoding length of the data given the
+model, which depends on the closeness of the proba­
+bilities qi determined by the network to the true prob­
+abilities Pi, i.e., on the accuracy of the model.
+We could use Equation 2 directly to evaluate the the
+encoding length of the data given the model. How­
+ever, the equation involves a summation over all the
+atomic events, and the number of atomic events is ex­
+ponential in the number of variables. Instead of trying
+to use Equation 2 directly we investigate the relation­
+ship between encoding length and network topology.
+Let the underlying joint distribution over the variables X = {X11 , Xn} be P. Any Bayesian network
+model will also define a joint distribution Q over these
+variables. We can express Q as [Pea88]:
+• • •
+
+Q(X)
+
+P(Xt I Fx1)P(X2 I Fx.) ...P(Xn I Fx,J,
+(3)
+where Fx; is the, possibly empty, set of parents of Xi
+in the network. Note that P appears on the right hand
+side instead of Q. We obtain the conditional proba­
+bility parameters on the right from frequency counts
+=
+
+taken over the data points. By the law of large num­
+bers we would expect that these frequency counts will
+be close to the true probabilities over P.3
+We can now prove the following new result that is the
+basis for our new localized description length compu­
+tations:
+The encoding length of the data (Equa­
+tion 2) can be ezpressed as:
+n
+n
+-N '2:W(Xi,Fx;)+N '2::[- '2:P(X.)log2(P(X•))]
+i=l
+i=l
+(4)
+
+Theorem 2.2
+
+where the second sum is taken over all possible instan­
+tiations of Xi. The term W(Xi, Fx;) given by
+W(Xi,Fx,)
+
+=
+
+P(Xi,Fx,)
+�
+L.J P(Xi,Fx,) log2
+
+P(Xi)P(Fx;)
+
+Xi,Fxi
+
+(5)
+where the sum is taken over all possible instantiations
+of xi and its parents Fxi I and we take w(Xi I Fxi ) 0
+if Fx, = 0. The proof of this, and all other theorems,
+is presented in our full report [LB93a].
+=
+
+Given some collection of raw data, the last term in
+Equation 4 is independent of the structure of the net­
+work. Furthermore, the weight measure, the first term
+in Equation 4, can be calculated locally.
+Localization of the Description
+
+3
+
+Length
+
+To make use of the MDL principle, we need to evaluak
+the total description length {item 1 + item 2) given a
+Bayesian network. Adding Equation 1 and 4, the total
+description length is:
+n
+
+n
+
+L[k,log2(n)+(s•-1)(
+i=l
+
+II
+n
+
+SJ)d]-NLW(Xi,Fx,)
+i=l
+
++NL[-LP(Xi)log2(P(Xi))]
+i=l
+Xi
+n
+
+=
+
+L[[kilog2(n)+ (si -1)(
+i=l
+
+II
+
+s;)d].- NW(Xi,FxJ]
+
+n
+
++NL[-LP(Xi)log2(P(Xi))]
+x.
+i=l
+
+(6)
+
+The last term in Equation 6 remains constant for a
+fixed collection of raw data. Therefore, the first term
+is sufficient to compare the total description lengths of
+alternative candidate Bayesian networks.
+3It might not be the case that Pis equal to this decom­
+position. The approximation introduced by our network
+model is precisely the asswnption of such a decomposition
+
+Using Causal Information and Local Measures to Learn Bayesian Networks
+
+The node description length DLi for
+the node Xi, with respect to its parents Fx., is defined
+as:
+
+Definition 3.1
+
+{7)
+Definition 3.2 The relative total description length
+for a Bayesian network, defined as the summation of
+the node description length of every node in the net­
+work, is given by:
+n
+
+{8)
+
+i=l
+As a result, the relative total description length is ex­
+actly equivalent to the first term in Equation 6, and
+thus is sufficient for comparing candidate networks.
+Moreover, it can be calculated locally since each DLi
+depends only on the set of parent nodes for a given
+node xi.
+Given a collection of raw data, an
+optimal Bayesian network is a Bayesian network for
+which the total description length is minimum.
+
+Definition 3.3
+
+Clearly, one or more optimal Bayesian networks must
+exist for any collection of raw data. Furthermore, we
+have the following result.
+Given a collection of raw data, the rel­
+ative total description length of an optimal Bayesian
+network is minimum. Also, for a given node Xi in an
+optimal Bayesian network, DLi is minimum among
+those parent sets creating no cycle and not making the
+network disconnected. That is, we cannot reduce DLi
+by modifying the network to change xi 's parents.
+
+Theorem 3.4
+
+This theorem says that in an optimal network no sin­
+gle node can be locally improved. It is possible, how­
+ever, that a non-optimal network could also possess
+this property. In such a case the parent sets of a num­
+ber of nodes would have to be altered simultaneously
+in order to reduce its description length.
+4
+
+Incorporating Partial Domain
+Knowledge
+
+247
+
+between the other variables. This kind of informatio
+might be provided by, e.g., domain experts, and we ca,
+use it when generating the network model. In particu­
+lar, we can require that in the learned model Xi be one
+of Xj 's parents, thus ensuring that the model validates
+the direct causation. More generally, the domain e:x.­
+perts might be able to construct a skeleton of the net­
+work, involving some, but not all, of the variables. The
+arcs in the skeleton can be specified as direct causation
+specifications to our system, which will then proceed
+to fill in the skeleton placing the remaining variables
+in appropriate positions.
+Partial ordering information, on the other hand, spec­
+ifies ordering relationships between two nodes. Such
+information might, for example, come from knowledge
+about the temporal evolution of events in our domair,.
+For instance, if we know that Xi occurs before x3, the
+network model should not contain a path from Xj b
+Xi as no causal influence should exist in that dire.:
+tion. Note that a total ordering among the variable�,
+as required by Cooper and Herskovits [CH91], is just
+a special case of our partial ordering specifications.
+Subject to the condition that the direct causation and
+partial ordering specifications not entail any transitiv
+ity violations (e.g., we cannot have a circular sequence
+of direct causations as input to the system), our sys­
+tem can ensure that the constructed network validate3
+these specifications. Furthermore, information of thi;
+sort can in fact lead to increased efficiency: it will con­
+strain our search for an appropriate network model.
+To incorporate this information, we define a
+strained Bayesian network as follows:
+
+o ­
+
+c n
+
+Definition 4.1 A constrained Bayesian network is an
+ordinary Bayesian network whose topology includes all
+the arcs specified by the direct causation specification;
+and does not violate any partial ordering specifica­
+tions.
+
+It can be shown that Theorem 3.4 still holds, with
+the obvious modifications, if we consider constrained
+Bayesian networks instead of ordinary networks.
+5
+
+Searching for the Best Constrained
+Network
+
+Although we might not know the underlying joint dis­
+tribution governing the behavior of the domain vari­
+ables, we could possibly have other, partial, informa­
+tion about the domain. In particular, our new system
+can consider two types of domain knowledge: direct
+causation specifications and partial ordering specifications.
+
+Although our expression for the relative total descrip
+tion length allows us to evaluate the relative merit of
+candidate network models, we cannot consider all pos­
+sible networks: there are simply too many of them
+(an exponential number in fact). Hence, to apply th�;
+MDL principle we must engage in a heuristic search
+that tries to find a good (i.e., low description length),
+but not necessarily optimal, network model.
+
+By direct causation information we mean information
+of the form "Xi is a direct cause of X/'. That is, we
+might know of a direct causal link between two vari­
+ables, even if we do not know the causal relationships
+
+In this section we describe our search algorithm which
+attempts to find a good network by building one up
+arc by arc. The first step is to rank the possible arcr.
+so that "better" arcs can be added into the candidat·
+
+·
+
+248
+
+Lam and Bacchus
+
+networks before others. The arcs are ranked by cal­
+culating the node description length for Xj given the
+arc Xi ----+ Xj, i =/= j, using Equation 7 and treating Xi
+as the single parent. This node description length is
+assigned as the "description length" of arc Xi ----+ Xj.
+A list of arcs PAIRS is created sorted so that the first
+arc on PAIRS has lowest description length. PAIRS will
+contain all arcs except for those violating the direct
+causation or partial ordering specifications. Looking
+at Equation 7 we can see that if Xi and Xj are highly
+correlated (as measured by W(Xj, Xi), Equation 5)
+the description length will be lower, and an arc be­
+tween them will be one of the first that we will try to
+add to the candidate networks.
+Search is performed by a best-first algorithm that
+maintains OPEN and CLOSED lists each containing
+search elements. The individual search elements have
+two components (G,L): a candidate network G, and
+an arc L which could be added to the candidate net­
+work without causing a cycle or violating the partial
+ordering and direct causation specifications. OPEN is
+ordered by heuristic value, which is calculated as the
+relative total description length (Equation 8) of the
+element's network, plus the description length of the
+element's arc (calculated during the construction of
+PAIRS). Therefore, the lower the heuristic value, the
+shorter the encoding length. Initially, we construct a
+network Ginit containing only those arcs included in
+the direct causation specifications. Then, the initial
+OPEN list is generated by generating all of the search
+elements (Ginit,L) for all arcs L E PARIS. Best-first
+search is then executed with the search element at the
+front of OPEN expanded as follows.
+1. Remove the first element from OPEN and copy it
+onto CLOSED. Let the element's network be Gold
+and the element's arc beL.
+2. Invoke the ARc-ABSORPTION procedure on Gold
+and L to obtain a new network Gnew with the
+arc L added. The ARc-ABSORPTION procedure,
+described below, might also reverse the direction
+of some other arcs in Gold·
+3. Next we make a new search element consisting of
+Gnew and the first arc from PAIRS that appears
+after the old arcL which could be added to Gnew
+without generating a cycle or violating a partial
+ordering specification. This new element is placed
+on OPEN in the correct order according to the
+heuristic function.
+4. Finally, we make another new search element con­
+sisting of Gold and the first arc from PAIRS that
+appears after L which could be added to Gold
+without generating a cycle or violating a par­
+tial ordering specification. Again, this element
+is placed on OPEN in the correct order.
+Now we describe the ARC-ABSORPTION procedure
+which finds a locally optimal way to insert a new arc
+into an existing network. To minimize the description
+
+length of the resulting network, the procedure might
+also decide to reverse the direction of some of the old
+arcs.
+A network Gold·
+An arc ,(Xi ----+ Xj) to be added.
+Output : A new network Gnew with the arc added
+and some other arcs possibly reversed.
+
+Input
+
+1. Create a new network by adding the arc (Xi -->
+Xj) to Gold· In the new network we then search
+locally to determine if we can decrease the relative
+total description length by reversing the direction
+of some of the arcs. This is accomplished via the
+following steps.
+2. Determine the optimal directionality of the arcs
+attached directly to Xj by examining which di­
+rections minimize the relative total description
+length. Some of these arcs may be reversed by
+this process.4 Furthermore, we do not consider
+the reversal of any arcs that would result in the
+violation of the direct causation or partial order­
+ing specifications.
+3. If the direction of an existing arc is reversed thel.<
+perform the above directionality determinatim,
+step on the other node affected.
+The search procedure is mainly composed of the ARc
+ABSORPTION procedure, a cycle checking routine, an•!
+
+·
+
+a partial order checking routine. The complexity of
+cycle checking and partial order checking are O(n) and
+O(n2) respectively, where n is the number of nodes
+We have found that the search can arrive at a very
+reasonable network model if provided with a resource
+bound of O(n2) search elements expansions. Under
+this resource bound, we have found that in practice the
+overall complexity of the search mechanism remains
+polynomial in the number of nodes n.
+We can further observe that when the amount of do­
+main information increases, the search time to find a
+good network model decreases. This arises from the
+fact that such information places constraints on the
+space of allowable models making search easier. For
+example, if a total ordering among the nodes in the
+domain is given, the search time will be reduced by a
+factor of O(n2): there is no need to perform the cycle
+or partial order checking, and the arc reversal step in
+ARc-ABSORPTION is no longer needed.
+6
+
+Experiments
+
+Following (CH91] we test our approach by constructing
+an original network and using Henrion's logical sam
+pling technique (Hen87] to generate a collection of raw
+4Note that it is sufficient to compute the node descrip·
+tion length (Equation 7} of those nodes whose parents have
+been changed. The relative total description length (Equa­
+tion 8} of the whole network need not be computed.
+
+Using Causal Information and Local Measures to Learn Bayesian Networks
+
+249
+
+P(c1lb1)=0.8 P(c1lb0)=0.2
+
+conditional
+probabi1ity
+parameters
+
+P(e1la1,b1,c1,d1)=0.9 P(e11aO,b1,c1,d1)=0.1
+P(e1la1,bO,c1,d1)=0.15 P(e1laO,bO,c1,d1)=0.1
+P(e1la1,b1,cO,d1)=0.1 P(e1laO,b1,cO,d1)=0.1
+P(e1la1,bO,cO,d1)=0.08 P(e1laO,bO,cO,d1)=0.1
+P(e1la1,b1,c1,d0)=0.1 P(eilaO,bi,c1,d0)=0.1
+P(eila1,bO,c1,d0)=0.1 P(e1laO,bO,c1,d0)=0.1
+P(eila1,b1,cO,d0)=0.1 P(eilaO,b1,cO,d0)=0.1
+P(e1la1,bO,cO,d0)=0.1 P(e1laO,bO,cO,d0)=0.1
+
+same as the
+£irst except
+£or:
+P(e1la1,bO,c1,d1)
+=0.8
+
+same as the
+£irst except
+£or:
+P(e1la1,b1,cO,d1)
+=0.8
+
+same as the
+£irst except
+£or:
+P(c1lb0)=0.9
+
+B
+1earned
+structures
+
+��D
+E
+
+E
+
+Figure
+
+1:
+
+The Quality of Learned Networks
+
+data. We then apply our learning mechanism to the
+raw data to obtain a learned network. By comparing
+this network with the original we can determine the
+performance of our system.
+In the first set of experiments, the original Bayesian
+network G consisted of 5 nodes and 5 arcs. We varied
+the conditional probability parameters during the pro­
+cess of generating the raw data obtaining four different
+sets of data. Exhaustive searching, instead of heuris­
+tic searching, was then carried out to find the net­
+work with minimum total description length for each
+of these sets of raw data resulting in different learned
+structures in each case. The experiment demonstrates
+that our algorithm does in fact yield a tradeoff between
+accuracy and complexity of the learned structures: in
+all cases where the original network was not recovered
+a simpler network was learned. The type of structure
+learned depends on the parameters, as each set of pa­
+rameters, in conjunction with the structure, defines a
+different probability distribution. Some of these distri­
+butions can be accurately modeled with simpler struc­
+tures. In the first case, the distribution defined by the
+parameters did not have a simpler model of sufficient
+accuracy, but in the other cases it did. We have also
+developed measures of the absolute accuracy of the
+learned structures (see (LB93b] for a full description)
+that indicate in all cases that the learned structure was
+very accurate even though it might possess a different
+topology.
+The second experiment consisted of learning a
+Bayesian network with a fairly large number of vari­
+ables (37 nodes and 46 arcs). This network was de­
+rived from a real-world application in medical diagno­
+sis [BSCC89] and is known as the ALARM network
+(see (LB93b) for a diagram of this network). After ap­
+plying our heuristic search algorithm, we found that
+
+the learned network is almost identical to the original
+structure with the exception of one different arc and
+one missing arc. One characteristic of our heuristic
+search algorithm is that we did not require a user sup­
+plied ordering of variables (cf. Cooper and Herskovits
+(CH91]). This experiment demonstrates the feasibility
+of our approach for recovering networks of practical
+size.
+Besides being able to use extra domain information
+our new search mechanism is faster and more accurate
+than the mechanism first reported in (LB93b] which
+was developed without the local measure of descrip­
+tion length. To investigate how our search mechanism
+behaves when domain information is supplied, we con­
+ducted some further experiments. Using the same set
+of raw data derived from the ALARM model in con
+junction with varying amounts of domain information,
+we applied our learning algorithm and recorded the
+search time required to obtain an accurate network
+model. The following two tables depict the relative
+time required by the search algorithm when varying
+amounts of direct causation and partial orderings spec­
+ifications are made available. In general, the search
+time decreases as the amount of causal information
+Increases.
+
+time
+
+time
+
+no p artial
+ordering
+100%
+
+10 partial
+orderings
+84%
+
+no direct
+causal
+specification
+100%
+
+20 partial
+orderings
+60%
+
+10 direct
+causal
+sp ecifications
+74%
+
+total
+ordering _i
+20%
+
+20 direct
+causal
+specifications
+25%
+
+I
+
+250
+
+Lam and Bacchus
+
+Refinement of Existent Networks
+
+(Coo90]
+
+Besides the advantages outlined above our new local com­
+putation of description length also allows for the possibil­
+ity of refining an existing network by modifying some local
+part of it. Refinement is based on the following theorem.
+
+[GPP90]
+
+7
+
+Theorem 7.1 Let
+
+X= {Xl' x2, .. . ,X....}
+
+be the nodes in
+
+an existent Bayesian network, X' be a subset of X, and
+DLx' be the total node description lengths of all the nodes
+in X' (i.e., DLx' = l:x,ex' DL,). Suppose we find a new
+
+set of parents for every node in X' that does not create any
+cycles or make the network di.sconnected. Let the new total
+node description lengths of all the nodes in X' be DLnewX'·
+Then we can construct a new network in which the parents
+of the nodes in X' are replaced by their new parent sets,
+such that the new network will have lower total description
+length if DLnewX' < DLx'·
+
+This theorem provides a means to improve a Bayesian net­
+work without evaluating the total description length of the
+whole Bayesian network, a potentially expensive task if the
+network is large. We can isolate a subset of nodes and try to
+improve that collection locally, ignoring the rest of the net­
+work. Algorithms for performing such a refinement, based
+on this theorem, have been developed and experiments are
+being performed. We hope to report on this work in the
+near future [LB93a].
+
+·
+
+[Hen87]
+
+[LB93a]
+[LB93b]
+
+[LH87]
+
+·
+
+[Pea86]
+
+[Pea87]
+
+References
+
+[Abr91]
+
+B. Abramson. ARC01: An application of be­
+lief networks to the oil market. In Proceedings
+of the Conference on Uncertainty in Artificial
+Intelligence, pages 1-8, 1991.
+
+C. Berzuini, R. Bellazzi, and D. Spiegellialter.
+Bayesian networks applied to therapy monitor­
+ing. In Proceedings of the Conference on Un­
+certainty in Artificial Intelligence, pages 35-43,
+1991.
+[BSCC89] I. A. Beinlich, H. J. Suermondt, R. M. Chavez,
+and G. F. Cooper. The ALARM monitoring
+system: A case study with two probabilistic in­
+ference techniques for belief networks. In Pro­
+
+[Pea88)
+
+[PV91)
+
+[BBS91]
+
+ceedings of the 2nd European Conference on Ar­
+tificial Intelligence in Medicine, pages 247-256,
+
+[CC90]
+
+[CH91]
+
+1989.
+R.M. Chavez and G. F. Cooper. A randomized
+approximation algorithm for probabilistic infer­
+ence on Bayesian Belief networks. Networks,
+20:661-685, 1990.
+G. F. Cooper and E. Herskovits. A Bayesian
+method for constructing Bayesian belief net­
+works from databases. In Proceedings of the
+Conference on Uncertainty in Artificial Intel­
+ligence, pages 86-94, 1991.
+
+[CL68]
+
+[CLR89]
+
+C. K. Chow and C. N. Liu. Approximating dis­
+crete probability distributions with dependence
+trees. IEEE Transactions on Information The­
+ory, 14{3):462-467, 1968.
+T. H. Carmen, C. E. Leiserson, and R. L.
+Rivest. Introduction to Algorithms. MIT-Press,
+Cambridge, Massachusetts, 1989.
+
+G. F. Cooper. The computational complexity of
+probabilistic inference using Bayesian belief net­
+works. Artificial Intelligence, 42:393-405, 1990.
+D. Geiger, A. Paz, and J. Pearl. Learning causal
+trees from dependence information. In Proceed­
+ings of the AAAI National Conference, pages
+770-776, 1990.
+M. Henrion.
+Propagating uncertainty i>
+Bayesian networks by probabilistic logic sarr
+piing. In L. N. Kanal and J. F. Lemmer, ed
+itors, Uncertainty in Artificial Intelligence Vol
+II, pages 149-163. North-Holland, Amsterdam,
+1987.
+W. Lam and F. Bacchus. Learning and refining
+bayesian networks using partial domain infor­
+mation, 1993. In preparation.
+W. Lam and F. Bacchus. Learning Bayesian
+belief networks an approach based on the MDI,
+principle. Computational Intelligence, 1993. Tu.
+appear.
+D. A. Lelewer and D. S. Hirschberg. Data com­
+pression. ACM Computing Surveys, 19(3):261
+296, 1987.
+J. Pearl. Fusion, propagation, and structur­
+ing in belief networks. Artificial Intelligence,
+29:241-288, 1986.
+J. Pearl. Evidential reasoning using stochastic
+simulation of causal models. Artificial Intelli
+gence, 32:245-257, 1987.
+J. Pearl. Probabilistic Reasoning in Intelliged
+Systems: Networks of Plausible Inference. Mor­
+gan Kaufmann, San Mateo, California, 1988.
+J. Pearl and T. S. Verma. A theory of inferred
+causation. In Proceedings of the 2nd Interna
+tiona! Conference on Principles of Knowledg,
+
+pages 441-452
+1991.
+J. Rissanen. Modeling by shortest data descrip­
+tion. Automatica, 14:465-471, 1978.
+J. Rissanen. Stochastic Complexity in Statistical
+Inquiry. World Scientific, 1989.
+G. Rebane and J. Pearl. The recovery of causal
+poly-trees from statistical data. In Proceedings
+Representation and Reasoning,
+
+[Ris78]
+[Ris89]
+[RP87]
+
+of the Conference on Uncertainty in Artificial
+Intelligence, pages 222-228, 1987.
+
+[SP90]
+
+[SS90]
+
+R. D. Shachter and M. A. Peat. Simulation ap··
+preaches to general probabilistic inference on
+belief networks. In M. Henrion, R. Shacter,
+L. N. Kanal, and J. F. Lemmer, editors, Un­
+certainty in Artificial Intelligence 5, pages 221231. North-Holland, Amsterdam, 1990.
+C. Spirtes, P. Glymour and R. Scheines. Causal­
+ity from probability. In Evolving Know ledge
+in Natural Science and Artificial Intelligence,
+
+[VP90]
+
+pages 181-199, 1990.
+T. Verma and J. Pearl. Causal networks: Se·
+mantics and expressiveness. In R. Shacter, T. S.
+Levitt, L. N. Kanal, and J. F. Lemmer, editors.
+Uncertainty in Artificial Intelligence 4, page
+69-76. North-Holland, Amsterdam, 1990.
+
+

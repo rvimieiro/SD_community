@@ -1,0 +1,1861 @@
+the non-video sensors. This problem is significant for
+Kinesiologists who are studying the usage of walkers
+by elderly people. Currently they have to hand label
+the data by looking at video feeds of the user, which is
+∗
+Allan Caine is currently at Research in Motion, Waterloo
+
+• the first fully automated system to automatically
+recognize activities performed by walker users;
+• design and training (supervised and unsupervised) of probabilistic models (HMMs and CRFs)
+tailored to activity recognition with instrumented
+walkers;
+• comprehensive analysis of these techniques with
+real data collected with control subjects and regular walker users living in a retirement community;
+• comprehensive analysis of the ease/difficulty to
+recognize common walker user activities with existing algorithms.
+The paper is organized as follows. Section 2 summarizes related work. Section 3 describes the walker, the
+experimental setup and our hypotheses regarding the
+ease/difficulty of recognizing common user activities.
+Section 4 describes the recognition models (HMMs and
+CRFs) and their training procedures (supervised and
+unsupervised). Sections 5 and 6 present the results of
+the experiments and analyze each approach. Finally
+Section 7 concludes and discusses future work.
+
+2
+
+Related Work
+
+In [1], Alwan et al. describe a method that assesses basic walker-assisted gait characteristics, including heel
+strikes, toe-off events, as well as stride time, double support and right and left single support phases.
+These statistics are based on the measurement of
+weight transfer between the user and the walker by
+two load cells in the handles of the walker. A simple
+thresholding approach is used to detect peaks and valleys in the load measurements, which are assumed to
+be indicative of certain events in the gait cycle. This
+work focuses on low level gait statistics where as we are
+interested to recognize complex high level behaviours.
+Hirata et al. [3] instrumented a walker with sensors
+and actuators. They recognize three user states: walking, stopped and emergency (including falling). These
+states are inferred based on the distance between the
+user and the walker (measured by a laser range finder)
+and the velocity of the walker. This work is limited
+to the three states mentioned above and would not
+be able to differentiate between activities that exhibit
+roughly the same velocity and distance measurements
+(e.g., walking, turning, going up a ramp).
+A significant amount of work has been done on activity recognition in other contexts. In particular Liao et
+al. [6] use a Hierarchical Markov Model to learn and
+infer a user’s daily movements through an urban community. The model uses multiple levels of abstraction
+in order to bridge the gap between raw GPS sensor
+measurements and high level information such as a
+user’s destination and mode of transportation. They
+use Rao-Blackwellized particle filters for state estimation. In [5], they also recognize activities and places
+from GPS traces by Hierarchical CRFs. This work assumes that the high level goals and routines of the user
+as well as the map of the area are known and stable.
+
+3
+
+Experimental Setup
+
+We have access to a walker developed by Tung et al. [9].
+A picture of the walker is shown in Fig. 2. The walker
+is equipped with various sensors including a 3-D accelerometer in the seat, a load-cell in each leg and a
+wheel encoder, which measures the wheel’s displacement. The sensor readings vary between 0 and 216 − 1.
+The data is channeled via blue-tooth to a PDA for acquisition at 50 Hz. In addition to these sensors, there
+are two cameras on the walker. One is facing backwards and provides the video feed of the user’s legs.
+The other is looking forwards and provides the video
+feed of the environment. The video frame rate is approximately 30 frames/second. In order to collect data
+for our models, we designed and conducted two exper-
+
+Figure 1: Course used for healthy young subjects
+Table 1: Behaviours in Experiment 1
+Not Touching the Walker (NTW)
+Stop/Standing (ST)
+Walking Forward (WF)
+Turn Left (TL)
+Turn Right (TR)
+Walking Backwards (WB)
+Transfers (Sit to Stand/Stand to Sit) (TRS)
+
+iments that are described below:
+3.1
+
+Experiment 1
+
+17 healthy young subjects (age between 19 and 53)
+were asked to go through the course shown in Figure
+1 twice with the walker. The behaviours exhibited by
+the participants are shown in Table 1.
+3.2
+
+Experiment 2
+
+In a second experiment, we asked 8 regular walker
+users (age 84 to 97) to follow the course shown in Figure 3. This experiment was conducted at the Village
+of Winston Park (retirement community in Kitchener,
+Ontario) and the participants were residents of that
+facility. We also asked 12 adults (age 80 to 89) who
+do not live in a retirement community and are not
+regular walker users to follow the same course. The
+behaviours exhibited during this experiment include
+those of Tables 1 and 2.
+3.3
+
+Recognizing Behaviours
+
+Our goal is to perform behaviour recognition based
+on the non-video sensors.1 Since the accelerometers,
+load cells and wheel encoder only measure indirectly
+the activities of the person, it is not obvious a priori
+which activities can easily recognized. We formulated
+the following hypotheses.
+1
+
+The use of video data is subject to future work.
+
+range of strategies used by people to lift or lower the
+walker.
+
+Figure 2: Smart Walker
+
+Transfers (sit to stand or stand to sit) are also expected
+to be difficult to recognize due to a wide range of
+strategies. In theory, the load of the walker should decrease as the person goes from standing to sitting and
+increase for sit to stand. However, some people leave
+the walker to hold other supports such as the arms of
+a chair. Some people also engage the walker’s brakes
+as they do a transfer while others move the walker.
+Another difficult behaviour is the reaching task. It
+involves behaviours such as opening a door or picking something from ground. The wheel encoder is not
+useful as people’s habits of engaging the brakes during
+these behaviours are variable. In reaching tasks, however, the person usually keeps one hand on the walker
+while he/she uses the other hand to reach for the object. This can be captured by the load cells as there
+will be more weight on one side.
+In the next section, we discuss various probabilistic
+models to recognize activities as accurately as possible despite the wide range of strategies for some behaviours.
+
+Figure 3: Course for older walker users
+
+4
+Not Touching Walker (NTW) should be easy to predict as there is no load on the walker and the walker
+is not moving. Standing (ST) should be differentiable
+from NTW based on load cell readings as load fluctuations are expected when the person touches the walker.
+Walking forward (WF) and walking backward (WB)
+should be differentiable from ST based on the wheel
+encoder measurements, which increase with forward
+movements and decrease with backward movements.
+Sitting on walker (SW) should also be easily distinguishable since the value of the load sensors is much
+higher than any other behaviour.
+We expect turns to be more difficult to predict. We
+hypothesize that the speed of the person is lower when
+he/she is turning. We also expect a higher load on the
+side of the turn and some mild acceleration in the opposite direction of the turn. However this will likely
+vary with each person. Similarly, going up or down
+ramps and curbs are not expected to be easy to detect.
+We expect to see some fluctuations in the vertical acceleration when there is an immediate change of elevation and a sustained mild acceleration corresponding
+to gravity in the forward or backward direction depending on the inclination of ramps. We hypothesize
+that both these behaviours will be noticeable. However, they may be difficult to distinguish from WF in
+general. Furthermore, going up and down curbs may
+be particularly difficult to recognize due to the wide
+
+Activity Recognition Models
+
+We assume that the set of all possible behaviours is
+B whose cardinality is m. The behaviour at time t is
+represented by the random variable Bt . The reading
+on sensor k at time t is given by the random variable
+Stk where k ∈ {1, . . . , n}. For notational convenience,
+we denote the sequence of behaviours from time i to
+j by Bi:j and the observation sequence on sensor k
+k
+by Si:j
+. The readings on all sensors observed between
+1:n
+time i and j is denoted by Si:j
+and the actual observed sequence is denoted by s1:n
+i:j . The total length
+of a sequence is T . The actual behaviour at time t is
+denoted by b̂t and the predicted behaviour at time t is
+b̃t . Lower case letters denote the assignment of a value
+to a random variable.
+
+4.1
+
+Hidden Markov Model
+
+We construct a hidden Markov model in which the behaviour is the hidden variable and the sensor readings
+are the observations (Fig. 4). The parameters include
+θb0 ,b ≡ Pr(Bt = b0 |Bt−1 = b) (probability that the
+behaviour at time t is b0 given that the behaviour at
+time t−1 is b), φs,k,b ≡ Pr(Stk = s|Bt = b) (probability
+that the value measured by the k th sensor at time t is
+s given that the behaviour is b) and πb ≡ Pr(B0 = b)
+(probability that the initial behaviour is b).
+
+Table 2: Additional Behaviours in Experiment 2
+Going up Ramp (GUR)
+Going down Ramp (GDR)
+Sitting on Walker (SW)
+Reaching Task (RT)
+Going up Curb (GUC)
+Going down Curb (GDC)
+
+Figure 4: HMM for behaviour recognition
+
+4.1.1
+
+Maximum Likelihood (ML) Learning
+
+For supervised learning, we manually label the data
+based on the video feed. We learn θb0 ,b by counting the
+number of times behaviour b is followed by behaviour
+b0 in the labeled data:
+PT
+δ (Bt =b0 &Bt−1 =b)
+PT
+θb0 ,b = t=1
+∀b, b0 ∈ B
+δ(B
+=b)
+t=1
+
+t−1
+
+Here δ(x) = 1 if x is true and 0 otherwise. However, in
+some of our experiments, to avoid the bias introduced
+by using a fixed course, we use a simple transition
+model that reflects the fact that behaviours are τ times
+more likely to persist than to change.
+(
+τ /m + τ − 1 if b = b0
+∀b, b0 ∈ B
+θb0 ,b =
+1/m + τ − 1 otherwise
+We can learn the prior πi from data using
+PT
+πb = t=1 δ (Bt = b)/T
+Again, in some of our experiments, to avoid the bias
+introduced by using a fixed course, we consider all behaviours to be equally likely initially. Hence
+πb = 1/m ∀b ∈ B
+We can model φs,k,b with a parametric density function such as a Gaussian. However, on close analysis of
+the data, we found that the distribution of φs,i,j does
+not follow a Gaussian. Therefore, we discretize the
+sensor readings by dividing the range into D discrete
+intervals. We learn φs,k,b using
+PT
+
+φs,k,b =
+
+δ (Bt =b&Sti =s)
+PT
+t=1 δ(Bt =b)
+
+t=1
+
+∀b ∈ B, ∀s ∈ {1, . . . , D}
+∀k ∈ {1, . . . , n}
+
+ML with EM algorithm For unsupervised learning,
+we use Expectation Maximization (EM) [2] to learn the
+parameters. The algorithm alternates between com-
+
+puting the expectations
+E0 (b) = Pr(B0 = b|s1:n
+1:t , π, θ, φ),
+PT −1
+0
+E(b, b ) = t=1 Pr(Bt = b, Bt+1 = b0 |s1:n
+1:t , π, θ, φ),
+PT
+Ek (b, s) = t=1 Pr(Bt = b, Stk = s|s1:n
+,
+1:t π, θ, φ)
+and updating the parameters
+πb = E0 (b),
+P
+0
+θb0 ,b = E(b, b0 )/ P
+b0 E(b, b ),
+φs,k,b = Ek (b, s)/ s E(b, s).
+Prediction: Note that since the sensor readings at
+any given time are conditionally independent given
+1:n
+the
+Q behaviour at that time, therefore, Pr(st |Bt ) =
+iI φst ,i,b . We use maximum a posteriori filtering to
+infer the most likely behaviour
+ given past observations:
+b̃t = maxb∈B Pr Bt = b|s1:n
+1:t . This computation can
+be performed online as only past observations are used.
+4.1.2
+
+Bayesian Learning
+
+Bayesian learning is an alternative to maximum likelihood learning. We start from a prior distribution and
+update it using Bayes rule to obtain the full posterior
+distribution over the variables of interest. By considering the full posterior over the parameters, we hope to
+avoid the over-fitting issues, often experienced by the
+EM algorithm. Unfortunately, in most cases the posterior does not have a tractable form, so we cannot sample from it directly. Consequently, we resort to sampling techniques based on simulating a Markov chain
+whose stationary distribution is the posterior distribution of interest.
+A convenient choice of a prior distribution over
+the parameters is a product of Dirichlet distributions
+of the form Dir(θ1 , . . . , θk ; c1 , . . . , ck ) =
+P
+Q c1 c2
+P
+Γ(
+Q ci )
+θ1 θ2 . . . θkck where i θi = 1. Each DirichΓ(ci )
+let is a prior for the corresponding multinomial distribution of transitions or emissions from some state.
+The values ci can be understood as counts indicating
+how many times a particular transition/emission has
+been observed. The Dirichlet distribution is a conjugate prior for the multinomial distribution. Therefore, if the hidden states are known, the posterior distribution of the parameters will also be a product of
+Dirichlets with the counts updated by the number of
+observed transitions or emissions. If the hidden states
+are not known, the posterior becomes a mixture of exponentially many products of Dirichlets, each product
+corresponding to one possible state path.
+We use Gibbs sampling to estimate the posterior over
+hidden states and parameters. We repeatedly sample
+each variable from the conditional distribution given
+all the other variables. It can be shown that the resulting Markov chain converges to the joint distribution of
+
+Table 3: HMM results for Experiment 2 using center of pressure (COP) features. Behaviour persistence parameter:
+τ = 4000. Window size is 25. Observations are accelerometer measurements, speed, frontal and sagittal center of pressure
+and total weight. Overall accuracy is 77%.
+NTW
+
+ST
+
+WF
+
+TL
+
+TR
+
+WB
+
+RT
+
+SW
+
+GUR
+
+GDR
+
+GUC
+
+GDC
+
+NTW
+
+821
+
+7434
+
+0
+
+95
+
+0
+
+0
+
+89
+
+68
+
+16
+
+7
+
+14
+
+0
+
+9.58
+
+ST
+
+1393
+
+35203
+
+360
+
+3103
+
+550
+
+2165
+
+6831
+
+595
+
+355
+
+61
+
+771
+
+251
+
+68.17
+
+WF
+
+239
+
+2663
+
+42297
+
+6416
+
+12486
+
+763
+
+3167
+
+0
+
+1283
+
+657
+
+618
+
+828
+
+59.23
+
+TL
+
+41
+
+756
+
+1076
+
+12165
+
+516
+
+1095
+
+705
+
+51
+
+141
+
+152
+
+149
+
+20
+
+72.12
+
+TR
+
+23
+
+404
+
+1743
+
+784
+
+10623
+
+873
+
+621
+
+0
+
+146
+
+333
+
+159
+
+123
+
+67.10
+
+WB
+
+0
+
+0
+
+0
+
+174
+
+58
+
+447
+
+251
+
+0
+
+25
+
+3
+
+54
+
+33
+
+42.78
+
+RT
+
+529
+
+3837
+
+516
+
+1141
+
+545
+
+693
+
+4227
+
+25
+
+221
+
+88
+
+263
+
+202
+
+34.40
+
+SW
+
+15
+
+151
+
+33
+
+171
+
+61
+
+0
+
+106
+
+70769
+
+14
+
+0
+
+4
+
+10
+
+99.21
+
+GUR
+
+0
+
+0
+
+62
+
+20
+
+18
+
+0
+
+52
+
+0
+
+2382
+
+153
+
+154
+
+157
+
+79.45
+
+GDR
+
+0
+
+20
+
+55
+
+176
+
+124
+
+26
+
+29
+
+0
+
+24
+
+2389
+
+81
+
+270
+
+74.80
+
+GUC
+
+0
+
+17
+
+19
+
+40
+
+18
+
+0
+
+49
+
+0
+
+5
+
+0
+
+2939
+
+0
+
+95.21
+
+GDC
+
+0
+
+20
+
+27
+
+15
+
+171
+
+0
+
+67
+
+0
+
+32
+
+35
+
+22
+
+1311
+
+77.12
+
+all variables. Here, we use the collapsed Gibbs sampler
+[7] which samples the hidden states and integrates out
+the parameters to speed up the convergence.
+Since we use a Dirichlet prior, the posterior probability
+Pr(B1:T , s1:n
+1:T ) can be computed analytically:
+Pr(B1:T , s1:n
+(1)
+1:T )
+ˆ
+=
+Pr(B1:T , s1:n
+(2)
+1:T |π, θ, φ) Pr(π, θ, φ)dπdθdφ
+πθφ
+Q
+Y Q 0 Γ(αbb0 ) Y Q k Γ(βbsk )
+B1 Γ(γB1 )
+s
+bP
+P
+(3)
+=c P
+Γ( B1 γB1 )
+Γ( b0 αbb0 )
+Γ( sk βbsk )
+
+4.2
+
+Conditional Random Field
+
+Conditional Random Fields (CRFs) are probabilistic
+models for segmenting and labeling sequential data
+[4]. We consider the special case of linear-chain CRFs.
+A CRF specifies the distribution of a sequence of labels (B1:t ) conditioned on a sequence of observations
+1:n
+(S1:t
+). In our experiments, the labels are the behaviour of the user, and the observations are the sensor measurements at each time. The probability of
+1:n
+B1:t = b1:t conditioned on S1:t
+= s1:n
+1:t is given by
+1:n
+1:n
+Pλ (B1:t = b1:t | S1:t
+= s1:t
+)=
+
+b,k
+
+b
+
+T
+Y
+
+where α’s, β’s and γ’s are transition, emission and initial state counts. By taking Pr(Bt |B1:t−1 , Bt+1:T , s1:n
+1:T ) =
+Pr(Bt , B1:t−1 , Bt+1:T , s1:n
+1:T )/
+
+P
+
+Bt
+
+Pr(Bt , B1:t−1 , Bt+1:T , s1:n
+1:T )
+
+and simplifying, we get:
+Pr(Bt |B1:t−1 , Bt+1:T , s1:n
+1:T )
+∝
+
+Accuracy %
+
+αB
+B
+P t−1 t
+b αBt−1 bt
+t
+
+·
+
+P
+
+αBt Bt+1
+αBt bt+1
+
+bt+1
+
+·
+
+Qn
+
+k=1
+
+βB sk
+P t t
+s βBt s
+
+By repeatedly sampling each hidden state according to
+the distribution above, we are guaranteed to converge
+to the posterior distribution Pr(B1:T |s1:n
+1:T ).
+Although we integrate out the parameters analytically,
+we can sample efficiently from the distribution over the
+parameters. For any assignment to B1:T , the conditional distribution Pr(π, θ, φ|B1:T , s1:n
+1:T ) is a product
+of Dirichlet distributions. Since the Gibbs sampler
+provides us with a way to sample from Pr(B1:T |s1:n
+1:T ),
+sampling from Pr(π, θ, φ|s1:n
+1:T ) can be done efficiently.
+Gibbs sampling can be used both for learning and prediction. Here, we only use it for learning to simplify
+the comparison to other methods.
+
+1:n
+
+eµ·f (st
+
+t=1
+
+,bt )
+
+
+
+×
+
+T
+Y
+
+1
+×
+Z(s1:n
+1:t )
+
+
+(4)
+
+eν·g(bt−1 ,bt )
+
+t=2
+
+1:n
+where Z(s1:t
+) is a normalizing constant, f (s1:n
+t , bt ) is
+a state feature function (possibly vector-valued) with
+the corresponding weights µ, and g(bt−1 , bt )) is a transition feature function with the corresponding weights
+ν. Intuitively, the feature functions allow to incorporate which observations and labels are likely to occur
+together. Usually, the feature functions are kept fixed
+and the weights are learned from training data. Given
+a sequence of labeled training data, the most common approach to find the model weights is minimizing
+the negative log-likelihood. Writing λ for the stacked
+weights (µ, ν), the objective function is given by
+
+L (λ)
+
+= −
+
+T
+X
+t=1
+
+T
+X
+
+µ · f s1:n
+,
+b
+−
+ν · g (bt−1 , bt )
+t
+t
+t=2
+
+ λT λ
+1:n
++ log Z s1:T
++
+2σ 2
+
+(5)
+
+where the last term on the right hand side is a shrinkage prior to penalize large weights. In our experiments
+
+Table 4: CRF results for Experiment 2 using center of pressure (COP) features. Window size is 25. Observations are
+accelerometer measurements, speed, frontal and sagittal center of pressure and total weight. Overall accuracy is 81%.
+NTW
+
+ST
+
+WF
+
+TL
+
+TR
+
+WB
+
+RT
+
+SW
+
+GUR
+
+GDR
+
+GUC
+
+GDC
+
+Accuracy %
+
+NTW
+
+6674
+
+1834
+
+0
+
+0
+
+0
+
+0
+
+0
+
+36
+
+0
+
+0
+
+0
+
+0
+
+78
+
+ST
+
+1017
+
+48677
+
+1100
+
+296
+
+0
+
+0
+
+129
+
+374
+
+0
+
+0
+
+45
+
+0
+
+94
+
+WF
+
+0
+
+2490
+
+67738
+
+744
+
+270
+
+0
+
+25
+
+112
+
+0
+
+0
+
+38
+
+0
+
+95
+
+TL
+
+0
+
+2081
+
+5958
+
+8528
+
+97
+
+0
+
+72
+
+117
+
+0
+
+12
+
+2
+
+0
+
+51
+
+TR
+
+0
+
+1517
+
+10632
+
+350
+
+3129
+
+0
+
+62
+
+34
+
+0
+
+69
+
+39
+
+0
+
+20
+
+WB
+
+0
+
+383
+
+501
+
+55
+
+29
+
+0
+
+59
+
+0
+
+18
+
+0
+
+0
+
+0
+
+00
+
+RT
+
+387
+
+7787
+
+3071
+
+327
+
+24
+
+0
+
+634
+
+46
+
+11
+
+0
+
+0
+
+0
+
+5
+
+SW
+
+0
+
+271
+
+147
+
+77
+
+0
+
+0
+
+0
+
+70839
+
+0
+
+0
+
+0
+
+0
+
+99
+
+GUR
+
+0
+
+173
+
+1647
+
+28
+
+0
+
+0
+
+0
+
+32
+
+938
+
+0
+
+180
+
+0
+
+31
+
+GDR
+
+0
+
+95
+
+1753
+
+0
+
+575
+
+0
+
+0
+
+0
+
+0
+
+720
+
+41
+
+10
+
+23
+
+GUC
+
+0
+
+436
+
+375
+
+0
+
+89
+
+0
+
+122
+
+0
+
+0
+
+0
+
+2065
+
+0
+
+67
+
+GDC
+
+0
+
+156
+
+982
+
+0
+
+1
+
+0
+
+0
+
+0
+
+0
+
+339
+
+9
+
+213
+
+13
+
+we chose σ 2 = 1, However, we found that scaling σ 2 by
+factors up to 10 and 10−1 , does not yield big differences
+in the accuracy of the resulting models. Since the objective function is convex, its unique minimum can be
+found using gradient-based search. The term Z(s1:n
+1:t ),
+which also depends on λ, can be efficiently evaluated
+using dynamic programming [8]. We use conjugate
+gradients to minimize the negative log-likelihood and
+stop training after 100 iterations.
+To predict behaviours, we consider the speed of the
+walker and the acceleration in x, y and z-direction.
+Instead of using the raw data of the load sensors, we
+consider the following measurements: the total load
+(which is just the sum of the loads on each wheel), the
+frontal plane center of pressure (which is the difference
+between the loads on the left and on the right side
+divided by the total load) and the sagittal plane center
+of pressure (the difference between the loads on the
+rear and front wheels divided by the total load).
+Our state feature functions are based on thresholding:
+for each pair of behaviours b, b0 and each sensor k, we
+compare the actual observation to a fixed threshold
+value. If the value is exceeded, we add some model
+(e)
+(n)
+weight µbb0 k , otherwise, we add some weight µbb0 k . We
+choose the threshold values manually by a visual inspection of the data. If the labels b, b0 cannot be well
+discriminated by looking at the data from sensor k, the
+threshold is chosen as the average value from sensor k;
+later on, such “irrelevant” thresholds will be given very
+low weights in the training of the model.
+We use a very simple transition model to avoid a bias
+towards certain transitions due to the design of the
+walker course. In particular, the transition feature
+function is given by g(bt−1 , bt ) = δ(bt−1 = bt ), hence
+the corresponding weight ν is a scalar.
+
+Given the model parameters and an observation sequence, the predicted behaviour sequence b̃1:T maximizes the a-posteriori probability of B1:T ,
+b̃1:T
+
+1:n
+= arg max P (B1:T = b1:T | S1:T
+= s1:n
+1:T )
+b1:T
+
+where the maximization is over all label sequences of
+length T . Note that b̃1:T can be computed efficiently
+similar to the Viterbi algorithm for HMMs.
+
+5
+
+Results
+
+We present results for the HMM and CRF for both
+experiments. We use leave one out cross validation for
+each round of training and prediction. Specifically, if
+we want to predict the behaviour sequence for a certain participant in Experiment 2, we learn the parameters from all other participants in Experiment 2. For
+Experiment 1, each person goes through the course
+twice. We included one instance of the course in the
+training data along with data from other participants
+while testing for the same person.
+Since the range of sensor readings is too large (all integers from 0 to 216 − 1), we divide the range into
+20 intervals and set their length in such a way that
+the same number of readings fall into each interval.
+Since the participants’ weight varies, we also normalize
+the load cell readings as follows: normalizedV alue =
+(value − min)/(max − min).
+Ground truth is established by hand labeling the data
+based on the video. This process is not perfect since
+the labeler can make mistakes while identifying behaviour transitions. For example, the labeler may interpret that a left turn started at time t, while the turn
+may actually start some time before t, but it only becomes evident in the video at time t. Therefore, in
+order to calculate our error, we introduce the concept
+
+Table 5: Experiment 1 percentage accuracy for each behaviour. NL means the normalized load values are used. COP
+implies that center of pressure feature is used instead of normalized load values. LOD means observation model is learnt
+from data and transition model uses τ for behaviour persistence. LOTD means the observation, transition and prior
+probabilities are learned from data. Window size is 25.
+Learning
+
+Accuracy
+NTW
+
+ST
+
+WF
+
+TL
+
+TR
+
+WB
+
+TRS
+
+Total
+
+Supervised HMM NL
+
+65
+
+88
+
+95
+
+96
+
+92
+
+95
+
+85
+
+91
+
+Supervised HMM COP
+
+75
+
+85
+
+89
+
+93
+
+89
+
+98
+
+78
+
+88
+
+Supervised HMM LOTD NL
+
+67
+
+89
+
+96
+
+95
+
+91
+
+95
+
+85
+
+92
+
+Supervised CRF
+
+96
+
+82
+
+98
+
+89
+
+80
+
+94
+
+70
+
+93
+
+Unsupervised HMM EM
+
+100
+
+14
+
+48
+
+94
+
+90
+
+97
+
+0
+
+61
+
+Unsupervised HMM Gibbs
+
+100
+
+72
+
+95
+
+66
+
+72
+
+44
+
+17
+
+83
+
+Table 6: Experiment 2 percentage accuracy for each behaviour. NL means that normalized load values are used. COP
+implies that center of pressure feature is used instead of normalized load values. LOD means that the observation model
+is learnt from data and the transition model uses τ for behaviour persistence. LOTD means the observation, transition
+and prior probabilities have been learned from data. Window size is 25
+Learning
+
+Accuracy
+NTW
+
+ST
+
+WF
+
+TL
+
+TR
+
+WB
+
+RT
+
+SW
+
+GUR
+
+GDR
+
+GUC
+
+GDC
+
+Total
+
+Supervised HMM NL
+
+50
+
+71
+
+73
+
+81
+
+73
+
+21
+
+52
+
+99
+
+86
+
+86
+
+94
+
+85
+
+81
+
+Supervised HMM COP
+
+20
+
+74
+
+70
+
+76
+
+74
+
+56
+
+42
+
+99
+
+84
+
+81
+
+95
+
+82
+
+77
+
+Supervised HMM LOTD NL
+
+49
+
+74
+
+78
+
+81
+
+73
+
+21
+
+50
+
+99
+
+85
+
+85
+
+94
+
+84
+
+81
+
+Supervised CRF
+
+78
+
+94
+
+95
+
+51
+
+20
+
+0
+
+5
+
+99
+
+31
+
+23
+
+67
+
+13
+
+81
+
+Unsupervised HMM EM
+
+73
+
+33
+
+54
+
+63
+
+63
+
+7
+
+30
+
+99
+
+40
+
+23
+
+13
+
+91
+
+62
+
+Unsupervised HMM Gibbs
+
+100
+
+42
+
+77
+
+69
+
+81
+
+0
+
+62
+
+91
+
+57
+
+52
+
+46
+
+2
+
+69
+
+of window size. If the window size is x, then for the
+behaviour at time t, if we find the same behaviour in
+the window between time t − x and time t + x in the
+predicted sequence, we count it as a correct prediction.
+We vary our window size from 0 to 50 in intervals of
+5. If we make a correct prediction within a window
+width of 25, then we are only off by half a second.
+Since older people perform behaviours at a rate that
+is much slower than half a second, this may still be
+considered accurate.
+Tables 3 and 4 show the results in the form of confusion matrices for Experiment 2 when performing supervised learning with an HMM and a CRF. In both
+cases, accelerometer measurements, speed, frontal and
+sagittal center of pressure (COP) and total weight are
+used as observations instead of the raw measurements
+(see Sect. 4.2 for more details). Each entry at row i
+and column j indicates how many times behaviour i
+was confused as behaviour j, assuming a window of
+size 25.
+Due to a lack of space, we did not include the confusion matrices for Experiment 1 and for the unsupervised learning algorithms, however Tables 5 and 6
+summarize the recognition accuracy of all the algorithms 
+for each experiment. We define accuracy as
+PT
+t=1 δ b̂t = b̃t /T . Note that random predictions
+
+would yield an accuracy of 1/7 = 14% in Experiment
+1 and 1/13 = 7% in Experiment 2.
+In some situations, identifying transitions from
+some behaviour to another is what really matters. Hence, Fig. 5 shows the precision and recall of behaviour transitions (in addition to recognition accuracy) as a function of the window size.
+We calculate the number 
+of actual transitions (i.e.,
+PT
+AT =
+t=1 δ b̂t 6= b̂t−1 ), the number of pre
+P|T | 
+dicted transitions (i.e., P T =
+t=1 δ b̃t 6= b̃t−1 )
+and the number ofcorrectly predicted transitions (i.e.,
+
+PT
+CP T =
+δ
+b̃
+=
+6
+b̃
+&
+b̂
+=
+b̃
+&
+b̂
+=
+b̃
+).
+t
+t−1
+t
+t
+t−1
+t−1
+t=1
+Then precision = CP T /AT and recall = CP T /P T .
+
+6
+
+Discussion
+
+In this section, we analyze the results presented in the
+previous section.
+Experiment 1 vs. Experiment 2: It is obvious
+from Tables 5 and 6 that the overall accuracy is much
+higher for Experiment 1. Difficult behaviours such as
+TR, TL and TRS are also predicted accurately. In
+fact, the accuracy for TRS is much higher than expected. One reason for the high accuracy may be that
+in Experiment 1, each person executes the course twice
+
+Figure 5: Accuracy, Precision and Recall for various algorithms in each experiment.
+and one instance of the course execution is included in
+the training data while testing for the same person.
+Therefore, the training data may include information
+that is more specific to the particular person e.g., how
+people put load on the walker for different behaviours.
+Secondly, for Experiment 1, behaviours such as NTW,
+ST, WF and WB are easily distinguishable from each
+other. Confusion is only likely between WF, TL and
+TR and between ST and TRS. There is a larger number of behaviours in Experiment 2 that are difficult to
+distinguish from each other based on sensor information e.g. WF, TL, TR, GUR, GDR, GUC and GDC.
+Similarly it is difficult to distinguish between RT and
+ST.
+Center of Pressure (COP) vs. Normalized Load
+Values: In addition to the accelerometer values and
+the walker speed, we considered two alternative sets of
+features for prediction. One set includes the normalized load cell measurements while the other includes
+the frontal plane COP, the sagittal plane COP and the
+total load on the walker. It is evident from Tables 5
+and 6 that both sets of features predict different behaviours well. When the COP features are used, we
+note that the prediction accuracy is lower for TR, TL,
+GUR, GDR, GUC and GDC and higher for the other
+behaviours.
+CRF vs. HMM: Tables 5 and 6 show that the
+total accuracy of the CRF is much higher than
+that of the HMM. This is largely due to the fact
+that the CRF models Pr(Behaviours|Observations)
+directly and optimizes the parameters of this
+distribution.
+On the other hand, the HMM
+models Pr(Observations|Behaviours) as well as
+Pr(Behaviours), and then uses Bayes rule to calculate
+
+Pr(Behaviours|Observations). Therefore, the HMM
+model is more complex and the number of parameters
+that we have to learn is larger. Also, the HMM makes
+an explicit assumption about the conditional independence of sensor measurements over time. The CRF
+avoids this (problematic) assumption since it does not
+model any distribution over the observations. However, techniques for unsupervised learning are better
+established for HMMs than CRFs. This becomes an
+important advantage since we do not need to label data
+in unsupervised learning.
+We were surprised to see that the HMM was able to
+predict certain behaviours better than the CRF. In
+general, the HMM seems to favor behaviours that occur infrequently. For example, in Table 3, we can
+see that the prediction accuracy of GUR and GUC
+is higher than that of WF. We expected that it would
+be difficult to accurately predict infrequent behaviours
+such as GUR and GUC. Note also that WF is often
+predicted as GUR and GUC. We suspect that this is
+due to the assumption of conditional independence between different sensors.
+Learning Transition Model from Data: As discussed in Sect. 3, the experiments include a pre-defined
+walking course that biases the behaviour transitions.
+This is why we considered two scenarios when learning an HMM: i) fixed transition model where each behaviour is τ times more likely to persist than to transition to some other behaviour with uniform probability
+(denoted by LOD in Tables 5 and 6) and ii) learned
+transition model (denoted by LOTD). Naturally, the
+accuracy is higher when the transition model is learned
+from data. In future work, we plan to collect data
+with participants in their daily activities instead of a
+
+scripted walking course, which will allow us to learn
+realistic and personalized transition models.
+ML vs. Bayesian Learning: As explained previously, manually labeling the data is a time consuming and error-prone. Unsupervised learning algorithms
+avoid this problem. However, they take longer to converge and the solutions are usually approximations to
+the optimal parameters. It is interesting to note from
+Table 5 that for Experiment 1, the Gibbs sampling accuracy for NTW and ST is actually higher than other
+algorithms. One important difficulty with unsupervised learning is state matching. On one hand, unsupervised learning algorithms may pick sub-behaviours
+of composite behaviours as a state. For example, the
+ramp transition can be broken up into getting on the
+ramp (corresponding to a blip in the vertical acceleration), and walking on the ramp. The algorithm
+may find a state that matches either one or both instead of the behaviours going up/down ramp. On the
+other hand, if two behaviours are similar, the algorithm might treat them as the same state. We observe
+that in Table 5, TRS is almost never predicted correctly. This may be due to the fact that TRS is very
+similar to ST and hence they are merged into one state.
+For EM and Gibbs sampling, once a model is learned,
+we manually associate each latent state with the behaviour that is the most frequent. In general we used
+a number of latent states equal to the number of behaviours, except for Gibbs sampling in Experiment 1
+(Table 5) where we used more latent states (11) than
+behaviours (7). As a result, the accuracy improved.
+In future work, we would like to investigate more thoroughly whether using a larger number of latent states
+generally improves the accuracy.
+Since EM often gets stuck in local optima, we did 20
+random restarts and showed the results of the model
+with the highest likelihood. In contrast, Gibbs sampling does not suffer from this problem. It is evident
+from Tables 5 and 6 as well as Fig. 5 that Gibbs sampling performs better than EM.
+
+7
+
+Conclusion and Future Work
+
+This paper presented a novel and significant application of activity recognition in the context of instrumented walkers. We designed several algorithms based
+on HMMs and CRFs, and tested them with real users
+at the Village of Winston Park (retirement community in Kitchener, Ontario). A comprehensive analysis
+of the results showed that behaviours associated with
+walker usage tend to induce load, speed and acceleration patterns that are sufficient to distinguish them
+with reasonable accuracy. In the future, we would like
+to further improve the recognition accuracy, by using
+
+the video data and exploring various feature extraction techniques. We are also working on improving
+the battery life and memory capacity of the walker to
+collect data over long periods of time. In particular,
+this will allow us to loan the walker to users, record
+their daily usage and learn realistic and personalized
+behaviour transition models. Finally, we hope to turn
+this work into a clinical tool that can be used to assess
+the mobility patterns of walker users and the contexts
+in which they are more likely to fall.
+Acknowledgments
+This work was supported by funds from CIHR,
+NSERC, the Ontario Ministry of Research and Innovation (Pascal Poupart’s ERA) and the Canadian government (Mathieu Sinn’s postdoctoral fellowship). We
+also thank the UW-Schlegel Research Institute for Aging and the Village of Winston Park as well as all the
+volunteers who participated in the experiments.
+
+References
+[1] M. Alwan, G. Wasson, P. Sheth, A. Ledoux, and
+C. Huang. Passive derivation of basic walker-assisted
+gait characteristics from measured forces and moments.
+In Proc. Int. Conf of the IEEE EMBS, 2004.
+[2] A. Dempster, N. Laird, and D. Rubin. Maximum likelihood from incomplete data with the em algorithm. J.
+of the Royal Statistical Society, Series B, 39(1):1–38,
+1977.
+[3] Y. Hirata, A. Muraki, and K. Kasuge. Motion control of
+intelligent passive-type walker for fall prevention function based on estimation of user state. In Proc. of the
+IEEE ICRA, 2006.
+[4] J. Lafferty, A. McCallum, and F. Pereira. Conditional
+random fields: Probabilistic models for segmenting and
+labeling sequence data. In Proc. ICML, 2001.
+[5] L. Liao, D. Fox, and H. Kautz. Extracting places and
+activities from gps traces using hierarchical conditional
+random fields. International Journal of Robotics Research, 26(1):119–134, 2007.
+[6] L. Liao, D. J. Patterson, D. Fox, and H. Kautz. Learning and inferring transportation routines. AI, 171:311–
+331, April 2007.
+[7] J.S. Liu. The collapsed Gibbs sampler in Bayesian computations with applications to a gene regulation problem. J. of the Am. Statistical Association, 89(427):958
+– 966, 1994.
+[8] C. Sutton and A. McCallum. Introduction to Statistical
+Relational Learning, chapter An Introduction to Conditional Random Fields for Relational Learning. MIT
+Press, 2006.
+[9] J. Tung, K. Zabjek, W. Gage, B. Maki, and W. McIlroy.
+Frontal plane balance control with rollators: Perturbed
+stance and walking. Archives of Physical Medicine and
+Rehabilitation, 89:e50, 2008.
+
+

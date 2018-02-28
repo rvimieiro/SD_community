@@ -1,0 +1,1765 @@
+approximated by a conditional particle filter. That is, one uses a particle filter to sample the first
+group and then conditions on these samples to sample the second group with a conditional particle
+filter. They provide an important reason for doing this: increased parallelization.
+The resampling step is one of the computational bottlenecks in parallel implementations of
+particle filters in graphics processing units (GPUs) and field-programmable gate arrays (FPGAs)
+[10, 11, 12]. By decomposing the state space, the DPF allows for more efficient, local in the state
+space, resampling. Chen and colleagues have demonstrated this advantage of DPFs over standard
+PFs. Moreover, with increased interest in the deployment of particle filters for large scale applications, such as the analysis of streaming news [13], algorithms that capitalize on decompositions of
+the space space are of great research interest.
+Chen et. al. suggest the use of Gaussian approximations in order to manage computation. In
+this paper, we show that it is possible to avoid these Gaussian approximations without significant
+loss of performance. Moreover, we show that it is possible to obtain a pure Monte Carlo approximation of the optimal importance distribution (optimal proposal). This Monte Carlo approximation
+enables us to design and implement a look-ahead filter, where the sampling and resampling steps
+can be swapped. In the context of exact Rao-Blackwellization, this look-ahead strategy is described
+in detail in [5] and was first suggested in [1]. In [5], it was clear that the look-ahead RBPF performed significantly better than the PF and RBPF algorithms in practical domains. In our context,
+the derivation of a look-ahead strategy is a bit more tricky as it involves additional Monte Carlo
+approximations. However, as we will see in the experiments, the look-ahead strategy still results
+in substantial improvements over the standard DPF.
+Our final contribution is to answer, to some extent and for the first time, question (iv). This
+question was posed more than ten years ago and continues appearing in the future work sections
+of papers on the topic, including the DPF paper. Our solution involves the usage of online bandit
+algorithms [14] to decide the order in which variables should be sampled. Question (iii) is still open,
+but we conjecture that the improvements introduced in [9] and here will lead to it being answered
+in the near future.
+The paper is organized as follows. Section 2 describes the models, poses the inference problems,
+and provides a brief description of the DPF. The section ends with a description of the proposed
+look ahead (LA)-DPF algorithm. Section 3 presents the automatic state decomposition strategy.
+The PF, DPF and LA-DPF are compared in the experiments of Section 4. We conclude the paper
+in Section 5.
+
+2
+
+p(x0:t |y0:t−1 )
+p(x0:t |y0:t )
+p(x0:t+1 |y0:t )
+
+p(zt |x0:t , y0:t−1 )
+p(yt |x0:t , y0:t−1 )
+
+p(yt |xt , zt )
+
+p(xt+1 |x0:t , y0:t )
+
+p(xt+1 |xt , zt )
+
+p(zt |x0:t , y0:t )
+p(zt |x0:t+1 , y0:t )
+
+p(zt+1 |xt:t+1 , zt )
+
+p(zt+1 |x0:t+1 , y0:t )
+
+Figure 1: Flow of distributions that need to be computed in order to solve the nested filtering problem.
+
+2
+
+Decentralized Particle Filter
+
+The state space is decomposed into two groups of variables (xt ∈ X ⊆ Rnx , zt ∈ Z ⊆ Rnz ), which
+are governed by the following latent, dynamic state space model with observations yt ∈ Y ⊆ Rny :
+xt+1 = ftx (xt , zt , vtx )
+zt+1 = ftz (xt:t+1 , zt , vtz )
+
+(1)
+
+yt = ht (xt , zt , et ),
+where xt:t+1 = (xt , xt+1 ), vt = (vtx , vtz ) and et are noise processes, and f (·) and h(·) are nonlinear
+mappings. This model can be equivalently expressed in terms of the initial distributions p(x0 ) and
+p(z0 |x0 ), the transition distributions p(xt+1 |xt , zt ) and p(zt+1 |xt:t+1 , zt ) and the observation model
+p(yt |xt , zt ). We assume that the parameters of these distributions are known and focus on the
+inference problem.
+The goal of inference is to recursively estimate the posterior distribution p(zt , x0:t |y0:t ). Using
+the following factorization:
+p(zt , x0:t |y0:t ) = p(zt |x0:t , y0:t )p(x0:t |y0:t ),
+
+(2)
+
+with x0:t = (x0 , . . . , xt ), this filtering problem can be split into the two nested subproblems of
+recursively estimating (1) p(x0:t |y0:t ) and (2) p(zt |x0:t , y0:t ). The way in which these subproblems
+interact with each other is depicted in Figure 1. The diagram shows the necessary steps for
+implementing the optimal filter in this nested setting. However, except in very specific cases,
+there is no analytic solution to this filtering problem. Therefore, a numerical algorithm must be
+employed. The DPF is one such algorithm. It handles the two nested subproblems using particle
+filters: subproblem 1 is dealt with using a PF with Nx particles, and subproblem 2 is dealt with
+using Nx PFs with Nz particles each. The DPF solves these two nested subproblems in 7 steps [9],
+as illustrated in Figure 2. We only give a brief overview of the main steps of the DPF and state
+the important equations required for deriving our look-ahead DPF algorithm. We refer the reader
+to [9] for all the mathematical details involved in deriving the DPF algorithm and to [15] for an
+introduction to particle filtering.
+We describe the 7 steps briefly. Assume that we have Monte Carlo approximations of the
+
+3
+
+(i)
+
+Initialize the particles x̃0
+∼ p(x0 ), i
+(i,j)
+(i)
+z̃0
+∼ p(z0 |x̃0 ), j = 1, . . . , Nz . Initialize r1 .
+
+=
+
+(i)
+
+1, . . . , Nx ,
+
+and for each particle x̃0 ,
+
+the particles
+
+At each time (t ≥ 0), perform the following 7 steps:
+(i)
+
+1. Measurement update of x0:t given yt . Calculate the importance weights wt , i = 1, . . . , Nz according
+to:
+Nx
+(i)
+(i) (i)
+X
+pNz (yt |x̃0:t , y0:t−1 )pNz (x̃t |x0:t−1 , y0:t−1 )
+(i)
+(i)
+wt ∝
+;
+wt = 1 .
+(i) (i)
+π(x̃t |x0:t−1 , y0:t−1 )
+i=1
+(i)
+
+(i,1)
+
+(i,1)
+
+(i,N )
+
+(i,N )
+
+(i)
+
+2. Resample {x̃0:t , z̃t , r̃t , . . . , z̃t z , r̃t z }, i = 1, . . . , Nx according to wt
+(i)
+(i,1)
+(i,1)
+(i,N )
+(i,N )
+{x0:t , z̄t , rt , . . . , z̄t z , rt z }, i = 1, . . . , Nx .
+
+to generate particles
+(i,j)
+
+3. Measurement update of zt given yt . For i = 1, . . . , Nx , the importance weights q̄t
+are evaluated according to:
+(i,j)
+
+q̄t
+
+(i)
+
+(i,j)
+
+∝ p(yt |xt , z̄t
+
+(i,j)
+
+)rt
+
+;
+
+Nz
+X
+
+(i,j)
+
+q̄t
+
+, j = 1, . . . , Nz ,
+
+= 1.
+
+j=1
+(i)
+
+(i)
+
+4. Propose particles x̃t+1 , i = 1, . . . , Nx according to the proposal function π(xt+1 |x0:t , y0:t ).
+(i,j)
+
+5. Measurement update of zt given x̃t+1 . For i = 1, . . . , Nx , the importance weights qt
+1, . . . , Nz , are evaluated according to:
+(i,j)
+
+qt
+
+(i)
+
+(i,j)
+
+∝ p(yt |xt , z̄t
+
+(i)
+
+(i)
+
+(i,j)
+
+)p(x̃t+1 |xt , z̄t
+
+(i,j)
+
+)rt
+
+;
+
+Nz
+X
+
+(i,j)
+
+qt
+
+, j =
+
+= 1.
+
+j=1
+(i,j)
+
+6. Resample z̄t
+7.
+
+(i,j)
+
+, i = 1, . . . , Nx , j = 1, . . . , Nz according to qt
+
+(i,j)
+Propose particles z̃t+1 , i
+(i)
+(i)
+π(zt+1 |x̃0:t+1 , y0:t ). Set x̃0:t+1
+
+(i,j)
+
+to obtain zt
+
+.
+
+= 1, . . . , Nx , j = 1, . . . , Nz according to the proposal function
+(i)
+(i)
+= (x0:t , x̃t+1 ) and compute r̃t+1 :
+(i,j)
+
+(i,j)
+
+r̃t+1 =
+
+(i)
+
+p̃Nz (z̃t+1 |x̃0:t+1 , y0:t )
+(i,j) (i)
+π(z̃t+1 |x̃0:t+1 , y0:t )
+
+Figure 2: The DPF algorithm.
+distributions of interest from the previous time step:
+p̃Nx (x0:t−1 |y0:t−1 ) =
+(i)
+
+pNz (zt−1 |x0:t−1 , y0:t−1 ) =
+(i,j)
+
+Nx
+1 X
+(i)
+δ(x0:t−1 − x0:t−1 )
+Nx
+i=1
+
+Nz
+X
+j=1
+
+(i,j)
+
+(i,j)
+
+q̄t−1 δ(zt−1 − z̄t−1 ),
+
+(3)
+(i)
+
+x
+where q̄t−1 is an importance weight defined in equation (7). Assume that we have samples x̃0:t |N
+i=1
+
+(i)
+
+from a proposal distribution π(x̃t |x0:t−1 , y0:t−1 ). Then, importance sampling enables us to obtain
+
+4
+
+the following approximation of the posterior distribution of x0:t :
+pNx (x0:t |y0:t ) =
+
+Nx
+X
+
+(i)
+
+(i)
+
+wt δ(x0:t − x̃0:t ).
+
+i=1
+
+(i)
+
+As in standard particle filtering, the importance weights wt are given by:
+(i)
+
+(i)
+
+wt ∝
+
+(i)
+
+(i)
+
+pNz (yt |x̃0:t , y0:t−1 )pNz (x̃t |x0:t−1 , y0:t−1 )
+(i)
+
+(i)
+
+π(x̃t |x0:t−1 , y0:t−1 )
+
+.
+
+However, unlike in simple Markov processes, we cannot exploit conditional independence in a trivial
+manner so as to simplify the numerator. Instead, we express the quantities in the numerator in
+terms of the following marginals
+Z
+p(xt |x0:t−1 , y0:t−1 ) =
+p(xt |xt−1 , zt−1 )p(zt−1 |x0:t−1 , y0:t−1 )dzt−1
+Z
+p(yt |x0:t , y0:t−1 ) =
+p(yt |xt , zt )p(zt |x0:t , y0:t−1 )dzt
+and approximate them with the following Monte Carlo estimates:
+(i)
+pNz (x̃t |x0:t−1 , y0:t−1 )
+(i)
+pNz (yt |x̃0:t , y0:t−1 )
+
+=
+
+Nz
+X
+j=1
+
+=
+
+Nz
+X
+j=1
+
+(i,j)
+
+(i)
+
+(i,j)
+
+q̄t−1 p(x̃t |xt−1 , z̄t−1 )
+(i,j)
+(i,j)
+r̃t p(yt |x̃t , z̃t )/
+
+Nz
+X
+
+(4)
+(i,j)
+
+r̃t
+
+.
+
+(5)
+
+j=1
+
+The first expression is a simple Monte Carlo estimate obtained by replacing p(zt−1 |x0:t−1 , y0:t−1 )
+(i)
+with its approximation pNz (zt−1 |x0:t−1 , y0:t−1 ). In the second expression, we use importance sampling to approximate the integral. In particular, we assume that we have already computed the
+(i,j)
+importance weight r̃t , defined as follows:
+(i,j)
+
+(i,j)
+
+r̃t
+
+=
+
+p̃Nz (z̃t
+
+(i,j)
+
+π(z̃t
+
+(i)
+
+|x̃0:t , y0:t−1 )
+(i)
+
+|x̃0:t , y0:t−1 )
+
+(i,j)
+
+,
+
+(6)
+
+(i)
+
+where z̃t
+are samples from the proposal mechanism π(zt |x̃0:t , y0:t−1 ). Note that to compute this
+(i,j) (i)
+importance weight, we require an expression for p̃Nz (z̃t |x̃0:t , y0:t−1 ). To achieve this, we need to
+first obtain expressions for p(zt |x0:t , y0:t ) and p(zt |x0:t+1 , y0:t ).
+Using Bayes rule and conditional independence, we have:
+(i)
+
+(i)
+
+(i)
+
+p(zt |x0:t , y0:t ) ∝ p(zt |x0:t , y0:t−1 )p(yt |xt , zt ).
+(i)
+
+(i,j)
+
+Since π(zt |x̃0:t , y0:t−1 ) is the proposal mechanism from which the samples z̄t
+tance sampling yields the following approximation:
+(i)
+
+pNz (zt |x0:t , y0:t ) =
+
+Nz
+X
+j=1
+
+5
+
+(i,j)
+
+q̄t
+
+(i,j)
+
+δ(zt − z̄t
+
+),
+
+originated, impor-
+
+where
+
+(i,j)
+
+q̄t
+
+(i)
+
+(i,j)
+
+∝ p(yt |xt , z̄t
+
+(i,j)
+
+)rt
+
+.
+
+(7)
+
+Similarly, by two successive applications of Bayes rule, we have:
+(i)
+
+(i)
+
+(i)
+
+(i)
+
+(i)
+
+p(zt |x̃0:t+1 , y0:t ) ∝ p(zt |x0:t , y0:t−1 )p(yt |xt , zt )p(x̃t+1 |xt , zt ).
+Using importance sampling, the approximation for this distribution is given by:
+(i)
+pNz (zt |x̃0:t+1 , y0:t )
+
+where
+
+(i,j)
+
+qt
+
+(i)
+
+=
+
+(i,j)
+
+(i,j)
+
+qt
+
+δ(zt − z̄t
+
+(i)
+
+(i)
+
+j=1
+
+(i,j)
+
+∝ p(yt |xt , z̄t
+
+Nz
+X
+
+(i,j)
+
+)p(x̃t+1 |xt , z̄t
+
+),
+
+(i,j)
+
+)rt
+
+.
+
+(8)
+
+Using marginalization and conditional independence, we have
+Z
+p(zt+1 |x0:t+1 , y0:t ) = p(zt+1 |xt:t+1 , zt )p(zt |x0:t+1 , y0:t )dzt .
+A Monte Carlo approximation of this quantity results in the expression necessary for computing
+the numerator of r̃t+1 :
+(i)
+
+p̃Nz (zt+1 |x̃0:t+1 , y0:t ) =
+
+Nz
+1 X
+(i)
+(i,j)
+p(zt+1 |x̃t:t+1 , zt )
+Nz
+j=1
+
+Note that in contrast to what is done in [9], no further approximation of (4) will be made in
+the remainder of the derivation. We refer the reader to the results section for more details on this.
+In the algorithm, shown in Figure 2, the weights q̄t−1 and r̃t were computed in steps 3 and
+7 respectively. Steps 2 and 6 are standard resampling steps [15]. One has to be careful keeping
+tracks of indices, tildes and bars, but aside from this, the algorithm follows easily from the standard
+importance sampling steps for particle filtering.
+
+2.1
+
+On the choice of proposal distribution
+
+A common practice is to use the prior distributions as proposal distributions:
+(i)
+
+(i)
+
+π(xt |x0:t−1 , y0:t ) = p(xt |x0:t−1 , y0:t−1 )
+and
+
+(i)
+
+(i)
+
+π(zt |x0:t , y0:t ) = p(zt |x0:t , y0:t−1 ).
+These proposals are both intuitive and reduce the complexity of the derivations considerably. However, they do not take into account the current observation yt . The original DPF algorithm uses
+these prior proposal distributions. However, a better choice of proposal for xt that takes into
+account the current observation yt is given by:
+(i)
+
+(i)
+
+π(xt |x0:t−1 , y0:t ) = p(xt |x0:t−1 , y0:t ).
+6
+
+It can be shown that this importance distribution is optimal [16].
+Using Bayes rule, the optimal proposal distribution can be written as:
+(i)
+
+(i)
+
+p(yt |x0:t−1 , xt , y0:t−1 )p(xt |x0:t−1 , y0:t−1 )
+
+(i)
+
+π(xt |x0:t−1 , y0:t ) =
+
+(i)
+
+p(yt |y0:t−1 , x0:t−1 )
+
+.
+
+(9)
+
+This expression results in the following simplification of the importance weights for x:
+(i)
+
+wt =
+
+p(x0:t |y0:t )
+p(yt |x0:t , y0:t−1 )p(xt |x0:t−1 , y0:t−1 )
+(i)
+∝
+= p(yt |y0:t−1 , x0:t−1 ).
+π(x0:t |y0:t )
+π(xt |x0:t−1 , y0:t )
+(i)
+
+The predictive distribution p(yt |y0:t−1 , x0:t−1 ) can be expanded as follows:
+ZZ
+(i)
+(i)
+(i)
+p(yt |y0:t−1 , x0:t−1 ) =
+p(yt |xt , zt )p(zt |y0:t−1 , x0:t−1 , xt )p(xt |y0:t−1 , x0:t−1 )dxt dzt
+(i)
+
+(i)
+
+Note that wt does not depend on the value of the sample drawn from π(xt |x0:t−1 , y0:t ).
+The optimal importance density suffers from two major drawbacks: it requires the ability to
+(i)
+sample from π(xt |x0:t−1 , y0:t ) and to evaluate the integral over the new states in the calculation of
+the importance weights. In general, both of these steps are hard. There are two cases when the
+(i)
+use of the optimal importance density is possible: when π(xt |x0:t−1 , y0:t ) is a member of a finite
+(i)
+
+set, e.g. a jump-Markov linear system [1], or when π(xt |x0:t−1 , y0:t ) is Gaussian [16].
+In our case, we can use the Monte Carlo estimates (4) and (5) to obtain an approximation of
+(i)
+π(xt |x0:t−1 , y0:t ):
+(i)
+
+(i)
+π̂Nz (xt |x0:t−1 , y0:t )
+
+=
+
+=
+
+(i)
+
+pNz (yt |x0:t−1 , xt , y0:t−1 )pNz (xt |x0:t−1 , y0:t−1 )
+
+(10)
+
+(i)
+
+pNz (yt |y0:t−1 , x0:t−1 )
+P z (i,j) PNz (i,j)
+PNz (i,j)
+(i)
+(i,j)
+(i,j)
+· j=1 qt−1 p(xt |xt−1 , zt−1 )
+p(yt |xt , zt )/ N
+j=1 rt
+j=1 rt
+(i)
+
+pNz (yt |y0:t−1 , x0:t−1 )
+
+(i)
+
+,
+
+(i)
+
+where pNz (yt |y0:t−1 , x0:t−1 ) is a Monte Carlo approximation of p(yt |y0:t−1 , x0:t−1 ), which we derive
+(m)
+(i)
+next. First, we draw Nx samples x̄¯t , m = 1, . . . , Nx using pNz (xt |x0:t−1 , y0:t−1 ). Then, we draw
+
+(m,k)
+(i)
+¯(m)
+Nz corresponding samples z¯t
+, k = 1, . . . , Nz according to pNz (zt |y0:t−1 , x0:t−1 , x̄
+t ). Now, the
+weights can be expanded as follows:
+
+(i)
+ŵt
+
+∝
+
+Nx X
+Nz
+1 1 X
+¯(m)
+¯(m,k) ).
+p(yt |x̄
+t , z̄t
+Nx Nz
+
+(11)
+
+m=1 k=1
+
+The cost of the algorithm is Nx × Nz . Since X and Z are lower dimensional than X × Z, the hope
+is that Nx × Nz is still lower than the the number of particles N required by a standard particle
+filter on the joint space X × Z. Moreover, since typically Nx and Nz are much smaller than N , the
+resampling steps of the DPF are much cheaper than usual O(N ) cost of the standard PF. This can
+therefore result in significant computational gains when parallelizing the algorithm for real-time
+applications.
+7
+
+2.2
+
+Look-ahead DPF algorithm
+
+As mentioned in [5], one more improvement is possible when using the optimal proposal distribution.
+The optimal importance weights don’t depend on xt or zt , as we are in fact marginalizing over these
+variables. Therefore, we can swap the resampling and proposal steps. This enables us to resample
+(select the fittest) particles at time t − 1 using information from the future time t. We refer the
+reader to Figure 3 for an intuitive diagram highlighting the benefits of this. Figure 4 illustrates the
+4 steps of the look-ahead DPF algorithm.
+
+Sampled particles at time t−1
+
+Resampled particles at time t−1
+
+Weighted particles
+Sampled particles
+
+Resampled particles
+Weighted particles
+
+Resampled particles at time t
+
+Sampled particles at time t
+
+Figure 3: PF (left) and look-ahead PF (right) algorithms for a continuous one-dimensional problem. For
+the PF, starting with the resampled particles at t−1, a new set of particles is proposed at time t. We compute
+the importance weight of each particle. Finally, we select the fittest particles according to their weights. Note
+the PF has failed to track the two modes appearing on the right of the filtering posterior distribution at time
+t. On the other hand, for the look-ahead filter, we first compute the importance weights. After resampling
+according to these weights, we propose new particles at time t. With this algorithm, we are more likely to
+propose particles in areas of high probability.
+
+(i)
+
+∼
+Initialize the particles x̃0
+(i)
+(i,j)
+∼ p(z0 |x̃0 ), j = 1, . . . , Nz .
+z̃0
+
+p(x0 ), i
+
+=
+
+1, . . . , Nx ,
+
+(i)
+
+and for each particle x̃0 ,
+
+the particles
+
+At each time (t ≥ 0), perform the following 4 steps:
+0
+0
+¯(m) ∼ pNz (xt |x(i)
+1. Generate Nx0 particles x̄
+0:t−1 , y0:t−1 ), m = 1, . . . , Nx , and corresponding Nz particles
+(m,k)
+(i)
+(m)
+0
+¯t ), k = 1, . . . , Nz .
+z¯t
+∼ p(zt |y0:t−1 , x0:t−1 , x̄
+(i)
+
+2. Compute the weights wt
+
+according to (11).
+(i)
+
+(i,j)
+
+(i)
+
+3. Resampling. Multiply or discard particles {x̃0:t−1 , z̃0:t−1 } using the importance weights wt
+(i)
+(i,j)
+{x0:t−1 , z0:t−1 }.
+(i)
+
+(i)
+
+(i,j)
+
+4. Generate new particles. Obtain xt ∼ π(xt |x0:t−1 , y0:t ) and zt
+
+Figure 4: The look-ahead DPF algorithm.
+
+8
+
+(i)
+
+∼ p(zt |x0:t , y0:t−1 ).
+
+to obtain
+
+Initialization: Choose a real number η > 0. Set Gi (0) = 0 for i = 1, . . . , K.
+Repeat for t = 1, 2, . . . :
+exp(ηGi (t − 1))
+1. Choose action it according to the distribution: pi (t) = PK
+.
+j=1 exp(ηGj (t − 1))
+2. Receive the reward vector r(t) and score the gain rit (t).
+3. Set Gi (t) = Gi (t − 1) + ri (t) for i = 1, . . . , K.
+
+Initialization: Choose γ ∈ (0, 1]. Initialize Hedge(η).
+Repeat for t = 1, 2, . . . :
+1. Get the distribution p(t) from Hedge.
+2. Select action it to be j with probability p̂j (t) = (1 − γ)pj (t) +
+
+γ
+.
+K
+
+3. Receive reward rit (t) ∈ [0, 1].
+
+ rit (t)
+4. Feed the simulated reward r̂(t) back to Hedge, where r̂j (t) =
+p̂ (t)
+ it
+0
+
+if j = it
+otherwise
+
+Figure 5: The Hedge (top) and Exp3 (bottom) algorithms [14].
+
+3
+
+Automatic State Decomposition
+
+The decision of how to decompose the state space of a given system plays a dramatic role in the
+performance of the DPF. In our setting, with only two nested subproblems, the decomposition
+problem reduces to deciding in which order the two groups of variables should be sampled. This
+order can have a large impact both on the execution time and on the overall accuracy of the
+algorithm. If the system is non-stationary, the optimal order can change over time. For this reason,
+we need to design algorithms to automatically choose the optimal order.
+In this paper, we will adopt classical online bandit algorithms [14] to infer the sampling order.
+Note that these algorithms are however applicable to the more general problem of choosing state
+decompositions when splitting the state-space into more than two groups of variables.
+The first algorithm we consider is Hedge (Figure 5). Hedge chooses action i (out of K possible
+actions) at time t with P
+probability proportional to exp(ηGi (t − 1)) where η > 0 is a memory
+parameter and Gi (t) = tt0 =1 ri (t0 ) is the cumulative reward scored by action i from time 1 to t.
+Actions that repeatedly yield higher rewards quickly gain a higher probability of being selected.
+In our case, the actions are the different nesting orders. Different reward models are possible.
+We choose the closeness of the observations to the predicted observations as the reward measure.
+One drawback of Hedge is the fact that each action must be tried to pick the best action (Hedge
+assumes it has full information about the rewards). This is not ideal since it introduces a large
+overhead, especially when the number of actions is large. For this reason, we must introduce Exp3
+[14]. Exp3 stands for ”Exponential-weight algorithm for Exploration and Exploitation”. This
+algorithm assumes it has only partial information about the reward vector. Exp3 only tries one
+action at each iteration, and hence it only has information about one reward. Exp3 calls Hedge
+as a subroutine. For each time interval t, Exp3 receives the probability vector p(t) from Hedge,
+9
+
+and it selects an action it according to a new distribution, p̂(t), which is a mixture of p(t) and the
+uniform distribution. Using p̂(t) ensures that each action gets tried over time. After receiving the
+reward rit (t) associated with the chosen action, Exp3 must simulate a full reward vector r̂(t) for
+Hedge. That is, it must fill in the reward for the actions that were not tried (since Hedge requires
+this information). The pseudo-code is shown in Figure 5. Both Hedge and Exp3 have vanishing
+regret [14].
+
+4
+
+Simulation Results
+
+We conduct three experiments. The first experiment compares the performance of the look-ahead
+(LA)-DPF, bootstrap PF and DPF algorithms. To provide a meaningful comparison with results in
+the literature, we use the model benchmarks adopted in [9]. These are summarized in Table 1. The
+significant level of nonlinearity, multi-modality and non-stationarity in these models is sufficient
+to cause classical filtering algorithms, such as the extended Kalman filter, to fail. The second
+experiment investigates the difference between using a Gaussian approximation to evaluate (4),
+as opposed to our Monte Carlo strategy. In the third experiment, we study the behaviour of the
+automatic state ordering bandit methods.
+Table 1: Models used for testing the algorithms.
+Model 1: 2-dimensional example
+xt+1 = xt +
+
+zt
+1+zt2
+
+Model 2: 4-dimensional example
+x1,t+1 = 0.5x1,t + 8 sin t + vtx1
+x2,t+1 = 0.4x1,t + 0.5x2,t + vtx2
+
++ vtx
+
+zt+1 = xt + 0.5zt +
++8 cos(1.2t)
+
+25zt
+1+zt2
++ vtz
+
+z1,t+1 = z1,t +
+
+z2,t
+2
+1+z2,t
+
++ vtz1
+
+z2,t+1 = z1,t+1 + 0.5z2,t +
++8 cos(1.2t) + vtz2
+
+yt = arctan(xt ) +
+[x0 z0
+
+]T
+
+zt2
+20
+
+x1,t +x2,t
++ arctan(z1,t )
+1+x21,t
+T
+[x0 z0 ] 
+∼ N(0, I4×4 )
+
++ et
+
+yt =
+
+∼ N (0, I2×2 )
+
+1
+ 0
+
+vt ∼ N 
+0, 0
+0
+et ∼ N (0, 1)
+
+ 
+
+1 0.1
+vt ∼ N 0,
+0.1 1
+et ∼ N (0, 1)
+
+4.1
+
+25z2,t
+2
+1+z2,t
+
++
+
+2
+z2,t
+20
+
++ et
+
+
+0 0
+0
+
+1 0
+0
+
+0 1 0.1
+0 0.1 10
+
+Comparison between LA-DPF, DPF, and PF
+
+The objective of this experiment is to evaluate the performance of the proposed LA-DPF algorithm
+with respect to the existing DPF and standard PF algorithms. The simulations were carried out
+for 250 time intervals (t = 1, . . . , 250) with a varying number of particles Nx and Nz . The accuracy
+of the state estimate was measured using the root mean square error (RMSE) between the true
+state and the state estimate. The results were averaged over 500 Monte Carlo simulations. As in
+[9], the number of particles for the regular PF is set to Nx (Nz + 1) for meaningful comparison.
+10
+
+(a) Nx = 15
+
+(b) Nx = 15
+4
+PF
+DPF
+LA−DPF
+
+3
+
+RMSE z
+
+RMSE x
+
+4
+
+2
+1
+
+3
+2
+1
+
+1
+
+5
+
+9
+Nz
+
+19
+
+1
+
+5
+
+19
+
+(d) Nx = 50
+
+4
+
+4
+
+3
+
+3
+
+RMSE z
+
+RMSE x
+
+(c) Nx = 50
+
+9
+Nz
+
+2
+1
+
+2
+1
+
+1
+
+5
+
+9
+Nz
+
+19
+
+1
+
+5
+
+9
+Nz
+
+19
+
+Figure 6: Comparison among the PF, DPF and LA-DPF algorithms for model 1. The plots show the RMSE
+(mean and error bars) for the states x and z respectively as a function of the number of particles. Note that
+even in a sequential implementation, LA-DPF outperforms the standard PF in terms of this measure.
+
+(a) N =15
+
+x
+
+40
+DPF
+LA−DPF
+% Divergence
+
+80
+% Divergence
+
+5
+
+60
+40
+20
+1
+
+5
+
+9 19
+Nz
+
+30
+
+RMSE(norm)
+
+100
+
+0
+
+(c)
+
+(b) N =50
+
+x
+
+20
+10
+0
+
+4
+
+PF
+DPF
+LA−DPF
+
+3
+
+2
+
+1
+
+5
+
+9 19
+Nz
+
+1
+
+0
+2
+4
+6
+Computing time per time step (msec)
+
+Figure 7: Comparison of LA-DPF against DPF in terms of {(a),(b)} divergence rate for different numbers
+of particles and (c) attained RMSE as a function of computing power.
+
+The results are summarized in Figures 6 to 9. Figure 6 shows the RMSE (mean and 90% error
+bars) for the x and z states for different numbers of particles with model 1. It is clear from these
+plots that although PF can have lower error than DPF in a serial implementation of the algorithms
+
+11
+
+(b) Nx = 15
+
+9
+Nz
+
+(e) Nx = 50
+
+1
+
+19
+
+9
+Nz
+
+(i) Nx = 100
+
+RMSE z1
+5
+
+9
+Nz
+
+(j) Nx = 100
+RMSE x2
+
+5
+
+9
+Nz
+
+19
+
+5
+
+9
+Nz
+
+RMSE z2
+5
+
+9
+Nz
+
+19
+
+2
+
+1
+
+19
+
+5
+
+9
+Nz
+
+19
+
+(l) Nx = 100
+3
+
+2
+
+1
+
+9
+Nz
+
+(h) Nx = 50
+
+(k) Nx = 100
+
+19
+
+5
+
+3
+
+3
+
+2
+
+1
+
+1
+
+19
+
+2
+
+1
+
+19
+
+3
+
+2
+
+9
+Nz
+
+2
+
+(g) Nx = 50
+
+2
+
+1
+
+19
+
+5
+
+3
+
+RMSE z1
+
+RMSE x1
+
+RMSE x2
+5
+
+3
+
+RMSE x1
+
+9
+Nz
+
+3
+
+2
+
+1
+
+5
+
+3
+
+2
+
+(f) Nx = 50
+
+3
+
+1
+
+RMSE z1
+
+2
+
+1
+
+19
+
+(d) Nx = 15
+
+3
+
+RMSE z2
+
+5
+
+RMSE x2
+
+RMSE x1
+
+PF
+DPF
+LA−DPF
+
+2
+
+1
+
+(c) Nx = 15
+
+3
+
+RMSE z2
+
+(a) Nx = 15
+3
+
+5
+
+9
+Nz
+
+19
+
+2
+
+1
+
+5
+
+9
+Nz
+
+19
+
+Figure 8: Comparison among the PF, DPF and LA-DPF algorithms for model 2. The plots show the RMSE
+(mean and error bars) for the states x1 , x2 , z1 and z2 as a function of the number of particles. Note that
+LA-DPF outperforms both DPF and PF.
+
+(as also reported in [9]), the same is not true for LA-DPF. LA-DPF does significantly better as a
+function of the number of particles. Plots (a) and (b) of Figure 7 illustrate that for the same number
+of particles, the divergence rate of the DPF is higher than the one for LA-DPF. The difference is
+more significant for higher Nx . All methods work well for a reasonable number of particles. Figure 7
+(c) is a scatter plot for runs with multiple random Nx and Nz values. It illustrates the accuracy
+versus computation time trade-off for DPF and LA-DPF. The latter can attain much lower error
+than the PF and DPF variants. We should point out that both DPF and LA-DPF can equally
+benefit from parallel implementation as they follow the same state-decomposition strategy to reduce
+the cost of resampling. We should also note that for some transition models, the execution time of
+LA-DPF could be decreased even further using kd-trees as proposed in [17].
+Figures 8 and 9 are the results for Model 2, and are analogous to Figures 6 and 7, respectively.
+Again, it can be seen that LA-DPF performs significantly better than PF and DPF (or at worst,
+the performance is equivalent). Also, the divergence rate is much smaller for the LA-DPF than for
+the DPF. Similar conclusions to the ones for Model 1 can be drawn when it comes to the accuracy
+versus computation trade-off.
+
+12
+
+(b) Nx =50
+
+30
+
+% Divergence
+
+% Divergence
+
+DPF
+LA−DPF
+
+20
+
+10
+
+0
+
+10
+
+10
+
+8
+
+8
+% Divergence
+
+40
+
+6
+4
+2
+
+5
+
+9
+Nz
+
+19
+
+0
+
+9
+Nz
+
+19
+
+6
+4
+
+0
+
+4.5
+
+4
+
+PF
+DPF
+LA−DPF
+
+3.5
+
+3
+
+2
+
+5
+
+(d)
+
+(c) Nx =100
+
+RMSE(norm)
+
+(a) Nx =15
+
+5
+
+9
+Nz
+
+19
+
+2.5
+
+0
+2
+4
+6
+8
+Computing time per time step (msec)
+
+Figure 9: The first 3 columns show the divergence plots for model 2. Again, for any number of particles the
+DPF has a higher likelihood of diverging than the LA-DPF. The rightmost column compares the LA-DPF
+against the PF and DPF in terms of attained RMSE as a function of computing power.
+
+Table 2: Average RMSE for DPF (Gaussian) and DPF (Monte Carlo) algorithms, Nx = 100, Nz = 19 (100
+runs)
+
+RMSEx
+RMSEz
+
+4.2
+
+Gaussian approximation
+1.3197
+1.1705
+
+Monte Carlo approximation
+1.3216
+1.1640
+
+Comparison between DPF with Gaussian and Monte Carlo approximations
+
+We note that in [9], a Gaussian approximation is used to estimate the proposal distribution (4). It
+is however possible to use Monte Carlo approximations instead of Gaussian approximations. We
+carried experiments to verify that both approaches yield similar results for the model of Table 1.
+We ran the DPF with Gaussian approximation and the DPF with Monte Carlo approximation to
+compare their respective RMSEs. The experiment was performed 100 times, with Nx = 100 and
+Nz = 19. Table 2 shows the results. The results in terms of the RMSE are equivalent (within 1% of
+one another). However, the Monte Carlo method has the advantage of being universal in the sense
+that it does not require any assumption on the types of distributions that we are dealing with. It
+should be expected that for non-standard noise models, Gaussian approximation could result in
+very poor performance.
+
+4.3
+
+Automatic state decomposition for the two dimensional example
+
+In this experiment, we use Hedge and Exp3 to choose the optimal sampling order among two actions
+(action 1= sampling x first, then z, action 2 = sampling z first, then x). We tried each action
+separately and verified that this ordering has a large effect on the RMSE.
+α
+We designed the reward function to be rit = α+
+2 (0 < rit ≤ 1), where α is a small number (say
+t
+0.001) and t is the difference between the one-step-ahead predicted observation and the actual
+observation. Other functionals of  could also work just as easily.
+
+13
+
+Figure 10 shows the evolution of the probability for the two actions as a function of time for
+γ = 0.2 and η = 0.5 for both algorithms. The algorithms are able to converge to the action with
+the lowest RMSE. As expected, Hedge converges faster and more smoothly than Exp3. However,
+as the state space grows, Hedge becomes much less efficient than Exp3 because it relies on trying
+every action at each time step. Therefore, Exp3 is preferred.
+(b)
+1
+
+0.8
+
+0.8
+
+0.6
+
+Probability
+
+Probability
+
+(a)
+1
+
+Action 1
+Action 2
+
+0.4
+
+Action 1
+Action 2
+
+0.4
+0.2
+
+0.2
+0
+
+0.6
+
+0
+
+100
+
+200
+
+300
+
+400
+
+0
+
+500
+
+0
+
+100
+
+200
+
+Time
+
+300
+
+400
+
+500
+
+Time
+
+Figure 10: Automatic state decomposition using (a) Hedge and (b) Exp3.
+In another experiment, we introduce a change point at t = 600, so as to also assess whether
+the bandit algorithm can adapt. For the change-point, we simply swap the transition models for
+model 1. We observed the same behavior with model 2.
+Figure 11 (a) shows the evolution of the probability for the two actions as a function of time
+for γ = 0.2 and η = 0.5. The algorithm is able to converge to the action with the lowest RMSE.
+After the change-point, the algorithm is able to gradually adapt. The rate of this adaptation is
+controlled by the hyper-parameters of the control algorithm. It should be noted that we chose a
+very dramatic artificial change-point, which perturbs stability of the particle filters significantly.
+In practical applications we would expect more gradual model drift and, hence, better adaptation.
+Plot (b) shows the action sequence for the last 100 time steps and Table (c) compares the RMSE
+values incurred by Exp3 and the fixed action policies for the last 1000 time steps. As expected,
+Exp3 achieves a better result than the worst action. If we know our setting is stationary, then we
+can stop adapting and attain the same RMSE as the best action.
+(b)
+
+(a)
+
+(c)
+3000 < t ≤ 4000
+
+2
+
+0.8
+0.6
+
+Action 1
+Action 2
+
+0.4
+
+Action
+
+Probability
+
+1
+
+0.2
+0
+
+1
+0
+
+1000
+
+2000
+
+3000
+
+4000
+
+3900
+
+3950
+
+Time
+
+Time
+
+4000
+
+Case
+
+RMSE
+
+action 1
+action 2
+Exp3
+
+0.8485
+0.5788
+0.7564
+
+Figure 11: Automatic state decomposition using Exp3 when introducing a change point. a) Evolution of
+probability of each action, where the red dot indicates the time step at which we switch the models, b) Action
+sequence for the last 100 time steps, c) Comparison of the RMSE for action 1, action 2, and Exp3 for the
+last 1000 time steps.
+
+14
+
+5
+
+Concluding Remarks and Future Work
+
+The DPF algorithm is a new ingenious particle filter that holds great promise. In this paper,
+we proposed two algorithmic improvements: a look-ahead formulation and an automatic statedecomposition strategy. The look-ahead strategy performed remarkably well. Even though the
+original motivation for the DPF was to improve the parallelization level of particle filters, our
+experiments show that the look-ahead strategy works better than the widely used PF algorithm
+even in a serial implementation.
+In the experiments we also assessed the performance of the state-decomposition strategy using
+Exp3. The simple demonstration made it clear that it is possible to use bandits to automatically
+configure the filter. However, we also must point out that this set up was simple enough that
+Exp3 could handle it. As we move on to more sophisticated partitioning schemes, it will become
+necessary to adopt more powerful control strategies using correlated bandit strategies or Bayesian
+optimization; see for example [18, 19, 20, 21, 22].
+The immediate future work directions are to test the look-ahead DPF on practical settings
+and to carry out an empirical evaluation using GPUs. A longer term goal is to increase the level
+of partitioning (having more than two levels of nesting) of the state space. How such a strategy
+behaves in high-dimensions is of great interest. Another long term goal is to capitalize on the ideas
+proposed here to distribute the observations across multiple cores. That is, both the states and the
+observations should be decomposed for greater applicability to vast streaming datasets.
+
+Acknowledgements
+We would like to thank Arnaud Doucet, Alex Smola and Anthony Lee for useful discussions on this
+topic, which to a large extent shaped this paper. This work was supported by NSERC.
+
+References
+[1] A. Doucet, N.J. Gordon, and V. Krishnamurthy. Particle filters for state estimation of jump
+Markov linear systems. IEEE Transactions on Signal Processing, 49(3):613–624, 2001.
+[2] A. Doucet, N. de Freitas, K. Murphy, and S. Russell. Rao-Blackwellised particle filtering for
+dynamic Bayesian networks. In Uncertainty in Artificial Intelligence, pages 176–183, 2000.
+[3] N. de Freitas. Rao-Blackwellised particle filtering for fault diagnosis. In IEEE Aerospace
+Conference, volume 4, pages 1767–1772, 2002.
+[4] M. Montemerlo, S. Thrun, D. Koller, and B. Wegbreit. FastSLAM: a factored solution to
+the simultaneous localization and mapping problem. In National Conference on Artificial
+Intelligence (AAAI), pages 593–598, 2002.
+[5] N. de Freitas, R. Dearden, F. Hutter, R. Morales-Menendez, J. Mutch, and D. Poole. Diagnosis
+by a waiter and a Mars explorer. Proceedings of the IEEE, 92(3):455–468, 2004.
+[6] T. Schon, F. Gustafsson, and P.-J. Nordlund. Marginalized particle filters for mixed linear/nonlinear state-space models. IEEE Transactions on Signal Processing, 53(7):2279–2289,
+2005.
+15
+
+[7] F. Caron, M. Davy, E. Duflos, and P. Vanheeghe. Particle filtering for multisensor data fusion
+with switching observation models: Application to land vehicle positioning. IEEE Transactions
+on Signal Processing, 55(6):2703 –2719, 2007.
+[8] L. Liao, D. J. Patterson, D. Fox, and H. Kautz. Learning and inferring transportation routines.
+Artificial Intelligence, 171(5-6):311–331, 2007.
+[9] T. Chen, T.B. Schon, H. Ohlsson, and L. Ljung. Decentralized particle filter with arbitrary
+state decomposition. IEEE Transactions on Signal Processing, 59(2):465–478, 2011.
+[10] M. Bolic, P.M. Djuric, and S. Hong. Resampling algorithms and architectures for distributed
+particle filters. IEEE Transactions on Signal Processing, 53(7):2442–2450, 2005.
+[11] J. Mı́guez. Analysis of parallelizable resampling algorithms for particle filtering. Signal Processing, 87(12):3155–3174, 2007.
+[12] A. Lee, C. Yau, M. B. Giles, A. Doucet, and C. C. Holmes. On the utility of graphics
+cards to perform massively parallel simulation of advanced Monte Carlo methods. Journal of
+Computational and Graphical Statistics, 19(4):769–789, 2010.
+[13] A. Ahmed, Q. Ho, J. Eisenstein, E. Xing, A. J. Smola, and C. H. Teo. Unified analysis of
+streaming news. In World Wide Web conference, pages 267–276. ACM, 2011.
+[14] P. Auer, N. Cesa-Bianchi, Y. Freund, and R. E Schapire. Gambling in a rigged casino: the
+adversarial multi-armed bandit problem. Technical Report NC2-TR-1998-025, NeuroCOLT2
+Technical Report Series, 1998.
+[15] A. Doucet, N. de Freitas, and N. Gordon. An introduction to sequential Monte Carlo methods.
+Sequential Monte Carlo methods in practice, pages 3–14, 2001.
+[16] A. Doucet, S. Godsill, and C. Andrieu. On sequential Monte Carlo sampling methods for
+Bayesian filtering. Statistics and computing, 10(3):197–208, 2000.
+[17] M. Klaas, N. De Freitas, and A. Doucet. Toward practical N 2 Monte Carlo: The marginal
+particle filter. Uncertainty in Artificial Intelligence, 2005.
+[18] L. Li, W. Chu, J. Langford, and R. E. Schapire. A contextual-bandit approach to personalized
+news article recommendation. In World Wide Web Conference, pages 661–670, 2010.
+[19] E. Brochu, V. M. Cora, and N. de Freitas. A tutorial on Bayesian optimization of expensive
+cost functions with application to active user modeling and hierarchical reinforcement learning.
+eprint arXiv:1012.2599, arXiv, 2010.
+[20] N. Srinivas, A. Krause, S. M. Kakade, and M. Seeger. Gaussian process optimization in the
+bandit setting: No regret and experimental design. In International Conference on Machine
+Learning, 2010.
+[21] D. Lizotte, R. Greiner, and D. Schuurmans. An experimental methodology for response surface
+optimization methods. Journal of Global Optimization, pages 1–38, 2011.
+[22] F. Hutter. Automating the Configuration of Algorithms for Solving Hard Computational Problems. PhD thesis, University of British Columbia, Vancouver, Canada, 2009.
+
+16
+
+

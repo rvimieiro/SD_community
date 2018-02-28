@@ -1,0 +1,2556 @@
+SEAL: Spatio-Textual Similarity Search
+Ju Fan
+
+Guoliang Li
+
+Lizhu Zhou
+
+Shanshan Chen
+
+Jun Hu
+
+Department of Computer Science and Technology, Tsinghua National Laboratory for Information
+Science and Technology (TNList), Tsinghua University, Beijing 100084, China.
+
+arXiv:1205.6694v1 [cs.DB] 30 May 2012
+
+fan-j07@mails.tsinghua.edu.cn, liguoliang@tsinghua.edu.cn,
+dcszlz@tsinghua.edu.cn, aarifc33@gmail.com, j-hu08@mails.tsinghua.edu.cn
+ABSTRACT
+
+Existing LBS systems employ a spatial keyword search
+approach to provide LBS services [9, 7], which, given a set
+of points of interest (POIs), and a user query with location
+and keywords, finds all relevant POIs. For example, if a
+user wants to find the coffee shops nearby, she can issue
+a keyword query “coffee shop” to an LBS system, which
+returns the relevant coffee shops by considering the user’s
+location and query keywords.
+Recently, many modern LBS applications generate a new
+kind of spatio-textual data, regions-of-interest (ROIs), containing region-based spatial information and textual description. For example, in Facebook Places, mobile users have
+profiles consisting of active regions and interest tags. In
+wildlife monitoring, wild species with their habitats and descriptive features can be modeled by ROIs.
+To satisfy search requirements on ROIs, we introduce a
+new research problem, called spatio-textual similarity search
+in this paper: Given a set of ROIs and a query ROI, we aim
+to find the ROIs which are similar to the query by considering spatial overlap and textual similarity.
+Spatio-textual similarity search can satisfy users’ information needs in various real applications. The first one
+is location-based social marketing using Facebook Places.
+As mentioned above, in Facebook Places, mobile users have
+profiles that can be modeled by ROIs. For example, consider some users in Manhattan who are interested in tea and
+coffee. A coffee shop (e.g., starbucks) can utilize user profiles in Facebook to provide location-specific advertisements
+to the potential customers who not only are interested in its products (e.g., {starbucks, mocha, coffee}) but also have
+region-based spatial overlap with its service area. Another
+example is friend recommendation in location-aware social
+networks, e.g., Facebook, Foursquare and Twitter3 . Spatiotextual similarity search helps mobile users find potential
+friends with common interests (e.g., playing basketball)
+and overlap regions (e.g., Brooklyn), and thus facilitates
+users to form various kinds of circles with the same interests,
+such as sport games, shopping, and fans’ activities. Spatiotextual similarity search can also support other applications, e.g., wildlife protection. Wild species have their habitats
+(e.g., Yellowstone National Park for grizzly bears) and features (e.g., mammal, omnivore, etc.). A zoologist can issue a
+query to find all wild species having certain features (e.g.,
+mammal) and inhabiting in a specific region (e.g., Idaho).
+In this paper, we formalize the problem of spatio-textual
+similarity search, and study the research challenges that naturally arise in this problem. A challenge is how to evaluate
+
+Location-based services (LBS) have become more and more
+ubiquitous recently. Existing methods focus on finding relevant points-of-interest (POIs) based on users’ locations and
+query keywords. Nowadays, modern LBS applications generate a new kind of spatio-textual data, regions-of-interest
+(ROIs), containing region-based spatial information and textual description, e.g., mobile user profiles with active regions
+and interest tags. To satisfy search requirements on ROIs,
+we study a new research problem, called spatio-textual similarity search: Given a set of ROIs and a query ROI, we find
+the similar ROIs by considering spatial overlap and textual
+similarity. Spatio-textual similarity search has many important applications, e.g., social marketing in location-aware
+social networks. It calls for an efficient search method to
+support large scales of spatio-textual data in LBS systems.
+To this end, we introduce a filter-and-verification framework
+to compute the answers. In the filter step, we generate signatures for the ROIs and the query, and utilize the signatures
+to generate candidates whose signatures are similar to that
+of the query. In the verification step, we verify the candidates and identify the final answers. To achieve high performance, we generate effective high-quality signatures, and
+devise efficient filtering algorithms as well as pruning techniques. Experimental results on real and synthetic datasets
+show that our method achieves high performance.
+
+1. INTRODUCTION
+Nowadays, as mobile devices (e.g., smartphones) with builtin global position systems (GPS) become more and more
+popular, location-based services (LBS) have been widely accepted by mobile users and attracted significant attention
+from both the academic and industrial community. Many
+location-based services, such as Foursquare1 and Facebook
+Places2 , bring unique location-aware experiences to users.
+1
+2
+
+http://foursquare.com
+http://www.facebook.com/placesband
+
+Permission to make digital or hard copies of all or part of this work for
+personal or classroom use is granted without fee provided that copies are
+not made or distributed for profit or commercial advantage and that copies
+bear this notice and the full citation on the first page. To copy otherwise, to
+republish, to post on servers or to redistribute to lists, requires prior specific
+permission and/or a fee. Articles from this volume were invited to present
+their results at The 38th International Conference on Very Large Data Bases,
+August 27th - 31st 2012, Istanbul, Turkey.
+Proceedings of the VLDB Endowment, Vol. 5, No. 9
+Copyright 2012 VLDB Endowment 2150-8097/12/05... $ 10.00.
+
+3
+
+824
+
+http://www.twitter.com
+
+the similarity between two ROIs. Another challenge is how
+to achieve high search efficiency as LBS systems are required
+to support millions of users and respond to queries in milliseconds. Given a query ROI, there may be a huge amount
+of ROIs having significant overlaps with the query, thus it
+is rather expensive to find similar answers. Take the real
+dataset Twitter in our experiments (See Section 6) as an
+example. We used a set of query regions in an average area
+of 0.4 square kilometers. Even for one of the small query
+regions, there were, on average, 8000 ROIs overlapping with
+it. Moreover, similarity search needs to consider both spatial
+and textual similarities. To address these challenges, we propose an efficient Spatio-tExtuAl simiLarity search method,
+called Seal-Search. We combine spatial similarity functions and textual similarity functions to quantify the similarity
+between two ROIs. To provide high performance, we introduce a filter-and-verification framework to compute the
+answers. In the filter step, our method generates signatures
+for spatio-textual objects and queries, and utilizes the signatures to generate candidates whose signatures are similar to
+those of the queries. In the verification step, it verifies the
+candidates and identifies the final answers. We develop effective techniques to generate signatures and devise efficient
+filtering algorithms to prune dissimilar objects.
+To summarize, we make the following contributions.
+• To the best of our knowledge, we are the first to study
+spatio-textual similarity search on ROIs. We propose a
+filter-and-verification framework and signature-based
+filtering algorithms to address this problem.
+
+Query
+
+q: (Rq, {t1, t2, t3})
+
+R1
+Rq
+
+Objects
+
+o1: (R1, {t1, t2})
+o2: (R2, {t1, t2, t3})
+o3: (R3, {t3, t4, t5})
+o4: (R4, {t2, t3, t5})
+o5: (R5, {t1, t2, t5})
+o6: (R6, {t2, t4})
+o7: (R7, {t5})
+
+120
+
+R5
+
+g13 R2 g14
+
+g15
+
+100
+
+g16
+
+R4
+g9
+
+g10
+
+g11
+
+g5 R6
+
+g6
+
+g7
+
+g8
+
+g1
+
+g2
+
+g3
+
+g4
+
+R3
+
+80
+
+g12
+
+60
+
+R7
+
+40
+20
+
+Tokens (idf)
+t1:mocha(0.8), t2:coffee(0.3),
+t3:starbucks(0.8), t4: ice(1.3),
+t5: tea (0.6)
+
+0
+
+20
+
+40
+
+60
+
+80
+
+100
+
+0
+120
+
+Figure 1: An example of spatio-textual similarity
+search with objects {o1 , o2 , . . . , o7 } and query q.
+
+• For effective spatial pruning, we devise grid-based signatures and develop threshold-aware pruning techniques.
+• To utilize spatial and textual pruning simultaneously,
+we judiciously select high-quality signatures and devise
+efficient hybrid filtering algorithms.
+
+set of tokens q.T = {t1 , t2 , . . . , t|q.T | }. Given a set of objects
+O = {o1 , o2 , . . . , o|O| }, the answers of query q are a set of
+objects A ⊆ O similar to q, i.e., for o ∈ A,
+(1) The Spatial Similarity simR (q, o) ≥ τR , and
+(2) The Textual Similarity simT (q, o) ≥ τT ,
+where τR and τT are respectively spatial and textual similarity thresholds satisfying 0 ≤ τR , τT ≤ 1. Notice that we use
+the two thresholds to allow users to determine the spatial
+relevance and textual relevance in a more flexible way.
+We quantify the spatial similarity based on the overlap
+of regions. Given two regions q.R and o.R, their overlap is
+formally defined as the area of the intersecting region of q.R
+and o.R, denoted by | q.R ∩o.R |. Note that we use operator
+| · | to represent both the cardinality of a set and the area of
+a region, if there is no ambiguity. Based on the overlap, we
+consider the Jaccard similarity in this paper.
+Definition 1 (Spatial Similarity). The spatial Jaccard similarity for two regions q.R and o.R is defined as
+
+• We have conducted extensive experiments on real and
+synthetic datasets. Experimental results show that our
+algorithms achieve high performance.
+The paper is organized as follows. The problem formulation and related works are presented in Section 2. We
+introduce a signature-based method in Section 3. We develop grid-based filtering algorithms in Section 4 and hybrid
+filtering algorithms in Section 5. Experimental results are
+provided in Section 6. Finally, we conclude the paper and
+discuss the future work in Section 7.
+
+simR (q, o) =
+
+| q.R ∩ o.R |
+,
+| q.R ∪ o.R |
+
+where | q.R ∪ o.R |=| q.R | + | o.R | − | q.R ∩ o.R |.
+For example, the overlap of regions o1 .R and q.R in Figure 1 is | q.R ∩ o1 .R |= 1000 and | q.R ∪ o1 .R |= 4400. Thus
+the spatial similarity is simR (q, o1 )=1000/4400=0.23. Note
+that our method can be easily extended to other overlapbased functions, such as Dice Similarity.
+On the other hand, textual similarity measures the similarity between two token sets q.T and o.T . Many token-set
+based similarity functions have been studied in string similarity join/search [5, 18, 21], such as Jaccard similarity, Dice
+similarity, Cosine similarity, etc. In this paper, we take the
+weighted Jaccard similarity as an example.
+
+2. PRELIMINARIES
+2.1 Problem Formulation
+Data Model. Our work focuses on supporting similarity
+search for a set of spatio-textual ROI objects (or objects for
+simplicity), O = {o1 , o2 , . . . o|O| }. Each object o ∈ O consists of spatial information o.R and textual information o.T ,
+denoted by o = (R, T ). The spatial information o.R is a
+region. We use the well-known minimum bounding rectangle (MBR) to represent region o.R through the bottom-left
+point and top-right point of the MBR. The textual description o.T is a set of tokens, i.e., {t1 , t2 , . . . , t|o.T | }, where each
+token t ∈ o.T is associated with a weight w(t) to capture its
+importance. Figure 1 illustrates an example of seven objects,
+each of which has several tokens and a region.
+Query Model. Our paper considers a spatio-textual similarity search query q that also consists of a region q.R and a
+
+Definition 2 (Textual Similarity). The textual
+similarity simT (q, o) between q.T and o.T is defined as the
+weighted Jaccard coefficient of the two token sets, i.e.,
+∑
+t∈q.T ∩o.T w(t)
+simT (q, o) = ∑
+,
+t∈q.T ∪o.T w(t)
+where w(t) is the weight of token t.
+
+In this paper we use the inverted document frequency (de|O|
+noted by idf) as token weight, i.e., w(t)=ln count(t,O)
+, where
+
+825
+
+count(t, O) is the number of objects containing token t. Figure 1 shows five distinct tokens (i.e., t1 ∼ t5 ) with their
+weights. Using
+( the weights,) we
+( compute textual similarity
+)
+simT (q, o1 ) = w(t1 )+w(t2 ) / w(t1 )+w(t2 )+w(t3 ) = 0.58.
+Based on the above-mentioned notations, we formalize the
+spatio-textual similarity search problem.
+
+R2
+
+R8
+
+R9
+
+R10
+
+t1 t2 t3 t5
+
+t1 t2 t3 t4 t5
+
+t2 t3 t5
+
+R5
+
+t1 t2 t3 t1 t2 t5
+
+Definition 3 (Spatio-Textual Similarity Search).
+Consider a set of spatio-textual objects O = {o1 , o2 , . . . , o|O| }
+and a spatio-textual similarity search query q = (R, T, τR , τT ).
+It returns the objects A ⊆ O such that spatial similarity
+simR (q, o) ≥ τR and textual similarity simT (q, o) ≥ τT , i.e.,
+A = {o | o ∈ O, simR (q, o) ≥ τR , simT (q, o) ≥ τT }.
+
+R1 R3
+
+R6
+
+t1 t2 t3 t4 t5 t2 t4
+
+R4
+
+R7
+
+t2 t3 t5
+
+t5
+
+Figure 2: The IR-tree index of objects in Figure 1.
+of set S(o) consisting of the first |S(o)| − c + 1 elements. It
+is easy to prove that if | S(q) ∩ S(o) |≥ c, their prefix sets
+must have overlap, i.e., S p (q)∩S p (o) ̸= ∅. Therefore, we can
+prune the dissimilar objects satisfying S p (q) ∩ S p (o) = ∅.
+We utilize the prefix filtering framework to prune dissimilar objects. Compared with existing methods, our method
+focuses on devising effective threshold-aware pruning based
+on judiciously selected spatio-textual signatures.
+Grid-Based Spatial Index Structures: The grid-based
+spatial indexes, such as Grid File and EXCELL, have been
+studied in spatial databases [17]. These methods decomposed the underlying space into a set of grids, and stored
+POIs into grids for fast access. We utilize grids in a different way: We employ grids as signatures of spatio-textual
+objects, and develop efficient spatial pruning techniques.
+
+Example 1. Consider the objects {o1 , o2 , . . . , o7 } and a
+query q = (Rq , {t1 , t2 , t3 }, 0.25, 0.3) in Figure 1. Object o2 =
+(R2 , {t1 , t2 , t3 }) is an answer since it satisfies simR = 0.32 ≥
+τR (0.25) and simT = 1 ≥ τT (0.3). In contrast, object o1 =
+(R1 , {t1 , t2 }, ) is not an answer due to simR = 0.23 < τR ,
+although satisfying simT = 0.58 ≥ τT . Considering all the
+objects in O, we obtain the answer of q, A = {o2 }.
+
+2.2 Related Work
+
+Spatial Keyword Search: There are many studies on
+spatial keyword search [25, 6, 11, 9, 23, 7, 24, 22, 3, 20,
+4, 16, 14, 13]. One problem is knn based keyword search,
+which, given a query consisting of a location and a set of keywords, finds top-k relevant POIs by considering distance and
+textual relevance. Felipe et al. [9] integrated signature files
+into R-tree, and Cong et al. [7] combined inverted files and
+R-tree. Another problem is region-based keyword search,
+which, given a query consisting of a region and a set of keywords, finds the relevant POIs relevant to the keywords in
+the region. The methods addressing the problem also employed the R-tree index, and integrated inverted lists of
+keywords into R-tree nodes [25, 11, 6].
+Our spatio-textual similarity search problem is substantially different from the above-mentioned problems. The underlying data is a set of spatio-textual objects consisting of
+regions and tokens (i.e., ROIs), rather than POIs. Moreover,
+the query model is different, and we focus on spatio-textual
+similarity between objects and queries and devise efficient
+filtering algorithms for similarity search.
+String Similarity Search/Join: The problem of string
+similarity search/join has been extensively studied [10, 1, 2,
+5, 18, 19, 12]. Given a set of strings and a query string,
+string similarity search finds the strings whose similarities
+to the query are not smaller than a threshold τ . Existing
+studies employed various functions, e.g., edit distance and
+Jaccard similarity, to quantify the similarity. To improve the
+performance, Chaudhuri et. al [5] proposed a prefix filtering
+framework, and Bayardo et al. [2] employed this framework
+to support Jaccard or Cosine similarity functions.
+The basic idea of prefix filtering is to estimate a similarity
+upper bound of two sets using their subsets. Consider a
+string object o and a query string q. The prefix filtering
+framework first maps both strings to sets, denoted by S(o)
+and S(q), and transforms various similarity functions to the
+overlap similarity on sets. More formally, if sim(q, o) ≥ τ ,
+then the sets satisfy | S(q)∩S(o) |≥ c, where c is a threshold
+deduced from τ . Then, the framework fixes a global order
+on the elements of all sets, and sorts the elements in each
+set based on the global order. Let S p (o) denote the prefix
+
+2.3
+
+Baseline Methods
+
+We introduce several straightforward methods to address
+the problem defined above, and will show their poor performance using experimental results (see Section 6).
+Keyword-first method. The method constructs inverted
+indexes by mapping tokens to objects containing the tokens.
+Given a query, it first finds the objects with simT ≥ τT
+as candidates. Then, it verifies whether simR ≥ τR . The
+drawback of the method is that it may generate too many
+candidates, leading to low search performance.
+Spatial-first method. The method first finds the objects
+with simR ≥ τR as candidates, and then filters the candidates
+whose simT < τT . The method may also generate too many
+candidates, and cannot find similar objects fast.
+Spatial keyword search based method. We can extend the IR-tree method [7] to support our spatio-textual
+similarity search as follows. Specifically, we construct an IRtree to index all objects, where each node contains an MBR
+and an inverted file which maps a token to the child nodes
+containing the token. In particular, we store the spatiotextual objects in leaf nodes. Given a query q = (R, T ), the
+IR-tree based algorithm traverses the tree from the root to
+its leaf nodes. The algorithm takes an intermediate node
+n as a candidate and visits its descendants, if 1) the spatial overlap |q.R ∩ n.R| ≥ cR and 2) the textual overlap
+∑
+t∈q.T ∩n.T w(t) ≥ cT , where cR and cT are thresholds derived from τR and τT , which will be discussed respectively
+in Sections 3 and 4. For a leaf node corresponding to an
+object, we verify whether its spatial and textual similarities
+to q are respectively not smaller than τR and τT .
+The algorithm may visit too many unnecessary nodes and
+lead to low search efficiency. We explain it by taking the
+objects in Figure 1 as an example. Using a maximum fanout 3, we can construct an IR-tree as shown in Figure 2,
+where leaf nodes correspond to objects and intermediate nodes (i.e., R8 , R9 and R10 ) are MBRs bounding the objects.
+For simplicity, we use R to represent both tree nodes and
+
+826
+
+Algorithm 1: SealSig (O, q)
+Input: O: An object set; q: A query
+Output: A: Answers of q
+1 begin
+2
+Generate signatures for O and build index I;
+3
+C = Sig-Filter (q, I) ;
+4
+A = Sig-Verify (q, C) ;
+5 end
+
+their regions. Given query q in Figure 1, the algorithm has
+to visit nodes R8 , R9 and R10 and verifies their leaf nodes to
+report the answer {o2 }. Obviously, it is unnecessary to visit
+the subtrees rooted at R9 and R10 as none of the five leaf
+nodes is similar to q. Therefore, the IR-tree-based methods
+have poor filtering power due to the hierarchical structure of
+the IR-tree. Moreover, the IR-tree maintains a tree based
+inverted index in each node for mapping tokens to its child
+nodes. Let H denote the height of the IR-tree. In the worst
+case, each token of every object needs to be indexed H times,
+and this results in high space complexity. To address these
+problems, in this paper we propose a novel method Seal.
+
+Function Sig-Filter(q, I)
+Input: q: A query; I: An inverted index
+Output: C: Candidate objects
+1 begin
+2
+Initialize a candidate set C ← ∅ ;
+3
+Generate signature, S(q) ← GenSig (q) ;
+4
+Compute signature similarity threshold c ;
+5
+for each element s in S(q) do
+6
+Obtain objects in inverted list I(s) ;
+(
+)
+7
+Merge objects with sim S(q), S(o) ≥ c to C ;
+
+3. THE SEAL METHOD
+In this section, we first introduce a filter-and-verification
+framework in Section 3.1, and then present a textual-based
+filtering algorithm in Section 3.2.
+
+3.1 A Filter-and-Veriﬁcation Framework
+
+8
+
+To answer a spatio-textual similarity search query efficiently, we want to prune dissimilar objects and only visit a
+small amount of objects that may be similar to the query.
+To this end, we propose a filter-and-verification framework.
+Step 1 - Filter: We prune a large amount of objects which
+cannot be similar to query q, and find a candidate set C,
+which is a superset of the answer set A.
+Step 2 - Verification: We verify the candidates generated
+in the filter step by checking whether spatial and textual
+similarities of each candidate are respectively not smaller
+than thresholds τR and τT , and return the answer set A.
+In this paper, we focus on the filter step and propose
+efficient signature-based filtering algorithms. Consider a
+spatio-textual object o ∈ O and a query q. We denote their
+signatures as S(o) and S(q), where each s ∈ S(o) (or S(q))
+is called a signature element (or element for simplicity). A
+signature method must satisfy the following property:
+o is similar to q only if S(o) and S(q) are similar.
+Specifically, given a signature similarity function sim(·)
+and a threshold c deduced from thresholds
+(
+)τR and τT , the
+object o is similar to q only if sim S(q), S(o) ≥ c.
+A naı̈ve method for generating candidates( enumerates
+) the
+signature of each object o and checks if sim S(q), S(o) ≥ c.
+If so, we add o into candidate set C. However this method
+is rather expensive and we want to build indexes to support
+efficient filtering, which will be discussed later.
+Next we introduce our algorithm SealSig and Figure 3
+illustrates the pseudo-code. We first generate the signatures
+for objects in O and build an index on top of the signatures
+(line 2). Then for a query q, we use the index to find its
+candidate set C (line 3). Finally, we verify the candidates in
+C and return the answer set A (line 4).
+In this paper we focus on generating effective signatures,
+building indexes and devising efficient filtering algorithms.
+
+end
+
+Function Sig-Verify(q, C)
+Input: q: A query; C: A set of candidate objects
+Output: A: Answers of q
+1 begin
+2
+for each object o ∈ C do
+3
+if simR (q,
+∪ o) ≥ τR & simT (q, o) ≥ τT then
+A ← A {o} ;
+4
+
+end
+
+Figure 3: A Filter-and-Verification Framework
+Then, we define the similarity between signatures ST (o)
+and ST (q)
+of their common tokens,
+( as the weight
+) summation
+∑
+i.e., sim ST (q), ST (o) =
+w(t), and threshold
+t∈S
+(q)∩S
+T
+T (o)
+∑
+cT = τT · s∈ST (q) w(t). It is easy to prove that simT (q, o) ≥
+∑
+τT only if t∈ST (q)∩ST (o) w(t) ≥ cT . For example, we can respectively generate textual signatures for o1 and q as ST (o1 ) =
+{t1 , t2 } and ST (q) = {t1 , t2 , t3 }. Given τT = 0.3, the threshold cT can be∑
+computed as 0.57. Obviously, since simT (q, o) ≥
+τT , we have t∈ST (q)∩ST (o7 ) w(t) ≥ cT .
+
+Indexing Structures. To
+every object
+( avoid enumerating
+)
+o ∈ O for computing sim S(q), S(o) , we build an inverted
+index on top of the signatures. Formally, an inverted index
+I consists of a set of inverted lists, each of which maps an
+element s to the objects containing the element, denoted by
+I(s). Figure 4 provides the inverted index of the objects in
+Figure 1. For example, since the signatures of object o3 and
+o6 contain element t4 , the inverted list of t4 is {o3 , o6 }. In
+addition, since o2 has textual signature ST (o2 ) = {t1 , t3 , t2 },
+the object is contained in the inverted lists of t1 , t3 and t2 .
+Filtering Algorithm. Given a query q with thresholds
+τR and τT , the filtering algorithm Sig-Filter in Figure 3
+is utilized to filter dissimilar objects and find the candidates with
+signatures
+similar to S(q), i.e., C = {o | o ∈
+(
+)
+O, sim S(q), S(o) ≥ c}. Specifically, the algorithm generates a signature for q, i.e., S(q) ← GenSig(q), and computes
+threshold c. For each element s ∈ S(q), Sig-Filter probes
+inverted list I(s) from the inverted
+index) I, and merges the
+(
+objects in I(s) satisfying sim S(q), S(o) ≥ c to C.
+
+3.2 A Textual-Based Filtering Algorithm
+We introduce a textual-based filtering algorithm.
+Textual Signatures. Since object o similar to query q
+must satisfy simT (q, o) ≥ τT , we can use the tokens in o as its
+textual signature, i.e., ST (o) = o.T , where each token t ∈ o.T
+is a signature element. Similarly, we can also generate a
+textual signature for q, i.e., ST (q) = q.T .
+
+827
+
+ST (q) = { t1
+
+t3
+
+t2 }
+
+t4
+
+t1
+
+t3
+
+t5
+
+t2
+
+o3
+o6
+
+o2
+o5
+o1
+
+o4
+o3
+o2
+
+o5
+o4
+o7
+o3
+
+o6
+o5
+o4
+o2
+o1
+
+Inverted
+Index
+
+ST (o2) ={ t1
+
+t3
+
+t2 }
+
+Signature Similarity
+Threshold cT=0.57
+
+Signature Prefix
+
+SR (q) = { g7 g10 g11 g14 g15 g6 } cR=600
+w(g|q)
+
+Candidates:
+
+o1
+o2
+o3
+o4
+o5
+
+… g7
+
+sim(ST(q),ST(o1))=1.1
+sim(ST(q),ST(o2))=1.9
+sim(ST(q),ST(o3))=0.8
+sim(ST(q),ST(o4))=1.1
+sim(ST(q),ST(o5))=1.1
+
+Result: {
+
+g9
+
+750
+
+450
+
+g10
+
+500
+
+g11
+
+300
+
+g13
+
+250
+
+g14
+
+g15
+
+g6 …
+
+o7
+
+o1
+
+o1
+
+o5
+
+o1
+
+o1
+
+o5
+
+o3
+
+(2050)
+
+(3000)
+
+(2400)
+
+(1100)
+
+(1800)
+
+(900)
+
+(300)
+
+(500)
+
+Threshold
+Bound
+
+o2 }
+
+150
+
+o2
+
+o2
+
+o2
+
+o2
+
+o2
+
+o2
+
+o7
+
+(1750)
+
+(1525)
+
+(1075)
+
+(700)
+
+(550)
+
+(250)
+
+(250)
+
+o6
+(150)
+
+Figure 4: Textual signature based method.
+
+SR (o2) ={ g9 g10 g11 g13 g14 g15} Inverted
+w(g|o2)
+
+Example 2. We use an example to illustrate how algorithm SealSig works using textual signatures, as shown in
+Figure 4. Consider the objects and query q with thresholds
+τR = 0.25 and τT = 0.3 in Figure 1. The algorithm generates
+the textual signature ST (o) for every object o ∈ O, and then
+builds the inverted index on top of the signatures. Given
+query q, the algorithm Sig-Filter generates its textual signature ST (q) = {t1 , t2 , t3 } and computes the threshold cT =
+0.57. Then, it probes the inverted lists of (t1 , t3 and )t2 , and
+finds the candidate objects satisfying sim S(q), S(o) ≥ cT ,
+i.e., C = {o1 , o2 , o3 , o4 , o5 }. Finally, Sig-Verify verifies the
+candidates and reports the answer A = {o2 }.
+
+225
+
+450
+
+375
+
+150
+
+300
+
+250
+
+Index
+
+Figure 5: Threshold-aware pruning.
+We only consider the uniform grids with equal size, i.e.,
+|gi | = |gj | (i ̸= j) in this section, and will extend our techniques to support grids with different sizes in Section 5. Figure 1 provides an example of uniform grids G = {g1 , . . . , g16 }
+obtained by a 4 × 4 partition of the space R for regions
+{R1 , R2 , . . . , R7 }. Then, we define the grid-based signature
+of object o (query q), denoted by SR (o) (SR (q)), as the grids
+intersecting with region o.R (q.R) in Definition 4.
+Definition 4 (Grid-Based Signature). Given object o, the grid-based signature of o is the grids in G intersecting
+with region o.R, i.e., SR (o) = {g | g ∈ G, g ∩ o.R ̸= ∅}.
+
+The algorithm SealSig using textual signatures has a
+limitation that it fails to consider the spatial information.
+Recall that an object o is similar to query q if and only
+if textual similarity simT (q, o) ≥ τT and spatial similarity
+simR (q, o) ≥ τR . Obviously, it is rather limited to only consider the textual information. For example, consider object
+o4 in Figure 1. Although the textual similarity is larger than
+τT , o4 is not similar to q since its region R4 is dissimilar to
+Rq . To address this problem, we propose to generate spatial
+signatures for objects and queries, and devise efficient filtering algorithms using spatial signatures for spatial pruning
+in Section 4. In order to utilize spatial and textual pruning simultaneously, we develop more efficient hybrid filtering
+algorithms in Section 5.
+
+For example, Figure 5 shows the grid-based signature of
+object o2 , SR (o2 ) = {g9 , g10 , g11 , g13 , g14 , g15 }.
+Next, we define similarity between grid-based signatures
+SR (q) and S(R (o) as weight
+of their common grid) summation
+∑
+s, i.e., sim SR (q), SR (o) =
+g∈SR (q)∩SR (o) w(g | q, o), where
+w(g | q, o) is the weight of grid g with respect to query q
+and object o. Intuitively, the weight captures the degree of
+spatial similarity between q and o contributed by g.
+It is not straightforward to define grid weight due to the
+following reason. Ideally, if grid g is shared by q and o, the
+weight should be the area of the intersecting region of q and
+o in the grid, i.e., w(g | q, o) = |q.R ∩ o.R ∩ g|. However, in
+practice, it is expensive to compute |q.R ∩ o.R ∩ g| at the
+query time. Thus, we propose to employ an upper bound of
+|q.R ∩ o.R ∩ g| to estimate the weight as,
+{
+}
+w(g | q, o) = min w(g | q), w(g | o) ,
+(1)
+
+4. GRID-BASED FILTERING ALGORITHM
+In this section, we propose a grid -based filtering algorithm. We first define the grid-based signature in Section 4.1,
+and then devise a threshold-aware pruning technique in Section 4.2. Finally, we discuss how to select grid granularity
+to achieve better performance in Section 4.3.
+
+where w(g | o) (w(g | q)) is the weight of grid g with respect
+to object o (or query q), and can be estimated by w(g | o) =
+|g ∩ o.R| or w(g | q) = |g ∩ q.R|.
+In addition, we define the threshold cR to be the area of
+region q.R multiplied by threshold τR , i.e., τR · |q.R|. Now,
+we can prove that the grid-based signature satisfies the key
+property of signatures, as shown in Lemma 1.
+
+4.1 Grid-Based Signatures
+Different from textual signatures, as the spatial information has no inherent elements (e.g., tokens), it is not straightforward to generate spatial signatures for objects in O and
+query q. To address this challenge, we propose to partition
+the entire space R which is the MBR of the regions of all
+objects in O, and generate a set of grids. Then, for an object
+o, we use the grids intersecting with region o.R as its spatial
+signature. More formally, let G = {g1 , g2 , . . . , g|G| } be a set
+of grids in space R, where each grid is also an MBR, and
+the grids have the following properties.
+∪
+1) Completeness: All grids cover the space, i.e., g∈G = R.
+
+Lemma
+( 1. Spatial)similarity satisfies simR (q, o) ≥ τR , only if sim SR (q), SR (o) ≥ cR .
+Proof. The proofs are in our technical report [8].
+For example, in Figure 5, based on the grids {g1 , . . . , g16 },
+we generate grid-based signatures, SR (q) and SR (o2 ), for
+query q and object o2 . We also compute grid weights, e.g.,
+w(g10 | q) = 750, w(g(10 | o2 ) = 450.
+) Thus, we obtain signature similarity sim SR (q), SR (o2 ) = 1375. Obviously, we
+(
+)
+have sim SR (q), SR (o) ≥ τR · |q.R| = 600.
+
+2) Disjointness: Each pair of different grids is disjoinable,
+i.e., ∀i, j, if i ̸= j, gi ∩ gj = ∅.
+
+828
+
+4.2 Threshold-Aware Pruning
+
+Function Sig-Filter+ (q, I)
+Input: q: A query; I: An inverted index
+Output: C: Candidate objects
+1 begin
+2
+Initialize candidate set C ← ∅ ;
+3
+Generate signature, S(q) ← GenSig (q) ;
+4
+Compute signature similarity threshold c ;
+5
+Select prefix Sp (q) for query q ;
+6
+for each element s in Sp (q) do
+7
+Find the
+I c (s) from inverted list I(s) ;
+∪ objects
+c
+8
+C ← C I (s) ;
+
+Based on grid-based signatures, a straightforward method
+to filter dissimilar objects is to simply employ the algorithm
+Sig-Filter in Figure 3. The algorithm probes inverted lists
+of grids
+in signature
+SR (q), and inserts the objects satisfying
+(
+)
+sim SR (q), SR (o) ≥ cR into candidate set C. However algorithm Sig-Filter has the following limitations. Firstly, for
+a large query region q.R, since it may generate many grids
+as signature for q, the algorithm needs to probe many inverted lists, which may be very expensive. Secondly, when
+probing the inverted list of a grid, we have to retrieve all
+objects in the list, resulting in high probing costs for long
+inverted lists.
+To address the above-mentioned limitations, we devise a
+threshold-aware pruning technique in this section. The objective of our technique is two-fold: 1) to reduce the number
+of probed inverted lists; and 2) to reduce the number of objects retrieved from a probed inverted list. To this end, we
+employ the prefix-filtering [5] mentioned in Section 2.2.
+To use prefix filtering, we first fix a global order on the
+generated signature elements of the objects in O. Then, we
+sort the elements of every object based on the global order.
+In the filter step, for each object o, instead of using signature S(o), we only select a prefix of the signature, denoted
+by Sp (o). Similarly, we also select a signature prefix for
+p
+the
+prefixes must satisfy that
+∑ query S (q). The signature
+p
+p
+w(s)
+<
+c
+if
+S
+(q)
+∩
+S
+(o) = ∅.
+s∈S(q)∩S(o)
+
+9
+
+end
+
+Figure 6: Filtering with threshold-aware pruning
+in prefix Sp (o) rather than S(o). Thus, when probing the inverted list I(s) of element s ∈ S(o), we only need to retrieve
+the objects in I(s) containing s in their signature prefixes
+given threshold c, i.e., I c (s) = {o | o ∈ I(s), s ∈ Sp (o)}.
+A challenging problem is to efficiently compute I c (s) based
+on various thresholds c for different queries. To address this
+problem, we augment a threshold bound to each object in every inverted list. Specifically, for an object o in an inverted
+list I(s) of element s, we maintain a threshold upper bound
+cs (o), which represents the maximum threshold that we keep
+for s in o’s signature prefix. Thus, if threshold c > cs (o),
+object o can be pruned from I c (s), as shown below.
+
+Prefix Selection. Given a global order of signature elements, consider signature S(o) = {s1 , s2 , . . . , s|S(o)| } of object o, where si is the i-th element based on the global order.
+To select prefix Sp (o) = {s1 , . . . , sp }, we can remove the last
+elements with weight summation smaller than c and select
+the remaining elements as the prefix, as shown in Lemma 2.
+
+Lemma 3. Let si be the i-th signature element in S(o)
+(where 1 ≤ i ≤ |S(o)|) and c be a signature similarity threshold. The object o can be pruned from I c (si ) if
+
+Lemma 2. Given a similarity threshold c, the signature
+prefix Sp (o) = {s1 , . . . , sp } can be selected as
+
+We store bound cs (o) for each object o in inverted list
+I(s), and sort the objects in descending order of the bounds.
+Thus, given a threshold c, we can efficiently find I c (s) =
+{o | o ∈ I(s), cs (o) ≥ c}, when probing the inverted list of
+element s. Figure 5 provides the inverted lists of eight grids.
+For example, the inverted list of grid g14 contains objects
+{o1 , o2 }, each of which is associated with a threshold bound,
+e.g., cg14 (o1 ) = 900. Given threshold cR = 600, we only
+retrieve o1 when probing the inverted list of g14 , because
+bound cg14 (o2 ) = 550 < cR .
+
+p = min {i}, s.t.
+
+|S(o)|
+
+∑
+
+w(s) < c.
+
+c > csi (o) =
+
+|S(o)|
+
+∑
+
+w(sj ).
+
+(3)
+
+j=i
+
+(2)
+
+j=i+1
+
+Grid Order. In this paper, we sort the grids in ascending
+order of the number of the object regions intersecting with
+them4 . Formally, let count(g) denote the number of object
+regions in O intersecting with grid g, i.e., count(g) = |{R |
+R ∩ g ̸= ∅}|. Then, we sort all grids in G in ascending order
+of count(g). For example, in Figure 5 we sort the grids
+intersecting with q.R as {g7 , g10 , g11 , g14 , g15 , g6 }. Observed
+from this figure, we have cR = 600, w(g15 | q) = 300 and
+w(g6 | q) = 250. According to Lemma 2, we can select
+signature prefix as {g7 , g10 , g11 , g14 }, i.e., p = 4, because any
+shorter prefix (p < 4) may cause the reduction of weights
+∑
+larger than threshold cR , i.e., |S(o)|
+j=p+1 w(g | q, o) ≥ cR .
+Therefore, instead of considering all elements in S(q), we
+only need to probe the inverted lists of the ones in Sp (q),
+which can reduce the filtering complexity.
+Inverted Index with Threshold Bounds. To further
+improve the performance, we propose to reduce the number
+of retrieved objects in a probed inverted list. Recall that, for
+an object o, we only need to consider the signature elements
+
+Threshold-Aware Pruning. Based on the technique mentioned above, we devise an improved filtering algorithm SigFilter+ in Figure 6. Compared with algorithm Sig-Filter,
+Sig-Filter+ only selects signature prefix Sp (q) for query q.
+For each element s ∈ Sp (q), it only retrieves objects in I c (s)
+instead of I(s), and merges the objects to the candidates
+C. We use the following example to illustrate how algorithm
+Sig-Filter+ works using grid-based signatures.
+Example 3. Consider the objects O and query q with
+thresholds τR = 0.25 and τT = 0.3 in Figure 1. We generate grid-based signatures and build the inverted index with
+threshold bounds as shown in Figure 5. Given query q, we
+first generate its signature prefix, SpR (q) = {g7 , g10 , g11 , g14 }
+based on threshold cR = 600 according to Lemma 2. Then,
+for each element in SR (q), we probe its inverted list and only
+retrieve the objects with bounds no smaller than cR , and obtain the candidates CR = {o1 , o2 , o5 , o7 }. Finally, algorithm
+Sig-Verify reports the answer of q, i.e., A = {o2 }.
+
+4
+
+Note that the global grid order will influence the performance of filtering. We do not study the problem in this
+paper due to the space limitation, and take it as future work.
+
+829
+
+Algorithm Sig-Filter+ can be also applied to textual signatures. Specifically, we can sort tokens in descending order
+of their idfs, and build the inverted index with threshold
+bounds. Given query q, we only consider the tokens in the
+signature prefix, denoted by SpT (q), and only retrieve the objects with thresholds no smaller than cT in each inverted
+list. For example, we only retrieve inverted lists of t1 and t3
+in Figure 4, and obtain candidates CT = {o1 , o2 , o3 , o4 , o5 }.
+Notice that algorithm Sig-Filter+ may produce different
+sizes of candidates when using different signatures.
+
+0
+
+G (Level 0)
+0
+
+Entire Space R
+
+g1
+
+0
+
+P ( g1 )
+
+Grid Tree
+1
+
+2×2 Grids
+
+4×4 Grids
+
+G (Level 1)
+
+…
+…
+g12
+2
+
+P ( g1 )
+
+4.3 Grid Granularity Selection
+
+1
+
+g1
+
+1
+
+P ( g1 )
+2
+
+G (Level 2)
+g22
+2
+
+P ( g2 )
+
+g32
+2
+
+P ( g3 )
+
+g42
+2
+
+P ( g4 )
+
+Figure 7: Grid Granularity Selection
+
+An essential task in algorithm Sig-Filter+ is to generate
+grid-based signatures, i.e, GenSig. Obviously, the performance of Sig-Filter+ is affected by grid granularity and
+a key challenge is to select an appropriate grid granularity. More specifically, coarse granularity achieves high filtering performance but weakens the filtering power and leads
+to low verification performance. On the contrary, the fine
+granularity reduces the number of candidates, but leads to
+low filtering performance. For instance, in Example 3, o5
+is a candidate of query q as o5 .R and q.R share grid g15 .
+However, the two regions do not intersect with each other
+at all, and thus o5 can be actually pruned.
+To alleviate the problem, we propose a method for selecting grid granularity in this section. We introduce a probabilistic model to measure the expected query cost for grids
+of specific granularity. To answer a query q, the overall
+cost cost(q) consists of filtering cost costF (q) and verification cost costV (q), i.e., cost(q) = costF (q) + costV (q).
+The filtering cost costF (q) depends on the number of objects∑retrieved from the inverted index, i.e., costF (q) =
+π1 · g∈Sp (q) |I c (g)|, where π1 is the average cost of retrievR
+ing an object from an inverted list and merging it to candidates. On the other hand, verification cost costV (q) depends on the number of candidates, i.e., costV (q) = π2 · |C|,
+where π2 is the average
+∑ cost of verifying an object. Thus, we
+have cost(q) = π1 · g∈Sp (q) |I c (g)| + π2 · |C|. For example,
+R
+we have cost(q) = 6π1 + 4π2 for query q in Figure 5.
+Notice that the above analysis is based on a single query.
+To analyze the expected query cost of grid set G with specific
+granularity, we suppose that we have a query workload Q.
+Then, each grid g ∈ G has a probability P (g) representing
+the likelihood that g is used by queries. In addition, when
+inverted list I(g) is probed by different queries, the returned
+objects I c (g) may be different. For ease of analysis, we
+consider the worst case that all objects need to be returned,
+i.e., |I c (g)| = |I(g)|. Thus, we can estimate the expected
+query cost of all grids in G with the specific granularity as
+∑
+[
+(4)
+P (g) · |I(g)| + π2 · |C|,
+cost(G)
+= π1 ·
+
+R into 2 ∗ 2 grids, and so forth. Therefore, we reduce grid
+granularity selection to the problem of finding the best level
+l∗ in the grid tree to minimize the expected cost.
+We devise an approximate algorithm to solve this problem. We traverse the grid tree from the root to its leaves,
+and compute the expected cost of each level. For two adjacent levels, l and l + 1 (0 ≤ l < H), we compute the benefit
+[ l ) − cost(G
+[ l+1 ).
+of the partitioning as B(l, l + 1) = cost(G
+If the benefit is smaller than a threshold B, the algorithm
+terminates, where B > 0 is used to balance efficiency and
+storage. Then, we prove that for any B, we can find a level
+l, which satisfies that for any level l > l the filtering benefit
+B(l, l + 1) < B as formalized in Lemma 4.
+Lemma 4. ∀B > 0, there exists a level l which satisfies
+that for levels l > l filtering benefit BF (l, l + 1) < B.
+We briefly show the correctness of Lemma ∑
+4 (The proof is
+in [8]). Based on Equation (4), we have BF = gl ∈Gl BF (g l ),
+where BF (g l ) is the benefit of partitioning grid g l into finegrained grids. We use the example of partitioning g11 inl
+to {g12 , g22 , g32 , g42 } to show how to compute BF (g
+∑ ). Based
+1
+2
+)
+=
+on
+the
+probabilistic
+theory,
+we
+have
+P
+(g
+1
+i P (gi ) −
+∑
+∑
+2 2
+2 2 2
+2 2 2 2
+P
+(g
+g
+)
++
+P
+(g
+g
+g
+)
+−
+P
+(g
+g
+g
+g
+).
+Since
+no
+1
+2
+3
+4
+i
+j
+i
+j
+k
+i̸=j
+i,j,k
+query region can intersects with three grids, P (gi2 gj2 gk2 ) = 0.
+∑
+We denote i̸=j P (gi2 gj2 )+P (g12 g22 g32 g42 ) as θ. Thus, the ben(∑
+2
+2
+1
+efit of partitioning g11 is π1 ·
+gi2 P (gi ) · (|I(g1 )| − |I(gi )|)−
+)
+θ · |I(g11 )| . With the increase of l, the benefit of partitioning a grid becomes less and less significant, since 1)
+|I(g1l )| − |I(gil+1 )| eventually decreases, and 2) θ eventually
+increases since it becomes more likely that queries intersect
+with more grids. Thus, we can find a level l which satisfies
+that for levels l > l filtering benefit BF (l, l + 1) < B.
+Verification benefit BV also has the similar property. However, it is difficult to analyze BV , as estimating the average
+candidate size |C| is very hard. Thus, we take theoretical
+analysis as a future work and only show the experimental
+results in Section 6.
+
+5. HYBRID FILTERING ALGORITHMS
+
+g∈G
+
+where |C| is the average size of candidates given the query
+workload. Now, we can define the grid granularity selection
+problem: Find the best set of grids G with specific granu[
+larity that minimize the expected cost cost(G).
+Since it is intractable to solve the problem by considering
+arbitrary grid partition schemes, we devise an approximate
+algorithm for selecting grid granularity as illustrated in Figure 7. The basic idea is to decompose the underlying space
+R into a grid tree with height H, where the grids in level l,
+denoted by Gl , is obtain by a 2l × 2l partition of space R.
+For example, at level 0, there is 1*1 grid, level 1 partitions
+
+In this section, we develop hybrid filtering algorithms to
+simultaneously utilize textual and spatial signatures. We
+first introduce the hash-based hybrid signature and present
+a filtering algorithm based on the signature in Section 5.1,
+and then propose the hierarchical hybrid signature to further
+improve the performance in Section 5.2.
+
+5.1
+
+Hash-Based Hybrid Signature
+
+A straightforward method is to respectively apply algorithm Sig-Filter+ using textual and grid-based signatures,
+and compute the intersection of candidate sets CT and CR .
+
+830
+
+This method, although reducing the number of candidates,
+may increase the number of objects retrieved from inverted
+indexes, and thus result in higher filtering cost.
+In order to reduce the filtering cost, we propose the hashbased hybrid signature to efficiently find possibly similar
+objects. The basic idea is to hash tokens and grids of each
+same object into buckets using a hashing function, and then
+use each bucket as a hybrid signature element.
+Definition 5 (The Hash-Based Hybrid Signature).
+For each object o with textual signature ST (o) and grid-based
+signature SR (o), the hash-based hybrid signature of o is defined by SH (o) = {h = (t, g) | t ∈ ST (o), g ∈ SR (o)}, where h
+is a hash value by hashing t and g into a bucket.
+Based on hash-based hybrid signatures, we develop a more
+efficient filtering algorithm Hybrid-Sig-Filter+ in Figure 8.
+The algorithm respectively generates textual and grid-based
+signatures ST (o) and SR (o) for each object o ∈ O. It hashes
+tokens in ST (o) and grids in SR (o) into buckets to generate
+a hybrid signature SH (o). Then, the algorithm builds an inverted index I for the hybrid signatures generated from all
+objects in O. Compared with the inverted list introduced
+in Section 4.2, we augment both spatial and textual threshold bounds for each object o in each inverted list of element
+h, denoted by cTh (o) and cR
+h (o). The two bounds can be
+computed according to Lemma 3, and satisfy that if either
+cT > cTh (o) or cR > cR
+h (o), o can be safely pruned from the
+inverted list of element h. Moreover, to avoid generating
+too many inverted lists, we introduce a constraint of index
+sizes to guarantee that the number of hash buckets is smaller
+than a given number, which is explained in Section 5.2.
+Given query q, the algorithm respectively generates textual and grid-based signatures ST (q) and SR (q), and computes
+signature similarity thresholds cT and cR . Then, it respectively selects prefixes SpT (q) and SpR (q). Next, for each token
+t ∈ SpT (q), the algorithm examines each grid g ∈ SpR (q), and
+computes the hash-based signature element h = (t, g). Using element h, the algorithm probes its inverted list I(h) and
+retrieves the objects satisfying cTh ≥ cT and cR
+h ≥ cR , denoted
+by I {cR ,cT } (h) = {o ∈ I(h) | cTh (o) ≥ cT , cR
+h (o) ≥ cR }. Finally, the algorithm merges the retrieved objects I {cR ,cT } (h) to
+the candidate set C.
+
+Function Hybrid-Sig-Filter+ (q, I)
+Input: q: A query; I: A hybrid inverted index
+Output: C: Candidate objects
+1 begin
+2
+Initialize candidate set C ← ∅ ;
+3
+Generate signatures ST (q) and SR (q) ;
+4
+Compute signature similarity thresholds cT and cR ;
+Select prefixes SpT (q) and SpR (q) ;
+5
+6
+for each token t in SpT (q) do
+7
+for each grid g in SpR (q) do
+8
+Compute the hybrid signature h = (t, g) ;
+9
+Find object list I {cR ,cT } (h) from I ;
+∪
+10
+C ← C I {cR ,cT } (h) ;
+11
+
+end
+
+Figure 8: Hybrid signature based filtering algorithm
+p
+
+p
+
+ST (q) = { t1 t3 }cT=0.57 SR (q) = { g7 g10 g11 g14 } cR=600
+
+… (t1,g10)
+
+(t1,g11)
+
+(t1,g14)
+
+(t3,g10)
+
+(t3,g11) …
+
+o1
+
+o5
+
+o1
+
+o2
+
+o2
+
+2400/1.1
+
+1100/1.7
+
+900/1.7
+
+1525/1.1
+
+1075/1.1
+
+o2
+
+o1
+
+o2
+
+1525/1.9
+
+1075/1.9
+
+550/1.9
+
+Inverted Index
+
+Figure 9: Example of algorithm Hybrid-Sig-Filter+
+for small regions may weaken the filtering power and introduce more candidates. For example, the element (t1 , g11 )
+in Figure 9 involves a dissimilar object o5 as the estimated
+grid weight w(g | o5 ) = 200 is much larger than the real
+weight w(g | o5 , q) = 0. On the other hand, generating finegrained grids for large regions may involve too many useless
+signature elements, leading to high costs of both storage of
+inverted lists and filtering. In Figure 1, any fine-grained
+grid covered by g14 is useless to region R1 , because g14 has
+already provided an accurate grid weight for R1 .
+In order to address the problem, we propose to judiciously
+select hierarchical grids for each token t given a constraint
+of index sizes (i.e., the maximum number of hybrid signature elements), and generate hierarchical hybrid signatures
+to improve the performance. We first formalize the hierarchical hybrid signature selection problem as follows.
+Hierarchical hybrid signature selection. Intuitively,
+our objective is to select at most mt hierarchical grids for
+the objects containing each token t and optimize the filtering
+power. As mentioned in Section 4.3, optimizing the filtering
+power can be reduced to minimizing filter and verification
+costs. Since verification is the bottleneck as shown in Section 6.3, we focus on minimizing verification cost, i.e., the
+average size of candidates |C| in this section. It is known
+that the estimation of |C| is very difficult, so we consider a
+simplified version of the problem.
+Ideally, suppose that we have a set of grids with finest
+granularity, such that each finest grid is totally covered by
+or exclusive from object regions. Using the finest grids,
+we can obtain the most compact candidate set satisfying
+|C| = |A|. Obviously, the amount of the finest grids must be
+very huge. Therefore, given a number mt , we need to merge
+the finest grids to at most mt hierarchical grids. Different
+
+Example 4. Figure 9 shows how algorithm Hybrid-SigFilter+ works. For each object, the algorithm hashes its
+tokens and grids into buckets to generate a hybrid signature.
+For example, the signature of object o1 consists of elements
+such as (t1 , g10 ), (t1 , g11 ), (t1 , g14 ), etc. Given query q with
+prefixes SpT (q) = {t1 , t3 } and SpR (q) = {g7 , g10 , g11 , g14 }, the
+algorithm obtains hash-based hybrid signatures, and probes
+the corresponding inverted lists. When probing a list, the
+algorithm only retrieves the objects satisfying cTh (o) ≥ cT
+and cR
+h (o) ≥ cR . For example, the inverted list of element
+(t1 , g14 ) only returns o1 . Finally, the algorithm produces
+candidates C = {o1 , o2 , o5 }.
+
+5.2 Hierarchical Hybrid Signatures
+Algorithm Hybrid-Sig-Filter+ generates hybrid signatures using grids with fixed granularity. As different regions
+can use grids with different granularities, this method has
+the following limitations. Generating coarse-grained grids
+
+831
+
+g22 R5 g42
+
+R1 g21
+
+Spatial Pruning
+for Token t1
+
+Rq
+R2
+
+cR=600
+
+g32
+
+g23 g43
+
+w(g|q)
+
+g33
+Generating
+Signatures
+(mt=8)
+g21
+
+Inverted
+Index
+
+(Level 2)
+
+g41
+g12
+
+g22
+
+g33
+
+g43
+
+(Level 3)
+
+g23
+
+g32
+
+1
+2
+3
+
+1250 300 225
+
+1
+2
+3
+SR (q) = { g2 g2 g3 }
+
+g10
+
+(Level 1)
+
+Algorithm 2: HSS-Greedy (I(t), mt )
+
+g42
+
+g21
+
+g22
+
+g33
+
+o1
+
+o5
+
+o2
+
+3000/1.1
+
+2000/1.7
+
+375/1.9
+
+o2
+
+o1
+
+1750/1.9
+
+625/1.9
+
+Pruned
+
+Figure 10: Hierarchical hybrid signatures of t1
+grids merged from the finest grids may lead to different upper bounds of grid weights (See Section 4.1) and result in
+different candidate sizes. To measure quality of the grids, we
+introduce the error of each grid. Formally, we define the error as follows. Consider a grid g with inverted list I(g). Using uniform assumption, we can estimate the expected size of
+|g∩o.R|
+\ =∑
+inverted list as |I(g)|
+, where |g∩o.R|
+is the
+o∈I(g)
+|g|
+|g|
+probability that query region q.R intersects with each object
+region o.R. For example, consider grid g13 in Figure 1. We
+\
+can compute |I(g
+13 )| = (|g13 ∩ R1 | + |g13 ∩ R2 |)/|g| = 1.7.
+
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+
+Input: I(t): objects containing token t; mt : A number
+Output: Gt : The selected grids
+begin
+Construct a grid tree GT for objects in I(t) ;
+Initialize a priority queue Q ;
+(
+)
+Q.Enqueue GT.root, Error(GT.root) ;
+while Q is not empty do
+n ← Q.Dequeue() ;
+if n is a leaf node then Gt ∪ {n} ;
+else
+Nc ← Child nodes of n ;
+if |Gt | + |Q| + |Nc | − 1 > mt then Gt ∪ {n} ;
+else for Each( child node nc in
+) Nc do
+Q.Enqueue nc , Error(nc ) ;
+end
+
+Figure 11: Greedy Algorithm for the HSS problem.
+the root grid g10 , i.e., the space R. Then, the algorithm repeatedly dequeues the front element, and enqueues its child
+nodes. For example, since Error(g41 ) = 0.1 > Error(g21 ) =
+0.09, the algorithm dequeues grid g41 and enqueues its child
+nodes. Thus, given mt = 8, we obtain hierarchical hybrid
+signatures represented as bold circles in Figure 10.
+Hierarchical signature-based filtering algorithm. Using the generated hierarchical hybrid signatures, we can improve the performance of algorithm Hybrid-Sig-Filter+
+(in Figure 8) as follows. For each token t, we first fix a
+global order of its hierarchical grids. We sort the grids in
+ascending order of their levels in the grid tree. For grids in
+the same level, we sort them in ascending order of the number of object regions intersecting with them. For example,
+based on the global order, the hierarchical hybrid signature
+of token t1 can be sorted as {g21 , g32 , g42 , g22 , g23 , g33 , g43 }. Then,
+we can employ algorithm Hybrid-Sig-Filter+ to filter dissimilar objects, as illustrated in the following example.
+
+Definition 6 (Error of Grid). Consider grid g covering finest grids {g1f , . . . , glf }. The error of g, denoted by
+∑
+\
+f
+2
+\ − |I(g
+Error(g), is gf (|I(g)|
+i )|) .
+i
+
+Based on the errors of grids, we formally define our hierarchical hybrid signature selection (HSS) problem as follows.
+Definition 7 (The HSS Problem). Given a token t
+and a number
+∑ mt > 1, find at most mt hierarchical grids Gt
+such that g∈Gt Error(g) is minimized.
+
+We can prove that the HSS problem is NP-hard by a reduction from a known NP-hard problem, a rectangular partitioning problem in [15].
+
+Example 5. Figure 10 provides an example of algorithm
+Hybrid-Sig-Filter+ using hierarchical hybrid signatures.
+Consider token t1 in textual signature prefix SpT (q). We can
+generate three hierarchical grids {g21 , g22 , g33 } and compute the
+weight w(g | q) for each grid. Using threshold-aware pruning, we can prune inverted lists of grids g21 and g22 , and only
+need to probe the inverted list of hybrid signature (t1 , g21 ).
+Similarly, we probe the inverted lists of other tokens in SpT (q)
+and obtain a candidate set C = {o1 , o2 }. Notice that the candidate set is more compact than the one in Example 4.
+
+Theorem 1. The HSS problem is NP-Hard.
+To solve the HSS problem, we propose a greedy algorithm to find the grids with the minimum errors, as shown in
+Figure 11. Given all objects indexed by a token t, i.e., I(t),
+the algorithm first constructs a grid tree, and initializes a
+priority queue where elements are sorted in descending order of their scores. Then, it inserts the root with its grid
+error as the score. Here, for a node n, the algorithm approximately computes its error based on the child nodes,
+∑
+2
+\ − |I(child(n))|)
+\
+Error(n) = child(n) (|I(n)|
+. Next, the
+algorithm traverses the grid tree until the queue is empty as
+follows. It removes the front element in the queue, denoted
+by n. If n is a leaf node, the algorithm inserts it into Gt . If n
+is an intermediate node, the algorithm examines whether to
+split n using its child nodes Nc . If the number of grids after
+the splitting is larger than mt , i.e., |Gt | + |Q| + |Nc | − 1 > mt ,
+the algorithm does not split the node and only inserts n into
+Gt ; otherwise, it inserts the child nodes of n into the queue.
+Figure 10 provides an example to show how algorithm
+HSS-Greedy generates hierarchical hybrid signatures for regions {R1 , R2 , R5 } of token t1 . The algorithm first enqueues
+
+6. EXPERIMENTS
+In this section, we report experimental results. We extended the state-of-the-art spatial keyword search method
+IR-tree [7] to support spatio-textual similarity search as
+mentioned in Section 2.3. We compared our Seal method
+with this method.
+
+6.1
+
+Experiment Setup
+
+We used two datasets. The first one was a real dataset
+Twitter. We collected 60 million tweets from May 2011 to
+August 2011, among which about 13 million tweets had locations (i.e., points with longitudes and latitudes). We randomly selected 1 million users, and obtained ROI objects
+
+832
+
+100
+50
+0
+
+TokenFilter
+GridFilter(256)
+GridFilter(512)
+GridFilter(1024)
+
+150
+100
+50
+0
+
+0.1
+
+0.2
+
+0.3
+
+0.4
+
+0.5
+
+Spatial Similarity Threshold
+
+0.1
+
+0.2
+
+0.3
+
+0.4
+
+0.5
+
+400
+350
+300
+250
+200
+150
+100
+50
+0
+
+TokenFilter
+GridFilter(256)
+GridFilter(512)
+GridFilter(1024)
+
+0.1
+
+Texual Similarity Threshold
+
+0.2
+
+0.3
+
+0.4
+
+Elapsed Time (ms)
+
+150
+
+200
+
+Elapsed Time (ms)
+
+TokenFilter
+GridFilter(256)
+GridFilter(512)
+GridFilter(1024)
+
+Elapsed Time (ms)
+
+Elapsed Time (ms)
+
+200
+
+0.5
+
+Spatial Similarity Threshold
+
+400
+350
+300
+250
+200
+150
+100
+50
+0
+
+TokenFilter
+GridFilter(256)
+GridFilter(512)
+GridFilter(1024)
+
+0.1
+
+0.2
+
+0.3
+
+0.4
+
+0.5
+
+Textual Similarity Threshold
+
+(a) Large-Region Queries.
+(b) Large-Region Queries.
+(c) Small-Region Queries.
+(d) Small-Region Queries.
+Figure 12: TokenFilter vs. GridFilter on the Twitter data set.
+Table 1: Data statistics and index sizes.
+4KB. The inverted indexes of our signature-based methods
+Twitter
+USA
+were also disk-resident, and we maintained an index that
+Object number
+1 million 1 million
+mapped each signature element to the disk offset of its inAvg region area (sq.km.)
+115
+5
+verted list in memory. Note that this index was small eEntire space (million sq.km.)
+1342
+473
+nough to be maintained in memory. For example, for the
+Avg token number
+14.3
+12.5
+Twitter dataset, the index only occupied 19 MB. Table 1
+Data size (GB)
+0.34
+0.22
+IR-tree size (GB)
+2.37
+1.14
+summarizes the data statistics and index sizes. For simplicTokenInv size (GB)
+0.17
+0.07
+ity, we respectively use TokenInv, GridInv, HashInv and
+GridInv (1024) size (GB)
+0.018
+0.016
+HierarchicalInv to represent inverted indexes of textual,
+HashInv (1024) size (GB)
+0.57
+0.44
+grid-based, hash-based hybrid and hierarchical hybrid sigHierarchicalInv size (GB)
+0.30
+0.34
+natures. For GridInv and HashInv we also present the
+from their profiles. On the one hand, we selected frequent
+granularity. For example, GridInv (1024) represents the
+words in her tweets as the token set for each user, and the
+GridInv index with granularity 1024 × 1024. Due to space
+average token number of objects was 14.3. On the other
+constraints, we only show sizes of the indexes we used in
+hand, we took the MBR of all of her tweets as each usmethod comparison in Section 6.5. Besides, we varied both
+er’s active region, and the average area of the regions was
+spatial and textual similarity thresholds from 0.1 to 0.5, and
+115 square kilometers (sq.km.). Specifically, the distributhe default value of the thresholds was 0.4.
+tions of the region sizes were: 0.0001 sq.km. (4.4%), 0.01
+In the paper, we only show the running time and the
+sq.km. (15.4%), 1 sq.km. (29.7%), 100 sq.km. (73%), etc,
+numbers of candidate numbers of different methods are in
+where “x sq.km. (y%)” means there are y% regions with
+our technical report [8].
+areas not greater than x sq.km. We can see that the regionAll the programs were implemented in JAVA and all the
+s had various sizes due to different spatial distributions of
+experiments were run on the Ubuntu machine with an Intel
+users’ tweets, and most of regions sizes were not very large.
+Core 2 Quad X5450 3.00GHz processor and 4 GB memory.
+Note that more complicated methods can be used to obtain
+the active regions from users’ tweets. For example, we can
+6.2 Token Filter vs. Grid Filter
+compute multiple active regions for each user by clustering
+We first evaluated algorithm Sig-Filter+ in Figure 6
+tweets’ locations. We take it as a future work, and only fousing textual signatures and grid-based signatures, which
+cus on the general spatio-textual similarity search problem
+are respectively denoted by TokenFilter and GridFilin this paper. In addition, we generated two query sets to eter. We examined the GridFilter using grid-based sigvaluate the performance of different algorithms. Each query
+natures with different granularities. Figure 12 provides the
+set contained 100 queries.
+experimental results. We can see that the performance of
+Large-Region Queries: We generated a set of queries with
+TokenFilter and GridFilter depended on the similarity
+large regions. The average query token number was 6.97,
+thresholds, τR and τT . Observed from Figure 12(a), Tokenand the average area of regions was 554 sq.km, which was
+Filter outperformed GridFilter for small τR . However,
+equivalent to the area of a district.
+with the increase of τR , GridFilter became faster. For exSmall-Region Queries: We generated a set of queries with
+ample, given τR = 0.5, GridFilter (1024) took 30 millisecsmall regions. The average query token number was 12.9,
+onds, while TokenFilter took 64 millisecond. Similarly,
+and the average area of query regions was 0.44 sq.km, which
+with the increase of τT , TokenFilter became better (See
+was equivalent to the area of a small neighborhood.
+Figures 12(b) and 12(d)). Therefore, it is better to combine
+both filters instead of using either one individually.
+We also used a synthetic dataset by combing POIs in USA
+and the publication records in DBLP. We selected 1 million
+6.3 Evaluating Different Grid Granularities
+POIs from the USA dataset as centers and extended the POIs
+We then evaluated the performance of GridFilter with
+with random widths and heights to generate regions. Then,
+different grid granularities. We partitioned the entire space
+we randomly distributed publication records to the regions
+into p × p uniform grids as mentioned in Section 4, where p
+to generate token sets. The average area of regions was 5.4
+denotes the granularity. Then, we ran GridFilter based on
+sq.km and the average token number was 12.5. We also gendifferent granularities and compared the filtering time and
+erated 100 large-region queries and 100 small-region queries
+verification time. Figure 13 shows the experimental results.
+for this dataset. Note that the experimental results on the
+We can see that with the increase of granularity, the verifitwo datasets were similar. Due to the space constraints, we
+only provide experimental results of method comparison on
+cation time always decreased. For example, the verification
+the USA data set in Section 6.5.
+time decreased from 466 milliseconds at granularity 64 to 90
+The IR-tree index was disk-resident, and its page size was
+milliseconds at granularity 8192 in Figure 13(b). Moreover,
+
+833
+
+(Keyword), the spatial-first method (Spatial), and stateof-the-art spatial keyword search method IR-tree [7] as discussed in Section 2.3. Figures 16 and 17 respectively show
+the experimental results on Twitter and USA datasets.
+We can see that Keyword and Spatial could not effectively prune dissimilar objects. Specifically, Keyword
+sometimes performed worse than Spatial (See Figure 17(a)),
+as it did not have spatial pruning power. On the other hand,
+for large textual thresholds, Spatial might achieve lower
+efficiency (See Figures 16(d) and 17(d)), as it did not have
+textual pruning power. In addition, IR-tree also achieved
+low performance, and it was even worse than Spatial (See
+Figures 16). This is because the method, which is designed
+for spatial keyword search, visited too many unnecessary
+nodes and involved a huge number of dissimilar objects as
+mentioned in Section 2.3. In addition, IR-tree had to probe
+the inverted file associated in each R-tree node, resulting
+in a large overhead.
+Our method Seal always achieved the highest performance for any type of queries and any threshold on the
+two datasets. In Figures 16 and 17, our method was several
+tens of times faster than the baseline methods. For example, in Figure 16(c), given spatial threshold 0.1 and textual
+threshold 0.4, our method took 5 milliseconds, while IRtree, Keyword and Spatial respectively took 253, 52 and
+182 milliseconds. The better performance of our method is
+attributed to the signature-based methods integrating both
+spatial and textual pruning simultaneously, and the hierarchical hybrid signatures we selected for large filtering power.
+
+Verification
+Filter
+
+100
+
+10
+
+1000
+
+Verification
+Filter
+
+100
+
+10
+
+1
+
+1
+1
+
+2
+
+4
+
+8
+
+16
+
+32
+
+64 128
+
+1
+
+Granularity ( * 64)
+
+2
+
+4
+
+8
+
+16
+
+32
+
+64 128
+
+Granularity ( * 64)
+
+(a) Large-Region Queries.
+(b) Small-Region Queries.
+Figure 13: Evaluation on grid granularity selection
+on the Twitter data set.
+
+6.4 Evaluating Hybrid Filtering Algorithms
+
+Hash
+Hierarchical
+
+10
+8
+6
+4
+2
+0
+280
+
+320
+
+360
+
+Index Size (MB)
+
+400
+
+80
+70
+60
+50
+40
+30
+20
+10
+0
+
+6.6
+
+Hash
+Hierarchical
+
+280
+
+320
+
+360
+
+Scalability
+
+We evaluated the scalability of our hybrid filtering algorithm by varying the numbers of objects. Figure 18 shows
+the results. We can see that our method scaled very well,
+and with the increase of the numbers of objects, the elapsed
+time increased sub-linearly. This is because our algorithm
+could prune a huge amount of dissimilar objects even if the
+number of objects increases.
+
+400
+
+Index Size (MB)
+
+Elapsed Time (ms)
+
+12
+
+Elapsed Time (ms)
+
+Elapsed Time (ms)
+
+We evaluated hybrid filtering algorithms mentioned in
+Section 5. We first compared the algorithm using hash-based
+hybrid signatures (HybridFilter) with GridFilter. Figure 14 shows the experimental results, where G and H respectively stand for GridFilter and HybridFilter. We can
+see that HybridFilters significantly outperformed GridFilters for both large-region and small-region queries. For
+example, in Figure 14(a), HybridFilters with different
+granularities (i.e., 256, 512, 1024) were one order of magnitude faster than GridFilters with the same granularity.
+This is because HybridFilter utilized both spatial and textual pruning simultaneously and had larger filtering power
+than GridFilter with only spatial pruning.
+
+(a) Large-Region Query.
+(b) Small-Region Query.
+Figure 15: Comparison of hybrid signatures on the
+Twitter data set (τR = 0.4, τT = 0.1).
+Then, we evaluated the effect of hierarchical hybrid signatures, which were judiciously selected to improve the performance of hybrid filtering. We compared filtering algorithms with hash-based hybrid signatures and hierarchical
+hybrid signatures given different constraints of index sizes
+(i.e., maximum numbers of signature elements as mentioned
+in Section 5.2). Figure 15 shows the experimental results.
+Hierarchical hybrid signatures achieved better performance
+compared with hash-based hybrid signatures in various index sizes. For example, in Figure 15(b), the elapsed time
+of algorithm with hierarchical hybrid signatures was 30 milliseconds given index size 280 MB, while that of hash-based
+hybrid signatures was 70 milliseconds. The main reason is
+that we judiciously selected hybrid signatures with hierarchical grids. These signatures improved the filtering power,
+and thus pruned a large number of dissimilar objects.
+
+14
+12
+10
+
+Elapsed Time (ms)
+
+Elapsed Time (ms)
+
+Elapsed Time (ms)
+
+the decrease of verification cost became more and more insignificant as the granularity increased. The filtering step
+was not always improved with the increase of granularity,
+which was consistent with our cost-based analysis in Section 4.3. For example, in Figure 13(a), the filtering time
+first decreased and then increased after granularity 1024.
+
+Spatial Threshold=0.1
+Spatial Threshold=0.3
+Spatial Threshold=0.5
+
+8
+6
+4
+2
+0
+2
+
+4
+
+6
+
+8
+
+10
+
+Number of Objects (* 0.1 million)
+
+16
+14
+12
+10
+8
+6
+4
+2
+0
+
+Textual Threshold=0.1
+Textual Threshold=0.3
+Textual Threshold=0.5
+
+2
+
+4
+
+6
+
+8
+
+10
+
+Number of Objects (* 0.1 million)
+
+(a) Large-Region Queries.
+(b) Large-Region Queries.
+Figure 18: Scalability on the Twitter data set.
+
+7. CONCLUSION AND FUTURE WORK
+
+In this paper, we have studied a new research problem
+called spatio-textual similarity search. We introduced a
+filter-and-verification framework to compute the answers.
+We devised efficient signature-based filtering algorithms and
+developed effective pruning techniques. For spatial pruning,
+we proposed grid-based signatures by decomposing the underlying space, and developed threshold-aware pruning techniques. To utilize spatial and textual pruning simultaneously, we judiciously selected hierarchical hybrid signatures and
+devised hybrid filtering algorithms. We have implemented
+our method and examined it on real and synthetic datasets.
+Experimental results show that our method achieves very
+high search performance.
+
+6.5 Comparison with Existing Methods
+We compared our algorithm using hierarchical hybrid signatures (denoted by Seal) with the keyword-first method
+
+834
+
+10
+
+1
+0.1
+
+0.2
+
+0.3
+
+0.4
+
+H-512
+G-1024
+H-1024
+
+G-256
+H-256
+G-512
+
+100
+
+10
+
+1
+
+0.5
+
+0.1
+
+Spatial Similarity Threshold
+
+0.2
+
+0.3
+
+0.4
+
+1000
+
+G-256
+H-256
+G-512
+
+H-512
+G-1024
+H-1024
+
+Elapsed Time (ms)
+
+100
+
+1000
+
+Elapsed Time (ms)
+
+H-512
+G-1024
+H-1024
+
+G-256
+H-256
+G-512
+
+Elapsed Time (ms)
+
+Elapsed Time (ms)
+
+1000
+
+100
+10
+1
+
+0.5
+
+0.1
+
+Textutal Similarity Threshold
+
+0.2
+
+0.3
+
+0.4
+
+1000
+
+G-256
+H-256
+G-512
+
+H-512
+G-1024
+H-1024
+
+100
+10
+1
+
+0.5
+
+0.1
+
+Spatial Similarity Threshold
+
+0.2
+
+0.3
+
+0.4
+
+0.5
+
+Textual Similarity Threshold
+
+10
+1
+0.1
+
+0.2
+
+0.3
+
+0.4
+
+Spatial
+SEAL
+
+IR-Tree
+Keyword
+
+100
+10
+1
+
+0.5
+
+0.1
+
+Spatial Similarity Threshold
+
+0.2
+
+0.3
+
+0.4
+
+Spatial
+SEAL
+
+IR-Tree
+1000 Keyword
+
+Elapsed Time (ms)
+
+100
+
+1000
+
+Elapsed Time (ms)
+
+Spatial
+SEAL
+
+IR-Tree
+1000 Keyword
+
+Elapsed Time (ms)
+
+Elapsed Time (ms)
+
+(a) Large-Region Query.
+(b) Large-Region Query.
+(c) Small-Region Query.
+(d) Small-Region Query.
+Figure 14: Comparison of grid-based and hybrid filters on the Twitter data set.
+
+100
+10
+1
+
+0.5
+
+0.1
+
+Textual Similarity Threshold
+
+0.2
+
+0.3
+
+0.4
+
+Spatial
+SEAL
+
+IR-Tree
+1000 Keyword
+100
+10
+1
+
+0.5
+
+0.1
+
+Spatial Similarity Threshold
+
+0.2
+
+0.3
+
+0.4
+
+0.5
+
+Textual Similarity Threshold
+
+Spatial
+SEAL
+
+IR-Tree
+Keyword
+
+1
+
+0.1
+
+Spatial
+SEAL
+
+IR-Tree
+Keyword
+
+100
+10
+1
+
+Spatial
+SEAL
+
+IR-Tree
+Keyword
+
+Elapsed Time (ms)
+
+10
+
+1000
+
+Elapsed Time (ms)
+
+100
+
+Elapsed Time (ms)
+
+Elapsed Time (ms)
+
+(a) Large-Region Query.
+(b) Large-Region Query.
+(c) Small-Region Query.
+(d) Small-Region Query.
+Figure 16: Comparison with existing methods on the Twitter data set.
+100
+
+10
+
+1
+
+0.1
+0.1
+
+0.2
+
+0.3
+
+0.4
+
+0.5
+
+Spatial Similarity Threshold
+
+1000
+
+Spatial
+SEAL
+
+IR-Tree
+Keyword
+
+100
+10
+1
+0.1
+
+0.1
+
+0.2
+
+0.3
+
+0.4
+
+0.5
+
+0.1
+
+Textual Similarity Threshold
+
+0.2
+
+0.3
+
+0.4
+
+0.5
+
+Spatial Similarity Threshold
+
+0.1
+
+0.2
+
+0.3
+
+0.4
+
+0.5
+
+Textual Similarity Threshold
+
+(a) Large-Region Query.
+(b) Large-Region Query.
+(c) Small-Region Query.
+(d) Small-Region Query.
+Figure 17: Comparison with existing methods on the USA data set.
+We believe this study on spatio-textual similarity search
+opens many new interesting and challenging problems that
+need further research investigation, such as how to extend
+the textual similarity measure to more sophisticated schemes,
+how to provide a theoretical analysis of the approximate solutions presented in this paper, etc.
+
+[10] L. Gravano, P. G. Ipeirotis, H. V. Jagadish, N. Koudas,
+S. Muthukrishnan, and D. Srivastava. Approximate string joins
+in a database (almost) for free. In VLDB, pages 491–500, 2001.
+[11] R. Hariharan, B. Hore, C. Li, and S. Mehrotra. Processing
+spatial-keyword (SK) queries in geographic information
+retrieval (GIR) systems. In SSDBM, 2007.
+[12] G. Li, D. Deng, J. Wang, and J. Feng. Pass-join: A
+partition-based method for similarity joins. PVLDB,
+5(3):253–264, 2011.
+[13] G. Li, J. Xu, and J. Feng. Desks: Direction-aware spatial
+keyword search. In ICDE, pages 459–470, 2012.
+[14] J. Lu, Y. Lu, and G. Cong. Reverse spatial and textual k
+nearest neighbor search. In SIGMOD Conference, pages
+349–360, 2011.
+[15] S. Muthukrishnan, V. Poosala, and T. Suel. On rectangular
+partitionings in two dimensions: Algorithms, complexity, and
+applications. In ICDT, pages 236–256, 1999.
+[16] S. B. Roy and K. Chakrabarti. Location-aware type ahead
+search on spatial databases: semantics and efficiency. In
+SIGMOD Conference, pages 361–372, 2011.
+[17] H. Samet. Foundations of Multidimensional and Metric Data
+Structure. 2006.
+[18] S. Sarawagi and A. Kirpal. Efficient set joins on similarity
+predicates. In SIGMOD Conference, pages 743–754, 2004.
+[19] J. Wang, G. Li, and J. Feng. Trie-join: Efficient trie-based
+string similarity joins with edit-distance constraints. PVLDB,
+3(1):1219–1230, 2010.
+[20] D. Wu, M. L. Yiu, C. S. Jensen, and G. Cong. Efficient
+continuously moving top-k spatial keyword query processing. In
+ICDE, pages 541–552, 2011.
+[21] C. Xiao, W. Wang, X. Lin, and H. Shang. Top-k set similarity
+joins. In ICDE, pages 916–927, 2009.
+[22] B. Yao, F. Li, M. Hadjieleftheriou, and K. Hou. Approximate
+string search in spatial databases. In ICDE, 2010.
+[23] D. Zhang, Y. M. Chee, A. Mondal, A. K. H. Tung, and
+M. Kitsuregawa. Keyword search in spatial databases: Towards
+searching by document. In ICDE, 2009.
+[24] D. Zhang, B. C. Ooi, and A. K. H. Tung. Locating mapped
+resources in web 2.0. In ICDE, pages 521–532, 2010.
+[25] Y. Zhou, X. Xie, C. Wang, Y. Gong, and W.-Y. Ma. Hybrid
+index structures for location-based web search. In CIKM, 2005.
+
+Acknowledgement. This work was partly supported by
+the National Natural Science Foundation of China under
+Grant No. 61003004 and No. 60833003, the National Grand
+Fundamental Research 973 Program of China under Grant
+No. 2011CB302206, a project of Tsinghua University under
+Grant No. 20111081073, and the “NExT Research Center”
+funded by MDA, Singapore, under the Grant No. WBS:R252-300-001-490.
+
+8. REFERENCES
+
+[1] A. Arasu, V. Ganti, and R. Kaushik. Efficient exact
+set-similarity joins. In VLDB, pages 918–929, 2006.
+[2] R. J. Bayardo, Y. Ma, and R. Srikant. Scaling up all pairs
+similarity search. In WWW, pages 131–140, 2007.
+[3] X. Cao, G. Cong, and C. S. Jensen. Retrieving top-k
+prestige-based relevant spatial web objects. PVLDB,
+3(1):373–384, 2010.
+[4] X. Cao, G. Cong, C. S. Jensen, and B. C. Ooi. Collective
+spatial keyword querying. In SIGMOD Conference, pages
+373–384, 2011.
+[5] S. Chaudhuri, V. Ganti, and R. Kaushik. A primitive operator
+for similarity joins in data cleaning. In ICDE, pages 5–16, 2006.
+[6] Y.-Y. Chen, T. Suel, and A. Markowetz. Efficient query
+processing in geographic web search engines. In SIGMOD
+Conference, pages 277–288, 2006.
+[7] G. Cong, C. S. Jensen, and D. Wu. Efficient retrieval of the
+top-k most relevant spatial web objects. PVLDB, 2009.
+[8] J. Fan, G. Li, L. Zhou, S. Chen, and J. Hu. Seal:
+Spatio-textual similarity search. In Technical Report, 2012.
+http://dbgroup.cs.tsinghua.edu.cn/fanju/seal-tr.pdf.
+[9] I. D. Felipe, V. Hristidis, and N. Rishe. Keyword search on
+spatial databases. In ICDE, 2008.
+
+835
+
+

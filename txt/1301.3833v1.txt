@@ -1,0 +1,1191 @@
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS 2000
+
+11
+
+Reversible Jump MCMC Simulated Annealing for Neural Networks
+
+Christophe Andrieu+ *
+
+Nando de Freitast
+
++Engineering Department
+Cambridge University
+Cambridge CB2 1PZ, UK
+{ad2,ca22}©eng.cam.ac.uk
+Abstract
+
+We propose a novel reversible jump Markov
+chain Monte Carlo (MCMC) simulated an­
+nealing algorithm to optimize radial basis
+function (RBF) networks. This algorithm
+enables us to maximize the joint posterior
+distribution of the network parameters and
+the number of basis functions. It performs
+a global search in the joint space of the pa­
+rameters and number of parameters, thereby
+surmounting the problem of local minima.
+We also show that by calibrating a Bayesian
+model, we can obtain the classical AIC, BIC
+and MDL model selection criteria within a
+penalized likelihood framework. Finally, we
+show theoretically and empirically that the
+algorithm converges to the modes of the full
+posterior distribution in an efficient way.
+1
+
+INTRODUCTION
+
+In this paper, we show that traditional model selection
+criteria within a penalized likelihood framework, such
+as Akaike's information criterion (AIC), minimum de­
+scription length (MDL) and the Bayesian information
+criterion (BIC) (Akaike 1974, Schwarz 1985, Rissanen
+1987), can be shown to correspond to particular hyper­
+parameter choices in a Bayesian formulation. That
+is, it is possible to calibrate the prior choices so that
+the problem of model selection within the penalized
+likelihood context can be mapped exactly to a prob­
+lem of model selection via posterior probabilities. This
+technique has been previously applied in the areas of
+variable selection (George and Foster 1997) and the
+detection of harmonics in noisy signals (Andrieu and
+Doucet 1998).
+
+After resolving the calibration problem, maximum
+Authorship based on alphabetical order.
+
+t
+
+Arnaud Doucet+
+
+UC Berkeley Computer Science Division
+387 Soda Hall, Berkeley
+CA 94720-1776 USA
+jfgf@cs.berkeley.edu
+likelihood estimation, with the aforementioned model
+selection criteria, is performed by maximizing the cali­
+brated posterior distribution. To accomplish this goal,
+we propose an MCMC simulated annealing algorithm,
+which makes use of a homogeneous reversible jump
+MCMC kernel as proposal. This approach has the ad­
+vantage that we can start with an arbitrary model or­
+der and the algorithm will perform dimension jumps
+until it finds the "true" model order. That is, one
+does not have to resort to the more expensive task
+of running a fixed dimension algorithm for each pos­
+sible model order and subsequently selecting the best
+model. We also present a convergence theorem for the
+algorithm. The complexity of the problem does not al­
+low for a comprehensive discussion in this short paper.
+Readers are encouraged to consult our technical report
+for further results and details (Andrieu, de Freitas and
+Doucet 1999) 1.
+2
+
+MODEL SPECIFICATION
+
+We adopt the approximation scheme of Holmes and
+Mallick (1998), consisting of a mixture of k RBFs and
+a linear regression term. (The work can, however, be
+straightforwardly extended to many other interesting
+inference and learning prcolems, such as fMRI time se­
+ries modeling, wavelet networks, multivariate adaptive
+regression splines (MARS), Bayesian networks, etc.)
+This model is given by:
+Yt =
+
+k
+
+Yt = b + /31 Xt + llt k = 0
+
+L aj¢(11xt- JLjll) + b + f3'xt + llt
+
+j=l
+
+k�1
+
+where 11·11 denotes a distance metric (usually Euclidean
+or Mahalanobis), Jlj E JRd denotes the j-th RBF centre
+for a model with k RBFs, aj E IRe denotes the j-th
+RBF amplitude and b E IRe and f3 E JRd x IRe denote
+1
+
+The software is available at the following website
+
+http://www.cs.berkeley.edu/-jfgf.
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS 2000
+
+12
+
+the linear regression parameters. The noise sequence
+c
+nt E JR is assumed to be zero-mean white Gaussian. It
+is important to mention that although the dependency
+of b, f3 and nt on k has not been made explicit, these
+parameters are indeed affected by the value of k.
+
+Depending on our a priori knowledge about the
+smoothness of the mapping, we can choose differ­
+ent types of basis functions (Girosi, Jones and Pog­
+gio 1995). The most common choices are linear, cu­
+bic, thin plate spline and Gaussian. For convenience,
+the approximation model is expressed in vector-matrix
+form2:
+
+Y= D (IL1:k,1:d ' X1:N,1: d ) a1:1+d+k,1:c+ llt
+
+That is:
+
+b1 ···be
+/31,1 · · · f31,c
+
+Y1,1 · ·· Y1,c
+Y2,1 · ·· Y2,c
+y=
+
+a
+
+YN, l
+
+D=
+
+1
+1
+
+·
+
+·
+
+=
+
+f3d ,l · · · f3d,c
+a1,1 ·· · a1,c
+
+'YN,c
+
+X1,1 · · · Xl,d
+X2,1 · · X2,d
+·
+
+¢ (x1,1L1) . . . ¢ (xl,ILk)
+¢ (x2, IL1) · · · ¢ (x2, ILk)
+
+where the noise process is assumed to be normally dis­
+tributed nt ,...., N(O, aD for i = 1,. . . ,c. It should be
+stressed that u2 depends implicitly on the model or­
+der k. The number k of RBFs and their parameters
+() � {al:m, l:c, ILl:k,l:d ' ui:J, with m = 1+d+ k, are
+unknown. Given the data set {x,y }, the objective is
+to estimate k and () E E>k.
+3
+
+PROBABILI STIC MODEL
+
+In (Andrieu, de Freitas and Doucet 1999, Andrieu,
+de Freitas and Doucet 2000), we follow a Bayesian
+2
+
+The notation
+
+Yl:N,l:c
+
+is used to denote anN by c ma­
+
+trix, where N is the number of data and c the number of
+
+outputs. That is, Yl:N,j � (y1,j, Y2,j, ... ,YN,j )' denotes
+all the observations corresponding to the j-th output (j-th
+column of y). To simplify the notation, Yt is equivalent to
+Yt,l:c· That is, if one index does not appear, it is implied
+that we are referring to all of its possible values. Similarly,
+y is equivalent to Yl:N,l:c· The shorter notation will be
+favored, while the longer notation will be invoked to avoid
+ambiguities and emphasize certain dependencies. This no­
+tation, although complex, is essential to avoid ambiguities
+in the design of the reversible jump algorithm.
+
+approach where the unknowns k and () are regarded
+as being drawn from appropriate prior distributions.
+These priors reflect our degree of belief in the relevant
+values of these quantities (Bernardo and Smith 1994).
+An hierarchical prior structure is used to treat the pri­
+ors' parameters (hyper-parameters) as random vari­
+ables drawn from suitable distributions (hyper-priors).
+
+Here, we focus on performing model selection using
+classical criteria such AIC, BIC and MDL. We show
+that performing model selection using these criteria is
+equivalent to computing the joint maximum a poste­
+riori (MAP) of a "calibrated" posterior distribution.
+This interpretation allows one to develop very efficient
+simulated annealing algorithms to solve this difficult
+global optimization problem.
+3.1
+
+PENALIZED LIKELIHOOD MODEL
+SELECTION
+
+Traditionally, penalized likelihood model order selec­
+tion strategies, based on standard information crite­
+ria, require the evaluation of the maximum likelihood
+(ML) estimates for each model order. The number of
+required evaluations can be prohibitively expensive un­
+less appropriate heuristics are available. Subsequently,
+a particular model Ms is selected if it is the one that
+minimizes the sum of the log-likelihood and a penalty
+term that depends on the model dimension (Djuric
+1998, Gelfand and Dey 1997). In mathematical terms,
+this estimate is given by:
+Ms =
+
+{
+
+} (1)
+
+arg min
+-log (p (ylk,O,x))+P
+,kmax}
+
+Mk :kE{O, . ..
+
+where 0= (a1:m, fi1:k' u�) is the ML estimate of() for
+model Mk. P is a penalty term that depends on the
+model order. Examples of ML penalties include the
+well known AIC, BIC and MDL information criteria
+(Akaike 1974, Schwarz 1985, Rissanen 1987). The ex­
+pressions for these in the case of Gaussian observation
+noise are:
+and
+
+P mc = PMDL = ' 1og(N)
+2
+
+where ( denotes the number of model parameters
+(k(c + 1)+ c (1 +d) in the case of an RBF network).
+These criteria are motivated by different factors: AIC
+is based on expected information, BIC is an asymp­
+totic Bayes factor and MDL involves evaluating the
+minimum information required to transmit some data
+and a model, which describes the data, over a commu­
+nications channel.
+Using the conventional estimate of the variance for
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS 2000
+
+Gaussian distributions:
+
+1 (
+�
+�
+)'
+i = N Yl:N,i- D(l-£1:k, X) Ol:m,i
+X (Y l:N,i- D (jll:k, x) iil: m,i)
+1 I
+= NYl:N,iPi,kYl:N,i
+
+�2
+U
+
+where Pi,k is the least squares orthogonal projection
+matrix:
+we can re-express equation (1) as follows:
+Ms =
+
+x
+
+3.2
+
+N
+(Y�:N,iPi,kYl:N,i) - /2]
+{[IT
+i=l
+exp(-P) }
+(2)
+
+. arg max
+Mk .kE{O, ... ,kmax}
+
+BAYESIAN MODEL
+
+We place the following uninformative prior on the pa­
+rameters:
+
+where S1 denotes the joint space of k and JL and II
+is the standard set indicator variable. This prior is
+represented by the Bayesian network of Figure 1.
+
+13
+
+the marginal posterior distribution
+
+p(k, l-£1:klx,y):
+
+Let us now define the MAP estimate of this distribu­
+tion as follows:
+(k, 1-£1:k ) MAP = arg max
+k,/1- ,,k EO
+
+p(k, l-£1:klx,y)
+
+(4)
+
+Comparing equations (2) and (3), we note that these
+expressions agree whenever:
+
+p(k)
+
+ex:
+
+exp(-P)
+
+ex:
+
+exp (-Ck)
+
+This proportionality ensures that the expression for
+the calibrated posterior p(k, l-£1:klx,y) corresponds to
+the term that needs to be maximized in the penalized
+likelihood framework (equation (2)). Note that for the
+purposes of optimization, we only need the proportion­
+ality condition with C = c+ 1 for the AIC criterion and
+C = (c + 1) log (N)/2 for the MDL and BIC criteria.
+
+It has thus been shown that by calibrating the pri­
+ors in the Bayesian formulation, one can obtain the
+expression that needs to be maximized in the classi­
+cal penalized likelihood formulation with AIC, MDL
+and BIC model selection criteria. Consequently, the
+penalized likelihood framework can be interpreted as
+a problem of maximizing the joint posterior posterior
+distribution p(k, 1-£1:klx,y).
+
+The sufficient conditions that need to be satisfied so
+that the distribution p(k,JLl:klx,y) is proper are not
+overly restrictive. Firstly, S1 has to be a compact
+set, which is not a problem in our setting. Sec­
+ondly, Y�:N,ip i,kYl:N,i has to be larger than zero for
+i = 1,... , c. In (Andrieu, de Freitas and Doucet
+1999), it is shown that this is the case unless Yl:N,i
+spans the space of the columns of D (JLl:k, x), in which
+case Y�:N,iPi,kYl:N,i = 0. This event has zero mea­
+sure.
+4
+
+REVER SIBLE JUMP
+SIMULATED ANNEALING
+
+Figure 1: Directed acyclic graph for the Bayesian
+prior.
+
+We can solve the stochastic optimization problem
+posed in the previous subsection by using a simulated
+annealing strategy. The simulated annealing method
+(Geman and Geman 1984, Van Laarhoven and Arts
+1987) involves simulating a non-homogeneous Markov
+chain whose invariant distribution at iteration i is no
+longer equal to n(z) , but to:
+7r; (z) ex: 7rl/T; (z)
+
+For this prior it is possible to integrate out the variance
+and coefficients to obtain the following expression for
+
+where T; is a decreasing cooling schedule with
+limi-++oo T; = 0. The reason for doing this is that,
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS 2000
+
+14
+
+under weak regularity assumptions on 1r(z), 7r00(z) is
+a probability density that concentrates itself on the set
+of global maxima of 1r(z).
+
+The simulated annealing method with distribution
+7f (z)
+and proposal distribution q ( z*l z) involves
+sampling a candidate value z* given the current
+value z according to q ( z*l z). The Markov chain
+moves towards z* with probability AsA (z, z*)
+l
+min 1, (1r1/T; (z) q ( z*l z)) - 7fl/T ; (z*) q ( zl z*)
+
+},
+
+{
+
+otherwise it remains equal to z.
+
+To obtain an efficient algorithm it is of paramount im­
+portance to choose and efficient proposal distribution.
+If we choose a homogeneous transition kernel K(z, z*)
+that satisfies the following reversibility property:
+1r(z*)K(z*, z)
+
+it follows that:
+A sA
+
+=
+
+=
+
+1r(z)K(z, z*)
+
+.{
+
+7f(l/T;-l)(z*)
+mm 1, (l
+7f /T;-l)(z)
+
+}
+
+(5)
+
+We propose to use as transition kernel a reversible
+jump MCMC algorithm (Green 1995). This is a gen­
+eral state-space Metropolis-Hastings (MH) algorithm
+(see (Andrieu, Djuric and Doucet 1999) for an intro­
+duction). One proposes candidates according to a set
+of proposal distributions. These candidates are ran­
+domly accepted according to an acceptance ratio which
+ensures reversibility and thus invariance of the Markov
+chain with respect to the posterior distribution. Here,
+the chain must move across subspaces of different di­
+mensions, and therefore the proposal distributions are
+more complex: see (Green 1995, Richardson and Green
+1997) for details. For our problem, the following moves
+have been selected:
+1. Birth of a new basis by proposing its location in
+an interval surrounding the input data.
+
+These moves are defined by heuristic considerations,
+the only condition to be fulfilled being to maintain the
+correct invariant distribution. A particular choice will
+only have influence on the convergence rate of the algo­
+rithm. The birth and death moves allow the network
+to grow from k to k + 1 and decrease from k to k 1
+respectively. The split and merge moves also perform
+dimension changes from k to k + 1 and k to k 1. The
+merge move serves to avoid the problem of placing too
+many basis functions in the same neighborhood. On
+the other hand, the split move is useful in regions of the
+data where there are close components. Other moves
+may be proposed, but the ones suggested here have
+been found to lead to satisfactory results.
+
+-
+
+-
+
+The resulting transition kernel of the simulated
+Markov chain is then a mixture of the different tran­
+sition kernels associated with the moves described
+above. This means that at each iteration one of the
+candidate moves, birth, death, merge, split or update,
+is randomly chosen. The probabilities for choosing
+these moves are bk, dk, mko Sk and uk respectively,
+such that bk+dk+mk+sk+uk 1 for all 0 � k � kmax·
+A move is performed if the algorithm accepts it. For
+k 0 the death, split and merge moves are impossible,
+so that d0 � 0, s0 � 0 and m0 � 0. The merge move
+is also not permitted for k = 1, that is m1 � 0. For
+k = kmax, the birth and split moves are not allowed
+and therefore bkmax � 0 and Skmax � 0.
+=
+
+=
+
+Consequently, the following algorithm, with bk = dk
+mk sk uk 0.2, can find the joint MAP estimate
+of ILI:k and k:
+=
+
+=
+
+=
+
+Reversible Jump Simulated Annealing
+1. Initialization: set
+
+•
+
+•
+
+Sample u '"" U[o,l] and set the temperature with a
+cooling schedule.
+If (u ::;
+
+bk<iJ)
+
+- then "birth" move (See Section 3.2.2).
+
+- else if (u ::; bk(i) + dk<il) then "death" move
+(See Section 3.2.2).
+
+3. Merge a randomly chosen basis function and its
+closest neighbor into a single basis function.
+
+5. Update the RBF centres.
+
+(k(O)' (}(O)) E e.
+
+2. Iteration i.
+
+2. Death of an existing basis by removing it at ran­
+dom.
+
+4. Split a randomly chosen basis function into two
+neighbor basis functions, such that the distance
+between them is shorter than the distance be­
+tween the proposed basis function and any other
+existing basis function. This distance constraint
+ensures reversibility.
+
+=
+
+else if (u::; bk(iJ + dk(i) +
+move (See Section 3.2.3).
+
+sk<•J)
+
+then "split"
+
+else if (u ::; bk<•J + dk<•J + sk<•l + mk(i)) then
+"merge" move (See Section 3.2.3).
+
+else update the RBF centres (See Section
+3.2.1).
+End If.
+•
+
+3.
+
+i
+
+t-
+
+Perform an MH step with the annealed acceptance
+ratio (equation (5)).
+i + 1 and go to 2.
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS 2000
+
+4. Compute the coefficients
+in this case :
+
+a1:m
+
+Death move
+
+(
+
+by least squares optimal
+
+)
+
+------•
+In the algorithm, we fixed the mixing mixture coeffi­
+cients bk> dk,mk and sk to 0.2. The simulated anneal­
+ing moves are explained in the following subsections.
+Remark 1 Note that our algorithm has allowed us to
+
+integrate out the coefficients a1,m. It can thus be stated
+that the variance of this Rao Blackwellised estimate is
+less than the variance that would have resulted if we
+had sampled a1:m jointly with J.L and k {Casella and
+Robert 1996, Liu, Wong and Kong 1994).
+
+4.0.1
+
+•
+
+Choose the basis centre, to be deleted, at random among
+the k existing bases.
+
+•
+
+Evaluate
+
+The radial basis centres are sampled one-at-a-time us­
+ing an MH algorithm. To accomplish this, we use a
+mixture of random walk proposals and a global pro­
+posal surrounding the input data: see (Andrieu, de
+Freitas and Doucet 1999) for details. The resulting tar­
+get distribution p(J.Lj,l:d lx, y, J.L -j,l:d ) is proportional
+to:
+
+if ]
+(Y�:N,ip i,kYI:N,i) ( - ) exp ( -P)
+[IT
+t=l
+
+where Pi,k is similar to P;,k with J.Ll:k,l:d re­
+placed
+by
+{J.Ll,l:d'J.L2,1 :d' , J.Lj-l,l:d ' J.Lj,l:d'
+·
+
+·
+
+The acceptance ratio for the proposed birth move is
+deduced from the following expression ( Green 1995):
+
+rbirth � (posterior distributions ratio)
+x (proposal ratio) x (Jacobian)
+
+rbtrth .
+
+_
+
+(6)
+
+[rrc ( Y�:N,;Pi,kYl:N,i ) (.!Y.)] �exp ( -C)
+2
+
+1
+
+i=l YI:N, ;Pi,k+!Yl:N,i
+
+k+ 1
+
+The Jacobian in this case is equal to 1. Similarly,
+
+rdeath
+
+_
+
+-
+
+[rrc ( Y�:N,;Pi,kYl:N,i
+1
+
+p
+i=l Y1:N,i i,k-lYl:N,i
+
+)
+
+]
+
+(Jf) kexp (C )
+0<
+:S
+
+Abirth =min {1, rbirth}' Adeath =min {1, rdeath}
+(7)
+Split and Merge Moves
+
+The merge move involves randomly selecting a basis
+function (J.L1) and then combining it with its closest
+neighbor (J.L2) into a single basis function J.L, whose
+new location is:
+
+•
+
+Propose a new RBF centre at random from the space
+surrounding x.
+
+•
+
+Evaluate
+
+u
+
+<
+
+Abirth.
+
+Abirth
+
+( )
+
+see equation 7 , and sample
+
+u,....,
+
+U[o,I]
+
+then the state of the Markov chain be­
+
+� (k + 1, J.l.I:k+d, else it remains equal to (k, J.t!:k).
+
+come
+
+The corresponding split move that guarantees re­
+versibility is:
+
+(8)
+
+Birth move
+
+If
+
+U[o,I]
+
+Birth and Death Moves
+
+Suppose that the current state of the Markov chain is
+in {k} x e k, then the birth and death moves are given
+by:
+
+•
+
+u,....,
+
+-------•
+
+4.0.3
+
+·
+
+( )
+
+see equation 7 , and sample
+
+Hence, the acceptance probabilities corresponding to
+the described moves are:
+
+and, consequently, the acceptance ratio ARJSA is
+given by:
+
+J.Lj +l,l:d1 .. . 'J.Lk,l:d }.
+
+Adeath.
+
+If u :S Adeath then the state of the Markov chain be­
+comes (k- 1, J.I.I:k-I), else it remains equal to (k, J.t!:k).
+
+•
+
+That is:
+
+Update Move
+
+4.0.2
+
+15
+
+where .;-* is a simulation parameter and Ums ,...., U[o,l] ·
+Note that to ensure reversibility, the merge move is
+only performed if IIJ.L1- J.L211 < 2.;-*. Suppose now that
+the current state of the Markov chain is in { k} X e k'
+then:
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS 2000
+
+16
+
+5
+
+Split move
+
+CONVERGENCE
+
+We have the following convergence theorem:
+
+•
+
+Randomly choose an existing RBF centre.
+
+Theorem 1 Under certain assumptions found in
+
+•
+
+Substitute it for two neighbor basis functions, whose cen­
+tres are obtained using equation (8). The distance (typi­
+cally Euclidean) between the new bases has to be shorter
+than the distance between the proposed basis function
+and any other existing basis function.
+
+((J(i), k( i ) converges in probability to the set of global
+maxima, that is for a constant E > 0, it follows that:
+
+•
+
+Evaluate
+
+•
+
+Asplit.
+
+see equation(9}, and sample
+
+u ""U[o,l]
+
+If u � Asplit then the state of the Markov chain be­
+comes (k + 1, ILl:k+l), else it remains equal to (k, p1,k)
+.
+
+Merge move
+
+•
+
+•
+
+•
+
+Choose a basis centre at random among the k existing
+bases. Then find the closest basis function to it applying
+some distance metric, e.g. Euclidean.
+If Jlp1 - p2JI < 2.;*, substitute the two basis functions
+for a single basis function in accordance with equation
+(4.0.3).
+Evaluate
+
+U[o,l] .
+•
+
+Amerge.
+
+see equation (9), and sample
+
+u
+
+•
+
+The acceptance ratios for the proposed split and merge
+moves are given by:
+_
+-
+
+[rrc ( Y�:N,ipi,kYl:N,i
+
+p
+i=l Y1:N,i i,k+lYl:N,i
+1
+
+and
+
+rmerge
+
+_
+-
+
+)]
+
+) ( q. kc;* exp( -C)
+
+[rrc ( Y�:N,iPi,kYl:N,i
+1
+
+)
+
+p
+
+i=l Yl:N,i i,k-lYl:N,i
+
+(/f)
+
+k+1
+
+] k exp(C)
+c; (k
+*
+
+-
+
+1)
+
+The Jacobian corresponding to the split move is equal
+to:
+
+, )
+1
+Jspltt. _18(JL i JL2 I-I
+-
+
+O(JL, Urns)
+
+11_
+2*
+*
+*
+-c
+; c;
+- c;
+
+The acceptance probabilities for these moves are:
+
+Asplit
+
+=
+
+Proof. In (Andrieu, de Freitas and Doucet 1999), we
+show that the transition kernels for each temperature
+are uniformly geometrically ergodic. Hence, as a corol­
+lary of (Andrieu, Breyer and Doucet 1999, Theorem
+1), the convergence result for the simulated annealing
+MCMC algorithm follows •
+6
+
+EXPERIMENT: ROBOT ARM
+MAPPING
+
+The robot arm data set is often used as a benchmark
+to compare neural network algorithms3. It involves
+implementing a model to map the joint angle of a
+robot arm (x1, x2) to the position of the end of the
+arm (Yl, Y2). The data were generated from:
+
+2.0 cos( xi) + 1.3 cos(x1 + x2) + E1
+2.0 sin( xi) + 1.3 sin(x1 + x2) + E2
+
+Y1
+
+------
+
+.
+
+)
+
+""
+
+If u � Amerge then the state of the Markov chain be­
+comes (k -1, ILI:k-l). else it remains equal to (k, p1,k).
+
+rspltt
+
+(Andrieu, Breyer and Doucet 1999), the series of
+
+min {1 , r split } , Amerge
+
+=
+
+min {1, rmerge }
+(9)
+
+Y2
+
+where Ei
+N(O, a2); a 0.05. We use the first 200
+observations of the data set to train our models and the
+last 200 observations to test them. In the simulations,
+we selected cubic basis functions.
+=
+
+""
+
+We tested the reversible jump simulated annealing
+algorithms with the AIC and MDL criteria on this
+problem. The results for the MDL criterion are de­
+picted in Figure 2. We note that the posterior in­
+creases stochastically with the number of iterations
+and, eventually, converges to a maximum. The fig­
+ure also illustrates the convergence of the train and
+test set errors for each network in the Markov chain.
+For the final network, we chose the one that maxi­
+mized the posterior. This network consisted of 12
+basis functions and incurred a mean-square error of
+0.00512 in the test set. Following the same proce­
+dure, the AIC network consisted of 27 basis func­
+tions and incurred an error of 0.00520 in the test set.
+Our mean square errors are of the same magnitude
+as the ones reported by other researchers (Holmes
+and Mallick 1998, Mackay 1992, Neal 1996, Rios In­
+sua and Muller 1998); slightly better. Our results in
+3The
+
+robot
+
+arm
+
+data
+
+set
+
+can
+
+http://wol.ra.phy.cam.ac.uk/mackay/
+
+be
+
+found
+
+at
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS 2000
+
+rr� ::.·J
+rl�- ·· ·· · d
+{J,r;;:
+" . . . .. '." ..: ..: .. 'f
+0
+
+20
+
+40
+
+60
+
+80
+
+100
+
+120
+
+140
+
+160
+
+180
+
+200
+
+j
+
+£
+
+0
+
+W
+
+�
+
+�
+
+00
+
+100
+
+Iterations
+
+1W
+
+1�
+
+100
+
+180
+
+200
+
+Figure 2: Performance of the reversible jump simu­
+lated annealing algorithm for 200 iterations on the
+robot arm data, with the MDL criterion.
+(Andrieu, de Freitas and Doucet 1999) indicate that
+the full Bayesian hierarchical model provides slightly
+more accurate results. The Monte Carlo integrations
+are, however, much more computationally demanding
+than the stochastic optimization task. They can take
+take up to 500000 iterations, whether the algorithm
+discussed here only required 200 iterations to obtain a
+reasonable solution.
+7
+
+CONCLUSIONS
+
+We presented an efficient MCMC stochastic optimiza­
+tion algorithm that performs parameter estimation
+and model selection simultaneously. We also showed
+that starting from a full hierarchical Bayesian prior
+for neural networks, it is possible to derive the clas­
+sical AIC, BIC and MDL penalized likelihood model
+selection criteria. Finally, we presented a convergence
+proof for the algorithm and showed, by means of an
+experiment, that the method produces very accurate
+results.
+References
+
+17
+
+Lyapunov criteria, Technical Report CUED/F­
+INFENG/TR 346, Cambridge University Engi­
+neering Department.
+Andrieu, C., de Freitas, J. F. G. and Doucet,
+A. (1999). Robust full Bayesian learning for
+neural networks, Technical Report CUED/F­
+INFENG/TR 343, Cambridge University Engi­
+neering Department.
+Andrieu, C., de Freitas, J. F. G. and Doucet, A.
+(2000). Robust full Bayesian methods for neural
+networks, in S. Solla, T. Leen and K.-R. Muller
+(eds), Advances in Neural Information Processing
+Systems 12, MIT Press, pp. 379-385.
+Andrieu, C., Djuric, P. M. and Doucet, A. (1999).
+Model selection by MCMC computation, To ap­
+pear in Signal Processing.
+
+Bernardo, J. M. and Smith, A. F. M. (1994). Bayesian
+Theory, Wiley Series in Applied Probability and
+Statistics.
+Casella, G. and Robert, C. P. (1996).
+Rao­
+Blackwellisation of sampling schemes, Biometrika
+83 (1) : 81-94.
+
+Djuric, P. M. (1998). Asymptotic MAP criteria for
+model selection, IEEE Transactions on Signal
+Processing 46 (10): 2726-2735.
+Gelfand, A. E. and Dey, D. K. (1997). Bayesian model
+choice: Asymptotics and exact calculations, Jour­
+nal of the Royal Statistical Society B 56 (3): 501514.
+
+Geman, S. and Geman, D. (1984). Stochastic re­
+laxation, Gibbs distributions and the Bayesian
+restoration of images, IEEE Transactions on Pat­
+tern Analysis and Machine Intelligence 6 (6): 721741.
+
+George, E. I. and Foster, D. P. (1997). Calibration
+and empirical Bayes variable selection, Unpub­
+lished. Department of Management Science and
+Information Systems, University of Texas.
+
+Akaike, H. (1974). A new look at statistical model
+identification, IEEE Transactions on Automatic
+Control AC-19: 716-723.
+
+Girosi, F., Jones, M. and Poggio, T. (1995). Regular­
+ization theory and neural networks architectures,
+Neural Computation 7 (2): 219-269.
+
+Andrieu, C., Breyer, L. A. and Doucet, A. (1999).
+Convergence of simulated annealing using Foster-
+
+Holmes, C. C. and Mallick, B. K. (1998). Bayesian ra­
+dial basis functions of variable dimension, Neural
+Computation 10 (5): 1217-1233.
+
+Andrieu, C. and Doucet, A. (1998). Efficient stochas­
+tic maximum a posteriori estimation for harmonic
+signals, EUSIPCO, Vol. 3, Island of Rhodes,
+pp. 1821-1824.
+
+Green, P. J. (1995). Reversible jump Markov chain
+Monte Carlo computation and Bayesian model
+determination, Biometrika 82: 711-732.
+
+18
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS 2000
+
+Liu, J., Wong, W . H. and Kong, A. (1994). Covariance
+structure of the Gibbs sampler with applications
+to the comparisons of estimators and augmenta­
+tion schemes, Biometrika 81 (1): 27-40.
+
+Mackay, D. J. C. (1992). A practical Bayesian frame­
+work for backpropagation networks, Neural Com­
+putation 4(3): 448-472.
+
+Neal, R. M. (1996). Bayesian Learning for Neural
+Networks, Lecture Notes in Statistics No. 118,
+Springer-Verlag, New York.
+
+Richardson, S. and Green, P. J. (1997). On Bayesian
+analysis of mixtures with an unknown number of
+components, Journal of the Royal Statistical So­
+ciety B 59(4): 731-792.
+Rios Insua, D. and Muller, P. (1998). Feedforward neu­
+ral networks for nonparametric regression, Tech­
+nical Report 98-02, Institute of Statistics and De­
+cision Sciences, Duke University.
+
+Rissanen, J. (1987). Stochastic complexity, Journal of
+the Royal Statistical Society 49: 223-239.
+Schwarz, G. (1985). Estimating the dimension of a
+model, The Annals of Statistics 6 (2): 461-464.
+
+Van Laarhoven, P. J. and Arts, E. H. L. (1987). Simu­
+lated Annealing: Theory and Applications, Reidel
+Publishers, Amsterdam.
+
+

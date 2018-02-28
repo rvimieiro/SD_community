@@ -1,0 +1,1108 @@
+Daphne Koller
+Computer Science Dept.
+Stanford University
+Stanford, CA 94305
+
+depends strongly on the density of the GMRF structure.
+Finally, the number of parameters that need to be stored
+can be an important computational factor in some settings.
+These latter issues are particularly relevant in systems, such
+as speech recognition (Bilmes, 2000) or tracking (BarShalom & Fortmann, 1988), that need to achieve real-time
+performance. Sparsity can also be beneficial in a knowledge discovery setting, where the structure of the learned
+model may provide insight into the relationships between
+the variables. For example, sparse Gaussian models have
+been successfully used to explore interactions between the
+genes in gene expression data (Dobra et al., 2004).
+The idea of learning sparse GRMFs goes back to the work
+of Dempster (1972) where elements of the inverse covariance matrix are explicitly set to zero and the remaining parameters learned from data. Other early work used a greedy
+forward/backward search over edges in a Gaussian MRF
+that quickly became infeasible as n, the dimension of the
+problem, grew (Lauritzen, 1996). More recently, Banerjee et al. (2006) formulated the problem as one of optimizing a log-likelihood objective regularized with an ℓ1 norm penalty on the entries. This penalty is known (Tibshirani, 1996) to push parameters to zero, inducing sparsity. (See Section 2 for more details on this and other other
+approaches for learning sparse GMRFs.)
+In this paper, we present a new algorithm for optimizing the
+ℓ1 -penalized log-likelihood objective for Gaussian distributions. Our approach is based on projected gradient methods originally proposed by Levitin and Polyak (1966). Like
+other methods based on this objective, our method exploits
+the fact that the objective is tractable and convex, hence
+avoiding problems from greedy or heuristic searches. However, unlike the work of Banerjee et al. (2006), the complexity of our algorithm grows as O(n3 ) rather than O(n4 )
+per iteration. For problems of high dimension, this orderof-magnitude reduction in complexity can be significant.
+We also generalize the sparse inverse covariance problem
+to that of estimating an inverse covariance with block sparsity. This task corresponds to finding a Gaussian MRF
+in which certain groups of edges should all be penalized
+
+together. For example, in a GMRF over genes, we may
+want to jointly penalize any interaction between genes in
+two pathways; this penalty intuitively tries to reduce interpathway interactions, but once the two pathways are allowed to interact via one pair of genes, the penalty is removed for all other pairs. To our knowledge, this extension has not been considered elsewhere. Indeed, previous
+methods do not naturally handle this setting, whereas our
+method handles it easily, with no real increase in computational cost. We present results demonstrating the value
+of the block structure to two distinct applications: learning
+networks over genes from gene expression data, and learning models of the 2D shape of mammals.
+
+2
+
+Background and Related Work
+
+As mentioned above, the literature on estimating covariance matrices from data has a long history. Our work starts
+from the formulation of Banerjee et al. (2006) which we
+review below. We then compare this approach to several
+other recent works.
+2.1 ℓ1 -Regularized Problem Formulation
+We assume that we are given a dataset D =
+{x[1], . . . , x[m]} in which the samples x ∈ D are drawn
+from some n-dimensional Gaussian distribution N (µ, Σ).
+Given a Gaussian with mean µ and covariance Σ, the average log-likelihood (modulo unnecessary constants) for D
+with same mean can be written as
+log det K − tr(Σ̂K)
+where K = Σ−1 isP
+the inverse covariance matrix for the
+m
+1
+T
+model, and Σ̂ = m
+i=1 (x[i] − µ) (x[i] − µ) is the empirical covariance of the dataset D. As we discussed, the
+sparsity structure in the matrix K defines the structure of
+the GMRF corresponding to this Gaussian: a zero entry
+Kij corresponds precisely to the absence of an edge between the variables i and j. For uniformity of exposition,
+we use the matrix terminology and notation in the remainder of our discussion.
+Following the approach of Banerjee et al., we add sparsitypromoting ℓ1 -penalty to the entries of the inverse covariance. We can now formulate the convex optimization problem for estimating the inverse covariance of our model:
+X
+minimize − log det(K) + tr(Σ̂K) +
+λij |Kij |, (1)
+K≻0
+
+i,j
+
+where we use the notation A ≻ 0 to indicate that the symmetric matrix A is positive definite. Here λij controls the
+sparsity of the solution to (1). As we show in Lemma 1, so
+long as λij > 0 for all i 6= j (and λii ≥ 0) the solution
+to (1) is unique and positive definite. Furthermore, if λij is
+large enough, we will force all off-diagonal entries of K to
+zero.
+It will be instructive now and for later development in the
+paper to take the dual of (1). We introduce an auxiliary vari-
+
+able Z = K and its associated dual variable W ∈ Rn×n ,
+leading to the Lagrangian
+L(K, Z, W )
+
+= − log det(K) + tr(Σ̂K)
+X
++
+λij |Zij | + tr(W (K − Z)).
+i,j
+
+The above Lagrangian is separable into terms involving K
+and terms involving Z, which enables us to find the dual.
+For the terms involving Z we have that
+
+X
+0 if |Wij | ≤ λij
+λij |Zij | − tr(W Z) =
+inf
+−∞ otherwise.
+Z
+ij
+
+The infimum over K for the remaining terms can be found
+by using ∇K log det(K) = K −1 (and assuming that Σ̂ +
+W ≻ 0) to give
+inf [− log det(K)+tr((Σ̂+W )K)] = log det(Σ̂+W )+n
+K
+
+Combining, we get the following dual problem for (1):
+maximize log det(Σ̂ + W )
+subject to |Wij | ≤ λij ∀i, j.
+
+(2)
+
+The constraint that Σ̂ + W ≻ 0 is implicit in the objective
+because of the convention that log det(X) = −∞ when
+X 6≻ 0. We denote the set {W : |Wij | ≤ λij ∀i, j} by Bλ ,
+which is a box constraint indexed by the tuple λ = (λij ).
+The duality gap given a dual feasible point W ∈ Bλ (and
+hence the primal point K = (Σ̂ + W )−1 ) is
+X
+η = tr(Σ̂K) +
+λij |Kij | − n.
+ij
+
+Based on the dual problem, we prove the following lemma,
+which guarantees a solution to problem (1):
+Lemma 1. With probability 1, so long as λij > 0 for all
+i 6= j and λii ≥ 0, the minimization problem (1) is bounded
+below and has a unique optimal point K ⋆ .
+Proof We consider the case when λii = 0 as Banerjee
+et al. (2006) already consider the case when λii > 0. First,
+with probability 1, Σ̂ has non-zero diagonals because it was
+generated from a set of data samples. If there is a dual
+feasible point for (2), i.e., some W such that diag(W ) = 0
+and |Wij | ≤ λij , the dual problem has a non-infinite value,
+and so the primal is bounded below. Further, if we can
+find a dual-feasible W such that |Wij | < λij (i.e. W is in
+the relative interior of the domain), then Slater’s constraint
+qualification (Boyd & Vandenberghe, 2004) guarantees a
+primal-dual optimal pair K ⋆ = (Σ̂ + W ⋆ )−1 with zero
+duality gap. So we simply show that a W in the relative
+interior of the domain exists.
+Consider the matrix D = diag(Σ̂) ≻ 0. For α ∈ [0, 1) we
+have αΣ̂ + (1 − α)D ≻ 0. But, for any α, we have that
+diag(αΣ̂ + (1 − α)D) = diag(Σ̂). Thus, we choose
+W = αΣ̂ + (1 − α) diag(Σ̂) − Σ̂,
+
+(3)
+
+which has zeros on the diagonal, and for α close enough to
+1 will have |Wij | < λij . Further,
+
+starting point when the number of samples is less than the
+dimension, which we do not.
+
+Σ̂ + W = αΣ̂ + (1 − α) diag(Σ̂) ≻ 0.
+
+We have already mentioned Meinshausen and Bühlmann’s
+work (2006) regressing single variables against one another. The advantage of their approach is in its efficiency,
+as solving n regressions each with n variables can be done
+very quickly, i.e., in the time it takes to do one pass over all
+the columns with LASSO. However, they do not directly
+obtain a maximum likelihood estimate from their method,
+only the structure of the graph.
+
+Choosing W as in (3) gives a dual feasible point in the
+relative interior of the domain. W ⋆ is unique by the strong
+convexity of log det over the positive definite cone.
+If we can find the maximizing W ⋆ for (2), we can also
+easily calculate the sparsity for K ⋆ = (Σ̂ + W ⋆ )−1 by
+the complementarity conditions on Wij and Kij (Boyd &
+Vandenberghe, 2004). Specifically, if |Wij⋆ | < λij , then
+⋆
+Kij
+= 0. Lastly, as shown in the analysis of the so-called
+maximum determinant completion problem (see Boyd and
+Vandenberghe (2004)), if we constrain only the diagonal
+elements of W and do not constrain its off-diagonals, then
+maximizing log det(Σ̂ + W ) will drive the off-diagonal entries of K to 0; as such, choosing λij = |Σ̂ij | forces complete sparsity in K and we find an MRF with no edges,
+i.e., all the variables are independent. Thus, when solving
+(1), we have a natural upper bound on λ beyond which no
+additional sparsity can be gained.1
+2.2 Prior Work
+One recent approach for learning sparse GMRFs is to focus
+on learning the set of neighbors for a particular variable by
+regressing that variable against the remaining variables in
+the network with an ℓ1 -penalty to promote sparsity (Meinshausen & Bühlmann, 2006). An alternative approach, first
+presented by Banerjee et al. (2006), is to solve the optimization problem (2). It is convex and can be solved using
+interior point methods in O(n6 log(1/ε)) time to a desired
+accuracy ε, however, this becomes infeasible for even moderate n. Banerjee et al.’s approach was to solve problem (2)
+iteratively, column by column, as a sequence of QPs. That
+is, they define U = Σ̂ + W and partition U and Σ̂ as
+
+
+
+
+U11 u12
+S11 s12
+U=
+Σ̂
+=
+.
+uT12 u22
+sT12 s22
+They then solve a sequence of box-constrained QPs (swapping rows of U to
+all the rows), each iteration setting
+ get −1
+û12 = argminy y T U11
+y | ky − s12 k ≤ λ , updating U
+and W appropriately. This method takes O(T n4 ) time,
+where T is the number of passes through the columns of
+the matrix U .
+An alternative to the box-constrained QP above (its dual) is
+to minimize a sequence of re-weighted LASSO problems.
+In work developed in parallel and independently of our paper, Friedman et al. (2007) use this to solve problem (2).
+Their method enjoys better performance (around O(T n3 ),
+though no analysis is given) than Banerjee et al.’s, which is
+similar to the methods we develop in our paper. They, however, explicitly rely on λii being positive to get a feasible
+1
+Presumably one could regularize the diagonals further,
+though this seems of little practical use.
+
+The SPICE algorithm of Rothman et al. (2007) solves (1)
+when λii = 0 (i.e., applying an ℓ1 -penalty only to off diagonal elements of the inverse covariance). The advantages
+of this penalty are many: Rothman et al. prove that such a
+setting of the regularization terms is consistent so that the
+solution to (1) approaches the true inverse covariance as
+the number of data samples increases, and they give experiments showing that not penalizing the diagonal consistently
+learns model structure more accurately than does regularizing each entry of K. Further, Meinshausen (2005) gives
+simple conditions under which penalizing the on-diagonal
+entries of K in (1) gives the wrong inverse covariance, even
+in the limit of infinite data. These results underscore the importance of Lemma 1, which gives a dual-feasible starting
+point even when λii = 0. To our knowledge, this has not
+been noted before this work.
+The disadvantage of the SPICE algorithm is that, like
+Banerjee et al.’s algorithm, it performs coordinate-wise
+updates (though it uses the columns of the Cholesky decomposition of K). It repeatedly iterates through all the
+columns, solving n O(n3 ) regressions at every step, giving
+it a time complexity again of O(T n4 ). Further, Rothman
+et al.’s algorithm has no explicit way to check convergence,
+as it does not generate dual-feasible points (which our algorithms do), and they rely on truncation of near-zero values
+rather than explicit conditions for sparsity in the inverse
+covariance (such as complementarity of primal-dual variables). The algorithm they propose is also somewhat complicated.
+
+3
+
+Projected Gradient Method
+
+We propose a projected gradient method for solving the
+dual problem (2). Projected gradient algorithms minimize
+an objective f (x) subject to the constraint that x ∈ S for
+some convex set S.2 They do this by iteratively updating
+x := ΠS (x + t∇f (x))
+where t is a step size and ΠS (z) = argminy {kz−yk2 | y ∈
+S} is the Euclidean projection onto set S (Bertsekas, 1976).
+First order projected gradient algorithms are effective when
+second order methods are infeasible because of the dimension of the problem. As the dimensions of our problems
+2
+
+In our case S is the set of n × n matrices in the box Bλ .
+
+Algorithm 1 Maximize log det(Σ̂ + W ) subject to W ∈
+Bλ = {W | |Wij | ≤ λij }. Given empirical covariance
+Σ̂  0, λij , duality gap stopping criterion ǫ, and W such
+that W ∈ Bλ , Σ̂ + W ≻ 0, and Wii = λii .
+1: repeat
+2:
+Compute unconstrained gradient
+3:
+G := (Σ̂ + W )−1
+4:
+Zero components of gradient which would result in
+constraint violation
+5:
+Gii := 0
+6:
+Gij := 0 for all Wij = λij and Gij > 0
+7:
+Gij := 0 for all Wij = −λij and Gij < 0
+8:
+Perform line search
+9:
+t :≈ argmaxt log det(Σ̂ + ΠBλ (W + tG))
+10:
+Update and project
+11:
+W := ΠBλ (W + tG)
+12:
+K := (Σ̂ + W )−1
+13:
+Compute duality gapP
+14:
+η = tr(Σ̂K) + ij λij |Kij | − n
+15: until (η < ǫ) or maximum iterations exceeded
+16: return K
+
+Algorithm 2 Line search to find feasible t for log det(Σ̂ +
+W + tG) given f0 = log det(Σ̂ + W ).
+1: t :=
+
+tr((Σ̂+W )−1 G)
+−1 G(Σ̂+W )−1 G)
+tr((Σ̂+W )
+
+
+
+2: while log det Σ̂ + ΠBλ (W + tG) ≤ f0 do
+3:
+t := t/2
+4: end while
+
+often exceed n = 1000, giving more than 500,000 different parameters, this makes projected gradient methods a
+reasonable choice.
+The projected gradient method for our problem is shown
+in Algorithm 1. The unconstrained gradient of the dual
+objective function (2) is G = (Σ̂ + W )−1 . We perform
+a line search to find the step size t that approximately
+gives the greatest increase to the objective. This search
+needs to guarantee that the estimated covariance Σ̂ + W
+is positive definite, which it does because we assume that
+log det X = −∞ for X 6≻ 0. We can guarantee that the
+initial Σ̂ + W ≻ 0, because Σ̂  0, and we can simply
+initialize Wii = λii and the rest of W via Lemma 1 (this
+initialization is optimal for the diagonal elements, so we
+do not modify them through the course of the algorithm).
+The projection of the gradient appears in two places. First,
+we immediately zero out some entries of the gradient when
+Wij is at the boundary and Gij would push Wij outside
+Bλ . Second, during the line search, in each step we project
+the gradient onto the box-constraint |Wij | ≤ λij via the operation ΠBλ (W + tG), which simply sets any entry > λij
+to λij (and likewise for −λij ).
+
+For the simple box-constrained projections, because we
+can immediately zero out many entries of the gradient G
+and still have a descent direction (see lines 5 through 7
+of Algorithm 1, which are not strictly necessary but improve the performance of the line search), a simple heuristic line search based on the second-order approximation to
+log det performs very well. The second order expansion
+of the log-determinant function around a point X (Boyd
+& Vandenberghe, 2004) is given by log det(X + ∆X) ≈
+log det(X) + tr(X −1 ∆X) − 21 tr(X −1 ∆XX −1 ∆X).
+Thus, given the descent direction G, we approximate
+log det(Σ̂ + W + tG) by
+log det(Σ̂ + W ) + t tr((Σ̂ + W )−1 G)
+− 21 t2 tr((Σ̂ + W )−1 G(Σ̂ + W )−1 G)
+and perform the line search of Algorithm 2. Convergence
+is guaranteed because the iterates for W form a sequence in
+a compact space Bλ and log det(Σ̂+W ) is always increasing. If the line search cannot return a satisfying t, then no
+improvement can be made in the projected descent direction, so standard arguments by KKT conditions for a differentiable convex function guarantee that we have reached
+the optimum.
+
+4
+
+Structure Extensions
+
+We can extend the basic problem of (1) to cases in which
+we are interested in sparsity not just between single variables but between entire blocks of variables. In many
+problem domains, variables can be naturally grouped into
+blocks. For example, we might try to model a 2D shape
+made up of articulated objects (such as the outline of an animal) in which we want to regularize interactions between
+object parts (such as legs, body, head, and tail). Landmarks along the contour of an animal’s head can naturally
+be grouped together, as these landmarks move collectively
+as the animal moves through different articulated forms. In
+modeling gene networks, we may want to encode the intuition that interactions happen at the level of pathways, i.e.,
+either two pathways interact, in which case multiple genes
+can be involved, or they do not interact at all. Block regularization might also arise in the context of learning multiresolution models constrained so that only variables within
+specific resolution levels interact (Willsky, 2002).
+In the block regularization case, we let the entries in our
+inverse covariance matrix be divided into p < n2 disjoint
+subsets S1 , . . . , Sp (the disjointness assumption is essential
+to our method, as we see below). We can find the dependencies between the subsets by solving the following block
+ℓ1 -regularized log likelihood problem:
+minimize
+
+− log det(K) + tr(Σ̂K)
+(4)
+X
++
+λk max {|Kij | : (i, j) ∈ Sk } .
+k
+
+The subset Sk encodes a set of interactions that, as soon as
+one of the interactions in the set exists, there is no reason
+
+to penalize any of the other interactions. For example, in
+the 2D shape model, the subsets Sk may be constructed as
+Sqr = Bq × Br where the Bq and Br represent the set of
+variables belonging to the q th and rth articulated body part,
+respectively.
+We can perform a similar derivation to the one in Section 2.1 to find the dual problem for (4):
+maximize
+subject to
+
+log det(Σ̂ + W )
+P
+
+(i,j)∈Sk
+
+|Wij | ≤ λk ,
+
+(5)
+for k = 1, . . . , p.
+
+To apply a projected gradient
+P method to (5), we need to
+project to the constraints (i,j)∈Sk |Wij | ≤ λk . Recent
+work by Duchi et al. (2008) provides such a method, giving
+a randomized linear time algorithm to project a vector w to
+the constraint kxk1 ≤ C. The sets Sk must be disjoint so
+that we can project to each constraint in (5) independently
+(and hence efficiently). We refer the reader to their paper
+for a description of the actual projection algorithm.
+Given the linear time algorithm to project to an ℓ1 constraint, we can develop an O(n2 ) expected time (the
+same efficiency as the projection to Bλ of earlier methods) method to project to the feasible set S = {W |
+P
+(i,j)∈Sk |Wij | ≤ λk , k = 1, . . . , p}. The method simply iterates through each of the blocks
+P Sk , projecting Wij :
+(i, j) ∈ Sk to the constraint that (i,j)∈Sk |Wij | ≤ λk to
+get W ∈ S. With this as a building block, Algorithm 3
+maximizes the dual (5). Because the constraint set is more
+complicated, making it difficult to make the second order
+expansion of log det accurate for the projected direction,
+the algorithm uses Armijo-like line searches as described
+by Bertsekas (1976) rather than the simpler line search of
+Algorithm 1. If we let g = ∇f (x), the Armijo line search
+for a projected gradient maximization method with function f returns the first t such that
+f (ΠS (x + tg)) ≥ f (x) + α∇f (x)T (ΠS (x + tg) − x)
+where t is initialized to 1 and decreased by a multiplier
+β < 1 every time the above condition is not satisfied. In
+our algorithm t is adaptively chosen to make the line search
+converge more quickly (see line 22 of Alg. 3), and setting
+0 < α < 1 guarantees convergence of the method.
+Previous methods developed for solving the penalized
+maximum-likelihood problem for Gaussians are unable to
+handle the block ℓ1 -penalties of (4). Effectively, batch steps
+are needed to handle the more long range block constraints;
+the coordinate based methods of Banerjee et al. (2006),
+Friedman et al. (2007), and Rothman et al. (2007) cannot
+account for more global constraints that tie parameters in
+arbitrary columns and rows. Our projected gradient methods, however, extend to the case of block penalties, with
+ease. Further, the added complexity is negligible, as the
+entire projection step is still O(n2 ), while the expensive
+O(n3 ) step is computing the gradient.
+
+Algorithm 3 Solves (5) given an initial W such that Σ̂ +
+W ≻ 0 and constants β and α, 0 < β < 1 and 0 < α < 1.
+1: t = 1
+2: repeat
+3:
+Compute unconstrained gradient
+4:
+G = (Σ̂ + W )−1
+5:
+Compute direction of step
+6:
+D = ΠS (W + tG) − W
+7:
+Compute initial and next objective values
+8:
+f0 = log det(Σ̂ + W )
+9:
+ft = log det(Σ̂ + ΠS (W + tG))
+10:
+Perform backtracking line search
+11:
+while ft < f0 + α tr(DG) do
+12:
+Decrease t, recalculate direction and objective
+13:
+t=β·t
+14:
+D = ΠS (W + tG) − W
+15:
+ft = log det(Σ̂ + ΠS (W + tG))
+16:
+end while
+17:
+Compute next points and duality gap
+18:
+W = ΠS (W + tG)
+19:
+K = (Σ̂ + W )−1
+P
+20:
+η = tr(Σ̂K) + k λk kKij : (i, j) ∈ Sk k∞ − n
+21:
+Increase t slightly
+22:
+t = t/β
+23: until η < ǫ
+
+5
+
+Experimental Results
+
+In this section, we describe our experimental results. We
+performed experiments both on synthetic and real data,
+gathering timing information as well as calculating loglikelihood on test data, validating the usefulness of sparse
+estimators. This validation seems to have been notably absent from much of the literature on sparse inverse covariance selection.
+5.1
+
+Timing Results
+
+We ran a series of timing experiments for the original problem from equations (1) and (2) comparing our approach
+to that of Banerjee et al. (2006) and Friedman et al.
+(2007). To generate data for our timing experiments, we
+constructed random n × n sparse inverse covariance matrices with roughly 20 edges per node. For each such matrix,
+we generated n/3 samples and used them to construct the
+empirical covariance Σ̂. We selected λ for the penalty in (1)
+so that at solution, the inverse covariance K had (approximately) the correct number of edges. Our timing experiments were run on a computer with a 1.7Ghz Intel Xeon
+32-bit processor and 1.96GB of RAM. The run times to
+achieve a duality gap of ǫ = 0.1 are plotted in Fig. 1,
+which shows CPU time versus problem size compared to
+Banerjee et al.’s and Friedman et al.’s column-wise coordinate ascent algorithms. The results show that our projected
+subgradient method outperforms Banerjee et al.’s columnwise ascent by one to two orders of magnitude on these
+
+4
+
+−60
+
+2
+
+10
+
+1
+
+10
+
+Projected Subgradient
+Iterated QP
+Graphical Lasso
+
+0
+
+10
+400
+
+500
+
+600
+
+700
+
+800
+
+900
+
+1000
+
+Problem size
+
+tests. Our method seems to find a solution in roughly half to
+two-thirds the time that Friedman et al.’s does, though their
+method seems to more easily be optimized when the primal matrix K becomes sparse. Further, in our experiments
+when Σ̂ was not full rank, Friedman et al.’s method seemed
+to have more difficulty maintaining a positive definite solution than did ours, which guarantees positive definiteness
+of Σ̂+W throughout. We note that due to the slightly more
+complicated projection, the run times of Alg. 3 are roughly
+twice those of Alg. 1.
+5.2
+
+Synthetic Log Likelihoods
+
+To test the impact of learning sparse structures, we compared our ℓ1 -penalized inverse covariance estimation from
+(1) to Tikhonov regularized covariance matrices, i.e., selecting the covariance matrix to be Σ = Σ̂ + νI for some
+ν > 0, which guarantees the positive-definiteness of Σ. To
+do this, we randomly generated 20 inverse covariance matrices with 50% sparsity and dimension n = 60. From each
+of these, we generated 30 samples for a training set (defining a covariance Σ̂) and 30 samples for a test set. We then
+varied ν to compute the best test set log-likelihood achieved
+by Tikhonov regularized covariance across all ν’s. Fig. 2(a)
+shows this best-case test log-likelihood for the Tikhonov
+regularized covariance versus the log-likelihood for sparse
+covariances matrices output by Algorithm 1 as we sweep
+the penalty parameter λ from max(|Σ̂ij |) to 10−3 . The
+results show that, for appropriate levels of sparsity, ℓ1 regularized covariance estimation outperforms simple regularized estimates of the full covariance.
+5.3
+
+Mammal 2D Shape Models
+
+Moving on to real data, we aimed to study whether our
+block ℓ1 approach achieves better generalization than other
+approaches for learning the model. In our first application,
+we consider a two-dimensional shape classification task.
+Here, we have a series of 60 landmarks, each an (x, y) point
+in 2D, defining the outline of a mammal as a vector in R120 .
+The mammals are from six classes: bison, deer, elephants,
+giraffes, llamas, and rhinos. There are on average 42 examples from each class, each a hand-labeled outline from a
+real image. Our task is to model each animal’s outline as a
+Gaussian distribution, learning a mean µ(c) and covariance
+Σ(c) for each of the six animal classes c.
+We used and compared the standard sparsifying objective
+
+−60
+−65
+
+Test log−likelihood
+
+3
+
+10
+
+Figure 1:
+Run
+times in log-scale
+of the method presented in this paper versus Banerjee et al.’s (Iterated
+QP) and Friedman
+et al.’s (Graphical
+Lasso).
+
+Test log−likelihood
+
+CPU time (seconds)
+
+10
+
+−70
+
+−75
+
+−80
+
+−85
+
+−70
+−80
+−90
+−100
+−110
+−120
+
+Full
+L1
+
+−90
+
+−95
+
+0
+
+10
+
+20
+
+30
+
+40
+
+50
+
+60
+
+% Non−zeros
+
+(a)
+
+Block L1
+L1
+
+−130
+70
+
+80
+
+90
+
+100
+
+20
+
+30
+
+40
+
+50
+
+60
+
+70
+
+% Non−zeros
+
+(b)
+
+Figure 2: Log-likelihood results: (a) for synthetic data, comparing ℓ1 -penalized inverse covariance to (best-case) full covariance;
+(b) for 2D shape-recognition test data, comparing the block versus
+the non-block method.
+
+(1) and the block-penalized objective (4) to learn sparse inverse covariances K (c) . For the block penalties, we manually chose the articulated body parts Bq as the head, neck,
+stomach, each leg, back, and tail. The blocks Sk were then
+Sk = Bq × Br for all pairs q and r (including q = r), and
+the penalty λk for Sk was set so that λk ∝ |Sk |.3
+We measure the performance of the competing methods in
+two ways: by test set log-likelihood and by performance
+on a classification task. In the log-likelihood case, we performed five-fold cross validation of the training data and
+swept the λ penalties for both (1) and (4), ranging from
+full-sparsity to no-sparsity solutions for the inverse covariance K. We set the mean µ(c) for each class simply as the
+training set mean. As a baseline, we also chose a “full” covariance matrix Σ̂ + νI for each class using the Tikhonov
+regularization technique described above. As above, we selected ν to give the best test log-likelihood for each class in
+our cross-validation procedure. The block sparsity led to
+moderate improvements in the test likelihood, which can
+be seen in Fig. 2(b); we note that we do not plot the full
+covariance result, as its best average log-likelihood on test
+data is -173.22, which is off the bottom of the plot. We
+see that ℓ1 -regularization significantly improves generalization, and that our block approach provides yet an additional improvement.
+Other benefits of the block structured regularization can be
+seen in a classification task. In this case, for each of the
+three methods (sparse, block sparse, and Tikhonov regularized) and for each class we chose the inverse covariance
+K (c) that maximized the Gaussian log-likelihood on a heldout validation set. The task is to classify examples from a
+test set, that is, to assign a label ĉ to a given vector v ∈ R120
+from the test set. We assign the label for v simply as the
+class that has the maximum likelihood for v:
+n
+o
+ĉ = argmax log det K (c) − (v − µ(c) )T K (c) (v − µ(c) ) .
+c
+
+The false positive and false negative error rates over ten
+different testing runs for each class are in Table 1. We
+3
+
+Having the penalties on the blocks correspond to their sizes
+overcomes the tendency for larger blocks to have edges since they
+can more easily affect the log-likelihood.
+
+80
+
+80
+
+60
+
+60
+
+40
+
+40
+
+20
+
+20
+
+0
+
+0
+
+−20
+
+−20
+
+−40
+
+−40
+
+−60
+
+−60
+
+−530
+−535
+
+−100
+
+−80
+
+−60
+
+−40
+
+−20
+
+0
+
+20
+
+40
+
+60
+
+80
+
+average test log−likelihood
+
+−540
+
+−100
+
+−80
+
+−60
+
+−40
+
+−20
+
+0
+
+20
+
+40
+
+60
+
+80
+
+−545
+−550
+−555
+−560
+−565
+
+Full Covariance
+
+−570
+
+L−1 (our method)
+Block L−1 (our method)
+
+−575
+80
+
+80
+
+60
+
+60
+
+40
+
+40
+
+20
+
+20
+
+0
+
+0
+
+−20
+
+−20
+
+−40
+
+−40
+
+−60
+
+−580
+−4
+10
+
+−3
+
+10
+
+−2
+
+λ
+
+10
+
+Figure 4:
+Average
+test
+log-likelihood
+on Gasch dataset for
+ℓ1 (red diamonds)
+and block ℓ1 (blue
+circles) regularization
+of inverse covariance
+matrix, compared to
+the
+full-covariance
+baseline (horizontal
+green line).
+
+metabolic pathways (Förster et al., 2003). We preprocess
+the data so that each variable is zero mean and unit variance
+across the dataset.
+
+−60
+−100
+
+−80
+
+−60
+
+−40
+
+−20
+
+0
+
+20
+
+40
+
+60
+
+80
+
+−100
+
+−80
+
+−60
+
+−40
+
+−20
+
+0
+
+20
+
+40
+
+60
+
+80
+
+Figure 3: Different sparsity structures learned on blocked llama
+shape data.
+Table 1: Classification Error Rates on Animals
+N EG Bison Deer Elephant Giraffe Llama Rhino
+ℓ1
+5.6% 2.2%
+1.3%
+5.0% 40.0% 3.3%
+Block 1.1%
+0%
+0%
+3.0% 35.5% 3.3 %
+2.5%
+6.0% 41.1% 10.0%
+Full 10.0% 1.1%
+P OS Bison Deer Elephant Giraffe Llama Rhino
+ℓ1
+1.2% 35.3%
+1.2%
+0%
+3.6%
+0%
+Block 1.1% 29.1%
+1.2%
+0%
+0%
+0%
+Full
+2.4% 40.3%
+1.3%
+0%
+1.9%
+0%
+
+see that the standard ℓ1 -regularized objective almost always
+outperforms the full inverse covariance, and that the block
+ℓ1 -regularized likelihood consistently and significantly outperforms both other methods.
+The block regularized covariance selection can also be visualized as in Fig. 3. In the figure, we display the sparsity (i.e. the edges in the associated MRF) of the block
+inverse covariance learned for a llama outline as we vary
+the penalty term. We can see that generally, the articulated
+parts (legs, head, tail, body) have edges between themselves before edges between parts; intuitively, the relationships within articulated parts, such as the head or the legs,
+capture the shape of the part and are likely to be more informative for density estimation of the shape distribution
+than long range interactions such as the head’s position in
+relation to the back right leg.
+5.4
+
+Gene Expression Data
+
+We considered a data set that measures the mRNA expression levels of the 6152 genes in S. cerevisiae (baker’s
+yeast), measured under various environmental stress conditions (Gasch et al., 2000). The expression level of the
+genes can be modeled as random variables and each experiment as a data sample. Some of the expression data was
+missing and we used a standard nearest-neighbor method to
+impute the missing values (Troyanskaya et al., 2001). We
+restricted the dataset to the 667 genes involved in known
+
+For the block experiments we group genes into 86 disjoint sets Bq that correspond to known metabolic pathways (Förster et al., 2003).4 We then construct the edge
+subsets as follows. We have one block Sqr for each pair
+of pathways q 6= r, which contains all the covariance entries for Bq × Br . We then have a separate block Sij for
+each pair of genes i, j in the same pathway. That is, we
+apply block ℓ1 regularization between groups of genes in
+different blocks and standard ℓ1 regularization between individual genes within the same block. For each block Sk
+we again set λk = λ·|Sk | where λ is a shared regularization
+parameter.
+We conducted 5-fold cross-validation on the dataset. On
+each fold we use the training set to estimate the covariance
+matrix and compute the log-likelihood for each instance in
+the test set. We report the average log-likelihood over the
+5 folds. We baseline our method by first estimating the
+full covariance matrix. Since the number of data samples
+(174) is significantly smaller than the number of variables
+(667), we again use cross-validated Tikhonov regularization as previously described to give an estimate for Σ. We
+compare our results against the best (highest log-likelihood
+on test) Tikhonov regularized covariance.
+Fig. 4 shows the performance of our methods compared to
+the baseline. The results clearly illustrate that the sparsity
+inducing ℓ1 -regularized objective outperforms the baseline,
+while the block ℓ1 -regularized penalties give further benefits in terms of log-likelihood.
+
+6
+
+Conclusion
+
+In this work, we have presented new methods for finding
+sparse inverse covariance matrices and thereby for selecting edge structures for Gaussian MRFs. The methods we
+present are significantly faster than prior work, and they
+generalize straightforwardly to learning more complicated
+structures than has been previously possible. We also provide compelling experimental results on two real-world
+4
+A small number of genes that participate in more than one
+pathway were placed into individual sets of 1 gene each.
+
+data sets demonstrating the benefits of this approach for
+both density estimation and classification.
+
+Dempster, A. P. (1972). Covariance selection. Biometrics, 28,
+157–175.
+
+Our work suggests the promise of projected gradient methods for other ℓ1 -regularized problems by optimization in
+the dual space, as the duals of these problems often have
+simple ℓ∞ constraints to which it is trivial to project. However, this approach currently relies on the ability to efficiently recover the primal variables from the dual variables,
+making its general application an open problem. Another
+interesting direction for future work is the construction of
+methods for intelligently setting the penalty parameters λ.
+This could certainly lead to more accurate structure recoveries, and recent work by Do et al. (2007) demonstrates the
+promise of hyperparameter learning in log-linear models;
+this might be extended to more general problems such as
+structure learning. Our work demonstrates the benefit of
+block-structured regularization. However, the blocks must
+currently be selected by hand and cannot overlap. Automatically learning the block structure would be a very
+useful extension to our work, both for improved performance and for the explanatory power it gives beyond individual edge structures. Finally, ℓ1 -regularized learning
+has recently been demonstrated successfully for discrete
+MRFs (Lee et al., 2006; Wainwright et al., 2007). It
+would be interesting to see whether efficient projectionbased methods such as ours can be applied to richer settings
+that involve discrete variables or non-linear continuous interactions.
+
+Do, C. B., Foo, C.-S., & Ng, A. Y. (2007). Efficient multiple
+hyperparameter learning for log-linear models. Neural Information Processing Systems 21.
+
+Acknowledgments
+
+Dobra, A., Hans, C., Jones, B., Nevins, J., Yao, G., & West, M.
+(2004). Sparse graphical models for exploring gene expression
+data. Journal of Multivariate Analysis, 90, 196–212.
+Duchi, J., Shalev-Shwartz, S., Singer, Y., & Chandra, T. (2008).
+Efficient projections onto the ℓ1 -ball for learning in high dimensions. Proceedings of the 25th International Conference
+on Machine Learning.
+Förster, J., Famili, I., Fu, P., & Palsson, B. O. (2003). Genomescale reconstruction of the saccharomyces cerevisiae metabolic
+network. Genome Research, 13, 244–253.
+Friedman, J., Hastie, T., & Tibshirani, R. (2007). Sparse inverse
+covariance estimation with the graphical lasso. Biostatics, 1–
+10.
+Gasch, A., Spellman, P., Kao, C., Carmel-Harel, O., Eisen, M.,
+Storz, G., Botstein, D., & Brown, P. (2000). Genomic expression program in the response of yeast cells to environmental
+changes. Molecular Biology of the Cell, 11, 4241–4257.
+Lauritzen, S. L. (1996). Graphical models. Clarendon Press.
+Lee, S.-I., Ganapathi, V., & Koller, D. (2006). Efficient structure
+learning of Markov networks using ℓ1 -regularization. Neural
+Information Processing Systems.
+Levitin, E. S., & Polyak, B. T. (1966). Constrained minimization problems. USSR Computational Math and Mathematical
+Physics, 6, 1–50.
+
+We thank Stephen Boyd for his guidance and useful comments, Gal Elidan and Geremy Heitz for help with the
+mammals data set, Gal Chechik and Su-In Lee for help with
+the gene expression data set, and the anonymous reviewers for helpful feedback. This work was supported by the
+Office of Naval Research under MURI N000140710747,
+DARPA under the Transfer Learning program, and NSF
+grant BDI-0345474.
+
+Malioutov, D. M., Johnson, J. K., & Willsky, A. S. (2006). Walksums and belief propagation in gaussian graphical models.
+Journal of Machine Learning Research, 7, 2031–2064.
+
+References
+
+Rothman, A., Bickel, P., Levina, E., & Zhu, J. (2007). Sparse
+permutation invariant covariance estimation (Technical Report 467). University of Michian Dept. of Statistics.
+
+Banerjee, O., Ghaoui, L. E., d’Aspremont, A., & Natsoulis, G.
+(2006). Convex optimization techniques for fitting sparse gaussian graphical models. Proceedings of the 23rd International
+Conference on Machine Learning.
+Bar-Shalom, Y., & Fortmann, T. E. (1988). Tracking and data
+association. Academic Press.
+Bertsekas, D. P. (1976). On the Goldstein-Levitin-Polyak gradient
+projection method. IEEE Trans. on Automatic Control, 21.
+Bilmes, J. A. (2000). Factored sparse inverse covariance matrices.
+IEEE Conference on Acoustics, Speech and Signal Processing.
+Boyd, S., & Vandenberghe, L. (2004). Convex optimization. Cambridge University Press.
+
+Meinshausen, N. (2005).
+A note on the lasso for
+Gaussian graphical model selection.
+Available at
+http://www.stats.ox.ac.uk/ meinshau/note.pdf.
+Meinshausen, N., & Bühlmann, P. (2006). High dimensional
+graphs and variable selection with the lasso. Annals of Statistics, 34, 1436–1462.
+
+Tibshirani, R. (1996). Regression shrinkage and selection via the
+lasso. Journal of the Royal Statistical Society B, 58, 267–288.
+Troyanskaya, O., Cantor, M., Sherlock, G., Brown, P., Hastie,
+T., Tibshirani, R., Botstein, D., & Altman, R. (2001). Missing value estimation for DNA microarrays. Bioinformatics, 17,
+520–525.
+Wainwright, M. J., Ravikumar, P., & Lafferty, J. D. (2007). Highdimensional graphical model selection using ℓ1 -regularized logistic regression. Neural Information Processing Systems 19.
+Willsky, A. (2002). Multiresolution markov models for signal and
+image processing. Proceedings of IEEE, 90, 1396–1548.
+
+

@@ -1,0 +1,1562 @@
+only applicable to linear-Gaussian models and models with
+finite state spaces, respectively. Even when the state space
+is finite, it can be so large that the HMM or junction tree
+algorithms become too computationally expensive. This is
+typically the case for large discrete dynamic Bayesian net­
+works (DBNs) (Dean and Kanazawa 1989): inference re­
+quires at each time space and time that is exponential in the
+
+Kevin Murphyt
+t
+
+Stuart Russent
+
+Computer Science Dept.
+UC Berkeley
+
+{jfgf,murphyk,russell}©cs.berkeley.edu
+
+number of hidden nodes.
+To handle these problems, sequential Monte Carlo meth­
+ods, also known as particle filters (PFs), have been in­
+troduced (Handschin and Mayne 1969, Akashi and Ku­
+mamoto 1977). In the mid 1990s, several PF algorithms
+were proposed independently under the names of Monte
+Carlo filters (Kitagawa 1996), sequential importance sam­
+pling (SIS) with resampling (SIR) (Doucet 1998), bootstrap
+filters (Gordon, Salmond and Smith 1993), condensation
+trackers (lsard and Blake 1996), dynamic mixture models
+(West 1993), survival of the fittest (Kanazawa, Koller and
+Russell 1995), etc. One of the major innovations during the
+1990s was the inclusion of a resampling step to avoid de­
+generacy problems inherent to the earlier algorithms (Gor­
+don et al. 1993). In the late nineties, several statistical im­
+provements for PFs were proposed, and some important
+theoretical properties were established. In addition, these
+algorithms were applied and tested in many domains: see
+(Doucet, de Freitas and Gordon 2000) for an up-to-date sur­
+vey of the field.
+One of the major drawbacks of PF is that sampling in
+high-dimensional spaces can be inefficient. In some cases,
+however, the model has "tractable substructure", which
+can be analytically marginalized out, conditional on cer­
+tain other nodes being imputed, c.f., cutset conditioning in
+static Bayes nets (Pearl 1988). The analytical marginal­
+ization can be carried out using standard algorithms, such
+as the Kalman filter, the HMM filter, the junction tree al­
+gorithm for general DBNs (Cowell, Dawid, Lauritzen and
+Spiegelhalter 1999), or, any other finite-dimensional opti­
+mal filters. The advantage of this strategy is that it can
+drastically reduce the size of the space over which we need
+to sample.
+Marginalizing out some of the variables is an example of
+the technique called Rao-Blackwellisation, because it is
+related to the Rao-Blackwell formula: see (Casella and
+Robert 1996) for a general discussion. Rao-Blackwellised
+particle filters (RBPF) have been applied in specific con­
+texts such as mixtures of Gaussians (Akashi and Ku­
+mamoto 1977, Doucet 1998, Doucet, Godsill and Andrieu
+
+177
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS 2000
+
+2000), fixed parameter estimation (Kong, Liu and Wong
+1994), HMMs (Doucet 1998, Doucet, Godsill and Andrieu
+2000) and Dirichlet process models (MacEachern, Clyde
+and Liu 1999). In this paper, we develop the general theory
+of RBPFs, and apply it to several novel types of DBNs. We
+omit the proofs of the theorems for lack of space: please
+refer to the technical report (Doucet, Gordon and Krishna­
+murthy 1999).
+
+2
+
+PROBLEM FORMULATION
+
+Let us consider the following general state space
+model/DBN with hidden variables
+and observed vari­
+ables
+We assume that
+is a Markov process of ini­
+tial distribution
+and transition equation
+The observations
+are assumed
+to be conditionally independent given the process
+of
+marginal distribution
+Given these observations,
+the inference of any subset or property of the states
+�
+relies on the joint posterior distribution
+p
+Our objective is, therefore, to estimate this
+distribution, or some of its characteristics such as the filter­
+ing density
+or the minimum mean square error
+(MMSE) estimate
+The posterior satisfies the
+following recursion
+
+Zt
+
+Yt·
+
+{zo,z1,... ,Zt}
+(zo,tiY1:t).
+
+Zt
+
+p(z0)
+p(zt/Zt-1).
+Yl:t � {y1,Y2,... ,yt}
+Zt
+p(yt/zt).
+zo:t
+
+p (zt/Y1:t)
+E[ztiYl:t]·
+
+the alternative recursion
+
+(
+
+p ro:t I Yl:t) -
+
+_
+
+p(Yt/Y1:t-l,ro:t)P(rt/rt-!)p(ro:t-11Yl:t-d
+P ( Yt I Yl:t-1 )
+
+(2)
+
+If eq. ( 1) does not admit a closed-form expression, then eq.
+(2) does not admit one either and sampling-based methods
+is
+are also required. Since the dimension of
+smaller than the one of
+we should expect
+I
+to obtain better results.
+In the following section, we review the importance sam­
+pling (IS) method, which is the core of PF, and quantify the
+improvements one can expect by marginalizing out
+i.e. using the so-called Rao-Blackwellised estimate. Sub­
+sequently, in Section 4, we describe a general RBPF algo­
+rithm and detail the implementation issues.
+
+xo:t,
+
+3
+
+IMPORTANCE SAMPLING AND
+RAO-BLACKWELLISATION
+
+If we were able to sample N i.i.d.
+ples (particles),
+
+{ (r��L x���)
+
+The above description assumes that there is no structure
+within the hidden variables. But suppose we can di­
+vide the hidden variables
+and
+into two groups,
+such that
+and,
+conditional on
+the conditional posterior distribution
+is analytically tractable. 1 Then we can
+easily marginalize out
+from the posterior, and only
+need to focus on estimating
+which lies in a
+space of reduced dimension. Formally, we are making use
+of the following decomposition of the posterior, which fol­
+lows from the chain rule
+
+p(zt lzt-d
+ro:t.
+p ( Xo:t I Yl:t,ro:t)
+
+P (ro:t,Xo:t/ Yl:t)
+
+=
+
+=
+
+p (ro:tiY1:t),
+
+P ( xo:tl Yl:t,ro:t) P (ro:tl Yl:t)
+
+The marginal posterior distribution
+
+p (ro:t/yu)
+
+satisfies
+
+1
+The problem of how to automatically identify which vari­
+ables should be sampled, and which can be handled analytically,
+is one we are currently working on. We anticipate that algorithms
+similar to cutset conditioning (Becker, Bar-Yehuda and Geiger
+1999) might prove useful.
+
+i
+
+1, . . . , N
+
+=
+
+}.
+
+according to
+
+bution would be given by
+
+where
+
+N
+
+1
+
+"""' J( (i) (il ) (dro:tdXo:t)
+=l
+J(r&�Lx��n (dro:tdXo:t) denotes the Dirac delta
+
+function located at
+
+=
+
+x
+ro
+:t, O:t
+
+N L.....t
+i
+
+(r���,x���).
+
+As a corollary, an
+
+estimate of the filtering distribution
+
+PN (rt,Xt/ Yl:t)
+
+=
+
+-iJ 2::;:,1 J(
+
+(iJ
+r
+t
+
+,
+
+(il
+x
+t
+
+p ( rt,Xt I yl:t) is
+) (drtdxt). Hence
+
+one can easily estimate the expected value of any function
+of the hidden variables w.r.t. this distribution,
+us­
+ing
+
+I(ft),
+
+ft
+
+Zt
+rt
+Xt,
+p(xt/rt-1:t,Xt_l)p(rtlrt-1)
+
+xo:t
+
+;
+
+random sam­
+
+p ( ro:t,Xo:t / YI:t), then an empirical estimate of this distri­
+PN (ro,t,Xo:tl Yl:t)
+
+If one attempts to solve this problem analytically, one ob­
+tains integrals that are not tractable. One, therefore, has to
+resort to some form of numerical approximation scheme. In
+this paper, we focus on sampling-based methods. Advan­
+tages and disadvantages of other approaches are discussed
+at length in (de Freitas 1999).
+
+p (ro:t IYl:t)
+
+p ( r0,t,Xo:t Yl:t).
+
+=
+
+/ ft (ro:t,xo,t) PN ( ro:t,Xo:t/ YI:t) dro:tdXo:t
+N
+ft (ro:t> Xo:t)
+1 """'
+
+N �
+
+(i)
+
+(i)
+
+i=l
+
+This estimate is unbiased and,
+large numbers (SLLN), IN
+(a.s.)
+towards I
+as N
+varp( ro,t ,xo,t i Yl,t )
+limit theorem (CLT) holds
+
+(ft)
+
+(ft)
+[ft (ro:t,Xo:t)]
+
+Vii [I; (ft)- I (ft)]
+
+from the strong law of
+converges almost surely
+--+
++oo.
+If
+< +oo, then a central
+
+o}, �
+
+====>
+
+.N (o, ai)
+'
+
+N--too
+
+where " =? " denotes convergence in distribution. Typi­
+cally, it is impossible to sample efficiently from the "tar­
+get" posterior distribution
+at any time t.
+I
+So we focus on alternative methods.
+
+p ( ro:t,Xo:t Yl:t)
+
+178
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS 2000
+
+I(ft)
+
+p ( ro:t,Xo:tiYI:t)
+
+con­
+and
+One way to estimate
+sists of using the well-known importance sampling method
+(Bernardo and Smith 1994). This method is based on the
+following observation. Let us introduce an arbitrary impor­
+tance distribution
+I
+from which it is easy
+to get samples, and such thatp
+> 0 implies
+> 0. Then
+
+q(ro:t,Xo:tiYI:t)
+I (ft) =
+
+lEg(
+
+q( ro:t,xo:t YI:t),
+( ro:t,xo:tl y1,t)
+
+closed-form expression, then the following alternative im­
+portance sampling estimate of
+can be used
+
+I (ft)
+
+-
+
+IJv (ft)=
+
+Li=llE (
+
+(ft (ro:t,Xo:t) w (ro:t.Xo:t))
+r0,,,x0,, IYu) (W (ro:t,Xo:t))
+
+lEg(
+
+.1.1. . d. sampIes
+
+{ (r(0,ti),x0,t(i)) }
+
+( (
+
+(i)
+
+"" -(i)�
+L.....t
+
+where the normalized importance weights
+
+are equal to
+
+This method is equivalent to the following point mass ap­
+
+p (ro:t,Xo:tl Yl:t)
+
+Il:I._(ft) will require
+a reduced number N of samples over I}v (ft) as we only
+
+Intuitively, to reach a given precision,
+
+need to sample from a lower-dimensional distribution. This
+is proven in the following propositions.
+Proposition 1 The variances of the importance weights,
+
+the numerators and the denominators satisfy for any N
+
+(i) (i) ) (dro:tdXo:t)
+""w���o(ro:t,
+PN ( ro:t,Xo:tl Yl:t) = �
+xO:t
+
+i=l
+
+q(
+
+Xo:t IYI:t) =
+
+Wb�� ro:t,
+= N-1
+
+For "perfect" simulation, that is
+
+varq(ro,tiHt)
+varq(ro,tiYu)
+
+)
+(nJv (ft))
+
+(W (ro,t, Xo,t))
+varq(ro,.,xo,tiYt,tl (4 (ft)
+varq(r0,.,x0,, IYu)
+
+< varq(ro,.,xo,tiHtl
+
+)
+(BJ; (ft))
+
+-
+
+IJv (ft) to
+{ft (ro:t.Xo:t)} < +oo
+(ro:t,xoJ2 (Bernardo and
+w (ro:t.Xo:t)
+Smith 1994). This trivially implies that I'fv (ft) also satis­
+
+A
+sufficient
+condition
+satisfy a CLT is varp(ro,,,xo,tiYu)
+and
+< +oo for any
+
+Proposition 2 Under
+
+the assumptions given above,
+aCLT
+
+for any i.
+In practice, we will try to select the importance distribu­
+tion as close as possi
+to the target distribution in a given
+
+�
+sense. For N finite, I}v (ft) is biased (since it is a ratio of
+estimates), but according to the SLLN, IN (ft) converges
+asymptotically a.s. towards I (ft). Under additional as­
+sumptions, a CLT also holds.
+
+Xo:t
+
+Now consider the case where one can marginalize out
+analytically, then we can propose an alternative estimate
+for
+with a reduced variance. As
+where
+is
+I
+I
+I
+a distribution that can be computed exactly, then an
+approximation of
+I
+yields straightforwardly
+an approximation of
+Moreover, if
+can be evaluated in a
+lEv( x0,, IYu,r0,,)
+
+I (ft)
+p ( ro:t YI:t) p (Xo:t YI:t,ro:t),
+
+(w (ro,t))::;
+(A� (ft) <
+
+Varq(r0,, ly1,t)
+
+for
+
+fies a CLT. More precisely, we get the following result.
+
+N
+
+p(ro:t,Xo:tl YI:t), we would have
+
+J
+
+q( ro:tl YI:t)
+
+d1" stn"buted accord-
+
+LiN=l ft (ro:t(i) ,xo:t(i)) w (ro:t(i),xo:t)
+N
+(i) Xo:t(i))
+w (ro:n
+Li=l
+N
+(i),Xo:t(i))
+wa:t�t (ro:t
+i=l
+wt�
+(i) (i)
+WO:t(i) -- NW (rO:t'( (Xj)o:t)(j)
+Lj=l w ro:t ,Xo:t)
+
+proximation of
+
+) ) ( (i))
+
+(i)
+) ft ro:t
+,Xo:t w ro:t
+
+p(ro:tiYI:t)
+q( ro:tl YI:t)
+q( ro:t,Xo:t I YI:t) dxo:t
+
+w (ro:t)
+
+q( ro:t,Xo:tl YI:t), a Monte Carlo estimate of I (ft)
+
+ing to
+is given by
+
+p xo:t 1 Yl:t ,r<•>
+o:t
+
+where
+
+t)
+w (ro:t,Xo:t) = p=---:--((r....:o...:.:t-'x'-' o'-':t-:-1Y=-1'-: 7
+q ro:t. Xo:tl YI:t)
+N
+
+(ft)
+
+N
+
+ro,t,Xo,tiYu)
+
+where the importance weight is equal to
+
+G.1ven
+
+(ft)
+�
+B'fv
+
+p ( ro:t,Xo:tl YI:t) =
+p (Xo:t Yl:t,ro:t)
+
+p ( ro:t YI:t)
+p( ro:t,Xo:tiYI:t).
+(ft (ro:t,Xo:t))
+
+-
+
+I}v (ft)
+
+and
+
+(f1 (ft)- I (ft)) N-too
+VN (� (ft) -I (ft))
+N-too
+VN
+
+where ai 2:
+
+-
+
+I'fv (ft) satisfy
+
+===>
+
+N (o, ai)
+
+===>
+
+N (o, a�)
+
+a�, ai and a� being given by
+
+af = �( r0,,,x0,, IHtl [((ft (ro,t, Xo,t) - I (ft)) w (ro,t, Xo,t))2]
+17�
+
+=
+
+�( ro,, IY1,,) [( (�Ep( x0,, IY1,,,r0,,) (ft (ro,t, Xo,t))
+-I
+
+(ft))wt (ro,t))2]
+
+I'fv (ft) is u�ally compu­
+tationally more extensive to compute than I}v (ft) so it is
+
+The Rao-Blackwellised estimate
+
+of interest to know when, for a fixed computational com­
+plexity, one can expect to achieve variance reduction. One
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS 2000
+
+4.1
+
+has
+
+Eq( ro,t IYu) [varq( IYu ,ro,tl [(ft (ro:t,Xo:t)
+- I (ft))w (ro:t,Xo:t)]J
+xo,t
+
+so that, accordingly to the intuition, it will be worth gen­
+erally performing Rao-Blackwellisation when the average
+conditional variance of the variable
+is high.
+
+Xo:t
+
+4
+
+IMPLEMENTATION ISSUES
+Sequential importance sampling
+
+If we restrict ourselves to importance functions of the fol­
+lowing form
+
+t
+
+q( ro:tiYI:t) q(ro) IT q( rkiYl:k,rl:k-1) (3)
+k=I
+we can obtain recursive formulas to evaluate w (ro:t)
+w (ro:t-d Wt and thus WI:t. The "incremental weight" Wt
+=
+
+RAO-BLACKWELLISED PARTICLE
+
+=
+
+FILTERS
+.
+.
+} at time
+·
+tGIven N partie1es (samp1es) {
+1, approximately distributed according to the distribution
+
+(i} ,x0,t_1
+(i)
+ro:t-1
+
+( ')
+
+4.1.1
+
+179
+
+C)
+
+p(r0�t-I,x0�t-1IYI:t-I), RBPFs allow us to compute N
+particles (r��L x��D approximately distributed according
+.
+.
+.
+to the postenor p (r0(i),p Xo:t
+t. Th'
+ac(i} IYI:t) , at time
+IS IS
+
+complished with the algorithm shown below, the details of
+which will now be explained.
+
+is given by
+
+Wt<X P(Ytl YI:t-1,ro:t) P( rtI rt-1)
+q( rtl YI:t,rl:t-1)
+Wt denotes the normalized version of Wt. i.e. w}i)
+1
+[L::%1 w}1l ] - w} } . Hence we can perform importance
+
+i
+
+=
+
+sampling online.
+
+Choice of the Importance Distribution
+
+q(ro:tI YI:t),
+
+Generic RBPF
+
+p (ro:tl Y1:t)·
+( rtI rt-1),
+
+1. Sequential importance sampling step
+•
+
+Fori = 1, ...
+
+, N, sample:
+
+(r�il) ,...., q(rtlr���-1 , Yl:t)
+(�(i) (i) )
+(�(i)
+ro:t) - rt 'ro:t-I
+�
+
+, N,
+
+For i = 1, ...
+evaluate the importance
+weights up to a normalizing constant:
+
+Wt(i) _
+
+•
+
+For i
+weights:
+
+=
+
+�i)
+
+q rt
+
+p(ro,tiYI:t)
+(i)
+Iro:t-1•YI:t) (�(i)
+ro:t-1IY1:t-1 )
+
+1, ...
+
+, N,
+
+(�(i)
+
+P
+
+normalize the importance
+
+(r6��)
+
+P(YtI Y1:t-1,ro:t-d
+with high/low
+
+w�i), respectively, to obtain N
+
+(rg�) approximately distributed
+according to p(r���IYI:t).
+
+random samples
+
+3. MCMC step
+•
+
+Apply a Markov transition kernel with invariant
+distribution given by
+
+Proposition 3 The distribution that minimizes the vari­
+ance of the importance weights conditional upon ro:t-1
+and Yl:t is
+
+P(YtiYI:t-1,ro:t)p(rtl rt-I)
+P(YtI Y1:t-1,ro:t-1)
+and the associated importance weight Wt is
+
+Multiply/ suppress samples
+importance weights
+
+We can show that the "optimal" proposal distribution, in
+the sense of minimizing the variance of the importance
+weights, takes the most recent evidence into account:
+
+p ( rt I ro:t-1,Y1:t)
+
+2. Selection step
+•
+
+p (YtI Y1:t-1 ,ro:t)·
+
+Yt·
+
+and set:
+
+•
+
+There are infinitely many possible choices for
+the only condition being that its supports must include that
+of
+The simplest choice is to just sample from
+the prior, p
+in which case the importance weight
+This is the
+is equal to the likelihood,
+most widely used distribution, since it is simple to compute,
+but it can be inefficient, since it ignores the most recent
+evidence,
+Intuitively, many of our samples may end up
+in a region of the space that has low likelihood, and hence
+receive low weight; these particles are effectively wasted.
+
+p(r6��1Y�:t) to obtain (r���).
+
+------'·
+
+=
+
+Jp (YtI Y1:t-1 ,ro:t) P(rtI rt-d drt
+
+=
+
+Unfortunately, computing the optimal importance sampling
+distribution is often too expensive. Several deterministic
+approximations to the optimal distribution have been pro­
+posed, see for example (de Freitas 1999, Doucet 1998).
+
+Degeneracy of SIS
+The following proposition shows that, for importance func­
+can only in­
+tions of the form (3), the variance of
+crease (stochastically) over time. The proof of this propo­
+sition is an extension of a Kong-Liu-Wong theorem (Kong
+
+w (ro:t)
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS 2000
+
+180
+
+et a!. 1994, p. 285) to the case of an importance function of
+the form (3).
+Proposition 4 The unconditional variance (i.e.
+
+with the
+observations Y1:t being interpreted as random variables)
+of the importance weights w (ro:t) increases over time.
+
+In practice, the degeneracy caused by the variance increase
+can be observed by monitoring the importance weights.
+Typically, what we observe is that, after a few iterations,
+one of the normalized importance weights tends to I, while
+the remaining weights tend to zero.
+
+4.1.2
+
+4.2
+
+CONVERGENCE RESULTS
+
+B
+
+Let
+(IRn) be the space of bounded, Borel measurable
+functions on IRn. We denote 11!11
+sup If (x)l. The fol-
+
+�
+
+xEJRn
+
+lowing theorem is a straightforward consequence of Theorem I in (Crisan and Doucet 2000) which is an extension
+of previous results in (Crisan et a!. 1999).
+Theorem 5 If the importance weights Wt are upper
+bounded and if one uses one of the selection schemes de­
+scribed previously, then, for all t 2: 0, there exists Ct inde-
+
+pendent of N such that for any ft
+
+E
+
+B
+
+( (JRnz )t+l )
+
+Selection step
+
+To avoid the degeneracy of the sequential importance sam­
+pling simulation method, a selection (resampling) stage
+may be used to eliminate samples with low importance ra­
+tios and multiply samples with high importance ratios. A
+
+���
+2::�1
+
+selection scheme associates to each particle r
+
+a num­
+
+ber of offsprings, say N; E N, such that
+N;
+N.
+Several selection schemes have been proposed in the lit­
+=
+
+w�i),
+
+erature. These schemes satisfy E( N;)
+N
+but
+their performance varies in terms of the variance of the
+particles, var(N;). Recent theoretical results in (Crisan,
+Del Moral and Lyons 1999) indicate that the restriction
+=
+
+w�i)
+
+E( N;)
+N
+is unnecessary to obtain convergence re­
+sults (Doucet et a!. 1999). Examples of these selection
+schemes include multinomial sampling (Doucet 1998, Gor­
+don et a!. 1993, Pitt and Shephard 1999), residual resam­
+pling (Kitagawa 1996, Liu and Chen 1998) and stratified
+sampling (Kitagawa 1996). Their computational complex­
+ity is 0 (N).
+=
+
+where the expectation is taken w.r.t. to the randomness in­
+troduced by the PF algorithm. This results shows that, un­
+der very lose assumptions, convergence of this general par­
+ticle filtering method is ensured and that the convergence
+rate of the method is independent of the dimension of the
+state-space. However, Ct usually increases exponentially
+with time. If additional assumptions on the dynamic sys­
+tem under study are made (e.g. discrete state spaces), it
+c for
+is possible to get uniform convergence results (ct
+any t) for the filtering distribution p ( Xt I Yl:t). We do not
+pursue this here.
+=
+
+5
+
+EXAMPLES
+
+We now illustrate the theory by briefly describing two ap­
+plications we have worked on.
+
+5.1
+
+ON-LINE REGRESSION AND MODEL
+SELECTION WITH NEURAL NETWORKS
+
+4.1.3
+
+MCMC step
+
+After the selection scheme at time t, we obtain N par­
+ticles distributed marginally approximately according to
+p(ro:tiYl:t)· As discussed earlier, the discrete nature of the
+approximation can lead to a skewed importance weights
+distribution. That is, many particles have no offspring
+(N;
+0), whereas others have a large number of off­
+spring, the extreme case being N;
+N for a particular
+value i. In this case, there is a severe reduction in the di­
+versity of the samples. A strategy for improving the re­
+sults involves introducing MCMC steps of invariant distri­
+bution p(ro:t IYl:t) on each particle (Andrieu, de Freitas and
+Doucet 1999b, Gilks and Berzuini 1998, MacEachern et a!.
+1999). The basic idea is that, by applying a Markov tran­
+sition kernel, the total variation of the current distribution
+with respect to the invariant distribution can only decrease.
+Note, however, that we do not require this kernel to be er­
+godic.
+=
+
+Consider a function approximation scheme consisting of
+a mixture of k radial basis functions (RBFs) and a linear
+regression term. The number of basis functions, kt, their
+centers, J.Lt , the coefficients (weights of the RBF centers
+plus regression terms), Ot, and the variance of the Gaussian
+noise on the output,
+can all vary with time, so we treat
+them as latent random variables: see Figure I. For details,
+see (Andrieu, de Freitas and Doucet 1999a).
+
+az,
+
+=
+
+In (Andrieu et a!. 1999a), we show that it is possible to
+simulate J.Lt, kt and ut with a particle filter and to com­
+pute the coefficients Ot analytically using Kalman filters.
+This is possible because the output of the neural network
+is linear in Ot, and hence the system is a conditionally lin­
+ear Gaussian state-space model (CLGSSM), that is it is a
+linear Gaussian state-space model conditional upon the lo­
+cation of the bases and the hyper-parameters. This leads to
+an efficient RBPF that can be combined with a reversible
+jump MCMC algorithm (Green 1995) to select the number
+
+") -- ' -.
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS
+
+/----....,
+
+'
+
+·.
+
+r
+
+,./
+1,
+
+/
+
+( llo·:
+
+-,
+
+--
+
+/
+
+k,
+
+,.............
+
+k,
+
+k,
+
+-
+
+..
+
+�- --
+
+·;· Jl.·,
+
+:.' ll2;
+
+. __/'
+
+' -...•.
+
+/··---..
+
+181
+
+;------•{ � }-----'r
+,__.L
+J.
+
+(
+
+k,·:
+
+• .·
+
+2000
+
+.
+
+,___ .
+
+'
+
+/·---,
+
+_ ,--,
+
+: a0 � a1 ;'------'.---.{
+' __ /
+
+.
+
+' .. /
+
+)
+
+Figure 3: A Factorial HMM with 3 hidden chains. Mt (i
+represents the color of grid cell i at time t, Lt represents
+the robot's location,and yt the current observation.
+Figure 1: DBN representation of the RBF model.
+hyper-parameters have been omitted for clarity.
+
+The
+
+o' - �
+ts;;. � - �- � :.�.: 1
+�::� ; ; ; ' ; ; ; : 1
+��
+
+£-t
+
+·_.
+
+.
+
+.
+
+'
+
+.
+
+-\
+
+0
+
+0
+
+50
+
+50
+
+100
+
+100
+
+150
+
+150
+
+200
+
+200
+
+..
+
+.
+
+..
+
+.
+
+.
+
+260
+
+250
+
+240
+
+..
+
+.
+
+-2
+
+230
+
+.
+
+.'
+
+270
+
+250
+
+250
+Time
+
+280
+
+300
+
+300
+
+350
+
+400
+
+350
+
+310
+
+300
+
+290
+
+400
+
+450
+
+500
+
+450
+
+Figure 2: The top plot shows the one-step-ahead output
+predictions [-] and the true outputs [
+] for the RBF
+model. The middle and bottom plots show the true val­
+ues and estimates of the model order and noise variance
+respectively.
+·
+
+·
+
+·
+
+of basis functions online. For example, we generated some
+data from a mixture of 2 RBFs for t = 1, ... , 500, and
+then from a single RBF fort= 501, ... , 1000; the method
+was able to track this change,as shown in Figure 2. Further
+experiments on real data sets are described in (Andrieu et
+al. 1999a).
+5.2
+
+ROBOT LOCALIZATION AND MAP
+BUILDING
+
+Consider a robot that can move on a discrete, two­
+dimensional grid. Suppose the goal is to learn a map of
+the environment, which, for simplicity, we can think of as
+a matrix which stores the color of each grid cell, which
+can be either black or white. The difficulty is that the color
+
+sensors are not perfect (they may accidentally flip bits),nor
+are the motors (the robot may fail to move in the desired di­
+rection with some probability due e.g., to wheel slippage).
+Consequently,it is easy for the robot to get lost. And when
+the robot is lost,it does not know what part of the matrix to
+update. So we are faced with a chicken-and-egg situation:
+the robot needs to know where it is to learn the map, but
+needs to know the map to figure out where it is.
+The problem of concurrent localization and map learn­
+ing for mobile robots has been widely studied. In (Mur­
+phy 2000), we adopt a Bayesian approach, in which we
+maintain a belief state over both the location of the robot,
+Lt E {1, . . . , N£ } ,and the color of each grid cell,Mt i E
+{1, . . . , Nc } i = 1, . . . , N£, where NL is the number
+of cells, and Nc is the number of colors. The DBN we
+are using is shown in Figure 3. The state space has size
+O (N L ) . Note that we can easily handle changing envi­
+ronments, since the map is represented as a random vari­
+able, unlike the more common approach, which treats the
+map as a fixed parameter.
+
+()
+
+,
+
+g
+
+The observation model is yt = f(Mt(Lt)), where f(·) is
+a function that flips its binary argument with some fixed
+probability. In other words, the robot gets to see the color
+of the cell it is currently at, corrupted by noise: yt is a
+noisy multiplexer with Lt acting as a "gate" node. Note
+that this conditional independence is not obvious from the
+graph structure in Figure 3(a), which suggests that all the
+nodes in each slice should be correlated by virtue of sharing
+a common observed child, as in a factorial HMM (Ghahra­
+mani and Jordan 1997). The extra independence informa­
+tion is encoded in yt 's distribution, c.f., (Boutilier, Fried­
+man,Goldszmidt and Koller 1996).
+The basic idea of the algorithm is to sample Ll:t with a PF,
+and marginalize out the Mt i nodes exactly,which can be
+done efficiently since they are conditionally independent
+given Ll:t:
+
+()
+
+P(Mt(l), ... , Mt(NL)iyl:t, Ll:t) = IJf�i P(Mt(i)iyl:t, Ll:t)
+Some results on a simple one-dimensional grid world are
+
+1 82
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS 2000
+
+famous ones, there exist numerous other dynamic systems
+admitting finite dimensional filters. That is, the filtering
+distribution can be estimated in closed-form at any timet
+using a fixed number of sufficient statistics. These include
+
+...
+ll
+1
+/
+\
+l
+I
+I
+�
+I
+"'Wll
+I
+
+11
+il
+
+a
+
+'!"
+
+I
+
+�110 12 14 11
+
+c
+
+b
+
+Figure 4: Estimated position as the robot moves from cell
+1 to 8 and back. The robot "gets stuck" in cell 4 for two
+steps in a row on the outgoing leg of the journey (hence the
+double diagonal), but the robot does not realize this until
+it reaches the end of the "corridor" at step 9, where it is
+able to relocalise. (a) Exact inference. (b) RBPF with 50
+particles. (c) Fully-factorised BK.
+
+shown in Figure 4. We compared exact Bayesian infer­
+ence with the RBPF method, and with the fully-factorised
+version of the Boyen-Koller (BK) algorithm (Boyen and
+Koller 1998), which represents the belief state as a product
+of marginals:
+NL
+
+P(Lt, Mt(l),
+
+0 0 0
+
+'Mt(NL)IYl:t)=P(LtiYl:t) II P(Mt(i)IYl:t)
+i=l
+
+We see that the RBPF results are very similar to the ex­
+act results, even with only 50 particles, but that BK gets
+confused because it ignores correlations between the map
+cells. We have obtained good results learning a 10 x 10
+map (so the state space has size
+using only 100
+particles (the observation model in the 2D case is that the
+robot observes the colors of all the cells in a 3 x 3 neighbor­
+hood centered on its current location). For a more detailed
+discussion of these results, please see (Murphy 2000).
+
+0(2100))
+
+5.3
+
+CONCLUSIONS AND EXTENSIONS
+
+RBPFs have been applied to many problems, mostly in
+the framework of conditionally linear Gaussian state-space
+models and conditionally finite state-space HMMs. That is,
+they have been applied to models that, conditionally upon
+a set of variables (imputed by the PF algorithm), admit a
+closed-form filtering distribution (Kalman filter in the con­
+tinuous case and HMM filter in the discrete case). One can
+also make use of the special structure of the dynamic model
+under study to perform the calculations efficiently using the
+junction tree algorithm. For example, if one had evolv­
+ing trees, one could sample the root nodes with the PF and
+compute the leaves using the junction tree algorithm. This
+would result in a substantial computational gain as one only
+has to sample the root nodes and apply the juction tree to
+lower dimensional sub-networks.
+Although the previoulsy mentioned models are the most
+
+•
+
+Dynamic models for counting observations (Smith
+and Miller 1986).
+
+•
+
+Dynamic models with a time-varying unknow covari­
+ance matrix for the dynamic noise (West and Harrison
+1996, Uhlig 1997).
+
+•
+
+Classes of the exponential family state space models
+(Vidoni 1999).
+
+This list is by no means exhaustive. It,however,shows that
+RBPFs apply to very wide class of dynamic models. Con­
+sequently, they have a big role to play in computer vision
+(where mixtures of Gaussians arise commonly), robotics,
+speech and dynamic factor analysis.
+
+References
+Akashi, H. and Kumamoto, H. ( 1977). Random sampling
+approach to state estimation in switching environ­
+ments,Automatica 13: 429-434.
+Andrieu,C.,de Freitas,J. F. G. and Doucet,A. ( 1999a). Se­
+quential Bayesian estimation and model selection ap­
+plied to neural networks, Technical Report CUEDIF­
+/NFENG/TR 341, Cambridge University Engineering
+Department.
+Andrieu,C.,de Freitas, J. F. G. and Doucet,A. ( 1999b). Se­
+quential MCMC for Bayesian model selection, IEEE
+Higher Order Statistics Workshop, Ceasarea, Israel,
+pp. 130- 134.
+Becker,A.,Bar-Yehuda,R. and Geiger,D. ( 1999). Random
+algorithms for the loop cutset problem.
+Bernardo,J. M. and Smith, A. F. M. ( 1994). Bayesian The­
+ory, Wiley Series in Applied Probability and Statis­
+tics.
+Boutilier, C., Friedman, N., Goldszmidt, M. and Koller,
+D. ( 1996). Context-specific independence in bayesian
+networks,Proc. Conf Uncertainty in AI.
+Boyen, X. and Koller, D. ( 1998). Tractable inference
+for complex stochastic processes, Proc. Conf. Uncer­
+
+tainty in AI.
+Casella, G. and Robert,C. P. ( 1996). Rao-Blackwellisation
+of sampling schemes,Biometrika 83(1): 8 1-94.
+Cowell, R. G., Dawid, A. P., Lauritzen, S. L. and Spiegel­
+halter, D. J. ( 1999). Probabilistic Networks and Ex­
+pert Systems, Springer-Verlag, New York.
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS 2000
+
+183
+
+Crisan, D. and Doucet, A. (2000). Convergence of gen­
+eralized particle filters, Technical Report CUEDIF­
+INFENG/TR 381, Cambridge University Engineering
+Department.
+
+Isard, M. and Blake, A. ( 1996). Contour tracking by
+stochastic propagation of conditional density, Euro­
+pean Conference on Computer Vision, Cambridge,
+UK, pp. 343-356.
+
+Crisan, D., Del Moral, P. and Lyons, T. ( 1999). Dis­
+crete filtering using branching and interacting parti­
+cle systems, Markov Processes and Related Fields
+5(3): 293-318.
+
+Kanazawa,K.,Koller,D. and Russell,S. ( 1995). Stochastic
+simulation algorithms for dynamic probabilistic net­
+works, Proceedings of the Eleventh Conference on
+Uncertainty in Artificial Intelligence, Morgan Kauf­
+mann,pp. 346-35 1 .
+
+de Freitas, J. F. G. ( 1999). Bayesian Methods for Neu­
+ral Networks, PhD thesis, Department of Engineer­
+ing, Cambridge University,Cambridge, UK.
+Dean, T. and Kanazawa, K. ( 1989). A model for reason­
+ing about persistence and causation,Artificial Intelli­
+
+gence 93(1 -2): 1 -27.
+Doucet, A. ( 1998). On sequential simulation-based meth­
+ods for Bayesian filtering,Technical ReportCUED/F­
+INFENG/TR 310, Department of Engineering, Cam­
+bridge University.
+Doucet, A., de Freitas, J. F. G. and Gordon, N. J.
+
+(2000). Sequential MonteCarlo Methods in Practice,
+Springer-Verlag.
+Doucet, A., Godsill, S. and Andrieu, C. (2000). On se­
+quential Monte Carlo sampling methods for Bayesian
+filtering,Statistics andComputing 10(3): 197-208.
+Doucet, A., Gordon, N. J. and Krishnamurthy, V.
+( 1999). Particle filters for state estimation of jump
+Markov linear systems, Technical Report CUEDIF­
+INFENG/TR 359, Cambridge University Engineering
+Department.
+Ghahramani, Z. and Jordan, M. ( 1997). Factorial Hidden
+Markov Models,Machine Learning 29: 245-273.
+Gilks, W. R. and Berzuini, C. ( 1998). Monte Carlo in­
+ference for dynamic Bayesian models, Unpublished.
+Medical Research Council, Cambridge, UK.
+Gordon,N. 1., Salmond, D. J. and Smith, A. F. M. ( 1993).
+Novel approach to nonlinear/non-Gaussian Bayesian
+state estimation, lEE Proceedings-F 140(2): 1 07-
+
+1 1 3.
+
+Kitagawa, G. ( 1996). Monte Carlo filter and smoother for
+non-Gaussian nonlinear state space models, Journal
+ofComputational and Graphical Statistics 5: 1 -25.
+Kong, A., Liu, J. S. and Wong, W. H. (1994).
+Se­
+quential imputations and Bayesian missing data prob­
+lems,Journal of the American Statistical Association
+89(425): 278-288.
+Liu, J. S. and Chen, R. ( 1998). Sequential Monte Carlo
+methods for dynamic systems, Journal of the Ameri­
+
+can Statistical Association 93: 1 032-1 044.
+MacEachern, S. N., Clyde, M. and Liu, J. S. ( 1999).
+Sequential importance sampling for nonparametric
+Bayes models: the next generation,Canadian Jour­
+
+nal of Statistics 27: 25 1 -267.
+Murphy,K. P. (2000). Bayesian map learning in dynamic
+environments, in S. Solla, T. Leen and K.-R. Muller
+(eds), Advances in Neural Information Processing
+Systems 12, MIT Press, pp. 1 0 1 5- 1 02 1 .
+Pearl, J. ( 1988). Probabilistic Reasoning in Intelligent Sys­
+tems: Networks of Plausible Inference, Morgan Kauf­
+mann.
+Pitt, M. K. and Shephard, N. ( 1999). Filtering via simula­
+tion: Auxiliary particle filters, Journal of the Ameri­
+
+can Statistical Association 94(446): 590-599.
+Smith, R. L. and Miller, J. E. ( 1986). Predictive records,
+Journal of the Royal Statistical Society B 36 : 79-88.
+Uhlig, H. ( 1997). Bayesian vector-autoregressions with
+stochastic volatility, Econometrica.
+Vidoni, P. ( 1999). Exponential family state space models
+based on a conjugate latent process, Journal of the
+Royal Statistical Society B 61: 2 1 3-221 .
+
+Green,P. J. ( 1995). Reversible jump Markov chain Monte
+Carlo computation and Bayesian model determina­
+tion,Biometrika 82: 7 1 1 -732.
+
+West, M. ( 1993). Mixture models, Monte Carlo, Bayesian
+updating and dynamic models, Computing Science
+and Statistics 24: 325-333.
+
+Handschin, J. E. and Mayne, D. Q. ( 1969). Monte Carlo
+techniques to estimate the conditional expectation in
+multi-stage non-linear filtering,International Journal
+
+West, M. and Harrison, J. ( 1996). Bayesian Forecasting
+and Dynamic Linear Models, Springer-Verlag.
+
+ofControl 9(5): 547-559.
+
+

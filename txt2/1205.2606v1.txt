@@ -1,0 +1,991 @@
+Dept. of Computing Science
+University of Alberta
+Edmonton, AB Canada T6G 2E8
+setting, which is not i.i.d. and where realizing what
+portion of the model needs to be explored is crucial to
+optimizing reward.
+Recently, the introduction of the KWIK (Knows What
+It Knows) framework [11] has provided a characterization of sufficient conditions for a model-learning
+algorithm to induce sample-efficient behavior in a
+reinforcement-learning agent. One of the first algorithms developed for this framework was a KWIK linear regression algorithm [15], which was used to learn
+the transition function of an MDP with linear dynamics. In this paper, we present an algorithm that improves on both the sample and computational bounds
+of this previous algorithm and apply it to a stable
+of learning problems for reinforcement-learning agents
+that employ “compact” representations. Specifically,
+we use KWIK linear regression (KWIK-LR) to learn
+the reward function in a factored MDP and the transition probabilities in domains encoded using Stochastic
+STRIPS [12] or Object Oriented MDPs (OOMDP) [5].
+We note that learning these parameters is not typically
+associated with linear regression—this paper shows
+that KWIK-LR can be used to help learn models beyond its standard usage in learning linear dynamics.
+Because of the KWIK guarantees, agents using this
+algorithm in these settings are guaranteed to make at
+most a polynomial (in the parameters of the learned
+model) number of sub-optimal steps with high probability. We present algorithms and theoretical arguments to this effect, including a general reinforcementlearning algorithm for agents that need to learn the
+probabilities of action outcomes when these effects
+may be ambiguous in sample data. Experimental evidence is also presented for benchmark problems in the
+application areas mentioned above.
+Our major contributions are an improved and simplified algorithm for KWIK linear regression, and
+the sample-efficient algorithms that use KWIK-LR to
+efficiently learn portions of compact reinforcementlearning representations, none of which have previ-
+
+592
+
+WALSH ET AL.
+
+ously been shown to be efficiently learnable. We
+also discuss extensions, including combining KWIKLR with other KWIK algorithms to learn more parameters of these compact representations.
+
+2
+
+KWIK Linear Regression
+
+KWIK [11] (Knows What It Knows) is a framework for studying supervised learning algorithms and
+was designed to unify the analysis of model-based
+reinforcement-learning algorithms. Formally, a KWIK
+learner operates over an input space X and an output space Y . At every timestep t, an input xt ∈ X
+is chosen and presented to the learner. If the learner
+can make an accurate prediction on this input, it can
+predict ybt , otherwise it must admit it does not know
+by returning ⊥ (“I don’t know”), allowing it to see
+the true yt or a noisy version zt . An algorithm is
+said to be KWIK if and only if, with high (1 − δ)
+probability, ||b
+yt − yt || < ǫ and the number of ⊥s
+returned over the agent’s lifetime is bounded by a
+polynomial function over the size of the input problem. It has been shown [10] that in the model-based
+reinforcement-learning setting, if the underlying model
+learner is KWIK, then it is possible to build an RL
+agent around it by driving exploration of the ⊥ areas using an R-max [4] style manipulation of the value
+function. Such an agent will, with high probability,
+take no more than a polynomial (in the parameters
+of the model being learned) number of suboptimal actions. In this paper, which deals with compact representations where the parameter sizes are far smaller
+than the enumerated state space, we will call agents
+that satisfy these conditions, but may require superpolynomial (in the size of the compact parameters)
+computation for planning, PAC-compact-MDP.
+One of the first uses of the KWIK framework was in
+the analysis of an online linear regression algorithm
+used to learn linear transitions in continuous state
+MDPs [15]. This algorithm uses the least squares estimate of the weight vector for inputs where the output
+is known with high certainty. Certainty is measured
+by two terms representing (1) the number and proximity of previous samples to the current point and (2)
+the appropriateness of the previous samples for making a least squares estimate. When certainty is low for
+either measure, the algorithm reports ⊥. In this work,
+we present a KWIK-LR algorithm that is more sample
+and computationally efficient than this previous work.
+First though, we define some notation.
+Let X := {~x ∈ Rn | k~xk ≤ 1}, and let f : X → R
+be a linear function with slope θ∗ ∈ Rn , kθ∗ k ≤
+M , i.e. f (~x) := ~xT θ∗ . Fix a timestep t. For
+each i ∈ {1, . . . , t}, denote the stored samples by
+
+UAI 2009
+
+~xi , their (unknown) expected values by yi := ~xTt θ∗ ,
+and their observed values by zi := ~xTi θ∗ + ηi , where
+the noise ηi is assumed to form a martingale, i.e.,
+E(ηi |η1 , . . . , ηi−1 ) = 0, and bounded: |ηi | ≤ S. Define
+the matrix Dt := [~x1 , ~x2 , . . . , ~xt ]T ∈ Rt×n and vectors
+~yt := [y1 ; . . . ; yt ] ∈ Rt and ~zt := [z1 ; . . . ; zt ] ∈ Rt , and
+let I be an n × n identity matrix.
+2.1
+
+A New KWIK Linear Regression
+Algorithm
+
+Suppose that a new query ~x arrives. If we were able to
+solve the linear regression problem Dt θ = ~zt , then we
+could predict yb = ~xT θ, where θ is the least-squares
+solution to the system. However, solving this system directly is problematic because: (1) if Dt is rankdeficient the least-squares solution may not be unique
+and (2) even if we have a solution, we have no information on its confidence.
+We can avoid the first problem by regularization, i.e.
+by augmenting the system with Iθ = ~v , where ~v is
+some arbitrary vector. Regularization certainly distorts the solution, but this gives us a measure of confidence: if the distortion is large, the predictor should
+have low confidence and output ⊥. On the other hand,
+if the distortion is low, it has two important consequences. First, the choice of ~v has little effect, and
+second, the fluctuations caused by using ~zt instead of
+~yt are also minor.
+Let At := [I; DtT ]T . The solution of the system At θ =
+[(θ∗ )T ; ~ytT ]T is unique, and equal to θ∗ . However, the
+right-hand side of this system includes the unknown
+θ∗ , so we use the approximate system At θ = [~0T ; ~ztT ]T ,
+which has a solution θb = (ATt At )−1 ATt [~0T ; ~ztT ]T . Define Qt := (ATt At )−1 . The prediction error for ~x is
+
+yb − y = ~xT (θb − θ∗ )
+(1)
+   ∗ 
+   ∗ 
+~0
+~0
+θ
+θ
+− ~
+.
+= ~xT Qt ATt
+−
+= ~xT Qt ATt
+~yt
+~ηt
+0
+~zt
+If kQt ~xk is small, then both terms of (1) will be small,
+although for different reasons. If kQt ~xk is larger than
+a suitable threshold α0 , our algorithm will output ⊥,
+otherwise it outputs yb, which will be an accurate prediction with high probability.
+
+Algorithm 1 describes our method for KWIK-learning
+a linear model. Notice it avoids the problem of storing
+At and ~zt , which grow without bound as t → ∞. The
+quantities Qt = (ATt At )−1 and w
+~ t = ATt [~0T , ~ztT ]T are
+sufficient for calculating the predictions, and can be
+updated incrementally (see Algorithm 1). The algorithm is KWIK, as shown next.
+Theorem 2.1 Let δ > 0 and ǫ n> 0. If oAlgoǫ
+c·ǫ2
+with
+rithm 1 is executed with α0 := min log
+n ,
+2M
+δǫ
+
+UAI 2009
+
+WALSH ET AL.
+
+Algorithm 1 Learning of linear model
+input: α0
+initialize: t := 0, m := 0, Q := I, w
+~ := ~0
+repeat
+observe ~xt
+if kQ~xt k < α0 then
+predict ybt = ~xTt Qw
+~ //known state
+else
+predict ybt =⊥ //unknown state
+observe zt
+xt )(Q~
+x t )T
+,w
+~ := w
+~ + ~xt zt
+Q := Q − (Q~
+1+~
+xT
+xt
+t Q~
+t := t + 1
+until there are more samples
+
+593
+
+let mk be the number of samples where kQt ~xt k > αk
+is true.
+Fix t and drop the subscripts of ~xt , At and Qt . Suppose a new sample ~x arrives and the algorithm decides
+that it is “known”, i.e., kQ~xk ≤ α0 . The first term
+of the P
+prediction error (1) is a weighted sum of the
+t
+noise, i=1 (~xT Q~xi )ηi . If kQ~xk = 0 then the prediction error is 0. Otherwise let k be the index for which
+αk+1 < kQ~xk ≤ αk . The number of ~x inputs falling in
+the range (αk+1 , αk ] is at most mk+1 . We can bound
+the squared sum of the weights of the noise terms:
+t
+X
+
+T
+
+2
+
+(~x Q~xi ) =
+
+i=n+1
+
+i=1
+
+a suitable constant c, then the number of ⊥s will be
+n
+O ǫn2 max ǫ12 log2 δǫ
+, M 2 , and with probability at
+least 1 − δ, for each sample ~xt for which a prediction
+ybt is made, |b
+yt − f (~xt )| ≤ ǫ holds.1
+
+This result is a Θ(n2 / log2 n) improvement over the
+sample complexity of Strehl & Littman’s KWIK online
+linear regression, and requires Θ(n2 ) operations per
+timestep, in contrast to their O(tn2 ) complexity.
+2.2
+
+Proof sketch of Theorem 2.1
+
+The second term of the prediction error (1) is ~xT Qθ∗ ,
+which can be bounded by ~xT Qθ∗ ≤ kQ~xk kθ∗ k ≤
+α0 M. This will be no more than ǫ/2 if α0 ≤ ǫ/(2M ).
+We now consider the first term of (1). Fix a constant
+α ∈ R, and let m be the number of timesteps when
+kQt~xt k > α. We show that m < 2n/α2 . We proceed
+by showing that the traces of the Qt matrices are positive, monotonically decreasing, and decrease considerably when kQt~xt k is large. Q1 = I, so trace(Q1 ) = n.
+xt )(Qt ~
+x t )T
+t~
+. To lowerFor t ≥ 1, Qt+1 − Qt = − (Q1+~
+xT Qt ~
+xt
+t
+
+bound the update, note that ATt At = (I + DtT Dt ) ≥ I,
+so Qt = (ATt At )−1 ≤ I. Therefore, 1 + ~xTt Qt ~xt ≤
+1 + ~xTt ~xt ≤ 2.
+trace((Qt ~
+xt )(Qt ~
+x t )T )
+trace(Qt+1 ) − trace(Qt ) = −
+1+~
+xT
+Q
+~
+x
+t t
+t
+
+2
+≤ − 21 trace (Qt ~xt )(Qt ~xt )T = − 12 kQt ~xt k ,
+
+(2)
+
+2
+
+When kQt ~xt k > α, this expression is at most − α2 and
+at most 0 otherwise. Applying (2) iteratively, we get
+2
+2
+that trace(Qt+1 ) ≤ trace(Q1 ) − m α2 = n − m α2 . On
+the other hand, Qt+1 is positive definite, which implies
+that trace(Qt+1 ) is positive. So, m < 2n/α2 .
+Let {αk } (k = 0, 1, . . .) be a monotonically decreasing,
+0-limit sequence of constants to be defined later, and
+1
+The theorem also holds if the noise is Gaussian. There
+will be a difference only in the constant terms.
+
+n+t
+X
+
+[~xT QAT ]i
+
+2
+
+< (AQ~x)T (AQ~x)
+
+= ~xT Q(AT AQ)~x = ~xT Q~x ≤ kQ~xk k~xk ≤ αk .
+Let δ1 > 0 be a constant to be determined later.
+We can apply Azuma’s inequality to the weighted
+sum of random variables ηi , with weights ~xT Q~xi ,
+which gives the result that the probability that the
+first term
+of the
+
+ error is larger than ǫ/2 is at most
+2
+
+2 exp − 16Sǫ2 αk . This probability will be no more
+than δ1 /2k if αk ≤
+
+ǫ2
+16S 2 log(2k+1
+n /δ1 )
+
+. Putting together
+o
+ǫ2
+ǫ
+the two terms, if αk := min 16S 2 log(2
+,
+k+1 /δ ) , 2M
+1
+
+then |b
+y − y| < ǫ with probability at least 1 − δ1 /2k .
+With these settings,
+the
+of ⊥s
+
+n number
+ois at most
+n log2 (1/δ1 ) nM 2
+2n
+m0 ≤ α2 = Θ max
+, ǫ2
+. The toǫ4
+0
+P∞
+tal probability of an error is at most k=0 mk 2δ1k ≤
+
+n
+o
+P∞ 2n δ1
+nδ1 log2 (1/δ1 ) nδ1 M 2
+=
+Θ
+max
+. Let
+,
+2
+4
+2
+k
+k=0 αk 2
+ǫ
+ǫ
+us set δ1 so that the above probability is less than
+δ. For this, nthe following
+o assignment is sufficient:
+4 2
+ǫ2 δ
+.
+δ1 := O min ǫ nδ , nM
+2
+
+3
+
+Application 1: Learning Rewards in
+a Factored-State MDP
+
+A Markov decision process (MDP) [16] is characterized by a quintuple (X, A, R, P, γ), where X is
+a finite set of states; A is a finite set of actions;
+R : X × A → R is the reward function of the agent;
+P : X × A × X → [0, 1] is the transition function; and
+finally, γ ∈ [0, 1) is the discount rate on future rewards.
+A factored-state Markov decision process (fMDP) is a
+structured MDP, where X is the Cartesian product
+of m smaller components: X = X1 × X2 × . . . × Xm .
+A function f is a local-scope function if it is defined
+over a subspace X[Z] of the state space, where Z
+is a (presumably small) index set. We make the
+standard assumption [9] that for each i there exist
+sets Γi of size O(1) such that ~xt+1 [i] depends only on
+~xt [Γi ] and at . The transition probabilities are then
+
+WALSH ET AL.
+
+Algorithm 2 Reward learning in fMDPs with optimistic initialization
+input: R0
+
+m
+J
+M−r = {Xi }m
+xs ; γ; {Γi }m
+1 ; A; {Pi }1 ; ~
+1 ; {Zj }1
+t := 0, ~x0 := ~xs , m := 0, Q := I, w
+~ := R0~1
+repeat
+b
+~r := Qw
+~
+~r), state ~xt
+at := greedy action in fMDP(M−r , b
+execute at , observe reward rt , next state ~xt+1
+~u := χ(~xt , at )
+u)(Q~
+u)T
+Q := Q − (Q~
+,w
+~ := w
+~ + ~uT rt
+1+~
+uT Q~
+u
+t := t + 1
+until there are more samples
+Qm
+P (~y | ~x, a) = i=1 Pi (~y [i] | ~x[Γi ], a) for each ~x, ~y ∈ X,
+a ∈ A, so each factor is determined by a local-scope
+function. We make the analogous assumption that
+the reward function is the sum of JPlocal-scope funcJ
+tions with scopes Zj : R(~x, a) =
+x[Zj ], a).
+j=1 Rj (~
+An fMDP is fully characterized by the tuple M =
+m
+J
+J
+{Xi }m
+xs ; γ; {Γi }m
+i=1 ; A; {Pi }i=1 ; {Rj }j=1 ; ~
+i=1 ; {Zj }j=1 .
+Algorithms exist for learning transition probabilities [9] and dependency structure [14], but until now,
+no algorithm existed for learning the reward functions.
+For J > 1, we can only observe the sums of unknown
+quantities, not the quantities themselves. Doing so requires the solution of an online linear regression problem with a suitable encoding of the reward model. Let
+Nr be the total number of parameters describing the
+reward model (Nr ≤ J|A|nnf ), and consider the indicator function χ(~x, a) ∈ RNr , which is 1 on indices
+corresponding to Rj (~x[Zj ], a) and 0 elsewhere.
+Our solution, Algorithm 2, is a modification of Algorithm 1. We initialize all unknown rewards to some
+constant R0 (analogous to the common maximum reward parameter Rmax [4]). If R0 is sufficiently high,
+the algorithm outputs optimistic reward estimates for
+unknown states (instead of ⊥), and otherwise gives
+near-accurate predictions with high probability. This
+property follows from standard arguments [17]: for unknown states, the noise term of the prediction error
+can be bounded by Azuma’s inequality, and R0 can
+be set high enough so that the second term is positive and dominates. This form of optimistic initialization has proven consistently better than R-max in flat
+MDPs [17]. For known states, the KWIK guarantees
+suffice to ensure near-optimal behavior. Because it
+combines a KWIK model-learner with R-max style exploration, this algorithm is PAC-compact-MDP—the
+first efficient algorithm for this task. In Section 5.1 we
+combine this algorithm with another KWIK learner
+that learns the transition dependency structure and
+probabilities [11] to learn the full fMDP model.
+
+UAI 2009
+7000
+6000
+5000
+4000
+Reward
+
+594
+
+3000
+2000
+1000
+
+(1) Optimistic reward initialization
+(2) Algorithm 1 + Rmax
+(3) Strehl&Littman + Rmax
+(4) Tabular
+(5) pure LR
+(6) LR + 0.1−greedy
+
+0
+−1000
+−2000
+0
+
+50
+
+100
+150
+Number of steps
+
+200
+
+250
+
+Figure 1: The value of the learned policy as a function
+of time for different reward-learning algorithms.
+3.1
+
+Experiments
+
+We carried out reward-learning experiments on the
+Stocks domain [14], with 3 sectors and 2 stocks per
+sector. Rewards were uniformly random in the interval [0.5, 1.5] for owning a rising stock, and random in [−1.5, −0.5] for owning a decreasing stock.
+We compared six algorithms: (1) Algorithm 2; (2)
+Algorithm 1 modified to output Rmax in unknown
+states; (3) the previous state-of-the-art KWIK-LR algorithm [15] modified to output Rmax in unknown
+states; (4) a flat tabular reward learner; and to demonstrate the need for efficient exploration, (5) linear regression without exploration and (6) linear regression
+with epsilon-greedy exploration.
+Each algorithm was run 20 times for 250 steps, updating the model every 5 steps. For the Stocks(3,2)
+domain, Rmax = 6. We used R0 = 10 for Algorithm 2,
+α0 = 1.0 for the second approach and α1 = α2 = 1.0
+for the third one. The values of the learned policies
+are shown in Figure 1. All curves except (1) and (2)
+differ significantly on a 95% confidence level. Notice
+(3) and (5) take longer to learn the model, (4) takes
+far longer, and (6) fails to explore and find the correct
+model.
+
+4
+
+Learning Transition Probabilities
+
+We consider another novel application of KWIK linear regression—learning action-effect probabilities in
+environments where these effects may be ambiguous. Specifically, we consider environments where actions are encoded as stochastic action schemas (e.g.
+travel(X, Y) rather than travel(Paris, Rome)) and the
+effects of these actions are stochastic. For instance,
+the action travel(X, Y) may result in the effect at (Y)
+with probability .9 and the effect at (X) with probability .1. More formally, every action a ∈ A is of the
+
+UAI 2009
+
+WALSH ET AL.
+
+form a = [(ω0 , p0 ) · · · (ωn , pn )] where each ωi ∈ Ωa is
+a possible effect. When the action is taken, one of
+these effects occurs according to the probability distribution induced by the pi s. The schemas may also
+contain conditional effect distributions, the nature of
+which is determined by the specific language used (as
+discussed in the following subsections). This form of
+generalization has been used to encode many different types of environments in RL, including stochastic
+STRIPS [12], Object Oriented MDPs (OOMDPs) [5],
+and typed dynamics [13]. Learning these probabilities
+is non-trivial because for a given state action pair (s,
+a), the effects are partitioned into equivalence classes
+E(s, a) = {{ωi , ωj , ωk }, {ωl , ωm }, ...} where each e ∈
+E(s, a) contains effects that are identical given state
+s. For instance, if an action has two possible effects
+Holding(X) and Holding(Y), but is taken in a state
+where X and Y are both already held, we cannot tell
+which actually occurred. Notice that the probability
+of any equivalence class is equal to the sum of the
+probabilities of the effects it contains, hence the link
+to linear regression.
+The standard “counting” method for learning probabilities cannot be used in such a setting because it
+is unclear which effect’s count (Holding(X)s or Holding(Y)s) we should increment. However, KWIK-LR
+can be used to learn the probabilities. While standard
+linear regression could also be used if transition data
+was available in batch form, an RL agent using KWIKLR can learn the probabilities online and maintain
+the PAC-compact-MDP guarantee needed for effective
+exploration. Algorithm 3 presents a PAC-compactMDP algorithm for an agent that is given full actionoperator specifications, except for the probabilities.
+That is, since our focus is on learning the probabilities,
+we assume that each ωi is known, but not the pi s. We
+also assume the preconditions and reward structure of
+the problem are known. We discuss methods for relaxing these assumptions in Section 5. This algorithm can
+be used with several representations including those
+mentioned above.
+Intuitively, Algorithm 3 computes an optimistically
+optimal action at using a planner (Line 7, detailed
+below) and then gathers experience indicating which
+of the equivalence classes et ∈ E(st , at ) actually occurred. For instance, it may see that Holding(X) occurred, instead of Holding(Y). This equivalence class
+contains one or more effects (ωi , ωj ... ∈ Ωa ), and an
+indicator vector ~x is created where ~xi = 1 if ωi ∈ et
+(Line 10). For instance, if the agent was not holding anything, and then Holding(X) occurred and not
+Holding(Y), the vector would be [1; 0], but in a state
+where both were already held, ~x would always come
+out [1; 1]. Note that each equivalence class in E(s, a)
+
+595
+
+Algorithm 3 Transition Probability Learner
+1: input: S, A (action schemas sans pi s), R, α
+2: ∀a ∈ A, instantiate a learner (Algorithm 1) La (α)
+3: for each current state st do
+4:
+for each e ∈ E(s, a), s ∈ S and a ∈ A do
+5:
+Construct ~x where xj = 1 if j ∈ e, else 0.
+6:
+Pb (e) = Prediction of La (~x) // can be ⊥
+7:
+Perform
+modified
+value
+iteration
+on
+{S, A, E, Pb , R}, to get greedy policy π
+8:
+Perform action at = π(st ), observe et ∈ E(st , at )
+9:
+for equivalence classes e ∈ E(st , at ) do
+10:
+Construct ~x where xj = 1 if j ∈ e, else 0.
+11:
+Update Lat with ~x and y = 1 if e = et , else
+y=0
+
+induces a unique (and disjoint) ~x. Each of these is used
+to update the KWIK-LR learner (Lines 9-11), with an
+output (y) of 1 associated with the ~x that actually
+happened (which may have 1s in multiple places, as
+in the ambiguous Holding case). Given any possible
+action and equivalence class in the state/action space,
+the KWIK-LR agent can now be queried to determine
+the probability of the equivalent transition (Lines 5-6),
+though it may return ⊥, identifying transitions from
+equivalence partitions that have unlearned probability.
+Planning in Algorithm 3 is done by constructing a
+transition model in the grounded state space (Lines
+4-6). KWIK-LR determines for each E(s, a), the
+probability of the possible next states (one for each
+e ∈ E(s, a)). A modified version of value iteration [16]
+(Line 7) is then used to plan the optimal next action.
+The modification is that at every iteration, for every
+state-action pair that has effects with known probabilities K = {ωi , ωj ...} and unknown probabilities
+U = {ωk , ωl ...}, the effect in U that leads to the highest value
+P next state is considered to have probability
+1 − ωi ∈K P (ωi ). This change is designed to force
+value iteration to be optimistic—it considers the most
+rosiest of all models consistent with what has been
+learned. We note that planning in the flat state space
+can require exponential computation time, but this is
+often unavoidable, and since the model is still learned
+in a sample efficient manner, it satisfies the conditions
+for PAC-compact-MDP.
+4.1
+
+Application 2: Stochastic STRIPS
+
+STRIPS domains [8] are made up of a set of objects
+O, a set of predicates P , and a set of actions A. The
+actions have conjunctive (over P ) preconditions and
+effects specified by ADD and DELETE (DEL) lists,
+which specify what predicates are added and deleted
+from the world state when the action occurs. Stochastic STRIPS operators generalize this representation
+
+596
+
+WALSH ET AL.
+
+UAI 2009
+
+paint(X): reward = −1
+PRE: none
+ADD: Painted (X) DEL: none 0.6
+ADD: Painted (X), Scratched (X) DEL: none 0.3
+ADD: none DEL: none 0.1
+
+10
+
+"Partition" learner
+KWIK−LR (Alg. 3)
+
+Avg. steps to goal
+
+9
+
+polish(X): reward = −1
+PRE: none
+ADD: none DEL: Painted (X) 0.2
+ADD: none DEL: Scratched (X) 0.2
+ADD: Polished (X) DEL: Painted (X), Scratched (X) 0.3
+ADD: Polished (X) DEL: Painted (X) 0.2
+ADD: none DEL: none 0.1
+
+8
+7
+6
+5
+4
+0
+
+20
+
+40
+
+60
+
+80
+
+100
+
+Episode
+
+shortcut(X): reward = −1
+PRE: none
+ADD: Painted (X), Polished (X) DEL: none 0.05
+ADD: none DEL: none 0.95
+done(X): reward = 10
+PRE: Painted (X), Polished (X), Scratched (X)
+ADD: Finished (X) DEL: none 1.0
+
+Table 1: Stochastic Paint/Polish world
+
+by considering multiple possible action effects specified by hADD, DEL, PROBi tuples as in Table 1.
+Notice this representation is an instance of the general action schemas defined above. While others have
+looked at learning similar operators [12], their work
+attempted to heuristically learn the full operators (including structure), and could not give any guarantees
+(as we do) on the behavior of their algorithm, nor did
+they identify an efficient algorithm for learning the
+probabilities, as we have with Algorithm 3. To make
+the planning step well defined, we consider Stochastic
+STRIPS with rewards [18].
+Table 1 illustrates a variant of the familiar
+Paint/Polish domain in the Stochastic STRIPS setting. There are several ambiguous effects. For instance, executing paint on a scratched but not painted
+object, and observing it is now scratched and painted,
+one cannot tell which of the first two effects occurred.
+We used this domain with a single object to empirically test Algorithm 3 against a version of the algorithm that does not use KWIK-LR, instead attempting to learn every possible equivalence class partition
+distribution separately (Partition). Because the focus
+here is on learning the transition probabilities (pi s),
+both learners were given the preconditions and effects
+(ωi ) of each action. We discuss relaxing these assumptions later. Figure 2 shows the results (with the
+known/unknown thresholds empirically tuned) averaged over 1000 runs with randomized initial states for
+each episode (both learners receive the same initial
+states). Algorithm 3 learns much faster because it effectively shares information between partitions.
+
+Figure 2: Average steps to the goal over 1000 runs.
+
+4.2
+
+Application 3: Stochastic Object
+Oriented RL
+
+Object-oriented MDPs [5] consist of a set of objects O,
+a set of actions A that take elements of O as parameters, and (in the original deterministic description)
+a set of condition-effect pairs hc, ωi associated with
+each action. Objects have attributes, and the set of
+all objects and their attribute values at a given time
+t constitute the state st . When an action a is executed from st , the environment checks which condition
+ci ∈ C is satisfied (if any), and applies the corresponding effect wi ∈ Ωa , which updates the attributes of the
+affected objects. Stochastic OOMDP effects generalize
+this representation so that a given condition induces
+not just a single effect (ω) but a distribution over possible effects (Ωca ), only one of which (ωi ) will actually
+occur on a single timestep. In the parlance of action
+schemas as defined above, each {c, Ω} pair for action a
+can be thought of as its own action with preconditions
+specified by c. Again, this model can be viewed as a
+specific version of the action schemas presented above.
+Previous work [5] presented an efficient algorithm for
+learning deterministic effects. Here, we demonstrate
+Algorithm 3 learning the probabilities associated with
+each effect in the stochastic setting when the possible
+effects given a condition and the conditions themselves
+are known in advance. Methods for relaxing these assumptions are discussed in later sections.
+We demonstrate Algorithm 3 for stochastic OOMDPs
+on a simple 5 × 5 Maze domain, illustrated in Figure 3.
+The agent starts at location S and the goal is to arrive
+at G. Each step has a cost of −0.01, and arriving at
+the goal results in a reward of +1. The agent’s actions
+are N, S, E and W. When executing an action, the
+agent will attempt to move in the desired direction
+with probability 0.8 and will slip to either side with
+probability 0.1. If it hits a wall, it stays put. This
+rule is what produces ambiguity in the effects. For
+
+UAI 2009
+
+WALSH ET AL.
+
+S
+
+597
+
+G
+
+6000
+5000
+cumulative reward
+
+4000
+3000
+2000
+1000
+0
+
+Figure 3: Maze domain.
+
+−1000
+0
+
+5
+
+Cumulative reward
+
+−5
+KWIK−LR (Alg. 3)
+"Partition" learner
+
+−10
+−15
+−20
+
+200
+
+400
+600
+Number of steps
+
+800
+
+1000
+
+Figure 4: Stochastic OORL results for KWIK-LR and
+Partition in the Maze domain.
+example, imagine the agent has a wall to its North
+and East. If it attempts the N action, it could move
+to the West (with probability 0.1), or stay in place. If
+it stays in place, it might be because it attempted to
+move North (with probability 0.8) and hit the North
+wall, or it attempted to move East (with probability
+0.1) and hit the East wall.
+Figure 4 presents the results. As in the previous experiment, we can see that the KWIK-RL algorithm learns
+much faster than the “Partition” learner by sharing information between equivalence partitions.
+
+5
+
+Extensions
+
+We now discuss extensions for learning more of the
+compact representations discussed in this work. We
+will outline how to learn full fMDPs and larger parts
+of STRIPS and OOMDP models by combining KWIKLR with other KWIK learners, and provide empirical
+support in the fMDP case. We also discuss a variation of KWIK-LR that can be used to learn stochastic
+action-schema outcomes (Ωa ).
+5.1
+
+500
+
+1000
+
+1500 2000 2500
+number of steps
+
+3000
+
+3500
+
+4000
+
+Figure 5: Average cumulative rewards over 10 runs on
+the Stocks domain.
+
+0
+
+−25
+0
+
+Learning structure+transitions
+Learning structure+transitions+rewards
+
+Combining with Other KWIK Learners
+
+Existing work [11] describes methods for combining
+simple KWIK agents to learn in increasingly com-
+
+plex domains. We follow this “building blocks” approach and show how to combine the fMDP rewardlearning algorithm (Algorithm 2) with an implementation of the Noisy-Union [11; 10] algorithm (which
+is also KWIK) to learn the transition structure (Γ),
+transition probabilities (P ), and reward function (R)
+of an fMDP all at once. The only knowledge given to
+the agent is the number of parents a factor may have
+(|Z|) and the reward-function structure, resulting in
+the only algorithm to date that learns all of these parameters efficiently. Experience is fed to both building
+block algorithms in parallel. The reward learner outputs an optimistic approximation of the reward function, which is given to Noisy-Union, which then learns
+the transition structure and probabilities. We conducted experiments to validate this algorithm in the
+Stocks domain. For comparison, we also ran the NoisyUnion algorithm with the rewards given a priori. Figure 5 displays the results, which show that all three
+quantities can be learned with small overhead.
+We note that there are many other settings that could
+benefit from combining KWIK-LR with other KWIK
+learners for different parts of the model. For instance,
+in stochastic STRIPS and OOMDPs, the preconditions of actions (STRIPS) or the conditional effects
+(OOMDP) can be learned using an existing KWIK
+adaptation of Noisy Union [6] as long as their size is
+bounded by some known constant. Together, these
+learners could be used to learn all but the effects (Ωa )
+of each action operator, a problem we now consider.
+5.2
+
+Future Work: Learning Effects
+
+All of the effect distribution / condition learning variations require the possible effects (Ωa ) as input. Unfortunately, relaxing this assumption in the stochastic
+case is unlikely, since the effect learning problem is
+known to be NP-Hard [12]. When the number of possible effects is very small, or each ωi is of constant size,
+
+598
+
+WALSH ET AL.
+
+enumeration techniques could be used. But, these assumptions are often violated, so researchers have concentrated on heuristic solutions [12]. Here, we suggest
+a novel heuristic that extends KWIK-LR for probability learning to the setting where the whole action
+schema (including Ωa ) needs to be learned.
+We propose using sparsification; we consider all possible effects and use KWIK-LR to learn their probabilities, with an extra constraint that the number of “active” (non-zero) probabilities should be small. This
+minimization can be efficiently computed via linear
+programming, and techniques such as column generation may be used to keep the number of active constraints small in most cases. Together with the other
+learners discussed in this paper, the implementation of
+such an extension would form a complete solution to
+the action-schema learning problem: the probabilities
+and preconditions can be learned with KWIK-learners
+and the effects themselves can be learned heuristically
+using this sparsification extension. It remains a matter for future work to compare this system to other
+heuristic solutions [12] for such problems.
+
+6
+
+References
+[1]
+
+P. Auer. An improved on-line algorithm for learning
+linear evaluation functions. In COLT, 2000.
+
+[2]
+
+P. Auer, N. Cesa-Bianchi, and C. Gentile. Adaptive
+and self-confident on-line learning algorithms. JCSS,
+64(1):48–75, 2002.
+
+[3]
+
+J. A. Boyan. Least-squares temporal difference learning. Machine Learning, 49(2):233–246, November
+2002.
+
+[4]
+
+R. I. Brafman and M. Tennenholtz. R-MAX–a general
+polynomial time algorithm for near-optimal reinforcement learning. JMLR, 3:213–231, 2002.
+
+[5]
+
+C. Diuk, A. Cohen, and M. L. Littman.
+An
+object-oriented representation for efficient reinforcement learning. In ICML, 2008.
+
+[6]
+
+C. Diuk, L. Li, and B. Leffler. The adaptive kmeteorologists problem and its application to structure learning and feature selection in reinforcement
+learning. In ICML, 2009.
+
+[7]
+
+C.-N. Fiechter. PAC adaptive control of linear systems. In COLT, 1997.
+
+[8]
+
+R. Fikes and N. J. Nilsson. STRIPS: A new approach
+to the application of theorem proving to problem solving. Artificial Intelligence, 5:189–208, 1971.
+
+[9]
+
+M. J. Kearns and D. Koller. Efficient reinforcement
+learning in factored MDPs. In IJCAI, 1999.
+
+Related Work
+
+Online linear regression has also been studied in the
+regret minimization framework (see e.g. [1]). Applications to restricted RL problems also exist [2], but
+with different types of bounds. Furthermore, regret
+analysis seems to lack the modularity (the ability to
+combine different learners) of the KWIK framework.
+Previous work on linear regression for model-based RL
+has focussed on learning linear transition functions in
+continuous spaces. However, these approaches often
+lacked theoretical guarantees or placed restrictions on
+the environment regarding noise and the reward structure [7]. In this paper, we have both improved on the
+current state-of-the-art algorithm for linear regression
+in RL [15], and used it in applications beyond the standard linear transition models. Our theoretical results
+and experiments illustrate the potential of KWIK-LR
+in model-based RL. In the future, we intend to identify
+other compact models where this technique can facilitate efficient learning and perform expanded empirical and theoretical studies of the extensions mentioned
+above.
+
+UAI 2009
+
+[10] L. Li. A Unifying Framework for Computational Reinforcement Learning Theory. PhD thesis, Rutgers
+University, Piscataway, NJ, USA, 2009.
+[11] L. Li, M. L. Littman, and T. J. Walsh. Knows what it
+knows: A framework for self-aware learning. In ICML,
+2008.
+[12] H. M. Pasula, L. S. Zettlemoyer, and L. P. Kaelbling. Learning symbolic models of stochastic domains. JAIR, 29:309–352, 2007.
+[13] A. A. Sherstov and P. Stone. Improving action selection in MDP’s via knowledge transfer. In AAAI,
+2005.
+[14] A. L. Strehl, C. Diuk, and M. L. Littman. Efficient
+structure learning in factored-state MDPs. In AAAI,
+2007.
+[15] A. L. Strehl and M. L. Littman. Online linear regression and its application to model-based reinforcement
+learning. In NIPS, 2008.
+[16] R. S. Sutton and A. G. Barto. Reinforcement Learning: An Introduction. MIT Press, Cambridge, MA,
+March 1998.
+
+Acknowledgements
+
+[17] I. Szita and A. Lőrincz. The many faces of optimism:
+a unifying approach. In ICML, pages 1048–1055, 2008.
+
+We thank Alexander L. Strehl and the reviewers for
+helpful comments. Support was provided by the Fullbright Foundation, DARPA IPTO FA8750-05-2-0249,
+FA8650-06-C-7606, and NSF IIS-0713435.
+
+[18] H. L. S. Younes, M. L. Littman, D. Weissman, and
+J. Asmuth. The First Probabilistic Track of the International Planning Competition. JAIR, 24:851–887,
+2005.
+
+

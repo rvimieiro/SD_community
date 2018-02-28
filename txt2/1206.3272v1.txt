@@ -1,0 +1,979 @@
+function of the policy parameters. In that case, the local gradient can be estimated exactly from a small set
+of trials with policy parameter settings closely spaced
+around the setting of interest, and the sensor data can
+provide no more information.2 In the noisy case, however, a gradient estimator can be easily misled by trials
+of bad policies that yield fortuitously good scores and
+vice versa. In essence, what we propose is that sensor
+data can account, at least partially, for the deviation
+in the score of each trial from its expected value. Conditioned on the sensor data, therefore, the posterior
+estimate for the policy value will be closer to the true
+value.
+As an example, consider the problem of firing a cannon at a distant target (Figure 1). Imagine that, after
+firing several shots that fall short, you increase the firing angle to θ = θ0 . The next shot sails over the target.
+Normally, you would decrease θ again. Suppose, however, that the sound of this last shot was much louder
+than usual; this suggests that the muzzle velocity was
+higher than intended and accounts for the poor outcome. It might therefore be sensible to stay at θ0 for
+the next shot. Notice, though, that this decision re1
+Of course, the policies themselves may use the sensor data to select actions. One might also interpret the
+approach of [6] as using observed perturbations to improve
+gradient estimation—but only for the restricted case of perfect sensing of noise applied directly to the policy parameters. The current paper removes these unrealistic assumptions, allowing the method to apply to any real physical
+system; it also provides a more general explanation of the
+benefits of sensor data for gradient estimation.
+2
+If we are willing to step outside the policy search framework, of course, then we can use the sensor data to learn
+a transition model from which the optimal policy can be
+obtained by offline methods.
+
+v
+
+d
+
+θ
+
+Figure 1: The cannon problem.
+
+quires some knowledge of the relationship between the
+sensor data (loudness of bang) and the score; learning
+such relationships is a key element of our method.
+The remainder of the paper is organized as follows.
+Section 2 introduces the basic technical approach: instead of estimating the gradient by fitting a local linear
+model for the value as a function of the policy parameters, we fit a linear model of the value as a function
+of the policy parameters and the (transformed) sensor values. We show that estimator variance is minimized if the sensor data is transformed by a projection
+that renders it statistically independent of the policy
+parameters while remaining correlated with the perturbations in the score; we also present a practical
+technique that approximates this ideal transformation.
+Section 3 describes how we applied these techniques
+to a dart throwing task and a quadruped locomotion
+task, in both cases obtaining improved learning curves
+compared to a method that does not use the sensor
+data. Section 4 discusses possibilities for future improvements.
+
+2
+
+INCORPORATING SENSOR
+INFORMATION
+
+A policy π determines how an agent chooses its actions given its past observations, and the reinforcement
+learning goal is to find a policy π ∗ that maximizes the
+performance. Each policy trial generates a history h,
+a sequence of percept-action-reward tuples; the score
+f (h) is the sum of the reward values. The optimal policy π ∗ maximizes the value function V (π) = E[f (h)|π]
+where the histories h are generated from π. In this paper we perform policy search by hill-climbing through
+a space of parameterized policies π ∈ Rd . We climb
+through this space by adjusting our current policy π0
+in the direction of the gradient ∇π V (π)|π=π0 . At each
+hill-climbing step, the gradient is estimated from n policy trials where we vary the parameters of each trial
+for exploration purposes.
+
+2.1
+
+TOY EXAMPLE
+
+To illustrate the main contributions of this paper, we
+will examine the toy cannon problem (Figure 1). Here,
+the policy π = (πv , πθ )T consists of a desired cannon angle, πθ ∈ [0, π/2] and a desired initial velocity πv > 0. Following [6], we assume the policy itself is perturbed by noise to give the actual controls
+u = (uv , uθ )T . We assume that the agent has access to
+a noisy sensor that measures the perturbation (u − π)
+and let s = (sv , sθ ) denote its value. There is additive,
+zero-mean Gaussian noise in both the control and sensor values; the control noise has covariance matrix Σu
+and the sensor noise has covariance matrix Σs . The
+history h for this problem has a single tuple with the
+desired action π, the sensor value s, and the reward
+−d2 , where d is the distance from the target to where
+the cannon ball lands. The score is just the reward in
+this case, so maximizing V (π) = E[f (h)|π] is equivalent
+to minimizing the expected squared distance error.
+To demonstrate the benefits of incorporating the sensor data, suppose that we had a perfect sensor. In
+that case, we have u = π + s. Furthermore let us assume that f (h) is (locally) linear in the actual control u. Then the score function can be written as
+f (π, s) = (π + s)T Aπ0 + bπ0 . A typical approach to
+gradient estimation in this setting would be to ignore
+the sensor data and use samples of π and f (π, s) to fit
+a local linear approximation to V around π0 :
+V̂ (π) = π T Aπ0 + bπ0 .
+Using least-squares regression, we estimate the gradient by learning Aπ0 from n policy trials. The control
+noise causes perturbations in the scores with variance
+given by Aπ0 T Σu Aπ0 . Hence, the estimator Aπ0 will
+not be exact and we may need many samples to be
+confident in our estimate of the gradient.
+To obtain the benefits of incorporating the sensor data,
+we can instead fit a sensor-data-dependent linear approximation to the scoring function f itself (rather
+than its expectation V ):
+fˆ(π, s) = π T Aπ0 + sT As + bπ0 .
+From samples of π, f (π, s), and s we can use linear
+regression to learn both Aπ0 and As in this equation.
+The value that we learn for Aπ0 can be used as our
+estimate of the gradient of V. In the case of perfect
+sensing, fˆ(π, s) can be a locally exact fit because the
+score will be a deterministic function of π and s. Thus,
+we have a perfect gradient estimator. Intuitively, the
+more informative the sensor, the better our gradient
+estimator.
+There are two important issues to note with this analysis. As we will see in Section 2.2, the estimator Aπ0
+
+−3000
+
+0.1 Σu
+
+−3000
+
+Σu
+0
+
+0
+
+−3600
+
+−500
+
+−3900
+
+V(π)
+
+−1000
+V(π)
+
+−3900
+
+−500
+
+−1000
+
+V(π)
+
+−3300
+
+−3600
+V(π)
+
+−3300
+
+−1500
+
+−1500
+−4200
+
+v
+
+v
+
+−4500
+19
+
+19.5
+
+20
+πv
+
+20.5
+
+−2000
+
+4 policy trials
+V(π )
+
+−4200
+
+4 policy trials
+V(π )
+21
+
+19.5
+
+(a)
+
+20
+πv
+
+20.5
+
+−2000
+
+−2500
+
+w/o Sensor
+−4500
+19
+
+21
+
+−3000
+0
+
+w/o Sensor
+w/Sensor
+2
+
+4
+
+(b)
+
+w/o Sensor
+w/Sensor
+−2500
+0
+
+6 8 10 12 14 16 18 20
+hill−climbing step
+
+2 Σu
+
+10 Σu
+−1000
+
+−500
+
+−1500
+
+−4200
+0.5
+
+0
+−0.5
+s
+
+−1
+−1.5 19
+
+(c)
+
+4 policy trials 21
+f(πv,s) 20.5
+20
+19.5
+πv
+
+−2000
+
+−1500
+
+V(π)
+
+V(π)
+
+−3900
+
+−4200
+−4500
+1
+
+−1000
+
+−3600
+V(π)
+
+f(πv,s)
+
+−3300
+
+−3900
+
+−2000
+
+4 policy trials
+V(π )
+
+−2500
+
+w/Sensor
+
+−3000
+
+−2500
+
+v
+
+−4500
+19
+
+6 8 10 12 14 16 18 20
+hill−climbing step
+
+(b)
+
+0
+−3300
+
+−3600
+
+4
+
+(a)
+
+−3000
+−3000
+
+2
+
+19.5
+
+20
+πv
+
+20.5
+
+21
+
+−3500
+0
+
+(d)
+
+−3000
+w/o Sensor
+w/Sensor
+2
+
+4
+
+6 8 10 12 14 16 18 20
+hill−climbing step
+
+w/o Sensor
+w/Sensor
+−3500
+0
+
+2
+
+4
+
+6 8 10 12 14 16 18 20
+hill−climbing step
+
+(c)
+
+(d)
+
+Figure 2: (a) The true value function with four policy trials
+superimposed. (b) Least squares fit of these four trials. (c)
+Least squares fit of the the four trials as a function of π
+and s. (d) Projection of the fitted plane from (c) to give a
+linear estimator for V (π) (circles). Note that the estimator
+fits the true value function exactly.
+
+Figure 3: The learning curve performances of two difference policy search algorithms as we increase the level of
+actuator noise. One curve estimates the gradient while ignoring the sensor data and the other curve estimates the
+gradient using the sensor data. As mentioned in Section 1,
+using the sensor data becomes more beneficial as the level
+of noise in the score increases.
+
+will be unbiased provided the sensor data are independent of the policy parameters. Therefore, it will be
+advantageous to project the sensor data in such a way
+as to render it independent of the policy parameters
+to the extent possible, while maintaining its correlation with the perturbations in the score. Second, the
+sensor-data-dependent fit for fˆ requires extra parameters to be learned for As (two extra parameters in
+our example), which may in turn require extra trials.
+We will see in the next subsection that the relative
+efficiency of this estimator depends on the amount of
+noise in the observed scores that can be corrected for
+using the sensor data and the number of extra parameters to be learned.
+
+by the sensor values. We expand upon this in the next
+section.
+
+Figures 2(a-d) demonstrates how incorporating the
+sensor data is beneficial. For ease of graphical depiction, we consider a restricted version of the cannon
+problem in which uθ is fixed at 45 degrees. We consider a linear approximation to the score around the
+nominal cannon velocity πv0 = 20ms−1 . Figure 2(a)
+shows the true value function with four policy trials
+superimposed. Figure 2(b) shows the least squares fit
+of these four trials. The slope of this line is an estimate
+of the gradient of V (π). Figure 2(c) shows the least
+squares fit of the four trials as a function of π and s
+and Figure 2(d) shows this least squares fit projected
+onto the plane that spans the πv and f (h) axes. Notice that it perfectly fits the true value. This is because
+deviations from the expected score are explained away
+
+Figure 3 shows different learning curves for the cannon problem
+  as we increase the level of actuator noise
+(Σu = 10 04 ). At each hill-climbing step we ran 10 trials, each with a different policy in the neighborhood
+of the current policy, and we averaged the resulting
+learning curve over 100 hill-climbing runs. One curve
+shows the learning performance achieved while ignoring the sensor data while the other curve shows what
+happens when incorporating the sensor data. Notice
+that the performance gains from using sensor data become more pronounced as the noise level increases.
+2.2
+
+VARIANCE REDUCTION
+
+In this section we compare the variance of a gradient
+estimator that incorporates sensor data to an estimator that ignores it. We assume that the score function
+is an unknown linear function of both the policy parameters and the sensor data. The gradient estimators
+take n policy trials from the current hill-climbing step
+and return an estimate of ∇π V (π)|π=π0 .
+We will show that an agent can reduce the variance of
+its gradient estimates by choosing a sensor encoding
+that correlates with the noise-induced perturbations
+in the score. To get an unbiased estimate, the sensor
+data must be uncorrelated with π. In Section 2.2.3 we
+
+give expressions for the bias and variance of a gradient
+estimator in the correlated setting. A biased estimator
+that incorporates sensor data may still outperform one
+that ignores it as long as the bias remains small.
+Let Π = [π1 , . . . , πn ]T be the matrix of policy parameters and let S = [s1 , . . . , sn ]T be a matrix whose
+rows contain the corresponding sensor values. We assume that the sensors have a Gaussian distribution
+with variance Σs and mean µs . Let f = [f1 , . . . , fn ]T
+be a column vector whose entries are the score values and let w = [w1 , . . . , wn ] be a column vector of
+zero-mean noise which is added to the output with
+variance σw 2 . The score is written as f2 (π, s, w) =
+π T Aπ + sT As + b + w. The scores for the current set
+of policy trials are given by the following equation:
+f = ΠAπ + SAs + 1n b + w,
+
+Ignore Sensor Data
+
+From the point of view of a gradient estimator that
+ignores the sensor data, additional noise will appear
+to be added to the scores that will not be explained
+by perturbations in the sensor data. Let v represent
+this noise where each element is given by the equation
+v = sT As + w. The variance of each entry in v is given
+by the expression As T Σs As + σ 2 . The score function
+f1 (π, v) = π T Aπ +b+v is equivalent in value to f2 . We
+can learn the linear relationship between the policy parameters and the score by performing linear regression
+on the set of n policy trials. In other words we find a
+suitable estimate for Aπ in the following equation:
+(2)
+
+We are interested in the gradient of E[f1 (π, v)|π0 ],
+where π and v represent random variables whose values are distributed according to the exploration distribution N (π0 , Σe ) and the output distribution respectively. The gradient with respect to π0 is written as
+∇π0 E[f1 (π, v)|π0 ] = Aπ and therefore, a sensible gradient estimator returns an estimate of Aπ from the n
+policy trials. The gradient estimator, which we denote
+by g1 (Π, f ) is given by the linear regression equation:
+g1 (Π, f ) = (ΠT Π)−1 ΠT f
+
+= (ΠT Π)−1 ΠT (As T Σs As + σ 2 )Π(ΠT Π)−1
+= (ΠT Π)−1 (As T Σs As + σ 2 ),
+where f is a column vector random variable whose entries are distributed according to the output distribution. This quantity is for a fixed set of policies Π.
+The variance of the g1 averaged over the randomness
+of the policies drawn for exploration purposes can be
+determined by observing that the distribution of the
+matrix (ΠT Π)−1 is an inverted Wishart with n degrees
+of freedom where d is the number of policy parameters.
+var[g1 (Π, f )] =
+
+Σe −1 (As T Σs As + σ 2 )
+,
+(N − d − 1)
+
+(3)
+
+where Π is a random variable where each row is distributed according to the exploration distribution.
+
+Each estimator learns a local linear model of the scoring function using linear regression on the data obtained from n policy trials. For exploration purposes
+the policy parameters of each trial are assumed to be
+distributed around a nominal policy π0 according to
+a Gaussian distribution with variance Σe . We assume
+that the policy parameters, scores, and sensor data
+have been centered around zero.
+
+f = ΠAπ + 1n b + v.
+
+var[g1 (Π, f )] = (ΠT Π)−1 ΠT E[vvT ]Π(ΠT Π)−1
+
+(1)
+
+where 1n is a column vector of ones.
+
+2.2.1
+
+The variance of the g1 is written as
+
+2.2.2
+
+Include Sensor Data
+
+A linear model that predicts the score as a function of
+both the policy parameters and sensor data will have
+the noise on the output partially explained by the sensor data. An estimate of the score as a linear function
+of the policy parameters and sensor data can be written as
+
+  T
+−1  T 
+g2 (Π, S, f )
+Π Π ΠT S
+Π f
+=
+,
+β2 (Π, S, f )
+ST Π ST S
+ST f
+where β2 (Π, S, f ) determines how the sensor values
+affect the perturbations in the score. The gradient
+of E[f2 (π, s, f )|π0 ] with respect to π0 is written as
+∇π E[f2 (π, s, f )|π0 ] = Aπ and so we can use g2 (Π, S, f ),
+the first d entries in the above vector, as our estimate
+of the gradient. The variance of the above expression
+is written as
+
+  T
+−1
+g (Π, S, f )
+Π Π ΠT S
+var 2
+=
+σ2 .
+β2 (Π, S, f )
+ST Π ST S
+We take the inverse of the Schur complement with respect to S T S to find the variance of g2 :
+var[g2 (Π, S, f )] = (ΠT Π − ΠT S(S T S)−1 S T Π)−1 σ 2 .
+This quantity is for a fixed set of policies Π and sensor
+values S. The variance of g2 averaged over different exploration policies and sensor values, assuming that the
+sensors are independent of both the policy parameters
+and output noise w, is given by the following equation:
+
+ 
+−1
+σ2
+g (Π, S, f )
+Σe 0
+var 2
+=
+β2 (Π, S, f )
+0 Σs
+(N − d − ds − 1)
+var[g2 (Π, S, f )] =
+
+Σe −1 σ 2
+,
+(N − d − ds − 1)
+
+(4)
+
+where ds is the dimensionality of the sensor data.
+The expressions for the variance of the two gradient
+estimators (equations 3 and 4) differ from each other
+in two factors. The variance of the estimator that ignores the sensor data has a factor of (As T Σs As + σ 2 )
+which is reduced to σ 2 in the estimator that incorporates the sensor data. We see that we get bigger
+reductions whenever the sensor information provides
+more information about the score. The second difference between the two estimators favors the estimator
+that ignores the sensor data because the denominator in equation 3 has a term that is larger than the
+corresponding term in equation 4. The difference in
+the denominators is the dimensionality of the sensor
+data ds , which suggests that we should choose sensor
+encodings of low dimensionality. Whether g2 is more
+efficient than g1 depends on the relative strength of
+these two factors.
+2.2.3
+
+Correlated Sensors
+
+If the sensors are correlated with the policy parameters
+then the gradient estimator that incorporates sensor
+data will be biased. In this situation we can represent
+the distribution over sensors as a linear Gaussian distribution s ∼ N (Aπ,s T π + bπ,s , Σs ). Inserting this into
+score function f2 gives the following equation:
+f3 (π, s, w, wπ,s ) = π T Aπ + π T Aπ,s As + bπ,s T As +
+wπ,s T As + b + w
+where wπ,s is a zero-mean Gaussian random variable
+with variance Σs . The gradient with respect to π0 is
+written as ∇π0 E[f3 (π, s, w, wπ,s )|π0 ] = Aπ + Aπ,s As
+which means that gradient estimator g2 is biased by
+Aπ,s As whenever the sensors are correlated with the
+policy parameters. The variance of the estimator also
+changes in the case of correlated sensors:
+var[g2 (Π, S, f )] =
+
+(Σe − D)−1 σ 2
+(N − d − ds − 1)
+
+D := Σes (Aπ,s T Σe Aπ,s + Σs )−1 Σes T ,
+where Σes = Σe Aπ,s is the covariance of the policy
+parameters and sensor values. Thus we see that it
+is best to choose sensor encodings where the sensor
+values are uncorrelated with the policy parameters.
+2.3
+
+FINDING GOOD SENSOR
+ENCODINGS
+
+In the prior subsection we saw that S should be independent of Π to give an unbiased estimate of the gradient. This is often not true in many problems. The
+analyzes also suggests that to get an improved gradient
+
+estimator, we should prefer low-dimensional sensor encodings that have a great influence on the score. This
+section presents a heuristic that can be used to find
+good sensor encodings that give performance gains in
+problems where the assumptions do not hold.
+We find good sensor encodings by taking sensor variables that lie in a high dimensional space and projecting them down to a low-dimensional subspace. Intuitively, we should prefer directions that maintain the
+influence of the sensor data on the score. We also
+want the sensor data to be uncorrelated with the policy parameters to minimize the bias. Our approach
+is to search over possible sensor encodings to find the
+optimal projection at each hill-climbing step. We use
+cross-validation to measure the quality of each projection. Let Π-i equal Π with the ith row removed,
+let S-i equal S with the ith row removed, and let f-i
+equal f with the ith entry removed. Let B be a matrix that projects the raw sensor data down to a lowdimensional subspace. We use a quasi-Newton method
+to minimize the following cost function:
+J=
+
+n
+X
+(πi T g(Π-i , S-i B, f-i ) + o(Π-i , S-i B, f-i ) − fi )2 ,
+i=1
+
+where g estimates the gradient using g2 after the inputs
+have been centered around zero and o estimates the
+appropriate offset term. Thus we learn the gradient
+and corresponding offset terms using the data from a
+collection of policy trials with a single policy trial held
+out at a time. This gradient and offset is then used
+to predict the score of the held out sample. Given the
+optimal projection B ∗ from the above procedure, we
+estimate the gradient using the full set of policy trials:
+∇π V (π)|π=π0 ≈ g2 (Π, SB ∗ , f ).
+
+3
+
+(5)
+
+RESULTS
+
+In this section we describe how an agent can use its
+sensor data to improve its learning performance on a
+dart throwing task [6] and a quadruped locomotion
+task. These partially observable sequential tasks are
+complicated partly due to the fact that the transition
+and sensor models and their structures are unknown.
+These properties are characteristic of a wide range of
+real-world tasks.
+Figure 4(a) shows a single frame of the dart throwing
+problem where the objective is to throw a dart with
+minimal mean squared error (measured from where the
+dart hits the wall to the center of the dart board).
+The arm is modeled as a three-link rigid body with
+dimensions based on biological measurements [2]. The
+links correspond to the upper arm, forearm, and hand
+and are connected using a single degree of freedom
+
+3.1
+
+(a)
+
+(b)
+Figure 4: (a) Dart throwing problem (b) Quadruped locomotion problem.
+
+rotational joint. The upper arm is connected to the
+shoulder at a fixed location. The arm is controlled by
+applying torques at each joint. These torques are generated by a PD-controller that attempts to move the
+arm through a desired trajectory, specified by a cubic
+spline for each joint angle. The starting posture of the
+arm is fixed in advance and the control policy specifies
+three spline knot positions for each joint, yielding 9
+policy parameters in all. The controller is simulated
+for approximately 0.2 seconds and then the dart is released. The torques calculated by the PD-controller
+are perturbed by additive and multiplicative noise,3
+and there is Gaussian noise added to the release time
+with σ = 0.01.
+Figure 4(b) shows a single frame of the quadruped
+locomotion problem where the objective is to maximize the sustained speed of the robot. Each leg of the
+quadruped has four degrees of freedom (three at the
+shoulder joints and one at the elbow). The quadruped
+is controlled by applying torques at each joint which
+gives the system 16 degrees of controllable freedom.
+The torques are generated by a PD-controller that
+attempts to move each leg through a desired trajectory, specified by a truncated Fourier Series for each
+joint angle. Each controllable degree of freedom has
+three corresponding parameters and the right side of
+the body is constrained to move the same as the left
+except offset by 180 degrees; there are 24 policy parameters. The controller is simulated for 3 seconds
+for each policy trial and the distance travelled is the
+objective function. As with the dart thrower, noise
+enters the system by perturbing the torques given by
+the PD-controller by additive and multiplicative noise.
+3
+Multiplicative noise has been shown to explain some
+aspects of biological motion [4, 12].
+
+SENSORS FOR MOTOR CONTROL
+
+The systems described in the previous subsection are
+capable of measuring the state of the observable joint
+angles during each policy trial. In these two tasks,
+the observable joints are the same as the controllable
+joints. In the quadruped task, this means that while
+the agent can sense the positions of each leg relative
+to the body, it does not have access to the absolute
+position and rotation of the torso.
+Our task is to take the sensed trajectories and to transform the values to something that gives us improvements in our gradient estimator. The sensor encodings should be independent of the policy parameters
+and so we attempt to find the difference between the
+observed motion of the system and the expected motion at each time step. The idea of using sensory data
+to cancel out the effect of one’s own motion is also
+present in the biology literature [14]. We approximate
+this difference by learning a crude approximation to
+the dynamical system in a pre-processing phase. Using the joint-space representation of each system, the
+dynamics are governed by the following second-order
+nonlinear differential equation:
+m(x)ẍ = u(t) + g(x) + c(x, ẋ) + w(x, ẋ, t).
+where x is the physical state of the system, m(x) is
+the joint-space inertia matrix, u(t) are the forces and
+torques applied to the system, g(x) is the gravitational
+force, c(x, ẋ) are the Centrifugal and Coriolis forces,
+and w(t) is the noise plus any external forces (e.g., the
+ground pushing up on the feet of the quadruped). A
+discrete time version of this equation is written as:
+m(x)a = u(t) + g(x) + c(x, v) + w(x, v, t).
+where v are the velocities and a is the acceleration.
+We approximate the expected acceleration by predicting the following quantities as a function of the observable states and velocities:
+vec(m(x)−1 ) ≈ AM φ(x(o) )
+vec(m(x)−1 g(x)) ≈ AG φ(x(o) )
+
+T
+vec(m(x)−1 c(x, v)) ≈ AC φ( x(o) T , v(o) T ),
+where x(o) and v(o) contain the observable components
+of the state and velocity terms and where φ(x) =
+triu([1, xT ]T [1, xT ]) is a function that augments its input with quadratic terms (triu(X) is a function that
+returns the upper triangular part of X stacked as a single column vector). We use linear regression to learn
+a model of each of these components as a function
+of the observable state variables. For example in the
+quadruped problem we will learn these linear models
+
+without regard to the absolute rotation of the system.
+This is clearly an approximation for the terms that involve gravity because the direction of the gravitational
+force, from a frame of reference attached to the torso,
+depends on its rotation relative to the ground frame.
+
+0
+−5
+−10
+
+AM :=
+AG :=
+Ag :=
+
+T
+
+−15
+−20
+w/o Sensor
+w/Sensor
+−25
+0
+
+−1
+
+(Φ1 Φ1 ) ΦT1 M
+(Φ1 T Φ1 )−1 ΦT1 G
+(Φ2 T Φ2 )−1 ΦT2 C,
+
+where
+αi = φ(xi(o) )
+T
+
+V(π)
+
+We learn these parameters in a pre-processing stage by
+examining random states (xi , vi ) in the dynamical system and examining the mass matrix m(xi ), the gravity forces g(xi ), and the Coriolis and Centrifugal forces
+c(xi , vi ). The samples are drawn from a distribution of
+states that are likely to be encountered during policy
+execution. We learn the linear relationships using the
+following equations:
+
+T T
+
+βi = φ([xi(o) , vi(o) ] )
+Φ1 = [α1 T , . . . , αnf T ]T
+Φ2 = [β1 T , . . . , βnf T ]T
+M = [vec(m(x1 )−1 )T , . . . , vec(m(xnf )−1 )T ]T
+G = [vec(m(x1 )−1 g(x1 ))T , . . . ,
+vec(m(xnf )−1 g(xnf ))T ]T
+C = [vec(m(x1 )−1 c(x1 , v1 ))T , . . . ,
+vec(m(xnf )−1 c(xnf , vnf ))T ]T .
+
+During each policy execution we can take these parameters to estimate the expected acceleration at each
+time step as follows:
+
+2
+
+4
+
+6
+8 10 12 14
+hill−climbing step
+
+16
+
+18
+
+Figure 5: The learning curve performance of two policy
+search strategies in the dart throwing domain. At each
+hill-climbing step we drew a single sample from 12 different
+policies and we averaged over 48 hill-climbing runs.
+
+splines for the dart and a truncated Fourier series for
+the quadruped. This is the sensor data that we give
+to the gradient estimator algorithms as described in
+Section 2.2. We also include a sensor that detects the
+release time for the dart throwing task.
+3.2
+
+LEARNING PERFORMANCE
+
+Figure 5 shows the learning curves for the dart throwing problem. We get a substantial improvement in the
+learning performance when using an algorithm that incorporates sensor data when compared to an algorithm
+that ignores the sensor data. At each hill-climbing step
+we drew a single sample from 12 different policies and
+we averaged over 48 hill-climbing runs. The policies
+for each hill-climbing step were drawn from a Gaussian distribution for exploration purposes.
+
+where the resh function reshapes a matrix to its original size. The difference in velocity is computed as
+the actual velocity at each time step v(o) (t) minus the
+velocity predicted using the following expression:
+
+Figure 6 shows the learning curves for the quadruped
+locomotion problem. We get an improvement in the
+learning performance when using of an algorithm that
+incorporates sensor data when compared to an algorithm that ignores the sensor data. At each hillclimbing step we drew a single sample from 30 different
+policies and we averaged over 48 hill-climbing runs.
+The policies for each hill-climbing step were drawn
+from a Gaussian distribution for exploration purposes.
+
+v(o) (t) ≈ v(o) (t − 1) + â(π, t, x(o) (t − 1), v(o) (t − 1))∆t,
+
+4
+
+â(π, t, x(o) , v(o) ) = reshM (AM φ(x(o) ))u(π, t)+
+reshG (AG φ(x(o) ))+
+
+T
+reshC (AC φ( x(o) T , v(o) T )),
+
+where ∆t is the time between sensor measurements.
+We reduce the number of sensor values by projecting these difference curves down onto a set of basis
+functions. We chose the same basis functions that we
+used to encode the policy for the two tasks; we used
+
+DISCUSSION
+
+In this paper we demonstrated how one may incorporate sensor data into the gradient estimation task
+to improve the performance of policy search. We
+showed that the level of improvement depends on the
+amount of information that the sensors provide about
+
+[2]
+
+B. Garner and M. Pandy. A kinematic model of the
+upper limb based on the visible human project (vhp)
+image dataset. Computer Methods in Biomechanics
+and Biomedical Engineering, 2:107–124, 1999.
+
+[3]
+
+Evan Greensmith, Peter L. Bartlett, and Jonathan
+Baxter. Variance reduction techniques for gradient
+estimates in reinforcement learning. In Advances in
+Neural Information Processing Systems, pages 1507–
+1514, 2001.
+
+[4]
+
+Christopher Harris and Daniel Wolpert.
+Signaldependent noise determines motor planning. Nature,
+394:780–784, 1998.
+
+[5]
+
+N. Kohl and P. Stone. Machine learning for fast
+quadrupedal locomotion. In Proceedings of the Nineteenth National Conference on Artificial Intelligence,
+2004.
+
+Figure 6: The learning curve performance of two policy
+search strategies in the quadruped learning domain. At
+each hill-climbing step we drew a single sample from 30 different policies and we averaged over 48 hill-climbing runs.
+
+[6]
+
+Gregory Lawrence, Noah Cowan, and Stuart Russell.
+Efficient gradient estimation for motor control learning. In Proceedings of the Nineteenth International
+Conference on Uncertainty in Artificial Intelligence,
+2003.
+
+the noise-induced perturbations on the score. We
+also showed that the performance gains depend on
+the dimensionality of the sensor data. It is important to choose sensor encodings that are independent
+of the policy parameters to minimize the bias. We
+also presented a technique to find good sensor encodings for problems in which these assumptions (lowdimensionality and statistical indepedence) do not
+hold. Finally, we presented learning curves that show
+improvements in the learning performance for a toy
+cannon problem, dart throwing task, and quadruped
+locomotion task.
+
+[7]
+
+Andrew Y. Ng and Michael Jordan. Pegasus: A policy
+search method for large MDPs and POMDPs. In Proceedings of the Sixteenth Conference on Uncertainty in
+Artificial Intelligence, pages 406–415, 2000.
+
+[8]
+
+Andrew Y. Ng, H. Jin Kim, Michael Jordan, and
+Shankar Sastry. Autonomous helicopter flight via reinforcement learning. In Advances in Neural Information Processing Systems, 2003.
+
+[9]
+
+Leon Peshkin and Christian R. Shelton. Learning from
+scarce experience. In Proceedings of the 19th International Conference on Machine Learning, 2002.
+
+2.6
+2.4
+2.2
+
+V(π)
+
+2
+1.8
+1.6
+1.4
+1.2
+w/o Sensor
+w/Sensor
+
+1
+0.8
+0
+
+5
+
+10
+15
+hill−climbing step
+
+20
+
+In this paper the distribution of every random variable
+was approximated by using a linear Gaussian relationship. Improvements in performance may be realized
+if we use non-linear mappings. Other improvements
+may come from incorporating our knowledge of the
+physics behind each task. For example, in the cannon
+problem we already know the equations of projectile
+motion. Thus, given the actual controls, we should
+be able to accurately predict the score. Even in cases
+in which we do not know the equations of motion, we
+often know qualitative information about the motion,
+such as the fact that increasing the desired velocity
+causes the cannon ball to fly further (i.e., the distance
+travelled is monotonically increasing as a function of
+the desired velocity). One possible approach to incorporating this information is to place a prior on the
+parameters that reflects these constraints.
+
+References
+[1]
+
+J. Baxter and P. L. Bartlett. Infinite-horizon policygradient estimation. Journal of Artificial Intelligence
+Research, 15:319–350, 2001.
+
+[10] Jan Peters, Sethu Vijayakumar, and Stefan Schaal.
+Natural actor-critic. In Proceedings of the 16th European Conference on Machine Learnin, 2003.
+[11] Christian R. Shelton.
+Policy improvement for
+POMDPs using normalized importance sampling. In
+Proceedings of the Seventeenth International Conference on Uncertainty in Artificial Intelligence, pages
+496–503, 2001.
+[12] Emanuel Todorov and Michael I. Jordan. Optimal
+control as a theory of motor coordination. Nature
+Neuroscience, 2002.
+[13] Lex Weaver and Nigel Tao. The optimal reward baseline for gradient-based reinforcement learning. In Proceedings of the Seventeenth Conference on Uncertainty
+in Artificial Intelligence, pages 538–545, 2001.
+[14] D. Wolpert, Z. Ghahramani, and J. Flanagan. Perspectives and problems in motor learning. Trends in
+Cognitive Science, 5, 2001.
+
+

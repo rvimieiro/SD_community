@@ -1,0 +1,1195 @@
+and their corresponding function evaluations, the algorithm must adaptively construct a sequence of queries
+(or actions) a1:T and afterwards return the element of
+highest expected value.
+A typical example of this problem is that of automatic
+product testing [Kohavi et al., 2009, Scott, 2010],
+where common “products” correspond to configuration options for ads, websites, mobile applications, and
+online games. In this scenario, a company offers different product variations to a small subset of customers,
+with the goal of finding the most successful product
+for the entire customer base. The crucial problem is
+how best to query the smaller subset of users in order to find the best product with high probability. A
+second example, analyzed later in this paper, is that
+of automating machine learning. Here, the goal is
+to automatically select the best technique (boosting,
+random forests, support vector machines, neural networks, etc.) and its associated hyper-parameters for
+solving a machine learning task with a given dataset.
+For big datasets, cross-validation is very expensive and
+hence it is often important to find the best technique
+within a fixed budget of cross-validation tests (function evaluations).
+In order to properly attack this problem there are three
+design aspects that must be considered. By taking
+advantage of correlation among different actions it is
+possible to learn more about a function than just its
+value at a specific query. This is particularly important when the number of actions greatly exceeds the
+finite query budget. In this same vein, it is important
+to take into account that a recommendation must be
+made at time T in order to properly allocate actions
+and explore the space of possible optima. Finally, the
+fact that we are interested only in the value of the
+recommendation made at time T should be handled
+explicitly. In other words, we are only interested in
+
+finding the best action and are concerned with the rewards obtained during learning only insofar as they
+inform us about this optimum.
+In this work, we introduce a Bayesian approach that
+meets the above design goals and show that it empirically outperforms the existing frequentist counterpart
+[Gabillon et al., 2012]. The Bayesian approach places
+emphasis on detailed modelling, including the modelling of correlations among the arms. As a result,
+it can perform well in situations where the number
+of arms is much larger than the number of allowed
+function evaluation, whereas the frequentist counterpart is inapplicable. The paper presents comprehensive comparisons of the proposed approach, Thompson
+sampling, classical Bayesian optimization techniques,
+more recent Bayesian bandit approaches, and state-ofthe-art best arm identification methods. This is the
+first comparison of many of these methods in the literature and allows us to examine the relative merits of
+their different features. The paper also shows that one
+can easily obtain the same theoretical guarantees for
+the Bayesian approach that were previously derived in
+the frequentist setting [Gabillon et al., 2012].
+
+2
+
+Valko et al. [2013]; this approach takes a tree-based
+structure for expanding areas of the optimization problem in question, but it requires one to evaluate each
+cell many times before expanding, and so may prove
+expensive in terms of the number of function evaluations.
+The problem of optimization under budget constraints
+has received relatively little attention in the Bayesian
+optimization literature, though some approaches without strong theoretical guarantees have been proposed
+recently [Azimi et al., 2011, Hennig and Schuler, 2012,
+Snoek et al., 2011, Villemonteix et al., 2009]. In contrast, optimization under budget constraints has been
+studied in significant depth in the setting of multiarmed bandits [Bubeck et al., 2009, Audibert et al.,
+2010, Gabillon et al., 2011, 2012]. Here, a decision
+maker must repeatedly choose query points, often discrete and known as “arms”, in order to observe their
+associated rewards [Cesa-Bianchi and Lugosi, 2006].
+However, unlike most methods in Bayesian optimization the underlying value of each action is generally assumed to be independent from all other actions. That
+is, the correlation structure of the arms is often ignored.
+
+Related work
+3
+
+Bayesian optimization has enjoyed success in a broad
+range of optimization tasks; see the work of Brochu
+et al. [2010b] for a broad overview. Recently, this
+approach has received a great deal of attention as a
+black-box technique for the optimization of hyperparameters [Snoek et al., 2012, Hutter et al., 2011, Wang
+et al., 2013b]. This type of optimization combines
+prior knowledge about the objective function with previous observations to estimate the posterior distribution over f . The posterior distribution, in turn, is used
+to construct an acquisition function that determines
+what the next query point at should be. Examples of
+acquisition functions include probability of improvement (PI), expected improvement (EI), Bayesian upper confidence bounds (UCB), and mixtures of these
+[Močkus, 1982, Jones, 2001, Srinivas et al., 2010, Hoffman et al., 2011]. One of the key strengths underlying the use of Bayesian optimization is the ability
+to capture complicated correlation structures via the
+posterior distribution.
+Many approaches to bandits and Bayesian optimization focus on online learning (e.g., minimizing cumulative regret) as opposed to optimization [Srinivas et al.,
+2010, Hoffman et al., 2011]. In the realm of optimizing
+deterministic functions, a few works have proven exponential rates of convergence for simple regret [de Freitas et al., 2012, Munos, 2011]. A stochastic variant
+of the work of Munos has been recently proposed by
+
+Problem formulation
+
+In order to attack the problem of Bayesian optimization from a bandit perspective we will consider a discrete collection of arms A = {1, . . . , K} such that
+the immediate reward of pulling arm k ∈ A is characterized by a distribution νk with mean µk . From
+the Bayesian optimization perspective we can think
+of this as a collection of points {a1 , . . . , aK } where
+µk = f (ak ). Note that while we will assume the distributions νk are independent of past actions this does not
+mean that the means of each arm cannot share some
+underlying structure—only that the act of pulling arm
+k does not affect the future rewards of pulling this or
+any other arm. This distinction will be relevant later
+in this section.
+The problem of identifying the best arm in this bandit
+problem can now be introduced as a sequential decision problem. At each round t the decision maker
+will select or “pull” an arm at ∈ A and observe an
+independent sample yt drawn from the corresponding
+distribution νat . At the beginning of each round t,
+the decision maker must decide which arm to select
+based only on previous interactions, which we will denote with the tuple (a1:t−1 , y1:t−1 ). For any arm k we
+can also introduce the expected immediate regret of
+selecting that arm as
+Rk = µ∗ − µk ,
+
+(1)
+
+where µ∗ denotes the expected value of the best arm.
+Note that while we are interested in finding the arm
+with the minimum regret, the exact value of this quantity is unknown to the learner.
+In standard bandit problems the goal is generally to
+minimize the cumulative sum of immediate regrets incurred by the arm selection process. Instead, in this
+work we consider the pure exploration setting [Bubeck
+et al., 2009, Audibert et al., 2010], which divides the
+sampling process into two phases: exploration and
+evaluation. The exploration phase consists of T rounds
+wherein a decision maker interacts with the bandit
+process by sampling arms. After these rounds, the
+decision maker must make a single arm recommendation ΩT ∈ A. The performance of the decision maker
+is then judged only on the performance of this recommendation. The expected performance of this single
+recommendation is known as the simple regret, and
+we can write this quantity as RΩT . Given a tolerance
+ > 0 we can also define the probability of error as the
+probability that RΩT > . In this work, we will consider both the empirical probability that our regret
+exceeds some  as well as the actual reward obtained.
+
+4
+
+Bayesian bandits
+
+We will now consider a bandit problem wherein the
+distribution of rewards for each arm is assumed to depend on unknown parameters θ ∈ Θ that are shared
+between all arms. We will write the reward distribution for arm k as νk (·|θ). When considering the bandit
+problem from a Bayesian perspective, we will assume
+a prior density θ ∼ π0 (·) from which the parameters
+are drawn. Next, after t − 1 rounds we can write the
+posterior density of these parameters as
+Y
+πt (θ) ∝ π0 (θ)
+νan (yn |θ).
+(2)
+n<t
+
+Here we can see the effect of choosing arm an at each
+time n: we obtain information about θ only indirectly
+by way of the likelihood of these parameters given reward observations yn . Note that this also generalizes
+the uncorrelated arms setting. If the rewards for each
+arm k depend only on a parameter (or set of parameters) θk , then at time t the posterior for that parameter
+would only depend on those times in the past that we
+had pulled arm k.
+We are, however, only partially interested in the posterior distribution of the parameters θ. Instead, we are
+primarily concerned with the expected reward for each
+arm under theseRparameters, which can be written as
+µk = E[Y |θ] = y νk (y|θ) dy. The true value of θ is
+unknown, but we have access to the posterior distribution πt (θ). This distribution induces a marginal dis-
+
+tribution over µk , which we will write as ρkt (µk ). The
+distribution ρkt (µk ) can then be used to define upper
+and lower confidence bounds that hold with high probability and, hence, engineer acquisition functions that
+trade-off exploration and exploitation. We will derive
+an analytical expression for this distribution next.
+We will assume that each arm k is associated with
+a feature vector xk ∈ Rd and where the rewards for
+pulling arm k are normally distributed according to
+νk (y|θ) = N (y; xTk θ, σ 2 )
+
+(3)
+
+with variance σ 2 and unknown θ ∈ Rd . The rewards for each arm are independent conditioned on
+θ, but marginally dependent when this parameter is
+unknown. In particular the level of their dependence
+is given by the structure of the vectors xk . By placing a prior θ ∼ N (0, η 2 I) over the entire parameter
+vector we can compute a posterior distribution over
+this unknown quantity. One can also easily place an
+inverse-Gamma prior on σ and compute the posterior
+analytically, but we will not describe this in order to
+keep the presentation simple.
+The above linear observation model might seem restrictive. However, because we are only considering
+K discrete actions (arms), it includes the Gaussian
+process (GP) setting. More precisely, let the matrix G ∈ RK×K be the covariance of a GP prior.
+Our experiments will detail two ways of constructing this covariance in practice. We can apply the following transformation to construct the design matrix
+X = [x1 . . . xK ]T :
+1
+
+X = V D 2 , where G = V DV T .
+The rows of X correspond to the vectors xk necessary for the construction of the observation model in
+Equation (3). By restricting ourselves to discrete actions spaces, we can also implement strategies such
+a Thompson sampling with GPs. The restriction to
+discrete action spaces poses some scaling challenges in
+high-dimensions, but it enables us to deploy a broad
+set of algorithms to attack low-dimensional problems.
+For this pragmatic reason, many existing popular
+Bayesian optimization software tools consider discrete
+actions only.
+We will now let Xt = [xa1 . . . xat−1 ]T denote the design
+matrix and Yt = [y1 . . . yt−1 ]T the vector of observations at the beginning of round t. We can then write
+the posterior at time t as πt (θ) = N (θ; θ̂t , Σ̂t ), where
+−2 T
+Σ̂−1
+Xt Xt + η −2 I, and
+t =σ
+
+θ̂t = σ
+
+−2
+
+Σ̂t XtT Yt .
+
+(4)
+(5)
+
+From this formulation we can see that the expected
+reward associated with arm k is marginally normal
+
+Figure 1: Example GP setting with discrete arms. The full
+GP is plotted with observations and confidence intervals
+at each of K = 10 arms (mean and confidence intervals of
+ρkt (µk )). Shown in green is a single sample from the GP.
+2
+ρkt (µk ) = N (µk ; µ̂kt , σ̂kt
+) with mean µ̂kt = xTk θ̂t and
+2
+T
+variance σ̂kt = xk Σ̂t xk . Note also that the predictive
+distribution over rewards associated with the kth arm
+2
+is normal as well, with mean µ̂kt and variance σ̂kt
++σ 2 .
+The previous derivations are textbook material; see for
+example Chapter 7 of [Murphy, 2012].
+
+Figure 1 depicts an example of the mean and confidence intervals of ρkt (µk ), as well as a single random
+sample. Here the features xk were constructed by first
+forming the covariance matrix with an exponential ker0 2
+nel k(x, x0 ) = e−(x−x ) over the 1-dimensional discrete
+domain. As with standard Bayesian optimization with
+GPs, the statistics of ρkt (µk ) enable us to construct
+many different acquisition functions that trade-off exploration and exploitation. Thompson sampling in
+this setting also becomes straightforward, as we simply have to pick the maximum of the random sample
+from ρkt (µk ), at one of the discrete arms, as the next
+point to query.
+
+5
+
+Algorithm 1 BayesGap
+1: for t = 1, . . . , T do
+2:
+set J(t) = arg mink∈A Bk (t)
+3:
+set j(t) = arg mink6=J(t) Uk (t)
+4:
+select arm at = arg maxk∈{j(t),J(t)} sk (t)
+5:
+observe yt ∼ νat (·)
+6:
+update posterior µ̂kt and σ̂kt
+7:
+update bound on H and re-compute β
+8:
+update posterior bounds Uk (t) and Lk (t)
+9: end for
+
+10: return ΩT = J arg mint≤T BJ(t) (t)
+
+can then introduce the gap quantity
+Bk (t) = max Ui (t) − Lk (t),
+i6=k
+
+which involves a comparison between the lower bound
+of arm k and the highest upper bound among all alternative arms. Ultimately this quantity provides an
+upper bound on the simple regret (see Lemma B1 in
+the supplementary material) and will be used to define the exploration strategy. However, rather than
+directly finding the arm minimizing this gap, we will
+consider the two arms
+J(t) = arg min Bk (t) and
+k∈A
+
+j(t) = arg max Uk (t).
+k6=J(t)
+
+We will then define the exploration strategy as
+at = arg max sk (t).
+
+Bayesian gap-based exploration
+
+In this section we will introduce a gap-based solution
+to the Bayesian optimization problem, which we call
+BayesGap. This approach builds on the work of Gabillon et al. [2011, 2012], which we will refer to as UGap1 ,
+and offers a principled way to incorporate correlation
+between different arms (whereas the earlier approach
+assumes all arms are independent).
+At the beginning of round t we will assume that the
+decision maker is equipped with high-probability upper and lower bounds Uk (t) and Lk (t) on the unknown
+mean µk for each arm. While this approach can encompass more general bounds, for the Gaussian-arms
+setting that we consider in this work we can define
+these quantities in terms of the mean and standard deviation, i.e. µ̂kt ± β σ̂kt . These bounds also give rise to
+a confidence diameter sk (t) = Uk (t) − Lk (t) = 2β σ̂kt .
+Given bounds on the mean reward for each arm, we
+1
+
+Technically this is UGapEb, denoting bounded horizon, but as we do not consider the fixed-confidence variant
+in this paper we simplify the acronym.
+
+(6)
+
+(7)
+
+k∈{j(t),J(t)}
+
+Intuitively this strategy will select either the arm minimizing our bound on the simple regret (i.e. J(t)) or
+the best “runner up” arm. Between these two, the arm
+with the highest uncertainty will be selected, i.e. the
+one expected to give us the most information. Next,
+we will define the recommendation strategy as
+
+ΩT = J arg min BJ(t) (t) ,
+(8)
+t≤T
+
+i.e. the proposal arm J(t) which minimizes the regret
+bound, over all times t ≤ T . The reason behind this
+particular choice is subtle, but is necessary for the
+proof of the method’s simple regret bound2 . In Algorithm 1 we show the pseudo-code for BayesGap.
+We now turn to the problem of which value of β to use.
+First, consider the quantity ∆k = | maxi6=k µi − µk |.
+For the best arm this coincides with a measure of the
+distance to the second-best arm, whereas for all other
+arms it is a measure of their sub-optimality. Given
+2
+
+See inequality (b) in the the supplementary material.
+
+this quantity let Hk = max( 21 (∆k + ), ) be an armdependent hardness quantity; essentially our goal is to
+reduce the uncertainty in each arm to below this level,
+at which point with high probability
+we will identify
+P
+−2
+the best arm. Now, given H = k Hk
+we define our
+exploration constant as
+
+β 2 = (T − K)/σ 2 + κ/η 2 (4H )
+(9)
+P
+where κ = k kxk k−2 . We have chosen β such that
+with high probability we recover an -best arm, as detailed in the following theorem. This theorem relies on
+bounding the uncertainty for each arm by a function
+of the number of times that arm is pulled. Roughly
+speaking, if this bounding function is monotonically
+decreasing and if the bounds Uk and Lk hold with high
+probability we can then apply Theorem 2 to bound the
+simple regret of BayesGap3 .
+Theorem 1. Consider a K-armed Gaussian bandit
+problem, horizon T , and upper and lower bounds defined as above. For  > 0 and β defined as in Equation (9), the algorithm attains simple regret satisfying
+2
+Pr(RΩT ≤ ) ≥ 1 − KT e−β /2 .
+Proof. Using the definition of the posterior variance
+for arm k, we can write the confidence diameter as
+q
+sk (t) = 2β xTk Σ̂t xk
+q
+−1
+P
+σ2
+T
+= 2β σ 2 xTk
+xk
+i Ni (t − 1) xi xi + η 2 I
+q
+2 −1
+xk .
+≤ 2β σ 2 xTk Nk (t − 1) xk xTk + ση2 I
+In the second equality we decomposed the Gram matrix XtT Xt in terms of a sum of outer products over the
+fixed vectors xi . In the final inequality we noted that
+by removing samples we can only increase the variance
+term, i.e. here we have essentially replaced Ni (t − 1)
+with 0 for i 6= k. We will let the result of this final
+inequality define an arm-dependent bound gk . Let2
+ting A = N1 ση2 we can simplify this quantity using the
+Sherman-Morrison formula as
+q
+−1
+gk (N ) = 2β (σ 2 /N )xTk xk xTk + AI
+xk
+s
+σ 2 kxk k2 
+kxk k2 /A 
+= 2β
+1−
+N A
+1 + kxk k2 /A
+v
+u
+u σ 2 kxk k2
+= 2β t 2
+,
+σ
+2
+η 2 + N kxk k
+which is monotonically decreasing in N . The inverse
+of this function can be solved for as
+gk−1 (s) =
+
+4(βσ)2
+σ2 1
+− 2
+.
+2
+s
+η kxk k2
+
+P
+By setting k gk−1 (Hk ) = T − K and solving for β
+we then obtain the definition of this term given in the
+statement of the proposition. Finally, by reference to
+Lemma B4 (supplementary material) we can see that
+for each k and t, the upper and lower bounds must hold
+with probability 1 − e−β/2 . These last two statements
+satisfy the assumptions of Theorem 2 (supplementary
+material), thus concluding our proof.
+Here we should note that while we are using Bayesian
+methodology to drive the exploration of the bandit,
+we are analyzing this using frequentist regret bounds.
+This is a common practice when analyzing the regret of
+Bayesian bandit methods [Srinivas et al., 2010, Kaufmann et al., 2012a]. We should also point out that
+implicitly Theorem 2 assumes that each arm is pulled
+at least once regardless of its bound. However, in our
+setting we can avoid this in practice due to the correlation between arms.
+One key thing to note is that the proof and derivation
+of β given above explicitly require the hardness quantity H , which is unknown in most practical applications. Instead of requiring this quantity, our approach
+will be to adaptively estimate it. Intuitively, the quantity β controls how much exploration BayesGap does
+(note that β directly controls the width of the uncertainty sk (t)). Further, β is inversely proportional to
+H . As a result, in order to initially encourage more
+exploration we will lower bound the hardness quantity.
+In particular, we can do this by upper bounding each
+∆k by using conservative, posterior dependent upper
+and lower bounds on µk . In this work we use three
+posterior standard deviations away from the posterior
+mean, i.e. µ̂k (t) ± 3σ̂kt . (We emphasize that these are
+not the same as Lk (t) and Uk (t).) Then the upper
+bound on ∆k is simply
+ˆ k = max(µ̂j + 3σ̂j ) − (µ̂k − 3σ̂k ).
+∆
+j6=k
+
+From this point we can recompute H and in turn recompute β (step 7 in the pseudocode). For all experiments we will use this adaptive method.
+Comparison with UGap. The method in this section provides a Bayesian version of the UGap algorithm which modifies the bounds used in this earlier
+algorithm’s arm selection step. By modifying step 6
+of the BayesGap pseudo-code to use either Hoeffding
+or Bernstein bounds we can re-obtain the UGap algorithm. Note, however, that in doing so UGap assumes
+independent arms with bounded rewards.
+We can now roughly compare UGap’s probability of er−K
+ror, i.e. O(KT exp(− TH
+)), with that of BayesGap,
+
+2
+
+3
+
+The additional Theorem is in supplementary material
+and is a slight modification of that in [Gabillon et al., 2012].
+
+2
+
+/η
+O(KT exp(− T −K+κσ
+)). We can see that with miH σ 2
+nor differences, these bounds are of the same order.
+
+Probability of error
+
+0.16
+0.14
+0.12
+0.10
+0.08
+
+son
+
+B
+
+mp
+
+UC
+
+Tho
+
+GP
+
+PI
+
+yes
+U
+Ba CB
+yes
+Ga
+p
+EI
+
+ap
+
+Ba
+
+UG
+
+UC
+
+BE
+
+0.06
+
+Figure 2: Probability of error on the optimization domain
+of traffic speed sensors. For this real data set, BayesGap
+provides considerable improvements over the Bayesian cumulative regret alternatives and the frequentist simple regret counterparts.
+
+First, we can ignore the additional σ 2 term as this
+quantity is primarily due to the distinction between
+bounded and Gaussian-distributed rewards. The η 2
+term corresponds to the concentration of the prior,
+and we can see that the more concentrated the prior is
+(smaller η) the faster this rate is. Note, however, that
+the proof of BayesGap’s simple regret relies on the true
+rewards for each arm being within the support of the
+prior, so one cannot increase the algorithm’s performance by arbitrarily adjusting the prior. Finally, the
+κ term is related to the linear relationship between
+different arms. Additional theoretical results on improving these bounds remains for future work.
+
+6
+
+Experiments
+
+In the following subsections, we benchmark the proposed algorithm against a wide variety of methods on
+two real-data applications. In Section 6.1, we revisit
+the traffic sensor network problem of Srinivas et al.
+[2010]. In Section 6.2, we consider the problem of automatic model selection and algorithm configuration.
+6.1
+
+Application to a traffic sensor network
+
+In this experiment, we are given data taken from traffic
+speed sensors deployed along highway I-880 South in
+California. Traffic speeds were collected at K = 357
+sensor locations for all working days between 6AM and
+11AM for an entire month. Our task is to identify the
+single location with the highest expected speed, i.e.
+the least congested. This data was also used in the
+work of Srinivas et al. [2010].
+
+Naturally, the readings from different sensors are correlated, however, this correlation is not necessarily
+only due to geographical location. Therefore specifying a similarity kernel over the space of traffic sensor
+locations alone would be overly restrictive. Following
+the approach of Srinivas et al. [2010], we construct the
+design matrix treating two-thirds of the available data
+as historical and use the remaining third to evaluate
+the policies. In more detail, The GP kernel matrix
+G ∈ RK×K is set to be empirical covariance matrix
+of measurements for each of the K sensor locations.
+As explained in Section 4, the corresponding design
+1
+matrix is X = V D 2 , where G = V DV T .
+Following Srinivas et al. [2010], we estimate the noise
+level σ of the observation model using this data. We
+consider the average empirical variance of each individual sensor (i.e. the signal variance corresponding to
+the diagonal of G) and set the noise variance σ 2 to 5%
+of this value; this corresponds to σ 2 = 4.78. We choose
+a broad prior with regularization coefficient η = 20.
+In order to evaluate different bandit and Bayesian optimization algorithms, we use each of the remaining 840
+sensor signals (the aforementioned third of the data)
+as the true mean vector µ for independent runs of the
+experiment. Note that using the model in this way
+enables us to evaluate the ground truth for each run
+(given by µ, but not observed by the algorithm), and
+estimate the actual probability that the policies return
+the best arm.
+In this experiment, as well as in the next one, we estimate the hardness parameter H using the adaptive
+procedure outlined at the end of Section 5.
+We benchmark the proposed algorithm (BayesGap)
+against the following methods:
+(1) UCBE: Introduced by Audibert et al. [2010]; this
+is a variant of the classical UCB policy of Auer et al.
+[2002] that replaces the log(t) exploration term of UCB
+with a constant of order log(T ) for known horizon T .
+(2) UGap: A gap-based exploration approach introduced by Gabillon et al. [2012].
+(3) BayesUCB and GPUCB: Bayesian extensions
+of UCB which derive their confidence bounds from the
+posterior. Introduced by Kaufmann et al. [2012a] and
+Srinivas et al. [2010] respectively.
+(4) Thompson sampling: A randomized, Bayesian
+index strategy wherein the kth arm is selected with
+probability given by a single-sample Monte Carlo approximation to the posterior probability that the arm
+is the maximizer [Chapelle and Li, 2012, Kaufmann
+et al., 2012b, Agrawal and Goyal, 2013].
+(5) Probability of Improvement (PI): A clas-
+
+sic Bayesian optimization method which selects points
+based on their probability of improving upon the current incumbent.
+(6) Expected Improvement (EI): A Bayesian optimization, related to PI, which selects points based
+on the expected value of their improvement.
+Note that techniques (1) and (2) above attack the
+problem of best arm identification and use bounds
+which encourage more aggressive exploration. However, they do not take correlation into account. On the
+other hand, techniques such ad (3) are designed for cumulative regret, but model the correlation among the
+arms. It might seem at first that we are comparing apples and oranges. However, the purpose of comparing
+these methods, even if their objectives are different, is
+to understand empirically what aspects of these algorithms matter the most in practical applications.
+The results, shown in Figure 2, are the probabilities
+of error for each strategy, using a time horizon of
+T = 400. (Here we used  = 0, but varying this
+quantity had little effect on the performance of each
+algorithm.) By looking at the results, we quickly learn
+that techniques that model correlation perform better
+than the techniques designed for best arm identification, even when they are being evaluated in a best arm
+identification task. The important conclusion is that
+one must always invest effort in modelling the correlation among the arms.
+The results also show that BayesGap does better than
+alternatives in this domain. This is not surprising because BayesGap is the only competitor that addresses
+budgets, best arm identification and correlation simultaneously.
+6.2
+
+Automatic machine learning
+
+There exist many machine learning toolboxes, such as
+Weka and scikit-learn. However, for a great many
+data practitioners interested in finding the best technique for a predictive task, it is often hard to understand what each technique in the toolbox does.
+Moreover, each technique can have many free hyperparameters that are not intuitive to most users.
+Bayesian optimization techniques have already been
+proposed to automate machine learning approaches,
+such as MCMC inference [Mahendran et al., 2012,
+Hamze et al., 2013, Wang et al., 2013a], deep learning [Bergstra et al., 2011], preference learning [Brochu
+et al., 2007, 2010a], reinforcement learning and control
+[Martinez-Cantin et al., 2007, Lizotte et al., 2012], and
+more [Snoek et al., 2012]. In fact, methods to automate entire toolboxes (Weka) have appeared very recently [Thornton et al., 2013], and go back to old pro-
+
+posals for classifier selection [Maron and Moore, 1994].
+Here, we will demonstrate BayesGap by automating
+regression with scikit-learn. Our focus will be on
+minimizing the cost of cross-validation in the domain
+of big data. In this setting, training and testing each
+model can take a prohibitive long time. If we are working under a finite budget, say if we only have three
+days before a conference deadline or the deployment
+of a product, we cannot afford to try all models in
+all cross-validation tests. However, it is possible to
+use techniques such as BayesGap and Thompson sampling to find the best model with high probability. In
+our setting, the action of “pulling an arm” will involve
+selecting a model, splitting the dataset randomly into
+training and test sets, training the model, and recording the test-set performance.
+In this bandit domain, our arms will consist of
+five scikit-learn techniques and associated parameters selected on a discrete grid.
+We consider the following methods for regression: Lasso
+(8 models) with regularization parameters alpha
+= (0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1,
+0.5), Random Forests (64 models) where we vary
+the number of trees, n estimators=(1,10,100,1000),
+the minimum number of training examples in a
+node to split min samples split=(1,3,5,7) and the
+minimum number of training examples in a leaf
+min samples leaf=(2,6,10,14), linSVM (16 models)
+where we vary the penalty parameter C= (0.001, 0.01,
+0.1, 1) and the tolerance parameter epsilon=(0.0001,
+0.001, 0.01, 0.1), rbfSVM (64 models) where we
+use the same grid as above for C and epsilon,
+and we add a third parameter which is the length
+scale γ of the RBF kernel used by the SVM
+gamma = (0.025, 0.05, 0.1, 0.2), and K-nearest neighbors (8 models) where we vary number of neighbors
+n neighbors = (1, 3, 5, 7, 9, 11, 13, 15). The total number of models is 160. Within a class of regressors, we
+model correlation using a squared exponential kernel
+0 2
+with unit length scale, i.e., k(x, x0 ) = e−(x−x ) . Using
+this kernel, we compute a kernel matrix G and construct the design matrix as before.
+When an arm is pulled we select training and test
+sets that are each 10% of the size of the original,
+and ignore the remaining 80% for this particular arm
+pull. We then train the selected model on the training set, and test on the test set. This specific form of
+cross-validation is similar to that of repeated learningtesting [Arlot and Celisse, 2010, Burman, 1989].
+We use the wine dataset from the UCI Machine Learning Repository, where the task is to predict the quality
+score (between 0 and 10) of a wine given 11 attributes
+of its chemistry. We repeat the experiment 100 times.
+
+1.1
+1.0
+0.9
+0.8
+0.7
+
+n
+pso
+
+B
+
+PI
+
+UC
+GP
+
+Tho
+m
+
+Ba
+
+yes
+
+Ga
+
+p
+
+0.5
+
+EI
+
+0.6
+
+Figure 3: Boxplot of RMSE over 100 runs with a fixed
+budget of T = 10. EI, PI, and GPUCB get stuck in local
+minima. Note: lower is better.
+
+We report, for each method, an estimate of the RMSE
+for the recommended models on each run. Unlike in
+the previous section, we do not have the ground truth
+generalization error, and in this scenario it is difficult
+to estimate the actual “probability of error”. Instead
+we report the RMSE, but remark that this is only a
+proxy for the error rate that we are interested in.
+The performance of the final recommendations for
+each strategy and a fixed budget of T = 10 tests
+is shown in Figure 3. The results for other budgets
+are almost identical. It must be emphasized that the
+number of allowed function evaluations (10 tests) is
+much smaller than the number of arms (160 models).
+Hence, frequentist approaches that require pulling all
+arms, e.g. UGap, are inapplicable in this domain.
+The results indicate that Thompson and BayesGap are
+the best choices for this domain. Figure 4 shows the individual arms pulled and recommended by BayesGap
+(above) and EI (bottom), over each of the 100 runs,
+as well as an estimate of the ground truth RMSE for
+each individual model. EI and PI often get trapped in
+local minima. Due to the randomization inherent to
+Thompson sampling, it explores more, but in a more
+uniform manner (possibly explaining its poor results
+in the previous experiment).
+
+7
+
+Conclusion
+
+We proposed a Bayesian optimization method for best
+arm identification with a fixed budget. The method
+involves modelling of the correlation structure of the
+arms via Gaussian process kernels. As a result of combining all these elements, the proposed method outperformed techniques that do not model correlation
+or that are designed for different objectives (typically
+cumulative regret). This strategy opens up room for
+greater automation in practical domains with budget
+constraints, such as the automatic machine learning
+
+Figure 4: Allocations and recommendations of BayesGap
+(top) and EI (bottom) over 100 runs at a budget of T =
+40 training and validation tests, and for 160 models (i.e.,
+more arms than possible observations). Histograms along
+the floor of the plot show the arms pulled at each round
+while the histogram on the far wall shows the final arm
+recommendation over 100 different runs. The solid black
+line on the far wall shows the estimated “ground truth”
+RMSE for each model. Note that EI quite often gets stuck
+in a locally optimal rbfSVM.
+
+application described in this paper.
+Although we focused on a Bayesian treatment of the
+UGap algorithm, the same approach could conceivably be applied to other techniques such as UCBE.
+As demonstrated by Srinivas et al. [2010] and in this
+paper, it is possible to easily show that the Bayesian
+bandits obtain similar bounds as the frequentist methods. However, in our case, we conjecture that much
+stronger bounds should be possible if we consider all
+the information brought in by the priors and measurement models.
+
+References
+S. Agrawal and N. Goyal. Thompson sampling for contextual bandits with linear payoffs. In ICML, 2013.
+
+M. W. Hoffman, E. Brochu, and N. de Freitas. Portfolio
+allocation for Bayesian optimization. In UAI, pages 327–
+336, 2011.
+
+S. Arlot and A. Celisse. A survey of cross-validation procedures for model selection. Statistics Surveys, 4:40–79,
+2010.
+
+F. Hutter, H. H. Hoos, and K. Leyton-Brown. Sequential
+model-based optimization for general algorithm configuration. In Proceedings of LION-5, page 507523, 2011.
+
+J.-Y. Audibert, S. Bubeck, and R. Munos. Best arm identification in multi-armed bandits. In Conference on Learning Theory, 2010.
+
+D. Jones. A taxonomy of global optimization methods
+based on response surfaces. J. of Global Optimization,
+21(4):345–383, 2001.
+
+P. Auer, N. Cesa-Bianchi, and P. Fischer. Finite-time analysis of the multiarmed bandit problem. Machine Learning, 47(2):235–256, 2002.
+
+E. Kaufmann, O. Cappé, and A. Garivier. On Bayesian upper confidence bounds for bandit problems. In AIStats,
+2012a.
+
+J. Azimi, A. Fern, and X. Fern. Budgeted optimization
+with concurrent stochastic-duration experiments. In
+NIPS, pages 1098–1106, 2011.
+
+E. Kaufmann, N. Korda, and R. Munos. Thompson sampling: an asymptotically optimal finite-time analysis. In
+International Conference on Algorithmic Learning Theory, 2012b.
+
+J. Bergstra, R. Bardenet, Y. Bengio, and B. Kégl. Algorithms for hyper-parameter optimization. In NIPS,
+pages 2546–2554, 2011.
+E. Brochu, N. de Freitas, and A. Ghosh. Active preference
+learning with discrete choice data. In NIPS, pages 409–
+416, 2007.
+E. Brochu, T. Brochu, and N. de Freitas. A Bayesian interactive optimization approach to procedural animation
+design. In ACM SIGGRAPH/Eurographics Symposium
+on Computer Animation, pages 103–112, 2010a.
+
+R. Kohavi, R. Longbotham, D. Sommerfield, and
+R. Henne. Controlled experiments on the web: survey
+and practical guide. Data Mining and Knowledge Discovery, 18:140–181, 2009.
+D. J. Lizotte, R. Greiner, and D. Schuurmans. An experimental methodology for response surface optimization
+methods. Journal of Global Optimization, 53(4):699–
+736, 2012.
+
+E. Brochu, V. Cora, and N. de Freitas. A tutorial on
+Bayesian optimization of expensive cost functions. Technical Report arXiv:1012.2599, arXiv, 2010b.
+
+N. Mahendran, Z. Wang, F. Hamze, and N. de Freitas.
+Adaptive MCMC with Bayesian optimization. Journal
+of Machine Learning Research - Proceedings Track, 22:
+751–760, 2012.
+
+S. Bubeck, R. Munos, and G. Stoltz. Pure exploration in
+multi-armed bandits problems. In International Conference on Algorithmic Learning Theory, 2009.
+
+O. Maron and A. W. Moore. Hoeffding races: Accelerating model selection search for classification and function
+approximation. In NIPS, pages 59–66, 1994.
+
+P. Burman. A comparative study of ordinary crossvalidation, v-fold cross-validation and the repeated
+learning-testing methods. Biometrika, 76(3):pp. 503–
+514, 1989.
+
+R. Martinez-Cantin, N. de Freitas, A. Doucet, and J. A.
+Castellanos. Active policy learning for robot planning
+and exploration under uncertainty. 2007.
+
+N. Cesa-Bianchi and G. Lugosi. Prediction, Learning, and
+Games. Cambridge University Press, New York, 2006.
+
+J. Močkus. The Bayesian approach to global optimization.
+In Systems Modeling and Optimization, volume 38, pages
+473–481. Springer, 1982.
+
+O. Chapelle and L. Li. An empirical evaluation of Thompson sampling. In NIPS, 2012.
+N. de Freitas, A. Smola, and M. Zoghi. Exponential Regret
+Bounds for Gaussian Process Bandits with Deterministic
+Observations. In ICML, 2012.
+V. Gabillon, M. Ghavamzadeh, A. Lazaric, and S. Bubeck.
+Multi-bandit best arm identification. In NIPS, 2011.
+V. Gabillon, M. Ghavamzadeh, and A. Lazaric. Best arm
+identification: A unified approach to fixed budget and
+fixed confidence. In NIPS, 2012.
+F. Hamze, Z. Wang, and N. de Freitas. Self-avoiding random dynamics on integer complex systems. ACM Transactions on Modelling and Computer Simulation, 23(1):
+9:1–9:25, 2013.
+P. Hennig and C. Schuler. Entropy search for informationefficient global optimization. JMLR, 13:1809–1837, 2012.
+
+R. Munos. Optimistic optimization of a deterministic function without the knowledge of its smoothness. In NIPS,
+pages 783–791, 2011.
+K. P. Murphy. Machine learning: A probabilistic perspective. Cambridge, MA, 2012.
+S. Scott. A modern Bayesian look at the multi-armed bandit. Applied Stochastic Models in Business and Industry,
+26(6), 2010.
+J. Snoek, H. Larochelle, and R. P. Adams. Opportunity
+cost in Bayesian optimization. In Neural Information
+Processing Systems Workshop on Bayesian Optimization, 2011.
+J. Snoek, H. Larochelle, and R. Adams. Practical Bayesian
+optimization of machine learning algorithms. In NIPS,
+pages 2960–2968, 2012.
+
+N. Srinivas, A. Krause, S. M. Kakade, and M. Seeger.
+Gaussian process optimization in the bandit setting: No
+regret and experimental design. In ICML, pages 1015–
+1022, 2010.
+C. Thornton, F. Hutter, H. H. Hoos, and K. Leyton-Brown.
+Auto-WEKA: Combined selection and hyperparameter
+optimization of classification algorithms. In KDD, pages
+847–855, 2013.
+M. Valko, A. Carpentier, and R. Munos. Stochastic simultaneous optimistic optimization. In ICML, 2013.
+J. Villemonteix, E. Vazquez, and E. Walter. An informational approach to the global optimization of expensiveto-evaluate functions. Journal of Global Optimization,
+44(4):509–534, 2009.
+Z. Wang, S. Mohamed, and N. de Freitas. Adaptive Hamiltonian and Riemann manifold Monte Carlo samplers. In
+ICML, 2013a.
+Z. Wang, M. Zoghi, D. Matheson, F. Hutter, and N. de
+Freitas. Bayesian optimization in high dimensions via
+random embeddings. In IJCAI, 2013b.
+
+A
+
+Theorem 2
+
+The proof of this section and the lemmas of the next
+section follow from the proofs of Gabillon et al. [2012].
+The modifications we have made to this proof correspond to the introduction of the function gk which
+bounds the uncertainty sk in order to make it simpler
+to introduce other models. We also introduce a sufficient condition on this bound, i.e. that it is monotonically decreasing in N in order to bound the arm pulls
+with respect to gk−1 . Ultimately, this form of the theorem reduces the problem of of proving a regret bound
+to that of checking a few properties of the uncertainty
+model.
+Theorem 2. Consider a bandit problem with horizon
+T and K arms. Let Uk (t) and Lk (t) be upper and
+lower bounds that hold for all times t ≤ T and all
+arms k ≤ K with probability 1 − δ. Finally, let gk be
+a monotonically decreasing
+P −1 function such that sk (t) ≤
+gk (Nk (t − 1)) and
+k gk (Hk ) ≤ T − K. We can
+then bound the simple regret as
+Pr(RΩT ≤ ) ≥ 1 − KT δ.
+
+(10)
+
+Proof. We will first define the event E such that on this
+event every mean is bounded by its associated bounds
+for all times t. More precisely we can write this as
+E = {∀k ≤ K, ∀t ≤ T, Lk (t) ≤ µk ≤ Uk (t)}.
+By definition, these bounds are given such that the
+probability of deviating from a single bound is δ. Using
+a union bound we can then bound the probability of
+remaining within all bounds as Pr(E) ≥ 1 − KT δ.
+We will next condition on the event E and assume
+regret of the form RΩT >  in order to reach a contradiction. Upon reaching said contradiction we can
+then see that the simple regret must be bounded by 
+with probability given by the probability of event E,
+as stated above. As a result we need only show that a
+contradiction occurs.
+We will now define τ = arg mint≤T BJ(t) (t) as the time
+at which the recommended arm attains the minimum
+bound, i.e. ΩT = J(τ ) as defined in (8). Let tk ≤
+T be the last time at which arm k is pulled. Note
+that each arm must be pulled at least once due to the
+initialization phase. We can then show the following
+sequence of inequalities:
+min(0, sk (tk ) − ∆k ) + sk (tk ) ≥ BJ(tk ) (tk )
+≥ BΩT (τ )
+
+(a)
+(b)
+
+≥ RΩT
+
+(c)
+
+> .
+
+(d)
+
+Of these inequalities, (a) holds by Lemma B3, (c) holds
+by Lemma B1, and (d) holds by our assumption on
+
+the simple regret. The inequality (b) holds due to the
+definition ΩT and time τ . Note, that we can also write
+the preceding inequality as two cases
+sk (tk ) > 2sk (tk ) − ∆k > , if ∆k > sk (tk );
+2sk (tk ) − ∆k ≥ sk (tk ) > , if ∆k ≤ sk (tk )
+This leads to the following bound on the confidence
+diameter,
+sk (tk ) > max( 21 (∆k + ), ) = Hk
+which can be obtained by a simple manipulation of the
+above equations. More precisely we can notice that in
+each case, sk (tk ) upper bounds both  and 12 (∆k + ),
+and thus it obviously bounds their maximum.
+Now, for any arm k we can consider the final number
+of arm pulls, which we can write as
+Nk (T ) = Nk (tk − 1) + 1 ≤ g −1 (sk (tk )) + 1
+< g −1 (Hk ) + 1.
+This holds due to the definition of g as a monotonic
+decreasing function, and the fact that we pull each arm
+at least once during the initialization stage. Finally,
+by summing
+P −1 both sides with respect to k we can see
+that
+(Hk ) + K > T , which contradicts our
+kg
+definition of g in the Theorem statement.
+
+B
+
+Lemmas
+
+In order to simplify notation in this section, we will
+first introduce B(t) = mink Bk (t) as the minimizer
+over all gap indices for any time t. We will also note
+that this term can be rewritten as
+B(t) = BJ(t) (t) = Uj(t) (t) − LJ(t) (t),
+which holds due to the definitions of j(t) and J(t).
+Lemma B1. For any sub-optimal arm k 6= k ∗ , any
+time t ∈ {1, . . . , T }, and on event E, the immediate
+regret of pulling that arm is upper bounded by the index
+quantity, i.e. Bk (t) ≥ Rk .
+Proof. We can start from the definition of the bound
+and expand this term as
+Bk (t) = max Ui (t) − Lk (t)
+i6=k
+
+≥ max µi − µk = µ∗ − µk = Rk .
+i6=k
+
+The first inequality holds due to the assumption of
+event E, whereas the following equality holds since we
+are only considering sub-optimal arms, for which the
+best alternative arm is obviously the optimal arm.
+
+Lemma B2. For any time t let k = at be the arm
+pulled, for which the following statements hold:
+if k = j(t), then Lj(t) (t) ≤ LJ(t) (t),
+if k = J(t), then Uj(t) (t) ≤ UJ(t) (t).
+Proof. We can divide this proof into two cases based
+on which of the two arms is selected.
+Case 1: let k = j(t) be the arm selected. We will then
+assume that Lj(t) (t) > LJ(t) (t) and show that this is a
+contradiction. By definition of the arm selection rule
+we know that sj(t) (t) ≥ sJ(t) (t), from which we can
+easily deduce that Uj(t) (t) > UJ(t) (t) by way of our
+first assumption. As a result we can see that
+Bj(t) (t) = max Uj (t) − Lj(t) (t)
+j6=j(t)
+
+< max Uj (t) − LJ(t) (t) = BJ(t) (t).
+j6=J(t)
+
+This inequality holds due to the fact that arm j(t)
+must necessarily have the highest upper bound over all
+arms. However, this contradicts the definition of J(t)
+and as a result it must hold that Lj(t) (t) ≤ LJ(t) (t).
+Case 2: let k = J(t) be the arm selected. The proof
+follows the same format as that used for k = j(t).
+Corollary B2. If arm k = at is pulled at time t,
+then the minimum index is bounded above by the uncertainty of arm k, or more precisely
+B(t) ≤ sk (t).
+
+Case 1: consider k ∗ = k = j(t). We can then see that
+the following sequence of inequalities holds,
+(a)
+
+(b)
+
+(c)
+
+(d)
+
+µ(2) ≥ µJ(t) (t) ≥ LJ(t) (t) ≥ Lj(t) (t) ≥ µk − sk (t).
+Here (b) and (d) follow directly from event E and (c)
+follows from Lemma B2. Inequality (a) follows trivially from our assumption that k = k ∗ , as a result J(t)
+can only be as good as the 2nd-best arm. Using the
+definition of ∆k and the fact that k = k ∗ , the above
+inequality yields
+sk (t) − (µk − µ(2) ) = sk (t) − ∆k ≥ 0
+Therefore the min in the result of Lemma B3 vanishes
+and the result follows from Corollary B2.
+Case 2: consider k = j(t) and k ∗ = J(t). We can
+then write
+B(t) = Uj(t) (t) − LJ(t) (t)
+≤ µj(t) (t) + sj(t) (t) − µJ(t) (t) + sJ(t) (t)
+≤ µk − µ∗ + 2sk (t)
+where the first inequality holds from event E, and the
+second holds because by definition the selected arm
+must have higher uncertainty. We can then simplify
+this as
+= 2sk (t) − ∆k
+≤ min(0, sk (t) − ∆k ) + sk (t),
+where the last step evokes Corollary B2.
+
+Proof. We know that k must be restricted to the set
+{j(t), J(t)} by definition. We can then consider the
+case that k = j(t), and by Lemma B2 we know that
+this imposes an order on the lower bounds of each possible arm, allowing us to write
+B(t) ≤ Uj(t) (t) − Lj(t) (t) = sj(t) (t)
+from which our corollary holds. We can then easily see
+that a similar argument holds for k = J(t) by ordering
+the upper bounds, again via Lemma B2.
+Lemma B3. On event E, for any time t ∈ {1, . . . , T },
+and for arm k = at the following bound holds on the
+minimal gap,
+
+Case 3: consider k = j(t) 6= k ∗ and J(t) 6= k ∗ . We
+can then write the following sequence of inequalities,
+(a)
+
+(b)
+
+(c)
+
+µj(t) (t) + sj(t) (t) ≥ Uj(t) (t) ≥ Uk∗ (t) ≥ µ∗ .
+Here (a) and (c) hold due to event E and (b) holds since
+by definition j(t) has the highest upper bound other
+than J(t), which in turn is not the optimal arm by
+assumption in this case. By simplifying this expression
+we obtain sk (t) − ∆k ≥ 0, and hence the result follows
+from Corollary B2 as in Case 1.
+
+B(t) ≤ min(0, sk (t) − ∆k ) + sk (t).
+
+Cases 4–6: consider k = J(t). The proofs for these
+three cases follow the same general form as the above
+cases and is omitted. Cases 1 through 6 cover all possible scenarios and prove Lemma B3.
+
+Proof. In order to prove this lemma we will consider
+a number of cases based on which of k ∈ {j(t), J(t)}
+is selected and whether or not one or neither of these
+arms corresponds to the optimal arm k ∗ . Ultimately,
+this results in six cases, the first three of which we will
+present are based on selecting arm k = j(t).
+
+Lemma B4. Consider a normally distributed random
+variable X ∼ N (µ, σ 2 ) and β ≥ 0. The probability that
+X is within a radius of βσ from its mean can then be
+written as
+
+2
+Pr |X − µ| ≤ βσ ≥ 1 − e−β /2 .
+
+Proof. Consider Z ∼ N (0, 1). The probability that Z
+exceeds some positive bound c > 0 can be written
+2
+
+e−c /2
+Pr(Z > c) = √
+2π
+2
+
+e−c /2
+= √
+2π
+2
+
+e−c /2
+≤ √
+2π
+
+Z
+
+∞
+
+2
+
+e(c
+
+−z 2 )/2
+
+dz
+
+c
+
+Z
+
+∞
+
+2
+
+/2−c(z−c)
+
+2
+
+/2
+
+e−(z−c)
+
+dz
+
+c
+
+Z
+c
+
+∞
+
+e−(z−c)
+
+2
+
+dz = 21 e−c
+
+/2
+
+.
+
+The inequality holds due to the fact that e−c(z−c) ≤ 1
+for z ≥ c. Using a union bound we can then bound
+2
+both sides as Pr(|Z| > c) ≤ e−c /2 . Finally, by setting
+Z = (X − µ)/σ and c = β we obtain the bound stated
+above.
+
+

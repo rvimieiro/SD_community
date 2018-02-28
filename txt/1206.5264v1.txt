@@ -1,0 +1,946 @@
+NEU & SZEPESVÁRI
+
+295
+
+Apprenticeship Learning using Inverse Reinforcement Learning and
+Gradient Methods
+
+Gergely Neu∗
+Budapest University of Technology and Economics
+Műegyetem rkp. 3-9.
+H-1111 Budapest, Hungary
+
+Abstract
+In this paper we propose a novel gradient algorithm to learn a policy from an expert’s
+observed behavior assuming that the expert
+behaves optimally with respect to some unknown reward function of a Markovian Decision Problem. The algorithm’s aim is to
+find a reward function such that the resulting
+optimal policy matches well the expert’s observed behavior. The main difficulty is that
+the mapping from the parameters to policies is both nonsmooth and highly redundant. Resorting to subdifferentials solves the
+first difficulty, while the second one is overcome by computing natural gradients. We
+tested the proposed method in two artificial
+domains and found it to be more reliable and
+efficient than some previous methods.
+
+1
+
+INTRODUCTION
+
+The aim of apprenticeship learning is to estimate a
+policy of an expert based on samples of the expert’s
+behavior. This problem has been studied in the field of
+robotics for a long time and due to the lack of space we
+cannot give an overview of the literature. The interested reader might find a short overview in the paper
+by Abbeel and Ng (2004).
+In apprenticeship learning (a.k.a. imitation learning)
+one can distinguish between direct and indirect approaches. Direct methods attempt to learn the policy (as a mapping from states, or features describing
+states to actions) by resorting to a supervised learning
+method. They do this by optimizing some loss function that measures the deviation between the expert’s
+∗
+
+Computer and Automation Research Institute of the
+Hungarian Academy of Sciences, Kende u. 13-17, Budapest 1111, Hungary
+
+Csaba Szepesvári∗
+Department of Computing Science
+University of Alberta
+Edmonton T6G 2E8, AB, Canada
+
+policy and the policy chosen. The main problem then
+is that in parts of the state space that the expert tends
+to avoid the samples are sparse and hence these methods may have difficulties with learning a good policy
+at such places.
+In an indirect method it is assumed that the expert
+is acting optimally in the environment. In particular,
+in inverse reinforcement learning the environment is
+modelled as a Markovian decision problem (MDP) (Ng
+and Russell, 2000). The dynamics of the environment
+is assumed to be known (or it could be learnt from
+samples which might even be unrelated to the samples
+come from the expert). However, the reward function
+that the expert is using is unknown. Recently Abbeel
+and Ng (2004) gave an algorithm which was proven to
+produce a policy which performs almost as well as the
+expert, even though it is not guaranteed to recover the
+expert’s reward function (recovering the reward function is an ill-posed problem). This approach might
+work with less data since it makes use of the knowledge of model of the environment, which can help it
+in generalizing to the less frequently visited parts of
+the state space. One problem is that the algorithm of
+Abbeel and Ng (2004) relies on the precise knowledge
+of the features describing the reward function, which
+is not a realistic assumption (for a discussion of this,
+see Section 6). In particular, we will show that even
+the correct scales of the features have to be known.
+In this paper we propose a gradient algorithm that
+combines the two approaches by minimizing a loss
+function that penalizes deviations from the expert’s
+policy like in supervised learning, but the policy is obtained by tuning a reward function and solving the
+resulting MDP, instead of finding the parameters of a
+policy. We will demonstrate that this combination can
+unify the advantages of the two approaches in that it
+can be both sample efficient and work even when the
+features are just vaguely known.
+
+296
+
+NEU & SZEPESVÁRI
+
+2
+
+BACKGROUND
+
+Let us first introduce some notation: For a subset
+S of some topological space, S ◦ will be used to denote its
+For a finite dimensional vector x,
+Pinterior.
+d
+kxk = i=1 x2i shall denote its `2 -norm. Random variables will be denoted by capital letters (e.g., X,A), E [·]
+stands for expectations.
+We assume that the reader is familiar with basic concepts underlying Markovian decision processes
+(MDPs) (e.g., Puterman 1994), hence we introduce
+these concepts only to fix the notation. A finite, discounted infinite-horizon total reward MDP is defined
+by a 5-tuple M = (X , A, γ, P, r), where
+X is a finite set of states,
+A is a finite set of actions,
+γ ∈ [0, 1) is the discount factor,
+P gives the transition probabilities; P (x0 |x, a) stands
+for the probability of the transition from state x
+to x0 upon taking action a (x, x0 ∈ X , a ∈ A),
+r is the reward function; r : X × A → R; r(x, a)
+gives the reward incurred when action a ∈ A is
+executed from state x ∈ X .
+A stationary stochastic policy (in short:
+P policy) is a
+mapping π : A × X → [0, 1] satisfying a∈A π(a|x) =
+1, ∀x ∈ X .1 The value of π(a|x) is the probability of
+taking action a in state x. A policy is called deterministic if for any x, π(·|x) is concentrated on a single
+action. The class of all stationary stochastic policies
+will be denoted by Π.
+For a fixed policy, the value of a state x ∈ X is defined
+by
+"∞
+#
+¯
+X
+¯
+γ t r(Xt , At )¯¯ X0 = x ,
+(1)
+V π (x) = E
+t=0
+
+where (Xt , At )t≥0 is the sequence of random stateaction pairs generated by executing the policy π. The
+function V π : X → R is called the value function underlying policy π.
+We will also need action-value functions. The actionvalue function, Qπ : X × A → R, underlying policy π
+is defined by
+"∞
+#
+¯
+X
+¯
+π
+t
+Q (x, a) = E
+γ r(Xt , At )¯¯ X0 = x, A0 = a (2)
+t=0
+1
+
+Instead of π(a, x) we use π(a|x) to emphasize that
+π(·, x) is a probability distribution. Note that in finite
+MDPs one can always find optimal (stochastic) stationary
+policies (Puterman, 1994).
+
+with the understanding that for t > 0, At ∼ π(·|Xt ).
+A policy that maximizes the expected total discounted
+reward over all states is called an optimal policy.
+The optimal value function is defined by V ∗ (x) =
+supπ V π (x), while the optimal action-value function is
+defined by Q∗ (x, a) = supπ Qπ (x, a).
+It turns out that V ∗ and Q∗ satisfy the so-called Bellman optimality equations (e.g., Puterman 1994). In
+particular,
+X
+Q∗ (x, a) = r(x, a) + γ
+P (y|x, a) max Q∗ (x, b). (3)
+y∈X
+
+b∈A
+
+P
+We call a policy that satisfies a∈A π(a|x)Q(x, a) =
+maxa∈A Q(x, a) at all states x ∈ X greedy w.r.t. the
+function Q. It is known that all policies that are greedy
+w.r.t. Q∗ are optimal and all stationary optimal policies can be obtained these way.
+
+3
+
+APPRENTICESHIP LEARNING
+
+Assume that we observe a sequence of state-action
+pairs (Xt , At )0≤t≤T , the ‘trace’ of some expert. We
+assume that the expert selects the actions by some
+unknown policy πE : At ∼ πE (·|Xt ). The goal is to recover πE from the observed trace. The simplest solution is of course to use a supervised learning approach:
+we select a parametric class of policies, (πθ )θ , πθ ∈ Π,
+θ ∈ Rd , and try to tune the parameters so as to minimize some loss JT (πθ ), such as
+X
+JT (π) =
+µ̂T (x)(π(a|x) − π̂E,T (a|x))2 , (4)
+x∈X ,a∈A
+
+where µ̂T (x) could be defined by µ̂T (x) = 1/(T +
+PT
+1) t=0 I{Xt =x} are the empirical occupation frequencies under the expert’s policy and π̂E,T (a|x) =
+PT
+PT
+t=0 I{Xt =x} is the empirical est=0 I{Xt =x,At =a} /
+timate of the expert’s policy.2 It is easy to see that JT
+approximates the squared loss
+X
+J(π) =
+µE (x)(π(a|x) − πE (a|x))2 (5)
+x∈X ,a∈A
+
+uniformly in π (the usual concentration results hold
+for JT , e.g. Györfi et al. (2002)).
+The reason π̂E,T is not used directly as a ‘solution’ is
+that if the state space is large then it will be undefined for a large number of states (where µ̂E,T (x) = 0)
+with high probability unless the number of samples is
+enormous.
+An alternative to direct policy learning is inverse reinforcement learning (Ng and Russell, 2000). The idea
+2
+If a state is not visited by the expert, the policy is
+defined arbitrarily.
+
+NEU & SZEPESVÁRI
+is that given the expert’s trace, we find a reward function that can be used to explain the performance of
+the expert. More precisely, the problem is to find a
+reward function that the behavior of the expert is optimal for. Once the reward function is found, existing
+algorithms are used to find a behavior that is optimal
+with respect to it.
+One difficulty in IRL is that solutions are non-unique:
+e.g. if r is a reward function that recovers the expert’s
+policy then for any λ ≥ 0, λr is also a solution (r = 0
+is always a solution). For non-trivial problems there
+are many solutions besides the variants that differ in
+their scale only.
+We propose here to unify the advantages of the direct and indirect approaches by (i) taking it seriously
+that we would like to recover the expert’s policy and
+(ii) achieve this through IRL so that we can achieve
+good generalization at parts of the state space avoided
+by the expert. We thus propose to find the parameters given a parametric family of rewards (rθ )θ ∈ Θ
+such that the corresponding (near) optimal policy, πθ ,
+matches the expert’s policy πE (more precisely, it’s
+empirical estimate). The proposed method can be
+written succinctly as the optimization problem
+θ
+
+J(πθ ) → min! s.t.
+
+πθ = G(Q∗θ ),
+
+(6)
+
+where J is a loss function (such as (5) or (4)) aimed at
+measuring the distance of πE and its argument, Q∗θ is
+the optimal action-value function corresponding to the
+reward function rθ and G is a suitable smooth mapping
+that returns (near) greedy policies with respect to its
+argument. One possibility, utilized in our experiments,
+is to use Boltzmann action-selection policies (see (7)).3
+In this paper we consider gradient methods to solve
+the above optimization problem. One difficulty with
+such an approach is that there could be many parameterizations that yield to the same loss. This will be
+helped with the method of natural gradients, for which
+the theory is worked out in the next section.
+Another difficulty is that the mapping θ 7→ Q∗θ is nondifferentiable.We will, however, show that it is Lipschitz when rθ is Lipschitz and hence, by Rademacher’s
+theorem it is differentiable almost everywhere (w.r.t.
+the Lebesgue measure).
+3.1
+
+NATURAL GRADIENTS
+
+Our ultimate goal is to find some parameters θ in a
+parameter space Θ ⊂ Rd such that the policy πθ determined by θ matches the expert’s policy πE . For
+
+297
+
+facilitating the discussion let us denote the map from
+the parameter space Θ to the policy space by h (i.e.,
+h(θ) = πθ ). Thus, our objective function can be writ˜ = J(h(θ)), where J : Π → R is a (differenten as J(θ)
+tiable) objective function defined over Π (such as (5))
+˜ Incremental gradient
+and the goal is to minimize J.
+methods implement θt+1 = θt − αt gt , where αt ≥ 0
+is an appropriate step-size sequence and gt = g(θ)
+points in the direction of steepest ascent on the surface
+˜
+(θ, J(θ))
+θ.
+The gradient method with an infinitesimal step-size
+gives rise to a trajectory (θ(t))t≥0 . This in turn determines a trajectory (π(t))t≥0 in the policy space, where
+π(t) = h(θ(t)). Since our primary interest is the trajectory in the policy state, it makes sense to determine
+the gradient direction g in each step such that π(t)
+moves in the steepest descent direction on the surface
+of (π, J(π))π . We call g = g(θ) the natural gradient if
+this holds. Amari (1998) gives a method to find the
+natural gradients using the formalism of Riemannian
+spaces.
+The advantage of this procedure is that the resulting
+trajectories will be the same for any equivalent parameterization (i.e., if the parameter space is replaced
+by some other space that is related to the first one
+through a smooth invertible mapping, with a smooth
+inverse). In addition, the gradient algorithm that uses
+natural gradients can be proven to be asymptotically
+efficient in a probabilistic sense and has the tendency
+to alleviate the problem of ‘plateaus’ (Amari, 1998).
+In order to define natural gradients we need some definitions. First, we need the generalization of derivatives for mappings f between Banach spaces.4 The
+underlying idea is that the gradient (derivative) of
+f : U → V provides a linear approximation to the
+change f (u + h) − f (u):
+Definition 1 (Fréchet derivative). Let U, V be Banach
+spaces. A is the Fréchet-derivative of f at u if A :
+U → V is a bounded linear operator and kf (u + h) −
+f (u) − AhkV = o(khkU ). The mapping f then is called
+Fréchet differentiable at u.
+In what follows we view Π both as a vector space and
+a complete metric space with some metric d. In our
+application this metirc will be derived from the (unweighted) `2 -norm, but other choices would also work.
+The following definition suggests a geometry induced
+on Θ:
+Definition 2 (Induced metric). Let Θ ⊂ Rd , θ ∈ Θ◦ .
+We say that Gθ ∈ Rd×d is a pseudo-metric induced by
+
+3
+
+The benefit of choosing strictly stochastic policies is
+that if the expert’s policy is deterministic, they force the
+uniqueness of the solution.
+
+4
+A Banach space is a complete normed vector space. In
+our case it will usually be a Euclidean space, e.g. Rd .
+
+298
+
+NEU & SZEPESVÁRI
+
+(h, Π, d) at θ if Gθ is positive semidefinite and
+d(h(θ + ∆), h(θ)) = ∆T Gθ ∆ + o(k∆k2 ).
+The essence of this definition is that if the ‘distance’
+between θ and θ + ∆ is given by ∆T Gθ ∆ then this
+distance will match the distance of h(θ) and h(θ + ∆),
+as k∆k → 0. It follows from the definition that the
+induced pseudo-metric is unique.
+In the rest of the paper we assume that Π is finite
+dimensional to make the presentation of the results
+easier. The following proposition is an immediate consequence of the definition of induced pseudo-metrics
+and the definition of Fréchet differentiability:
+Proposition 1. Assume that h : Θ → Π is Fréchet
+differentiable at θ ∈ Θ◦ , Θ ⊂ Rd , Π = (Π, d) is a
+complete, linear metric space. Then h0 (θ)T h0 (θ) is the
+pseudo-metric induced by (h, Π, d) at θ.
+Natural gradients can be obtained by the follow˜ +
+ing procedure: Let g(θ; ε) = argmax∆∈S̃(θ,ε) J(θ
+˜
+∆) − J(θ)
+be the direction of steepest ascent
+over the ‘warped sphere’ S̃(θ, ε) = {∆ ∈
+Rd | kh(θ + ∆) − h(θ)k = ε}.5 Then the set of natural gradients is given by
+˜ (h) J(θ)
+˜ def
+∇
+= lim inf 1ε g(θ; ε).
+ε→0+
+
+Here the limes inferior of the sets (g(θ; ε))ε>0 is meant
+in the sense of the Painlevé-Kuratowski convergence
+(Kuratowski, 1966): It then holds that no matter how
+˜ (h) J(θ)
+˜
+ε converges to zero, g ∈ ∇
+defines a direction
+of steepest ascent on the surface of J at h(θ).
+The following theorem holds:
+Theorem 1. Let J : Π → R, h : Θ → Π, J˜ = J ◦
+h. Assume that J is Fréchet differentiable and locally
+Lipschitz and h : Θ → Π is Fréchet differentiable at
+θ ∈ Θ◦ . Let Gθ = h0 (θ)T h0 (θ) be the pseudo-metric
+˜
+˜ ∈∇
+˜ (h) J(θ),
+at θ induced by (h, Π, d). Then G†θ ∇J(θ)
+˜
+˜
+where ∇J(θ) is the ordinary gradient of J at θ and G†θ
+denotes the Moore-Penrose generalized inverse of Gθ .
+For the sake of specificity, when it does not cause con˜ the natural gradient of J˜ at θ.
+fusion, we call G†θ ∇J(θ)
+Note that from the construction it follows immediately
+˜ are covariant for
+that the trajectories of θ̇ = G†θ ∇J(θ)
+any initial condition.
+The proof borrows some ideas from the proof of Theorem 1 in (Amari, 1998). In order to spare some
+space we only give an outline here: The basic idea
+is to replace the warped sphere S̃(θ, ε) by the ‘sphere’
+5
+
+Note that g(θ; ε) is set-valued.
+
+SGθ (θ, ε) = {∆ ∈ Rd | ∆T Gθ ∆ = ε2 }. This is justified since the ‘sphere’ SGθ (θ, ε) becomes arbitrarily
+close to S̃(θ, ε) as ε → 0 and J˜ is sufficiently regular. The next step is to show that for some C > 0,
+˜
+CεG†θ ∇J(θ)
+is a solution of the optimization problem argmax∆∈SG (θ,ε) J˜0 (θ)∆, and this solution tracks
+θ
+˜ + ∆) − J(θ)
+˜ when
+closely that of argmax∆∈SG (θ,ε) J(θ
+θ
+ε → 0.
+
+4
+
+CALCULATING THE GRADIENT
+
+In order to calculate the natural gradient we need to
+calculate the (Fréchet) derivative of h(θ) = G(Q∗θ ) and
+the gradient of J(h(θ)).6 By the chain rule we obtain ∇J(h(θ)) = J 0 (h(θ))h0 (θ). Since calculating the
+derivative of J (or JT ) is trivial, we are left with calculating the derivative of h(θ). As suggested previously,
+we use a smooth mapping G. One specific proposal,
+that we actually used in the experiments assigns Boltzmann policies to the action-value functions:
+G(Q)(a|x) = P
+
+exp[βQ(x, a)]
+,
+b∈A exp[βQ(x, b)]
+
+(7)
+
+where β > 0 is a parameter that controls how close
+G(Q) is to a greedy action selection. With this choice
+∂πθ
+∂ ln[πθ (a|x)]
+(a|x) = πθ (a|x)
+∂θk
+∂θk
+Ã
+!
+∗
+∂Q∗θ (x, b)
+∂Qθ (x, a) X
+= πθ (a|x)β
+−
+πθ (b|x)
+.
+∂θk
+∂θk
+b∈A
+
+(8)
+Hence, we are left with calculating ∂Q∗θ (x, a)/∂θk . We
+will show that these derivatives can be calculated almost everywhere on Θ by solving some fixed-point
+equations similar to the Bellman-optimality equations.
+For this, we will need the concept of subdifferentials
+and some basic facts:
+Definition 3 (Fréchet Subdifferentials). Let U be a
+Banach space, U ∗ be its topological dual.7 The Fréchet
+subdifferential of f : U → R at u ∈ U , denoted by
+∂ − f (u) is the set of u∗ ∈ U ∗ such that
+lim inf khk−1 [f (u + h) − f (u) − hu∗ , ui] ≥ 0.
+
+h→0,h6=0
+
+The following elementary properties follow immediately from the definition (e.g., Kruger 2003):
+Proposition 2. Let (fi )i∈I be a family of real-valued
+functions defined over U and let f (u) = maxi∈I fi (u).
+6
+
+Remember that G maps action-value functions to policies and J measures deviations to the expert’s policy.
+7
+When U = Rd with the `2 -norm then U ∗ = Rd and for
+u ∈ U, v ∗ ∈ U ∗ , hv ∗ , vi is the normal inner product.
+
+NEU & SZEPESVÁRI
+Then if u∗ ∈ ∂ − fi (u) and fi (u) = f (u) then u∗ ∈
+∂ − f (u). If f1 , f2 : U → R, α1 , α2 ≥ 0 then α1 ∂ − f1 +
+α2 ∂ − f2 ⊂ ∂ − (α1 f1 + α2 f2 ).
+The next result states some conditions under which,
+in a generalized sense, ‘taking a derivative and a limit
+is interchangeable’. It is extracted from the proof of
+Proposition 3.4 of Penot (1995):
+Proposition 3. Assume that (fn )n is a sequence of
+real-valued functions over U which converge to some
+function f pointwise. Let u ∈ U , u∗n ∈ ∂ − fn (u)
+and assume that (u∗n ) is weak∗ -convergent to u∗ and
+is bounded. Further, assume that the following holds
+at u: For any ε > 0, there exists some index N > 0
+and a real number δ > 0 such that for any n ≥ N ,
+h ∈ BU (0, δ),
+fn (u + h) ≥ fn (u) +
+
+hu∗n , hi
+
+− εkhk.
+
+Then u∗ ∈ ∂ − f (u).
+Now, we state the main result of this section:
+Proposition 4. Assume that the reward function rθ is
+differentiable w.r.t. θ with uniformly bounded derivatives: sup(θ,x,a)∈Rd ×X ×A krθ0 (x, a)k < +∞. The following statements hold:
+(1) Q∗θ is uniformly Lipschitz-continuous as a function of θ in the sense that for any (x, a) pair,
+θ, θ0 ∈ Rd , |Q∗θ (x, a) − Q∗θ0 (x, a)| ≤ L0 kθ − θ0 k with
+some L0 > 0;
+(2) Except on a set of measure zero, the gradient,
+∇θ Q∗θ , is given by the solution of the following
+fixed-point equation:
+ϕθ (x, a) = (rθ0 (x, a))T
+P
+P
++γ y∈X P (y|x, a) b∈A π(b|y)ϕθ (y, b), (9)
+where π is any policy that is greedy with respect
+to Qθ .
+Note that (rθ0 (x, a))T ∈ Rd . In fact, the above equation
+can be solved componentwise: The kth component of
+the derivative can be obtained computing the action0
+value function for the policy π using rθ,k
+in place of
+8
+the reward function.
+Proof. Let T : RX ×A → RX ×A be the Bellman operator
+X
+(T Q)(x, a) = rθ (x, a) + γ
+P (y|x, a) max Q(y, b).
+y∈X
+
+b∈A
+
+8
+0
+Here rθ,k
+is the kth component of the derivative of the
+reward function with respect to θ. We also note in passing
+that if rθ is convex in θ then so is Qθ . This follows with
+the reasoning followed in the proof of the first part.
+
+299
+
+By elementary arguments, if Q is L-Lipschitz in θ, then
+T Q is R + γL-Lipschitz in θ, where R is such that for
+any θ, θ0 ∈ Rd , (x, a) ∈ X × A, |rθ (x, a) − rθ0 (x, a)| ≤
+Rkθ − θ0 k. Choose Q0 = 0. As is well known (e.g.,
+Puterman (1994)), Qn = T n Q0 converges to Q∗ : Q∗θ =
+limn→∞ T n Q0 . Hence, by the previous argument Q∗
+is R + γR + γ 2 R + . . . = R/(1 − γ)-Lipschitz, proving
+the first part of the statement.
+For the second part, for a policy π, let us define the
+operator Sπ , acting over the space of functions φ :
+X × A → Rd , by
+(Sπ φ)(x, a) = (rθ0 (x, a))T
+P
+P
++γ y∈X P (y|x, a) b∈A π(b|y)φ(y, b).
+Let π denote a greedy policy w.r.t. Q∗θ and let πn
+be a sequence of policies that are
+Pgreedy w.r.t. Qn
+and where ties are broken so that x∈X ,a∈A |π(a|x) −
+πn (a|x)| is minimized. It follows that for n large
+enough, πn = π. Now, consider the sequence ϕ0 = 0,
+ϕn+1 = Sπn ϕn . Then for n large enough we have
+ϕn+1 = Sπ ϕn . By induction, ϕn (x, a) ∈ ∂θ− Qn (x, a)
+holds for any n ≥ 0. Indeed, this clearly holds for
+n = 0, while the general case follows by Proposition 2.
+Now, observe that Sπ acts separately on each of the d
+components of its argument and when it is restricted
+to any of these components, it is a contraction. Hence,
+ϕn converges to the fixed point of Sπ , i.e., the solution
+of (9). By Proposition 3 the limit is a subdifferential of
+limn→∞ Qn = Q∗θ (that the condition of this proposition is satisfied follows from the uniform convergence of
+ϕn in θ, which follows since krθ0 k is uniformly bounded
+in both θ and (x, a)). Now, since by the first part Q∗θ
+is Lipschitz-continuous in θ, by Rademacher’s theorem
+it is differentiable almost everywhere. It is well-known
+that if a function is differentiable then its subderivative
+coincides with its derivative (see e.g. Kruger (2003)).
+This finishes the proof of the statement.
+
+5
+
+COMPUTER EXPERIMENTS
+
+The goal of the experiments was to assess the efficiency
+of the algorithm and to test its robustness. We were
+also interested in how it compares with the algorithm
+of Abbeel and Ng (2004).
+We have implemented three versions of our algorithm:
+(i) gradient descent using plain gradients, (ii) gradient descent using natural gradients (iii) RPROP using plain gradients.9 RPROP is a popular adaptive
+step-size selection algorithm that proved to be very
+competitive in a number of settings Riedmiller and
+9
+
+We tried a “natural RPROP” variant as well (RPROP
+using natural gradients), but perhaps suprisingly, it give
+much poorer results than the other algorithms.
+
+NEU & SZEPESVÁRI
+
+Braun (1993). We have implemented the variant described in Igel and Hüsken (2000). We also implemented the “max margin” and the “projection” algorithms described in Abbeel and Ng (2004) to be able
+to compare the different approaches. Results will be
+shown for “max margin”. The projection algorithm is
+computationally more efficient, but we have found it
+less reliable and less data efficient.
+
+−1
+
+10
+
+−2
+
+10
+J(πθ)
+
+300
+
+Natural grad.
+
+We decided to use two test environments: The familiar
+grid world that has also been used by Abbeel and Ng
+(2004) and the sailing problem due Vanderbei (1996).
+The reward function was linear in the unknown parameters.
+5.1
+
+−3
+
+10
+
+RPROP
+−4
+
+10
+
+Plain grad.
+Max margin
+2
+
+4
+
+10
+10
+Number of training samples
+
+GRID WORLD
+
+We have run the first series of experiments in grid
+worlds, where each state is a grid square and the four
+actions correspond to moves in the four compass directions with 70% success. We constructed the reward function as a linear combination of 5 features
+(φi : X → R, i = 1, . . . , 5), where the features were essentially randomly constructed. The optimal parameter vector θ∗ consists of evenly distributed random
+values from [−1, 1]. In general we try to approximate
+the reward function with the use of the same set of
+features that has been used to construct it, but we
+also examine the situation of unprecisely known features. The size10 of the grid worlds was set to 10 × 10.
+Value iteration was used for finding the optimal policy
+(or gradients) in all cases. Unless otherwise stated the
+data consists of 10 independent trajectories following
+the optimal policy, each having a length of 100 steps.
+The learning rate was hand-tuned (with a little effort)
+and the number of iterations is kept at 100 (usually,
+convergence happens much earlier). In all cases, the
+performance measure is the error function JE , defined
+by (5) and we measure the performance of the optimal policy computed for the found reward function.
+For the “max margin” algorithm we show the performance of the overall best policy found during the first
+100 iterations, thus optimistically biasing these measurements.
+We examined the algorithms’ behavior when (i) the
+number of the training samples was varied (Figure 1),
+(ii) the features were linearly transformed (Figure 2,
+Table 1, row 2), and when (iii) the features were perturbed (Table 1, row 3).
+We see from Figure 1 that for small sample sizes plain
+gradient is doing the best, while eventually natural
+gradient becomes the winner. Note that the scale on
+the y axis is logarithmic, so the differences between
+10
+Preliminary experiments confirm that our conclusions
+would not change significantly for other sizes.
+
+Figure 1: Performance as a function of the number of
+training samples. Each curve is an average of 10 runs
+using different samples, with 1/10 s.e. error bars.
+these algorithms is not big. “Max margin” also catches
+up at the end, just like RPROP.
+Figure 2 shows the effect of transforming the features
+linearly (the true reward function still remains in the
+span of the features). Clearly, “Max Marging” suffers badly, while the natural gradient algorithm and
+RPROP are little affected. Plain gradient descent is
+slowed down, but eventually converges to good solutions.
+In practice, it is not realistic to assume that a subspace containing the reward function is known. To
+test how the algorithms behave without this assumption we perturbed the features by adding uniform
+[− max(φi )/2, max(φi )/2] random numbers to them.
+Results are shown in row 3 of Table 1. The results indicate the robustness of natural gradients and RPROP.
+Both plain gradients and “max margin” suffer large
+losses under these adverse conditions.
+5.2
+
+SAILING
+
+We also applied the algorithms to the problem of “sailing” proposed by Vanderbei (1996). In this problem
+the task is to navigate a boat from one point to another
+in the shortest possible time. Thus, this is a stochastic shortest path (SSP) problem. Formally, we have
+a grid of waypoints connected by legs, at each waypoint the sailor has to select one of these eight legs to
+move on to the next waypoint. The state space in this
+setting is constructed from the actual situation of the
+boat and the direction from where the wind is blowing
+at the specific moment. The eight actions of selecting
+the next waypoint have different costs depending on
+the direction of the wind: e.g. it costs more time to
+
+NEU & SZEPESVÁRI
+
+Original
+Transformed
+Perturbed
+
+Natural
+Mean
+0.0051
+0
+0.0163
+
+gradients
+Deviation
+0.0010
+0
+0.0165
+
+RPROP
+Mean
+0.0130
+0.0110
+0.0197
+
+301
+
+Plain gradients
+Mean
+Deviation
+0.0011 0.0068
+0.0256 0.0237
+0.1377 0.3428
+
+Deviation
+0.0134
+0.0076
+0.0179
+
+Max margin
+Mean
+Deviation
+0.0473 0.1476
+0.0702 0.0228
+0.2473 0.3007
+
+Table 1: Means and deviations of errors. The row marked ’original’ gives results for the original features, the
+row marked ‘transformed’ gives results when features are linearly transformed, the row marked ‘perturbed’ gives
+results when they are perturbed by some noise.
+
+1.4
+0.25
+
+1.2
+
+Natural gradients
+Natural gradients
+
+0.8
+
+Rprop
+0.6
+
+Plain gradients
+
+0.4
+
+Error rate
+
+J(πθ)
+
+1
+
+Max margin
+
+0.15
+0.1
+
+Maximum margin
+
+0.2
+0
+
+0.2
+
+0.05
+20
+
+40
+60
+Number of iterations
+
+0
+
+80
+
+10
+
+1
+
+10
+
+2
+
+3
+
+4
+
+10
+10
+10
+Number of training episodes
+
+Figure 2: Performance with linearly transformed features. The features were transformed by a (nonsingular) square matrix with uniform [0, 1] random elements. Each curve is an average of 25 runs with different scalings of the features, the 1/10 s.e. error bars
+are also plotted.
+
+Figure 3: Performance as a function of the number
+of training episodes. The fraction of states where the
+found policy differs from the actual optimal policy is
+plotted against the number of episodes observed., measured by the mean of 5 runs. The 1/2-s.e. error bars
+are also plotted for both methods.
+
+sail 45 degrees against the wind than to sail 45 degrees
+in the wind direction etc.. We assume that the wind
+changes follow a Markov process. The reward function
+is given using a linear combination of the six features of
+(away, down, cross, up, into, delay), as defined in Vanderbei (1996) (all defined as a map φ : X × A → R).
+The following weighting was used in the experiments:
+θ∗ = (−1, −2, −3, −4, −100000, −3)T .
+
+again that the gradient method outperforms the “max
+margin” algorithm by a significant amount.
+
+Results as a function of the number of episodes is
+shown in Figure 3 for natural gradients and the “max
+margin” algorithm. In this case the number of iterations is set to 1000 and we again computed the optimal
+policy with the reward found by the algorithm. As a
+more tangible performance measure in this case, we
+show the number of states where the actions selected
+by the found policy differ from the ones selected by
+the policy followed by the expert. The results here are
+shown fro a small lake of size 4×4.11 The conclusion is
+11
+Our preliminary experiments show that the new algorithm performs reasonably for larger problems, too.
+
+6
+
+RELATED WORK
+
+Our main concern in this section is the algorithm of
+Abbeel and Ng (2004). This algorithm returns policies that come with the guarantee that their average
+total discounted reward computed from the expert’s
+unknown reward function is in the ε-vicinity of the expert’s performance. We claim that this guarantee will
+be met only when the scaling of the features in the
+method and the ‘true’ scaling match each other. Actually, this observation led us to the algorithms proposed
+here.
+In order to explain why the algorithm of Abbeel and
+Ng (2004) is sensitive to scalings, we need some background on the algorithm. A crucial assumption in this
+algorithm is that the reward function is linearly parameterized, i.e., r(x) = θ∗T φ(x), where φ : X → Rd
+
+302
+
+NEU & SZEPESVÁRI
+
+and θ∗ ∈ Rd is the vector of unknown parameters. It
+follows that the expected total discounted reward is
+θT φE , where φE ∈ Rd is the so-called feature expectation underlying the expert. From the trajectory of
+the expert this can be estimated. In fact, we can define φπ for any policy π and express the expected total
+discounted reward as θT φπ . The main idea of Abbeel
+and Ng (2004) is then that it suffices to find a policy π whose feature expectations φπ matches φE since
+|θ∗T φπ − θ∗T φE | ≤ kθ∗ k2 kφπ − φE k2 .
+However, a major underlying hidden assumption (implicit in the formalism of Abbeel and Ng (2004)) is that
+the scaling of the features is√known. To see this assume
+that d = 2, θ∗,1 = θ∗,2 = 2/2, kφπ − φE k2 ≤ ε and
+in particular φE,1 = 0, φE,2 > 0, φπ,1 = −ε, φπ,2 = 0.
+Further, assume that the features are rescaled by
+λ = (λ1 , λ2 ). In the
+scale the expert’s perfor√ new
+T
+φ
+mance is √
+ρE (λ) = 2/2λ
+√ E and π’s performance is
+ρπ (λ) = 2/2λT φπ = 2/2(λT φE − λ1 ε). A natural requirement is that for any scaling λ, ρπ (λ)/ρE (λ)
+should be lower bound by a positive number (or rather
+a number close to 1 − ε). By straightforward calculations, ρπ (λ)/ρE (λ) = 1−(λ1 /λ2 )ε/φE,2 → −∞, hence
+although kφπ − φE k2 ≤ ε, the actual performance of π
+can be quite far from the performance of the expert if
+the scaling of the features does not match the scaling
+used in the algorithm.
+More recently, Ratliff et al. (2006) have proposed an algorithm which uses similar ideas to the ones of Abbeel
+and Ng (2004). Just like Abbeel and Ng (2004) they
+measure performance with respect to the original reward function and not by the difference of the expert’s
+policy and the policy returned.
+
+7
+
+CONCLUSIONS
+
+In the paper we have argued for the advantages of unifying the direct and indirect approaches to apprenticeship learning. The proposed procedure attempts to optimize a cost function, yet it chooses the policy based
+on a model and thus may overcome problems usually
+associated with method that directly try to match the
+expert’s policy. Although our method has shown stable behaviour in our experiments, more work is needed
+to fully explore the limitations of the method. One
+significant barrier for applying the method (as well as
+other methods based on IRL) is that it needs to solve
+MDPs many times. This is problematic since solving
+an MDP is a challenging problem on its own. One
+idea is to turn to two time-scale algorithms that run
+two incremental procedures in parallel, exploiting that
+a small change to the parameters would likely cause
+small changes in the solutions; as confirmed by our
+theoretical results. There are many important direc-
+
+tions to continue this work: The present work assumed
+that states are observed. This could be replaced by the
+assumption that sufficiently rich features are observed,
+however, when this is not satisfied the method won’t
+work. For large state-spaces one needs to use function
+approximation techniques to carry out the computations. It is an open question if the methods would
+generalize to such settings. Another important direction is to consider infinite MDPs. This presents some
+technical difficulties, but we expect that the methods
+could still be generalized to such settings. Yet another interesting direction is to replace the parametric
+framework with a non-parametric one.
+Acknowledgements
+Csaba Szepesvári greatly acknowledges the support received through the Alberta Ingenuity Center for Machine Learning (AICML). This work was supported in
+part by the PASCAL pump priming project “Sequential Forecasting and Partial Feedback: Applications to
+Machine Learning”. This publication only reflects the
+authors’ views.
+
+References
+Abbeel, P. and Ng, A. Y. (2004). Apprenticeship learning
+via inverse reinforcement learning. In ICML’04, pages
+1–8.
+Amari, S. (1998). Natural gradient works efficiently in
+learning. Neural Computation, 10(2):251–276.
+Györfi, L., Kohler, M., Krzyżak, A., and Walk, H. (2002).
+A Distribution-Free Theory of Nonparametric Regression. Springer-Verlag.
+Igel, C. and Hüsken, M. (2000). Improving the Rprop learning algorithm. In ICSC/NC 2000, pages 115–121.
+Kruger, A. (2003). On Fréchet subdifferentials. J. of Math.
+Sciences, 116:3325–3558.
+Kuratowski, K. (1966). Topology, volume I. Academic
+Press, New York.
+Ng, A. and Russell, S. (2000). Algorithms for inverse reinforcement learning. In ICML-2000, pages 663–670.
+Penot, J. (1995). On the interchange of subdifferentiation
+and epi-convergence. Journal of Math. Anal. and Appl.,
+196:676–698.
+Puterman, M. (1994). Markov Decision Processes — Discrete Stochastic Dynamic Programming. John Wiley &
+Sons, Inc., New York, NY.
+Ratliff, N., Bagnell, J., and Zinkevich, M. (2006). Maximum margin planning. In ICML’06, pages 729–736.
+Riedmiller, M. and Braun, H. (1993). A direct adaptive method for faster backpropagation learning: The
+RPROP algorithm. In IEEE ICNN’93, pages 586–591.
+Vanderbei, R. (1996).
+Optimal sailing strategies, statistics and operations research program.
+http://www.sor.princeton.edu/˜rvdb/sail/sail.html.
+
+

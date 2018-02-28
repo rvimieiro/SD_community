@@ -1,0 +1,1067 @@
+configuration. Belief Propagation (BP) is a popular algorithm for approximately solving the
+MAP inference problem. BP is an iterative, message passing algorithm that is exact on tree
+structured GMs. However, BP often shows remarkably strong heuristic performance beyond
+trees, i.e. on GMs with loops. Distributed implementation, associated ease of programming
+and strong parallelization potential are the main reasons for the growing popularity of the BP
+algorithm.
+The convergence and correctness of BP was recently established for a certain class of loopy
+GM formulations of several classic combinatorial optimization problems, including matchings
+[5, 6, 7], perfect matchings [8], independent sets [9] and network flows [10]. The important
+common feature of these instances is that BP converges to a correct MAP assignment when
+the Linear Programming (LP) relaxation of the MAP inference problem is tight, i.e., it shows
+no integrality gap. While this demonstrates that LP tightness is necessary for the convergence
+and correctness of BP, it is unfortunately not sufficient in general. In other words, BP may not
+work even when the corresponding LP relaxation to the MAP inference problem is tight. This
+motivates a quest for improving the BP approach so that it works, at least, when the LP is
+tight.
+In this paper, we study if BP can be used as an iterative, message passing-based LP solver
+in cases when a LP (relaxation) is tight. We do so by considering a specific class of GMs
+corresponding to the Maximum Weight Matching (MWM) problem. It was recently shown
+[13] that a MWM can be found in polynomial time by solving a carefully chosen sequence
+of LP relaxations, where the sequence of LPs are formed by adding and removing sets of socalled “blossom” inequalities [11] to the base LP relaxation. Utilizing successive LP relaxations
+to solve the MWM problem is an example of the popular cutting plane method for solving
+combinatorial optimization problems [12]. While the approach in [13] is remarkable in that
+one needs only a polynomial number of “cut” inequalities, it unfortunately requires solving an
+emerging sequence of LPs via traditional, centralized methods (e.g., ellipsoid, interior-point or
+simplex) that may not be practical for large-scale problems. This motivates our search for an
+efficient and distributed BP-based LP solver for this class of problems.
+Our work builds upon that of Sanghavi, Malioutov and Willsky [6], who studied BP for the
+GM formulation of the MWM problem on an arbitrary graph. The authors showed that the maxproduct BP converges to the correct, MAP solution if the base LP relaxation with no blossom
+- referred to herein as MWM-LP - is tight. Unfortunately, the tightness is not guaranteed in
+general, and the convergence and correctness for the max-product BP do not readily extend to
+a GM formulation with blossom constraints.
+To resolve this issue, we propose a novel GM formulation of the MWM problem and show
+that the max-product BP on this new GM converges to the MWM assignment as long as the
+MWM-LP relaxation with blossom constraints is tight. The only restriction placed on our
+GM construction is that the set of blossom constraints added to the base MWM-LP be nonintersecting (in edges). Our GM construction is motivated by the so-called ‘degree-two’ (DT)
+condition, which simply means that every variable in a GM is associated to at most two (simple)
+2
+
+factor functions. The DT condition is necessary for analysis of BP using the computational tree
+technique, developed and advanced in [5, 6, 10, 14, 16, 17] – the technique is one of the most
+powerful tools for analyzing BP algorithms. Note, that the DT condition is not satisfied by the
+standard MWM GM, and hence, we design a new GM satisfying the DT condition via a certain
+graphical transformation - collapsing odd cycles into new vertices and defining new weights
+on the contracted graph. Importantly, the MAP assignments of two GMs are in one-to-one
+correspondence. This clever graphical transformation allows us to use the computational tree
+techniques to prove the convergence and correctness of BP on the new GM.
+Our theoretical result naturally guides a cutting-plane method suggesting a sequential and
+adaptive design of GMs using respective BPs. We use the output of BP to identify odd-sized
+cycle constraints - “cuts” - to add to the MWM-LP, construct a new GM using our graphical
+transformation, run BP and repeat. We evaluate this heuristic approach empirically and show
+that its performance is close to the traditional cutting-plane approach employing LP solvers
+rather than BP, i.e., BP is as powerful as an LP solver. Finally, we note that the DT condition
+may neither be sufficient nor necessary for BP to work. It was necessary, however, to provide
+theoretical guarantees for the special class of GMs considered. We believe that our success in
+crafting a graphical transformation will offer useful insight into the design and analysis of BP
+algorithms on a wider class of MAP inference problems.
+Organization. In Section 2, we introduce a standard GM formulation of the MWM problem
+as well as the corresponding BP and LP. In Section 3, we introduce our new GM and describe
+performance guarantees of the respective BP algorithm. In Section 4, we describe a cuttingplane(-like) method using BP for the MWM problem and show its empirical performance for
+random MWM instances.
+
+2
+2.1
+
+Preliminaries
+Graphical Model for Maximum Weight Matchings
+
+A joint distribution of n (discrete) random variables Z = [Zi ] ∈ Ωn is called a Graphical Model
+(GM) if it factorizes as follows: for z = [zi ] ∈ Ωn ,
+Y
+Pr[Z = z] ∝
+ψα (zα ),
+(1)
+α∈F
+
+where F is a collection of subsets of Ω, zα = [zi : i ∈ α ⊂ Ω] is a subset of variables, and ψα
+is some (given) non-negative function. The function ψα is called a factor (variable) function if
+|α| ≥ 2 (|α| = 1). For variable functions ψα with α = {i}, we simply write ψα = ψi . One calls z
+a valid assignment if Pr[Z = z] > 0. The MAP assignment z ∗ is defined as
+z ∗ = arg maxn Pr[Z = z].
+z∈Ω
+
+Let us introduce the Maximum Weight Matching (MWM) problem and its related GM.
+Suppose we are given an undirected graph G = (V, E) with weights {we : e ∈ E} assigned to
+its edges. A matching is a set of edges without common vertices. The weight of a matching is
+the sum of corresponding edge weights. The MWM problem consists of finding a matching of
+maximum weight. Associate a binary random variable with each edge X = [Xe ] ∈ {0, 1}|E| and
+consider the probability distribution: for x = [xe ] ∈ {0, 1}|E| ,
+Y
+Y
+Y
+ψi (x)
+ψC (x),
+(2)
+Pr[X = x] ∝
+ewe xe
+i∈V
+
+e∈E
+
+3
+
+C∈C
+
+where
+ψi (x) =
+
+(
+P
+1 if
+e∈δ(i) xe ≤ 1
+0 otherwise
+
+and
+
+ψC (x) =
+
+(
+
+1 if
+
+P
+
+e∈E(C) xe
+
+≤
+
+0 otherwise
+
+|C|−1
+2
+
+.
+
+Here C is a set of odd-sized cycles C ⊂ 2V , δ(i) = {(i, j) ∈ E} and E(C) = {(i, j) ∈ E :
+i, j ∈ C}. Throughout the manuscript, we assume that cycles are non-intersecting in edges, i.e.,
+E(C1 ) ∩ E(C2 ) = ∅ for all C1 , C2 ∈ C. It is easy to see that a MAP assignment x∗ for the GM
+(2) induces a MWM in G. We also assume that the MAP assignment is unique.
+
+2.2
+
+Belief Propagation and Linear Programming for Maximum Weight Matchings
+
+In this section, we introduce max-product Belief Propagation (BP) and the Linear Programming
+(LP) relaxation to computing the MAP assignment in (2). We first describe the BP algorithm
+for the general GM (1), then tailor the algorithm to the MWM GM (2). The BP algorithm
+updates the set of 2|Ω| messages {mtα→i (zi ), mti→α (zi ) : zi ∈ Ω} between every variable i and its
+associated factors α ∈ Fi = {α ∈ F : i ∈ α, |α| ≥ 2} using the following update rules:
+mt+1
+α→i (zi ) =
+
+X
+
+ψα (z ′ )
+
+z ′ :zi′ =zi
+
+Y
+
+mtj→α (zj′ )
+
+and
+
+mt+1
+i→α (zi ) = ψi (zi )
+
+Y
+
+mtα′ →i (zi ).
+
+α′ ∈Fi \α
+
+j∈α\i
+
+Here t denotes time and initially m0α→i (·) = m0i→α (·) = 1. Given a set of messages {mi→α (·), mα→i (·))},
+the BP (max-marginal) beliefs {ni (zi )} are defined as follows:
+Y
+ni (zi ) = ψi (zi )
+mα→i (zi ).
+α∈Fi
+
+For the GM (2), we let nte (·) to denote the BP belief on edge e ∈ E at time t. The algorithm
+|E|
+outputs the MAP estimate at time t, xBP (t) = [xBP
+, using the using the beliefs
+e (t)] ∈ [0, ?, 1]
+and the rule:
+
+t
+t
+
+1 if ne (0) < ne (1)
+xBP
+? if ntij (0) = nte (1) .
+e (t) =
+
+
+0 if nte (0) > nte (1)
+The LP relaxation to the MAP problem for the GM (2) is:
+X
+C-LP :
+max
+we xe
+e∈E
+
+s.t.
+
+X
+
+e∈δ(i)
+
+xe ≤ 1,
+
+∀i ∈ V,
+
+X
+
+e∈E(C)
+
+xe ≤
+
+|C| − 1
+,
+2
+
+∀C ∈ C,
+
+xe ∈ [0, 1].
+
+Observe that if the solution xC-LP to C-LP is integral, i.e., xC-LP ∈ {0, 1}|E| , then it is a MAP
+assignment, i.e., xC-LP = x∗ . Sanghavi, Malioutov and Willsky [6] proved the following theorem
+connecting the performance of BP and C-LP in a special case:
+Theorem 1 If C = ∅ and the solution of C-LP is integral and unique, then xBP (t) under the
+GM (2) converges to the MWM assignment x∗ .
+
+4
+
+Adding small random component to every weight guarantees the uniqueness condition required
+by Theorem 1. A natural hope is that the Theorem 1 extends to a non-empty C since adding
+more cycles can help to reduce the integrality gap of C-LP. However, the theorem does not hold
+when C =
+6 ∅. For example, BP does not converge for a triangle graph with edge weights {2, 1, 1}
+and C consisting of the only cycle. This is true even though the solution of the corresponding
+C-LP is unique and integral.
+
+3
+
+Graphical Transformation for Convergent and Correct Belief
+Propagation
+
+The loss of convergence and correctness of BP when the MWM LP is tight (and unique) but
+C=
+6 ∅ motivates the work in this section. We resolve the issue by designing a new GM, equivalent
+to the original GM, such that when BP is run on this new GM it converges to the MAP/MWM
+assignment whenever the LP relaxation is tight and unique - even if C =
+6 ∅. The new GM is
+′
+′
+′
+′
+defined on an auxiliary graph G = (V , E ) with new weights {we : e ∈ E ′ }, as follows
+V ′ = V ∪ {iC : C ∈ C},
+E ′ = E ∪ {(iC , j) : j ∈ V (C), C ∈ C} \ {e : e ∈ ∪C∈C E(C)}
+( P
+′
+1
+(−1)dC (j,e ) we′ if e = (iC , j) for some C ∈ C
+′
+′
+.
+we = 2 e ∈E(C)
+we
+otherwise
+Here dC (j, e) is the graph distance of j and e in cycle C = (j1 , j2 , . . . , jk ), e.g., if e = (j2 , j3 ),
+then dC (j1 , e) = 1.
+
+Figure 1: Example of original graph G (left) and new graph G′ (right).
+Associate a binary variable with each new edge and consider the new probability distribution
+′
+on y = [ye : e ∈ E ′ ] ∈ {0, 1}|E | :
+Y ′ Y
+Y
+Pr[Y = y] ∝
+ψi (y)
+ψC (y),
+(3)
+ewe ye
+e∈E ′
+
+i∈V
+
+C∈C
+
+where
+
+ψi (y) =
+
+
+1 if
+
+P
+
+ye ≤ 1
+
+e∈δ(i)
+
+0 otherwise
+
+
+0
+
+
+
+
+ψC (y) = 0
+
+
+
+
+1
+
+P
+
+if
+
+ye > |C| − 1
+
+e∈δ(iC )
+
+P
+
+if
+
+(−1)dC (j,e) yiC ,j ∈
+/ {0, 2} for some e ∈ E(C) .
+
+j∈V (C)
+
+otherwise
+
+It is not hard to check that the number of operations required to update messages at each
+round of BP under the above GM is O(|V ||E|), since the number of non-intersecting cycles is at
+5
+
+most |E| and messages updates involving the factor ψC can be efficiently done using the dynamic
+programming. We are now ready to state the main result of this paper.
+Theorem 2 If the solution of C-LP is integral and unique, then the BP-MAP estimate y BP (t)
+under the GM (3) converges to the corresponding MAP assignment y ∗ . Furthermore, the MWM
+assignment x∗ is reconstructible from y ∗ as:
+( P
+S
+1
+dC (j,e) y ∗
+if e ∈ C∈C E(C)
+iC ,j
+∗
+j∈V (C) (−1)
+2
+xe =
+.
+(4)
+otherwise
+ye∗
+The proof of Theorem 2 is provided in the following sections. We also establish the convergence time of the BP algorithm under the GM (3) (see Lemma 3). We stress that the new
+GM (3) is designed so that each variable is associated to at most two factor nodes. We call this
+condition, which did not hold for the original GM (2), the ‘degree-two’ (DT) condition. The DT
+condition will play a critical role in the proof of Theorem 2. We further remark that even under
+the DT condition and given tightness/uniqueness of the LP, proving correctness and convergence
+of BP is still highly non trivial. In our case, it requires careful study of the computation tree
+induced by BP with appropriate truncations at its leaves.
+
+3.1
+
+Main Lemma for Proof of Theorem 2
+
+Let us introduce the following auxiliary LP over the new graph and weights.
+X
+C-LP′ : max
+we′ ye
+e∈E ′
+
+X
+
+s.t.
+
+ye ≤ 1,
+
+∀i ∈ V,
+
+∀e ∈ E ′ ,
+
+ye ∈ [0, 1],
+
+(5)
+
+e∈δ(i)
+
+X
+
+(−1)dC (j,e) yiC ,j ∈ [0, 2],
+
+∀e ∈ E(C),
+
+j∈V (C)
+
+X
+
+ye ≤ |C| − 1,
+
+∀C ∈ C.
+
+(6)
+
+e∈δ(iC )
+
+Consider the following one-to-one linear mapping between x = [xe : e ∈ E] and y = [ye : e ∈
+E ′ ]:
+ye =
+
+(P
+
+e′ ∈E(C)∩δ(i)
+
+xe
+
+xe′
+
+if e = (i, iC )
+otherwise
+
+xe =
+
+( P
+1
+2
+
+dC (j,e)
+yiC ,j
+j∈V (C) (−1)
+
+ye
+
+S
+if e ∈ C∈C E(C)
+.
+otherwise
+
+Under the mapping, one can check that C-LP = C-LP′ and if the solution xC-LP of C-LP is
+′
+′
+unique and integral, the solution y C-LP of C-LP′ is as well, i.e., y C-LP = y ∗ . Hence, (4) in
+Theorem 2 follows. Furthermore, since the solution y ∗ = [ye∗ ] to C-LP′ is unique and integral,
+there exists c > 0 such that
+c=
+
+inf
+
+y6=y ∗ :y is feasible to C-LP′
+
+w′ · (y ∗ − y)
+,
+|y ∗ − y|
+
+where w′ = [we′ ]. Using this notation, we establish the following lemma characterizing performance of the max-product BP over the new GM (3). Theorem 2 follows from this lemma
+directly.
+′
+
+′
+
+Lemma 3 If the solution y C-LP of C-LP′ is integral and unique, i.e., y C-LP = y ∗ , then
+6
+
+• If ye∗ = 1, nte [1] > nte [0] for all t >
+
+′
+6wmax
+c
+
++ 6,
+
+• If ye∗ = 0, nte [1] < nte [0] for all t >
+
+′
+6wmax
+c
+
++ 6,
+
+′
+where nte [·] denotes the BP belief of edge e at time t under the GM (3) and wmax
+= maxe∈E ′ |we′ |.
+
+3.2
+
+Proof of Lemma 3
+
+This section provides the complete proof of Lemma 3. We focus here on the case of ye∗ = 1,
+while translation of the result to the opposite case of ye∗ = 0 is straightforward. To derive a
+contradiction, assume that nte [1] ≤ nte [0] and construct a tree-structured GM Te (t) of depth t+1,
+also known as the computational tree, using the following scheme
+′
+
+1. Add a copy of Ye ∈ {0, 1} as the (root) variable (with variable function ewe Ye ).
+2. Repeat the following t times for each leaf variable Ye on the current tree-structured GM.
+2-1. For each i ∈ V such that e ∈ δ(i) and ψi is not associated to Ye of the current model,
+add ψi as a factor (function) with copies of {Ye′ ∈ {0, 1} : e′ ∈ δ(i) \ e} as child
+′
+variables (with corresponding variable functions, i.e., {ewe′ Ye′ }).
+2-2. For each C ∈ C such that e ∈ δ(iC ) and ψC is not associated to Ye of the current
+model, add ψC as a factor (function) with copies of {Ye′ ∈ {0, 1} : e′ ∈ δ(iC ) \ e} as
+′
+child variables (with corresponding variable functions, i.e., {ewe′ Ye′ }).
+It is known from [15] that there exists a MAP configuration y TMAP on Te (t) with yeTMAP = 0 at
+the root variable. Now we construct a new assignment y NEW on the computational tree Te (t)
+as follows.
+1. Initially, set y NEW ← y TMAP and e is the root of the tree.
+2. y NEW ← FLIPe (y NEW ).
+3. For each child factor ψ, which is equal to ψi (i.e., e ∈ δ(i)) or ψC (i.e., e ∈ δ(iC )), associated
+with e,
+(a) If ψ is satisfied by y NEW and FLIPe (y ∗ ) (i.e., ψ(y NEW ) = ψ(FLIPe (y ∗ )) = 1), then do
+nothing.
+6= ye∗′ and ψ is
+(b) Else if there exists a e’s child e′ through factor ψ such that yeNEW
+′
+satisfied by FLIPe′ (y NEW ) and FLIPe′ (FLIPe (y ∗ )), then go to the step 2 with e ← e′ .
+(c) Otherwise, report ERROR.
+In the construction, FLIPe (y) is the 0-1 vector made by flipping (i.e., changing from 0 to 1 or 1
+to 0) the e’s position in y. We note that there exists exactly one child factor ψ in step 3 and we
+only choose one child e′ in step (b) (even though there are many possible candidates). Due to
+this reason, flip operations induce a path structure P in tree Te (t).1 Now we state the following
+key lemma for the above construction of y NEW .
+Lemma 4 ERROR is never reported in the construction described above.
+1
+
+P may not have an alternating structure since both yeNEW and its child yeNEW
+can be flipped in a same way.
+′
+
+7
+
+∗
+∗
+∗
+∗
+= 0,
+= 0, y4,i
+= 0, y3,i
+= 0, y2,i
+Figure 2: Example of y TMAP (left) and y NEW (right), where y1,i
+C
+C
+C
+C
+∗
+∗
+∗
+= 0, y3,5
+= 1 and y2,4
+= 1.
+y5,i
+C
+
+Proof. The case when ψ = ψi at the step 3 is easy, and we only provide the proof for the case
+when ψ = ψC . We also assume that yeNEW is flipped as 1 → 0 (i.e., ye∗ = 0), where the proof for
+the case 0 → 1 follows in a similar manner. First, one can observe that y satisfies ψC if and only
+if y is the 0-1 indicator vector of a union of disjoint even paths in the cycle C. Since yeNEW is
+flipped as 1 → 0, the even path including e is broken into an even (possibly, empty) path and an
+odd (always, non-empty) path. We consider two cases: (a) there exists e′ within the odd path
+as 1 → 0 broke the odd path into two even
+= 1) such that ye∗′ = 0 and flipping yeNEW
+(i.e., yeNEW
+′
+′
+(disjoint) paths; (b) there exists no such e′ within the odd path.
+For the first case (a), it is easy to see that we can maintain the structure of disjoint even
+as 1 → 0, i.e., ψ is satisfied by FLIPe′ (y NEW ). For the second
+paths in y NEW after flipping yeNEW
+′
+′
+case (b), we choose e as a neighbor of the farthest end point (from e) in the odd path, i.e.,
+= 0 (before flipping). Then, ye∗′ = 1 since y ∗ satisfies factor ψC and induces a union of
+yeNEW
+′
+as 0 → 1, then we can still maintain
+disjoint even paths in the cycle C. Therefore, if we flip yeNEW
+′
+the structure of disjoint even paths in y NEW , ψ is satisfied by FLIPe′ (y NEW ). The proof for the
+case of the ψ satisfied by FLIPe′ (FLIPe (y ∗ )) is similar. This completes the proof of Lemma 4.
+Due to how it is constructed y NEW is a valid configuration, i.e., it satisfies all the factor
+functions in Te (t). Hence, it suffices to prove that w′ (y NEW ) > w′ (y TMAP ), which contradicts
+to the assumption that y M AP is a MAP configuration on Te (t). To this end, for (i, j) ∈ E ′ , let
+n0→1
+and n1→0
+be the number of flip operations 0 → 1 and 1 → 0 for copies of (i, j) in the step
+ij
+ij
+2 of the construction of Te (t). Then, one derives
+w′ (y NEW ) = w′ (y TMAP ) + w′ · n0→1 − w′ · n1→0 ,
+8
+
+1→0 = [n1→0 ]. We consider two cases: (i) the path P does not arrive
+where n0→1 = [n0→1
+ij ] and n
+ij
+at a leave variable of Te (t), and (ii) otherwise. Note that the case (i) is possible only when the
+condition in the step (a) holds during the construction of y NEW .
+
+Case (i).
+
+†
+∗ +ε(n1→0 −n0→1 ), and establish the following lemma.
+In this case, we define yij
+:= yij
+ij
+ij
+
+Lemma 5 y † is feasible to C-LP′ for small enough ε > 0.
+Proof. We have to show that y † satisfies (5) and (6). Here, we prove that y † satisfies (6) for
+small enough ε > 0, and the proof for (5) can be argued in a similar manner. To this end, for
+given C ∈ C, we consider the following polytope PC :
+X
+X
+yiC ,j ≤ |C| − 1, yiC ,j ∈ [0, 1], ∀j ∈ C,
+(−1)dC (j,e) yiC ,j ∈ [0, 2], ∀e ∈ E(C).
+j∈V (C)
+
+j∈V (C)
+
+†
+We have to show that yC
+= [ye : e ∈ δ(iC )] is within the polytope. It is easy to see that the
+condition of the step (a) never holds if ψ = ψC in the step 3. For the i-th copy of ψC in P ∩Te (t),
+∗ (i) = FLIP ′ (FLIP (y ∗ )) in the step (b), where y ∗ (i) ∈ P . Since the path P does not
+we set yC
+e C
+C
+e
+C
+hit a leave variable of Te (t), we have
+N
+
+1
+1 X ∗
+∗
+yC (i) = yC
++
+n1→0
+− n0→1
+,
+C
+C
+N
+N
+i=1
+
+P
+∗
+where N is the number of copies of ψC in P ∩ Te (t). Furthermore, N1 N
+i=1 yC (i) ∈ PC due to
+∗ (i) ∈ P . Therefore, y † ∈ P if ε ≤ 1/N . This completes the proof of Lemma 5.
+yC
+
+C
+C
+C
+The above lemma with w′ (y ∗ ) > w′ (y † ) (due to the uniqueness of y ∗ ) implies that w′ · n0→1 >
+w′ · n1→0 , which leads to w′ (y NEW ) > w′ (y TMAP ).
+Case (ii). We consider the case when only one end of P hits a leave variable Ye of Te (t),
+‡
+where the proof of the other case follows in a similar manner. In this case, we define yij
+:=
+∗
+1→0
+0→1
+1→0
+1→0
+0→1
+0→1
+yij + ε(mij − mij ), where m
+= [mij ] and m
+= [mij ] is constructed as follows:
+1. Initially, set m1→0 , m0→1 by n1→0 , n0→1 .
+2. If yeNEW is flipped as 1 → 0 and it is associated to a cycle parent factor ψC for some C ∈ C,
+then decrease m1→0
+by 1 and
+e
+by 1.
+is flipped from 1 → 0, then decrease m1→0
+2-1. If the parent yeNEW
+′
+e′
+2-2. Else if there exists a ‘brother’ edge e′′ ∈ δ(iC ) of e such that ye∗′′ = 1 and ψC is
+by 1.
+satisfied by FLIPe′′ (FLIPe′ (y ∗ )), then increase m0→1
+e′′
+2-3. Otherwise, report ERROR.
+3. If yeNEW is flipped as 1 → 0 and it is associated to a vertex parent factor ψi for some i ∈ V ,
+by 1.
+then decrease m1→0
+e
+4. If yeNEW is flipped as 0 → 1 and it is associated to a vertex parent factor ψi for some i ∈ V ,
+by 1, where e′ ∈ δ(i) is the ‘parent’ edge of e, and
+then decrease m0→1
+, m1→0
+e
+e′
+9
+
+is associated to a cycle parent factor ψC ,
+4-1. If the parent yeNEW
+′
+by 1.
+is flipped from 1 → 0, then decrease m1→0
+4-1-1. If the grad-parent yeNEW
+′′
+e′′
+′′′
+′
+∗
+4-1-2. Else if there exists a ‘brother’ edge e ∈ δ(iC ) of e such that ye′′′ = 1 and ψC is
+satisfied by FLIPe′′′ (FLIPe′′ (y ∗ )), then increase m0→1
+e′′′ by 1.
+4-1-3. Otherwise, report ERROR.
+4-2. Otherwise, do nothing.
+We establish the following lemmas.
+Lemma 6 ERROR is never reported in the above construction.
+Lemma 7 y ‡ is feasible to C-LP′ for small enough ε > 0.
+Proofs of Lemma 6 and Lemma 7 are analogous to those of Lemma 4 and Lemma 5, respectively.
+From Lemma 7, we have
+
+
+′
+ε w′ (m0→1 − m1→0 )
+ε w′ (n0→1 − n1→0 ) + 3wmax
+w′ · (y ∗ − y ‡ )
+c ≤
+≤
+≤
+,
+|y ∗ − y ‡ |
+ε(t − 3)
+ε(t − 3)
+where |y ∗ − y ‡ | ≥ ε(t − 3) follows from the fact that P hits a leave variable of Te (t) and there
+are at most three increases or decreases in m0→1 and m1→0 in the above construction. Hence,
+′
+w′ (n0→1 − n1→0 ) ≥ c(t − 3) − 3wmax
+>0
+
+if
+
+t>
+
+′
+3wmax
++ 3,
+c
+
+which implies w′ (y NEW ) > w′ (y TMAP ). If both ends of P hit leave variables of Te (t), we need
+′
+t > 6wmax
++ 6. This completes the proof of Lemma 3.
+c
+
+4
+
+Cutting-plane Algorithm using Belief Propagation
+
+In the previous section we established that BP on a carefully designed GM using appropriate
+odd cycles solves the MWM problem as long as the corresponding MWM-LP relaxation is
+tight. However, finding a collection of odd-sized cycles to ensure tightness of the MWM-LP
+is a challenging task. In this section, we provide a heuristic algorithm which we call CP-BP
+(cutting-plane method using BP) for this task. It consists of making sequential, “cutting plane”,
+modifications to the underlying GM using the output of the BP algorithm in the previous step.
+CP-BP is defined as follows:
+1. Initialize C = ∅.
+2. Run BP on the GM (3) for T iterations
+
+
+if nTe [1] > nTe [0] and nTe −1 [1] > nTe −1 [0]
+1
+3. For each edge e ∈ E, set ye = 0
+if nTe [1] < nTe [0] and nTe −1 [1] < nTe −1 [0] .
+
+
+1/2 otherwise
+
+4. Compute x = [xe ] using y = [ye ] as per (4), and terminate if x ∈
+/ {0, 1/2, 1}|E| .
+5. If there is no edge e with xe = 1/2, return x. Otherwise, add a non-intersecting odd cycle
+(if exists) of edges {e : xe = 1/2} to C and go to step 2.
+10
+
+In the above procedure, BP can be replaced by an LP solver to directly obtain x in step 4.
+This results in a traditional cutting-plane LP (CP-LP) method for the MWM problem [18].
+The primary reason why we design CP-BP to terminate when x ∈
+/ {0, 1/2, 1}|E| is because the
+2
+/ {0, 1/2, 1}|E| occurs in CP-BP when
+solution x of C-LP is always half integral . Note that x ∈
+BP does not find the solution of C-LP.
+We compare CP-BP and CP-LP in order to gauge the effectiveness of BP as an LP solver for
+MWM problems - i.e., to test if BP is as powerful as an LP solver on this class of problems. We
+consider a set of random sparse graph instances. We construct a set of 100 complete graphs on
+|V | = {50, 100} nodes and “sparsify” each graph instance by eliminating edges with probability
+p = {0.5, 0.9}. We assign integral weights, drawn uniformly in [1, 220 ], to the remaining edges.
+The results are summarized in Table 1 and show that: 1) CP-BP is almost as good as
+CP-LP for solving the MWM problem; and 2) our graphical transformation allows BP to solve
+significantly more MWM problems than are solvable by BP run on the ‘bare’ LP without oddsized cycles.
+50 % sparse graphs
+
+90 % sparse graphs
+
+|V | / |E|
+
+# CP-BP
+
+# Tight LPs
+
+# CP-LP
+
+|V | / |E|
+
+# CP-BP
+
+# Tight LPs
+
+# CP-LP
+
+50 / 490
+
+94 %
+
+65 %
+
+98 %
+
+50 / 121
+
+90 %
+
+59 %
+
+91 %
+
+100 / 1963
+
+92 %
+
+48 %
+
+95 %
+
+100 / 476
+
+63 %
+
+50 %
+
+63 %
+
+Table 1: Evaluation of CP-BP and CP-LP on random MWM instances. Columns # CP-BP
+and # CP-LP indicate the percentage of instances in which the cutting plane methods found
+a MWM. The column # Tight LPs indicates the percentage for which the initial MWM-LP is
+tight (i.e. C = ∅).
+
+References
+[1] J. Yedidia, W. Freeman, and Y. Weiss, “Constructing free-energy approximations and generalized belief propagation algorithms,” IEEE Transactions on Information Theory, vol. 51,
+no. 7, pp. 2282 – 2312, 2005.
+[2] T. J. Richardson and R. L. Urbanke, Modern Coding Theory. Cambridge University Press,
+2008.
+[3] M. Mezard and A. Montanari, Information, physics, and computation, ser. Oxford Graduate
+Texts. Oxford: Oxford Univ. Press, 2009.
+[4] M. J. Wainwright and M. I. Jordan, “Graphical models, exponential families, and variational
+inference,” Foundations and Trends in Machine Learning, vol. 1, no. 1, pp. 1–305, 2008.
+[5] M. Bayati, D. Shah, and M. Sharma, “Max-product for maximum weight matching: Convergence, correctness, and lp duality,” IEEE Transactions on Information Theory, vol. 54,
+no. 3, pp. 1241 –1251, 2008.
+2
+
+A proof of
+
+1
+-integrality,
+2
+
+which we did not find in the literature, is presented in the appendix.
+
+11
+
+[6] S. Sanghavi, D. Malioutov, and A. Willsky, “Linear Programming Analysis of Loopy Belief
+Propagation for Weighted Matching,” in Neural Information Processing Systems (NIPS),
+2007
+[7] B. Huang, and T. Jebara, “Loopy belief propagation for bipartite maximum weight bmatching,” in Artificial Intelligence and Statistics (AISTATS), 2007.
+[8] M. Bayati, C. Borgs, J. Chayes, R. Zecchina, “Belief-Propagation for Weighted b-Matchings
+on Arbitrary Graphs and its Relation to Linear Programs with Integer Solutions,” SIAM
+Journal in Discrete Math, vol. 25, pp. 989–1011, 2011.
+[9] S. Sanghavi, D. Shah, and A. Willsky, “Message-passing for max-weight independent set,”
+in Neural Information Processing Systems (NIPS), 2007.
+[10] D. Gamarnik, D. Shah, and Y. Wei, “Belief propagation for min-cost network flow: convergence & correctness,” in SODA, pp. 279–292, 2010.
+[11] J. Edmonds, “Paths, trees, and flowers”, Canadian Journal of Mathematics, vol. 3, pp.
+449–467, 1965.
+[12] G. Dantzig, R. Fulkerson, and S. Johnson, “Solution of a large-scale traveling-salesman
+problem,” Operations Research, vol. 2, no. 4, pp. 393–410, 1954.
+[13] K. Chandrasekaran, L. A. Vegh, and S. Vempala. “The cutting plane method is polynomial
+for perfect matchings,” in Foundations of Computer Science (FOCS), 2012
+[14] R. G. Gallager, “Low Density Parity Check Codes,” MIT Press, Cambridge, MA, 1963.
+[15] Y. Weiss, “Belief propagation and revision in networks with loops,” MIT AI Laboratory,
+Technical Report 1616, 1997.
+[16] B. J. Frey, and R. Koetter, “Exact inference using the attenuated max-product algorithm,”
+Advanced Mean Field Methods: Theory and Practice, ed. Manfred Opper and David Saad,
+MIT Press, 2000.
+[17] Y. Weiss, and W. T. Freeman, “On the Optimality of Solutions of the MaxProduct BeliefPropagation Algorithm in Arbitrary Graphs,” IEEE Transactions on Information Theory,
+vol. 47, no. 2, pp. 736–744. 2001.
+[18] M. Grotschel, and O. Holland, “Solving matching problems with linear programming,”
+Mathematical Programming, vol. 33, no. 3, pp. 243–259. 1985.
+
+A
+
+Proof for Half Integrality of C-LP
+
+In this section, we show that there always exists a half-integral solution to C-LP. To this end,
+it suffices to show that every vertex in the constraint polyope of C-LP is half integral. Let x be
+
+12
+
+a feasible point in the constraint polyope of C-LP, and define the following notation.
+Ex = {e ∈ E : xe ∈ (0, 1)}
+X
+
+Vx =
+v∈V :
+xe = 1
+e∈δ(v)
+
+Cx
+
+
+
+X
+|C| − 1
+=
+C∈C:
+xe =
+2
+e∈E(C)
+
+Our goal is to show that x is either a non-vertex or a half-integral feasible point. To this end,
+one can assume Ex 6= ∅ (otherwise, we are done since x is integral) and and Ex does not contain
+a cycle consisting of half integral edges {e : xe = 1/2} (otherwise, one can redefine a new x by
+making xe → 0 for every edge e in the cycle to argue that the original x is either a non-vertex
+or a half-integral feasible point). Under these assumptions, we will show that x is not a vertex.
+First it is easy to check that each C ∈ Cx is one of the following types:
+T1. E(C) ⊂ Ex and there exist at least two vertices v1 , v2 ∈ V (C) such that for i = 1, 2,
+X
+xe < 1.
+
+(7)
+
+T2. E(C) ∩ Ex is a disjoint union of δ(vi ) ∩ E(C) for some v1 , . . . , vk ∈ V (C), and
+X
+xe = 1.
+
+(8)
+
+e∈δ(vi )∈E(C)
+
+e∈δ(vi )∈E(C)
+
+Now pick an arbitrary edge e = (u, v) ∈ Ex . We build a path in Ex starting from e, expanding
+in both directions under the following rule:
+R1. When we
+S have multiple choices of edges in the expansion procedure, we always prefer edges
+not in C∈Cx E(C).
+
+In the first step of the expansion procedure, one can check one of the following cases occur:
+C1. There exists an edge e′ = (v, w) 6= e ∈ Ex ;
+C2. v ∈
+/ Vx and e ∈
+/ ∪C∈Cx E(C).
+Therefore, the expansion procedure terminates in one of the following cases:
+(a) Case C2 occurs at both ends of the current path, i.e, impossible to expand further.
+(b) A cycle T in Ex is found, i.e., the path self-intersects.
+
+Case (a). In this case, we will show that x is not a vertex. Suppose the expansion procedure
+ends in a path P, and consider a walk along the path. We observe that
+• Once the walk enters an edge of cycle of Type T1, it goes out before traversing all edges
+of the cycle due to Rule R1 and (7).
+• Once the walk enters an edge of cycle of Type T2, it goes out after traversing even number
+of edges of the cycle due to (8).
+13
+
+Hence, when the walk enters and goes out a cycle of Type T1, we can possibly remove traversed
+edges from P and add remaining non-traversed edges to P so that the walk in the modified
+P always traverses (before going out) even number of edges of the cycle once it enters. By
+modifying P in this way, we can make path P = e1 → e2 · · · → ek traverse even number of
+edges of cycles of Type T1 and T2 once it enters. Note that P may contain a same edge more
+than once. Finally, we construct two different points y = [ye ], z = [ze ] with x = (y + z)/2 by
+starting from x = [xe ] and alternatively adding/substracting some constant ε > 0 following path
+P: ye = ze = xe for e ∈
+/ P and
+ye1 ← xe1 + ε,
+
+ye2 ← xe2 − ε,
+
+ye3 ← xe3 + ε, · · ·
+
+ze1 ← xe1 − ε,
+
+ze2 ← xe2 + ε,
+
+ze3 ← xe3 − ε, · · ·
+
+We provide an example of {x, y, z} in Figure 3. For small enough ε > 0, one can show that y, z
+are feasible points to the constraint polytope of C-LP using the following facts:
+• P always traverses even number of edges of cycles of Type T1 and T2 once it enters;
+• Both ends of P belong to Case C2.
+This implies that x is not a vertex.
+
+Figure 3: Example of x (left), y (middle) and z (right) for Case (a), where P = e → a → b → c → d
+and {a, b, c} forms a cycle of Type T1. Once P enters the cycle, it goes out after traversing even number
+of edges, (a, b) and (b, c).
+
+Case (b). Similarly as we did for Case (a), we can modify/make cycle T so that it always
+traverse even number of edges of cycles of Type T1 and T2 once it enters.3 If the length of
+T is even, one can construct two different feasible points y = [ye ], z = [ze ] with x = (y + z)/2
+by starting from x = [xe ] and alternatively adding/substracting some small constant ε > 0
+following path T , similarly as we did for Case (a). Hence, we assume that T is of odd length.
+Now consider the cases:
+• There exists a vertex v ∈ T such that v ∈
+/ Vx .
+• Else, V (T ) ⊂ Vx (every vertex v ∈ T is in Vx ) and V (T ) forms a disjoint component in
+Ex .
+3
+
+We note again that the modified cycle T may contain a same edge more than once.
+
+14
+
+• Else, V (T ) ⊂ Vx and there exists e ∈ Ex connecting between V (T ) and V \ V (T ).
+For the first case, one can construct again two different feasible points y = [ye ], z = [ze ] with
+x = (y + z)/2 by alternatively adding/substracting some small constant ε > 0 to x following
+path T with the staring point v. Hence, x is not a vertex in the first case. For the second case,
+one can show that every xe for e ∈ T is half integral, which contradicts to our assumption that
+Ex does not contain a cycle consisting of half integral edges {e : xe = 1/2}. In the third case, one
+can construct a new path P ′ starting from e until it finds a cycle T ′ in Ex as we did previously.
+But, now we expand a path in one direction, while we did in both directions previously. Of
+course, the expansion procedure may terminate before finding a cycle in Ex , which belongs to
+Case (a) and hence we are done, i.e., x is not a vertex. By using the previous arguments for T ′
+in place of T , we can also assume that
+• T ′ always traverses even number of edges of cycles of Type T1 and T2 once it enters.
+• The length of T ′ is odd.
+Now the union of P ′ and T form two cycles T , T ′ connected by (possibly, empty) bridge edges
+B, where we can assume that B also traverses even number of edges of cycles of Type T1 and
+T2 once it enters. Finally, using these properties, one can construct two different feasible points
+y = [ye ], z = [ze ] with x = (y + z)/2 by starting from x = [xe ] and
+• Alternatively adding/substracting ε following cycles T and T ′ ;
+• Alternatively adding/substracting 2ε following the bridge edges B,
+where ε > 0 is small enough. We provide an example of {x, y, z} in Figure 4. This implies that
+
+Figure 4: Example of x (left), y (middle) and z (right) for Case (b), where T = a → b → c → a,
+B = c → d and T ′ = e → d → f → e.
+
+x is not a vertex in the third case, and complete the proof of the half integrality of C-LP.
+
+15
+
+

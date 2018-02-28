@@ -1,0 +1,2283 @@
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS 2000
+
+523
+
+Monte Carlo inference via greedy importance sampling
+
+and Finnegan Southey
+Department of Computer Science
+University of Waterloo
+{dale,fdjsouth} @cs.uwaterloo.ca
+
+Dale Schuurmans
+
+Abstract
+
+P(x) (generally defined by a Bayesian network or graphi­
+cal model) that is hard to sample from directly.
+
+We present a new method for conducting Monte
+Carlo inference in graphical models which com­
+bines explicit search with generalized importance
+sampling. The idea is to reduce the variance
+of importance sampling by searching for signifi­
+cant points in the target distribution. We prove
+that it is possible to introduce search and still
+maintain unbiasedness. We then demonstrate our
+procedure on a few simple inference tasks and
+show that it can improve the inference quality of
+standard MCMC methods, including Gibbs sam­
+pling, Metropolis sampling, and Hybrid Monte
+Carlo. This paper extends previous work which
+showed how greedy importance sampling could
+be correctly realized in the one-dimensional case.
+
+In this paper we investigate a simple modification of im­
+portance sampling that demonstrates some advantages over
+independent and dependent-Markov-chain methods. The
+idea is to explicitly search for important regions in a tar­
+get distribution P when sampling from a simpler proposal
+distribution Q. Previous work [Sch99] showed that search
+could be incorporated in an importance sampler while still
+maintaining unbiasedness. However, these results were pri­
+marily restricted to the one-dimensional case. In this paper
+we extend these results by introducing a new estimator that
+can be successfully applied to multidimensional problems,
+as well as continuous problems.
+The motivation behind our approach is simple: Importance
+sampling simulates drawing a sample from a target distri­
+bution P by drawing a sample from a simpler "propos­
+al" distribution Q and then weighting the sample points
+x1, , Xt according to w(x;) = P(x;)jQ(x;) to ensure
+that the expected weight of any point x is P(x). The tech­
+nique is effective when Q approximates P over most of
+the domain. However, importance sampling fails when Q
+misses high probability regions of P and systematically
+yields sample points with small weights. This situation is
+illustrated in Figure 1. In these cases, the sample will al­
+most always consist of low weight points, but with small
+probability it will contain some very high weight points­
+and this combination causes any estimator based on these
+samples to have high variance (since the effective sample
+size is reduced). It is therefore critical to obtain sample
+points from the important regions of P. MCMC methods
+such as the Metropolis algorithm and Hybrid Monte Car­
+lo attempt to overcome this difficulty by biasing a local
+random search towards higher probability regions while p­
+reserving the asymptotic "fair sampling" properties of the
+techniques [Nea93, Nea96].
+...
+
+1
+
+Introduction
+
+It is well known that general inference and learning with
+Bayesian networks is computationally hard [DL93, Rot93],
+and it is therefore necessary to consider restricted architec­
+tures [Pea88], or heuristic and approximate algorithms to
+perform these tasks [JGJS98, Fre98, DL97]. Among the
+most convenient and successful techniques are stochastic
+methods which are guaranteed to converge to a correct so­
+lution in the limit of large random samples [Mac98, Nea96,
+Tan93, SP90, Gew89]. These methods can be easily ap­
+plied to complex inference problems that overwhelm deter­
+ministic approaches.
+The family of stochastic inference methods can be grouped
+into the independent Monte Carlo methods (importance
+sampling and rejection sampling [Mac98, FD94, SP90,
+Gew89, Hen88]) and the dependent Markov Chain Monte
+Carlo (MCMC) methods (Gibbs sampling, Metropolis
+sampling, and Hybrid Monte Carlo) [Mac98, GRS96,
+Nea93, Tan93]. The goal of all these methods is to sim­
+ulate drawing a random sample from a target distribution
+
+Here we investigate a simpler direct approach where one
+draws points from a proposal distribution Q but then ex­
+plicitly searches in P to find points in important regions.
+The main challenge is to maintain correctness (i.e., unbi-
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS 2000
+
+524
+
+Importance sampling
+
+0.8
+0.7
+
+p
+
+Q
+
+::
+
+0.1
+
+. .••
+. •
+
+__
+
+,
+
+.
+
+. ...
+.
+
+......••
+
+.
+
+· · ·· · ·
+.
+/..... / · ·· · - -,····
+
+.
+
+.
+
+······ .
+·. .
+.
+
+••
+•• •
+
+Draw
+
+Weight each sample point x; by w(x;) =
+
+•
+
+For a random variable of interest, f, estimate
+EP(x)f(x) by
+= � 2:7=1 f(x;)w(x;).
+
+Xt,
+
+•••
+
+, Xn
+
+�l::j.
+
+j
+
+Figure 2: Importance sampling procedure
+·· . . .
+. .
+·····
+·····. ..
+... ..
+..
+
+0.5
+
+Figure 1: Difficult situation for importance sampling
+
+asedness) of the resulting procedure. We achieve this by
+initiating independent search paths from different starting
+points and then weighting all of the sample points so that
+their expected weight under the sampling procedure match­
+es their true probability under the target P (or is at least
+proportional to this probability; see below). For example,
+if a point x appears in a sample path with some probabili­
+ty Q*(x) (which is a function of the proposal distribution
+Q, but is not necessarily just Q(x)) then we need to as­
+sign the weight w(x) = P(x)/Q*(x) so that x's expected
+weight is P(x). By conducting a number of searches, the
+idea is to build a sample from independent blocks that are
+each guaranteed to contain high weight points. In this way
+a reasonable sample of independent high weight points can
+be captured, which should yield improved inference.
+The remainder of this paper is organized as follows. We
+first consider the discrete case. Section 2 reviews the basic
+importance sampling procedure and its application to infer­
+ence in graphical models. Section 3 then presents a gener­
+alization of importance sampling that forms the core of our
+discrete estimators. We prove that this generalization pre­
+serves unbiasedness while admitting new estimation pro­
+cedures that had not been previously investigated. In Sec­
+tion 4 we then introduce the basic greedy search method
+we propose in this paper, and prove that it yields unbiased
+estimates, even in the multidimensional case. Section 5
+presents an experimental evaluation of the basic method
+and compares its performance against standard Monte Car­
+lo inference methods. We then consider the continuous
+case. Section 6 extends our method to the continuous set­
+ting and extends the proof of unbiasedness (which involves
+some technical complications that are discussed in the ap­
+pendix). Section 7 then presents an experimental evalua­
+tion of the continuous extension.
+
+2
+
+independently according to Q.
+
+•
+•
+
+Importance sampling
+
+Many inference problems in graphical models can be cast
+as determining the expected value of a random variable of
+interest, J, given observations drawn according to a tar­
+get distribution P. That is, we are interested in computing
+
+EP(x)f(x). Usually the random variable f is simple, like
+the indicator of some event, but the distribution P is usually
+not in a form that we can sample from efficiently.
+Importance sampling is a useful technique for estimat­
+ing EP(x)f(x) when P cannot be sampled from direct­
+ly. The idea is to draw independent points XI, , Xn ac­
+cording to a simpler proposal distribution Q, which can
+be sampled from efficiently, but then weight these points
+according to w(x) = P(x)/Q(x). Assuming that we
+can evaluate P(x) at individual sample points, the weight­
+ed sample can be computed and used to estimate de­
+sired expectations; as shown in Figure 2. The correct­
+ness (i.e., unbiasedness) of this procedure is easy to es­
+tablish. Given a target random variable f with the ex­
+pected value under P of EP(x)f(x) = Lx x J(x)P(x),
+e
+we can determine that the expected weighted value of f
+under Q is Eq(x)f(x)w(x) = Lxex f(x)w(x)Q(x) =
+•••
+
+LxeX f(x) ��:� Q(x) = LxEX f(x)P(x)
+
+=
+
+EP(x)f(x),
+
+thus yielding an unbiased estimate.1
+
+Unfortunately, for standard inference problems in Bayesian
+networks it is usually not possible to implement this proce­
+dure directly. The problem is that assigning the weights
+requires the ability to evaluate P(x) at chosen points x,
+and in Bayesian networks this probability usually corre­
+sponds to PnN(xie) for a vector of observation variables
+x given evidence variables e. In general, it is not pos­
+sible to efficiently compute [Coo90] or even approximate
+[Rot93, DL93] these quantities. However, it is possible to
+apply a generalized algorithm to attempt inference in these
+cases. Figure 3 shows the "indirect importance sampling"
+procedure, which does not assign sample weights in the de­
+sired form, but rather assigns indirect weights u(x) that are
+only a fixed constant multiple j3 of the desired ratio, i.e.,
+u(x) = j3P(x)/Q(x), where j3 need not be known a pri­
+ori. Here we only need to be able to compute u(x) without
+having to determine j3 directly. This relaxation permits ef­
+ficient calculation of the desired weights in Bayesian net­
+work inference, and results in a procedure that is known
+as the "likelihood weighting" algorithm [SP90]. For ex­
+ample, when evidence is strictly at the leaves, the like­
+lihood weighting proposal distribution corresponds to the
+prior Q(x) = PnN(x) and the indirect weights are giv­
+en by u(x) = PnN(eix), which is easily computed from
+1
+We find it advantageous to first present the discrete case for
+the purposes of clarity. We consider the continuous case later.
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS 2000
+
+"Indirect" importance sampling
+•
+•
+•
+
+(likelihood weighting)
+
+x1. ..., Xn independently according to Q.
+Weight each sample point x; by u(x;) = ,B ��:J
+For a random variable of interest, f, estimate
+l:n-t J(x; )u(x;)
+EP(x)!(x) by f _ E�=• u(x;)
+·
+
+Draw
+
+"Generalized" importance sampling
+
+Draw x1 , ..., Xn independently according to Q.
+For each x;, recover its block B; = { x;,t, ..., x;,bJ.
+• Create a large sample out of the blocks
+•
+
+•
+
+Xt,l, ..., Xt,b., Xz,t. ..., X2,b,, ... , Xn,l, ..., Xn,bn·
+
+A
+
+-
+
+Figure 3: Indirect importance sampling procedure
+
+x. These weights u(x) = PBN(xle)PBN(e)f PBN(x)
+PBN(e )w(x) are a fixed constant multiple of the desired
+
+weights (which cannot be computed efficiently), and there­
+fore we can use them to feasibly implement the indirect
+importance sampling procedure of Figure 3.
+The drawback of the indirect procedure is that it is not un­
+biased at small sample sizes. Rather it only becomes unbi­
+ased in the large sample limit. To establish the asymptotic
+correctness of indirect importance sampling, note that we
+estimate EP(x)f(x) by the weighted average of f divid­
+ed by the sum of indirect weights (Figure 3). It is easy
+to prove this estimate becomes unbiased because the two
+weighted averages 2:7=1 f(x;)u(x;) and 2:�1 u(x;)
+converge to
+
+EP(x)f(x)
+
+�
+
+�
+
+,BEP(x)f(x) and ,B respectively, and thus j---+
+
+(under broad technical conditions [Gew89]).
+For the extensions we discuss below it will always be pos­
+sible to generalize them in a similar manner so that they
+can be applied to Bayesian network inference. However, to
+keep the presentation simple we will focus on the simple
+version of importance sampling described in Figure 2, and
+establish unbiasedness for that case.
+
+3
+
+Generalized importance sampling
+
+As previously discussed, importance sampling is an effec­
+tive estimation technique when Q approximates P over
+most of the domain, but it fails when Q misses high prob­
+ability regions of P (and therefore systematically yields
+samples with small weights). This problem can occur in
+Bayesian network inference whenever the evidence is un­
+likely under the prior distribution, because this causes like­
+lihood weighting to use a proposal distribution that system­
+atically generates points with small weights. For example,
+when evidence is strictly at the leaves, likelihood weight­
+ing uses the proposal distribution Q(x) = P BN(x), which
+guarantees that the indirect weights u(x) = P BN(eix) will
+almost always be small. To overcome this problem it is
+critical to obtain data points from the important regions of
+P. Our goal is to avoid generating systematically under­
+weight samples by explicitly searching for significant re­
+gions in the target distribution P. To do this, and maintain
+the unbiasedness of the resulting procedure, we develop a
+simple generalization of importance sampling that can be
+proved correct.
+Consider a procedure where instead of sampling individ-
+
+525
+
+��::1
+
+Weight each point Xj E B; by w; (xj) =
+a;j
+• For a random variable of interest,f, estimate
+n
+b;
+Ep(x)f(x) by f = n1 2: ;=1
+l:k=t f(x;,k)w;(x;,k).
+
+•
+
+A
+
+Figure 4: Generalized importance sampling procedure
+ual points we sample deterministic blocks of points. That
+is, to each domain point x; associate a fixed block B; =
+{ x;,b ..., x;,bJ a priori. When x; is drawn from the pro­
+posal distribution Q we use it to recover the block B; and
+then add these points to the sample. (We make no re­
+striction on the structure of the blocks, other than they be
+finite-blocks can overlap and need not contain their ini­
+tiating x;-however we do require that each domain point
+x; deterministically generate the same block B; .) In this
+scheme, the final sample is built out of independently sam­
+pled blocks of points.
+The real issue is how to weight the points. To do this we
+introduce an auxiliary weighting scheme. For each pair of
+points x;, x j define the indicator l;j such that l;j = 1 if
+x j E B; and l;j = 0 if x j fl. B;. Then for every point
+Xj appearing in a block B; (initiated by x;) we associate a
+nonnegative weight a;j. (Here we think of x; as the initiat­
+ing point and xj as one of the successors in its block.) The
+a;j weights can be more or less arbitrary except that they
+must be nonnegative and satisfy the constraint
+
+L
+
+a;jlij = 1
+
+(1)
+
+x;EX
+
+for every xj. That is, for each destination point xj, the total
+of the incoming a-weight has to sum to 1. (We will see be­
+low how this can easily be arranged in real procedures.)
+Note that a particular point xj might appear in several
+blocks, but this will be of no concern as long as the above
+constraint is satisfied. To compute the final weight of a
+point xj in a sampled block B; we use
+
+w;(xj) =
+
+��:�? a;j.
+
+In summary, the generalized importance sampling proce­
+dure (Figure 4) draws initial points x; from Q, builds a
+sample out of the corresponding blocks B;, and weight the
+
+��:H
+
+aij· Al­
+individual points Xj E B; by w;(xj) =
+though only loosely constrained in terms of the block struc­
+ture and auxiliary weighting scheme, it turns out that this
+procedure always yields an unbiased estimate of Ep(x) f(x)
+for any random variable of interest,f. To prove this, con­
+sider the expected weighted value off when sampling ini­
+tiating points x; under Q
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS 2000
+
+526
+
+L L
+
+x;EX XjEB;
+
+f(xj)w;(xj)Q(x;)
+
+"Greedy" importance sampling
+
+• Draw x1 , ..., Xn independently from Q.
+• For each x;,let x;,1 = x;:
+-Compute block B; = { x;,I. x;,2, , x;,m} by taking
+local search steps in the direction of maximum
+If(x)P(x)I until a local maximum or m -1 steps.
+•••
+
+- Weight each point
+
+L L
+
+x;EX XjEX
+
+l;jf(xj)P(xj)a;j
+
+•••
+
+L x;EX
+L l;jf(xj)P(xj)aij
+
+XjEX
+
+L
+
+f(xj)P(xj)
+
+L
+
+f(xj)P(xj)
+
+XjEX
+
+L
+
+x;EX
+
+XjEX
+
+=
+
+l;jaij
+EP(x)f(x)
+
+thus yielding an unbiased estimate.
+This proof is remarkably simple and yet has general impli­
+cations. One important property of this argument is that it
+does not depend on how the block decomposition is chosen
+or how the auxiliary weights are set, so long as they satis­
+fy the above constraints. That is, we could fix any block
+decomposition and auxiliary weighting scheme, even ones
+that depended on the target distribution P, without affect­
+. ing the correctness of the procedure. Intuitively, this holds
+because once the block structure and weighting scheme are
+established, unbiasedness is achieved by randomly sam­
+pling blocks and assigning fair weights to the points, re­
+gardless of the set up. (Of course, we need the blocks to be
+finite to be able to implement the procedure.)
+The generality of this outcome allows us to contemplate
+alternative sampling procedures that explicitly attempt to
+construct blocks that have high weight points. We can then
+use the sampling procedure outlined in Figure 4 to yield
+unbiased estimates for any random variable f.
+
+4
+
+Xj E B; by w;(Xj)
+
+Greedy importance sampling
+
+It is well known that the optimal proposal distribu­
+tion for regular importance sampling is just Q* (x) =
+lf(x)P(x)l/ LxEX lf(x)P(x)l when estimating an ex­
+pectation EP(x)i(x) (which minimizes the variance of the
+estimate [Eva9 1, Rub8 1]). In searching for significant re­
+gions in the domain it would appear that one should seek
+points that have a high value of lf(x)P(x)l not just P(x).
+Our greedy search procedures, therefore, search for points
+that maximally increase the objective lf(x)P(x)l. In the
+discrete case we examine a set of immediate neighbors and
+take a greedy step.
+The "greedy" importance sampling procedure outlined in
+Figure 5 first draws an initial point x1 from Q and then
+conducts a greedy search in the direction of maximum
+
+=
+
+��:n a;j
+
+where a;j is defined in (2) below.
+• Create the final sample from the blocks of points
+X1,1. ..., X1 ,m, X2,1. , X2,m, , Xn,b ..., Xn,m•
+•For a r�dom variable, f, estimate EP(x)f(x)
+by
+
+f
+
+=
+
+•••
+
+� 2:: 7==1 2::;;'==1 f(xi,k )w;(x;,k).
+
+Figure 5: "Greedy" importance sampling procedure
+
+lf(x)P(x) I among local neighbors,until either m -1 step­
+s have been taken or a local maximum is encountered. (To
+break ties we employ a deterministic policy that prevents
+loops.) A single "block" in the final sample is comprised
+of a complete sequence captured in one ascending search.
+This procedure is easy to implement in principle. The on­
+ly challenge is finding ways to assign the auxiliary weights
+a;j so that they satisfy the constraint (1). That is, we re­
+quire that the total incoming a-weight to any domain point
+Xj be exactly L Note that, in principle, to verify (I) for a
+domain point x j we have to consider every search path that
+starts at some other point x; and passes through Xj within
+m - 1 steps. If our search is deterministic (which we as­
+sume here) the set of search paths entering Xj will form a
+tree in general. Let Tj denote the tree of points that lead
+to Xj and let a(1j) = LxkET akj· This tree will have
+depth at most m given the bound on search length. It turns
+out that it is easy to assign a-weights to ensure o:(1j) = 1
+using the following recursive scheme.
+Fix a parameter b which serves as a guess of the typical "in­
+ward" branching factor of trees in the domain. A complete
+balanced tree of depth m with inward branching factor b
+will have a number of nodes equal to
+if b =f
+if b =
+
+1
+1
+
+If 1j were a complete and balanced tree then we could as­
+sign a weight a;j = 1/ Sb,m for every x; in Tj and trivially
+satisfy the constraint ( 1). However, 1j need not be bal­
+anced and its internal nodes might have different branching
+factors. Moreover, we must be able to compute the weights
+on-line when conducting a search from a single initial point
+x;. Thus, to assign the a-weights we employ the following
+local correction scheme: Given a start node x; and a search
+path x;, Xi+l. ..., Xi+k = Xj from x; to Xj, we assign an
+auxiliary weight O:ij by
+if b; =f 0
+if b; = 0
+
+(2)
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS 2000
+
+ifi = j
+o.w. (where
+
+f3ij
+where
+
+t
+
+Xi+k = Xj)
+
+100
+
+rmse
+
+denotes the inward branching factor of node
+Xi+l· This scheme reflects the principle that a node x; at
+a distance k from the root of Tj takes responsibility for a
+complete balanced subtree of height m- ( k - 1) below x;.2
+It is easy to show that assigning auxiliary weights in this
+way preserves the desired constraint a(7j) = 1. The proof
+is by an induction on the level of the subtrees rooted at
+internal nodes x; E Tj: Let T;j denote the subtree of Tj
+rooted at x;. We establish that for subtrees at levels £ =
+1, 2 , , m (moving from the leaves up) that our system of
+auxiliary weights satisfies the invariant
+
+200
+
+Once this is established, it will trivially follow that a(Tj) =
+=
+
+1.
+
+For the base case note that for a subtree T;j at level 1 (i.e.,
+a leaf) we have T;j = { x;} and hence a(T;j) = a;j =
+/3;j/Sb,m = /3;jSb,I/Sb,m, which satisfies (3). Now as­
+sume as an induction hypothesis that (3) holds for trees of
+level £ - 1 in Tj; we prove that (3) must then hold for all
+trees of level £. Consider a node x; at level £ in 7j and
+assume b; # 0. (The proof for the case when b; = 0 is
+similar; we omit it for brevity.) In this situation we have
+
+rmse
+
+500
+
+Sb,t-1
+f3kj _s__
+b,m
+by (2) and the induction hypothesis
+
+L
+
++
+
+Xk:Xk
+
+immed
+� Xi
+
+!!.._ Sb,l-1
+f3ij ;
+b Sb,m
+
+by the definition of
+
+{3;j
+{3;j
+Sb,t-1
++ b; f3iJ !!.._
+;
+b
+Sb,m
+Sb,m
+/3ij (1 + bSb,l- )/Sb,m
+{3;i Sb,e/Sb,m
+by the definition of Sb,e
+
+(
+
+)
+
+t
+
+2
+
+The idea behind the auxiliary weighting scheme is that if the
+
+node weights all start out being
+
+1
+
+but x;'s branching factor
+
+b;
+
+differs from b, thenx; will compensate by multiplying the weights
+
+of its subtrees by b/b; so that the total node weight of the subtree
+rooted atx; remains
+
+Sb,m-(k-1).
+
+1+ -f, (b;Sb,m-(k-2))
+
+=
+
+1+bSb,m-(k-2) =
+
+In the case when b; = 0, Xi will compensate by
+adding the equivalent of b subtrees of depth m- (k - 2) to its
+
+own node weight, so that again
+
+1 + bSb,m-(k-2)
+
+=
+
+Sb,m-(k-l).
+
+In either case, as far as the rest of the tree Tj is concerned,x; will
+
+be the root of a complete balanced subtree of height m -
+
+bias
+stdev
+rmse
+
+700
+
+bias
+stdev
+rmse
+
+1000
+
+bias
+stdev
+rmse
+
+DS
+
+GIS
+
+IS
+
+Met
+
+0.0002
+0.1003
+0.1003
+0.0013
+0.0696
+0.0696
+0.0007
+0.0439
+0.0439
+0.0014
+0.0375
+0.0376
+0.0020
+0.0315
+0.0316
+
+0.0159
+0.1871
+0.1877
+0.0013
+0.1303
+0.1303
+0.0013
+0.0819
+0.0819
+0.0040
+0.0728
+0.0729
+0.0014
+0.0609
+0.0609
+
+0.0848
+0.3477
+0.3579
+0.0410
+0.2183
+0.2221
+0.0160
+0.1324
+0.1333
+0.0110
+0.1135
+0.1140
+0.0097
+0.0860
+0.0865
+
+15.6036
+13.9486
+20.9293
+18.5112
+13.4202
+22.8641
+21.7949
+12.7147
+25.2326
+24.7202
+12.2979
+27.6103
+26.1688
+11.9118
+28.7524
+
+Table I: Discrete two-dimensional experiments: Scaling
+in estimation sample size t. Distributions are bivariate
+Gaussians discretized on 21 x 21 grid. 1000 repetitions.
+/1-P = /1-Q = 0, I:p = I, LQ = 621, f(x) = -log(p(x)).
+
+which satisfies the desired invariant (3).
+Thus, we have a general procedure for conducting an ex­
+plicit search in general spaces, where search paths can
+merge, and yet our weighting scheme still correctly com­
+pensates and yields unbiased estimates.
+
+5
+
+Experiments
+
+To demonstrate the greedy method we conducted a series
+of experiments in order to gain an understanding of its per­
+formance relative to standard techniques. Given the un­
+biasedness of the candidate methods, the main issue is to
+assess the variance of the estimators. To measure the per­
+formance of the various techniques, we gathered their mean
+squared error, bias and variance over 1000 repetitions of a
+given problem. We use root mean squared error (rmse),
+absolute bias, and standard deviation to give an intuitive
+measure of an estimator's effectiveness. The methods we
+compared were greedy importance sampling (GIS), direct
+sampling from the target distribution (DS), standard impor­
+tance sampling (IS), rejection sampling (RS), and Metropo­
+lis sampling [Nea93, Nea96]. For Metropolis sampling we
+used a uniform neighborhood proposal distribution.
+
+a(T;j)
+
+/3;j
+Sb,m
+
+bias
+stdev
+
+...
+
+(3)
+
+bias
+stdev
+
+b;+l
+
+a(Tjj) = /3jjSb,m/Sb,m
+
+527
+
+(k - 1).
+
+The first series of experiments we conducted was on sim­
+ple one-dimensional problems that varied the relationship
+between P, Q and f, in order to test the basic correctness
+of our method. Figure 6 shows that GIS strongly outper­
+forms the other methods across a range of problems in this
+setting. Interestingly, these experiments also show that it
+is not always best to sample directly from the target distri­
+bution P when the random variable f has a substantially
+different structure. We also tested GIS on a simple multi­
+variate problem, and Table I shows that GIS handles mul­
+tidimensional problems quite well in this simple case.
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS 2000
+
+528
+
+Continuous greedy importance sampling
+'·
+
+fP
+
+05 '"'! "'
+''
+" '
+
+'
+
+• Draw x11 , Xn independently from Q.
+• For each x;, let x;,1 = x;:
+-Compute block B; = { x;,1, x;,z, ... , x;,m} by taking size
+c steps in axis direction of increasing If( x)P(x) I until a
+local maximum or m - 1 steps have been reached.
+•••
+
+f
+
+{!
+
+....,..
+. .....
+.
+·,
+
+\
+
+uz;
+
+- Weight each pointxj E B;
+
+'··
+
+bias
+stdev
+rmse
+
+byw;(xj) =
+
+��:�� a:;j
+
+where a:;j is defined in (2) above.
+• Create the final sample from the blocks of points
+
+;
+
+DS
+
+GIS
+
+IS
+
+RS
+
+Met
+
+0.001
+O.D71
+0.079
+
+0.001
+O.Q38
+0.038
+
+0.003
+0.065
+0.066
+
+0.425
+0.447
+0.617
+
+0.038
+O.Q38
+0.054
+
+Xt,b ... , Xt,m, X2,1, ... , Xz,m, ... , Xn,b ... , Xn,m·
+f, estimate EP(x)!( x)
+by j = � 2::7=1 2::;;'=1 f(x;,k)w;(x;,k)·
+
+•For a random variable,
+
+Figure 7: Continuous greedy importance sampling
+f
+
+", fP
+07i
+P.Bi
+
+6
+
+{!
+
+Continuous case
+
+Although the greedy importance sampling technique shows
+promise for simple discrete problems, it is also important
+to handle continuous problems defined over the sam­
+ple space X = lRn . Here, regular importance sam­
+pling applies just as well as in the discrete case, using
+weights determined by the ratio of the probability densi­
+ties, w(x) = p(x)jq(x) (provided the densities exist); see
+Figure 7. The unbiasedness of this procedure is easy to es­
+tablish when the densities exist, since EQ(x)f(x)w(x) =
+
+fJRn f(x)w(x)q(x) !-l(dx) = JJRn f(x)� q(x) !-l(dx) =
+fJRn f(x)p(x) !-l(dx) = EP(x)f(x). (Notenthat we use 1-l
+to denote standard Lebesgue measure on m )
+.
+
+.$.,
+
+bias
+stdev
+rmse
+
+.12
+DS
+
+GIS
+
+IS
+
+RS
+
+Met
+
+0.001
+0.069
+0.069
+
+0.004
+0.037
+0.037
+
+0.009
+0.094
+0.094
+
+0.4866
+0.519
+0.711
+
+0.777
+1.795
+1.947
+
+Figure 6: Discrete one-dimensional experiments: Problems
+with varying relationships between P, Q, f and IfP 1. 1000
+repetitions with estimation samples of size 100.
+
+Extending the greedy importance sampling strategy to the
+continuous case is not hard in principle-however, care
+must be taken not to "warp" the measure on the sample s­
+pace or else bias could be introduced into the procedure. To
+avoid the need to correct for compressing or dilating trans­
+formations (by determining Jacobians) we employ a very
+simple search scheme that takes only fixed size steps (of
+size c) in axis parallel directions. That is, inn-dimensional
+Euclidean space, the greedy importance sampling proce­
+dure given in Figure 7 first draws an initial point x; from
+q(x) and then conducts a search in the direction of maxi­
+mum lf(x)p(x) I among the 2n neighbors of x; determined
+by taking steps of size c in each direction from x;; until
+either m - 1 steps have been taken or a local maximum is
+reached. A single "block" in the final sample is comprised
+of a complete sequence in one ascending search. The re­
+mainder of the procedure (computing the a-weights) is im­
+plemented as in the discrete case (with the a;j 's satisfying
+the same constraints). To break ties, we employ a deter­
+ministic tie breaking policy that prevents loops.
+The intuitive significance of this "grid walk" strategy is that
+it does not transform the underlying Lebesgue measure of
+the Euclidean sample space. Instead it leaves the resulting
+discrete "merges" to be compensated by the a-weighting
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS
+
+scheme. In fact, except for one step, it is actually quite easy
+to prove that this continuous version of the greedy impor­
+tance sampling procedure also yields unbiased estimates:
+
+2000
+
+529
+
+n- 1
+t- 100
+
+bias
+stdev
+rmse
+
+200
+
+EQ(•;)
+
+[.�.
+[
+
+r
+}JRn
+
+f(x;)w; (x;)
+
+2:.: t(xj)
+
+XjEB;
+
+]
+
+bias
+stdev
+rmse
+
+500
+
+bias
+stdev
+
+l
+
+rmse
+
+p(x )
+� Ctjj q(xi ) tt(dxi )
+q(x,)
+
+1000
+
+bias
+stdev
+rmse
+
+L f(xj)p(xj) Ctij tt(dx;)
+1JRn XjEB;
+
+2000
+
+bias
+stdev
+rmse
+
+n-3
+t- 100
+
+bias
+stdev
+rmse
+
+(see appendix)
+
+200
+
+1JRn
+
+f(xj)p(xj)
+
+{
+Jmn
+
+f(xj)p(xj) tt(dxj)
+
+L
+
+x;EBj
+
+rmse
+
+500
+
+bias
+stdev
+
+EP(x)f(x)
+
+The only significant step in this derivation (4; changing the
+order of integration) requires an argument that depends on
+measure theoretic details, and is given in the appendix.
+Thus, we have a general procedure for conducting explicit
+searches in continuous spaces (in a controlled fashion) that
+yields unbiased estimates.
+
+7
+
+bias
+stdev
+
+Ctij tt(dxj)
+
+Continuous experiments
+
+To verify that our continuous greedy importance sampler
+is in fact correct, we ran a series of simple experiments
+to determine that the bias was zero (up to sampling error).
+Figure 2 demonstrates this both for a one dimensional and
+three dimensional problem. (In fact, these results are for the
+indirect versions of the importance sampling procedures,
+which technically are biased since they use the estimator
+given in Figure 3. However, our results show that this bias
+can quickly become negligible, and we have found that the
+indirect estimator significantly reduces variance for both
+regular and greedy importance sampling. Therefore we re­
+port only these results here.)
+To gain an understanding of how effective greedy impor­
+tance sampling performs relative to state of the art tech­
+niques on continuous problems, we then conducted a series
+of simple experiments meant to challenge standard meth­
+ods. Again, given the (relative) unbiasedness of the can­
+didate methods, the main issue is to assess the variance of
+the estimators. To measure the performance of the vari­
+ous techniques, we report root mean squared error (rmse),
+absolute bias, and standard deviation over 1000 repetitions
+
+rmse
+
+1000
+
+bias
+stdev
+rmse
+
+2000
+
+bias
+stdev
+rmse
+
+DS
+
+GIS
+
+IS
+
+Met
+
+HMC
+
+0.003
+0.068
+0.068
+0.004
+0.050
+0.050
+0.001
+0.032
+0.032
+0.000
+0.022
+0.022
+0.001
+0.016
+0.016
+
+0.003
+0.052
+0.052
+0.022
+0.032
+0.039
+0.001
+0.023
+0.023
+0.000
+0.016
+0.016
+0.000
+0.011
+0.011
+
+0.010
+0.092
+0.093
+0.005
+0.066
+0.066
+0.002
+0.040
+0.040
+0.001
+0.029
+0.029
+0.001
+0.021
+0.021
+
+0.197
+1.068
+1.086
+0.084
+0.793
+0.798
+O.D28
+0.187
+0.189
+0.010
+0.131
+0.131
+0.008
+0.072
+0.073
+
+0.292
+0.249
+0.383
+0.293
+0.244
+0.381
+0.293
+0.242
+0.381
+0.294
+0.241
+0.380
+0.293
+0.242
+0.381
+
+0.001
+0.118
+0.118
+0.003
+0.086
+0.086
+0.002
+0.056
+0.056
+0.000
+0.039
+0.039
+0.000
+0.028
+0.028
+
+0.324
+0.539
+0.629
+0.164
+0.394
+0.427
+0.056
+0.241
+0.247
+0.033
+0.160
+0.163
+0.008
+0.111
+0.112
+
+0.863
+1.319
+1.576
+0.363
+0.834
+0.909
+0.113
+0.441
+0.455
+0.076
+0.287
+0.297
+0.030
+0.204
+0.206
+
+2.806
+7.031
+7.570
+0.621
+1.673
+1.784
+0.296
+0.901
+0.948
+0.123
+0.383
+0.402
+0.060
+0.189
+0.198
+
+0.961
+0.313
+1.011
+0.961
+0.306
+1.009
+0.962
+0.302
+1.009
+0.962
+0.301
+1.008
+0.963
+0.300
+1.008
+
+Table 2: Continuous experiments: Scaling in estimation
+sample size t. Distributions are Gaussians of dimension
+n = 1 and n = 3.
+1000 repetitions. J-lP = J-lQ = 0,
+I:p =I, I:Q = 62 !, f(x) = -log(p(x)).
+n
+1
+
+bias
+stdev
+rmse
+
+2
+
+bias
+stdev
+rmse
+
+3
+
+bias
+stdev
+rmse
+
+5
+
+bias
+stdev
+rmse
+
+10
+
+bias
+stdev
+rmse
+
+15
+
+bias
+stdev
+rmse
+
+DS
+
+GIS
+
+IS
+
+Met
+
+HMC
+
+0.001
+0.023
+0.023
+0.000
+0.030
+0.030
+0.000
+0.039
+0.039
+0.001
+0.050
+0.050
+0.000
+0.072
+0.072
+0.001
+0.180
+0.180
+
+0.000
+0.016
+0.016
+0.026
+0.065
+0.070
+0.033
+0.160
+0.163
+0.237
+0.373
+0.442
+0.732
+0.620
+0.959
+1.019
+0.896
+1.358
+
+0.001
+0.029
+0.029
+0.012
+0.099
+0.100
+0.062
+0.298
+0.304
+1.442
+1.614
+2.164
+18.85
+6.470
+19.93
+68.80
+15.22
+70.46
+
+0.017
+0.121
+0.122
+0.051
+0.272
+0.277
+0.125
+0.379
+0.399
+0.421
+0.956
+1.044
+2.026
+2.124
+2.936
+11.82
+12.47
+17.18
+
+0.294
+0.241
+0.380
+0.609
+0.293
+0.676
+0.962
+0.300
+1.008
+1.748
+0.268
+1.769
+1.996
+0.278
+2.016
+4.008
+0.157
+4.011
+
+Table 3: Continuous multi-dimensional experiments: Scal­
+ing in dimension n . Distributions are multivariate Gaus­
+sians. 1000 repetitions with estimation samples of size
+1000. J-lP = J-lQ = 0, I:p = I, I:Q = 62!, f(x) =
+
+-log(p(x)).
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS 2000
+
+530
+
+DS
+n- 1
+
+GIS
+
+IS
+
+DS
+
+Met
+
+GIS
+
+IS
+
+t
+
+rmse
+
+Met
+
+Gibbs
+
+rmse
+
+�Q =3�I
+
+0.050
+
+0.058
+
+0.047
+
+0.20
+
+100
+
+25
+
+241
+
+254
+
+257
+
+322
+
+62
+
+0.050
+
+0.039
+
+0.066
+
+0.80
+
+200
+
+17
+
+233
+
+253
+
+256
+
+317
+
+0.050
+
+0.037
+
+0.081
+
+3.79
+
+300
+
+15
+
+223
+
+250
+
+256
+
+316
+
+0.049
+
+0.036
+
+0.092
+
+9.58
+
+500
+
+12
+
+213
+
+249
+
+256
+
+315
+
+0.049
+
+0.034
+
+0.103
+
+21.8
+
+700
+
+lO
+
+205
+
+247
+
+256
+
+315
+
+1000
+
+8
+
+184
+
+243
+
+256
+
+314
+
+1500
+
+7
+
+175
+
+238
+
+256
+
+314
+
+2000
+
+6
+
+165
+
+235
+
+256
+
+314
+
+3000
+
+5
+
+154
+
+225
+
+256
+
+314
+
+g2
+122
+
+152
+n=5
+
+rmse
+
+�Q =3� I
+
+0.111
+
+0.579
+
+0.85
+
+0.63
+
+62
+
+0.112
+
+0.441
+
+5.15
+
+5.01
+
+g2
+122
+
+0.110
+
+0.499
+
+13.5
+
+25.1
+
+0.106
+
+0.911
+
+25.1
+
+71.1
+
+152
+
+0.109
+
+1.140
+
+42.0
+
+155
+
+�Q =3' I
+
+0.153
+
+1.46
+
+4.98
+
+1.84
+
+62
+
+0.147
+
+0.88
+
+30.5
+
+17.2
+
+g2
+122
+
+0.150
+
+2.50
+
+74.0
+
+71.4
+
+0.142
+
+4.66
+
+133
+
+177
+
+0.138
+
+6.04
+
+210
+
+371
+
+rmse
+
+n= 10
+
+152
+
+Table 4: Continuous multi-dimensional experiments: Scal­
+ing in dimension n as proposal distribution Q is widened.
+Distributions are multivariate Gaussians. 1000 repetition­
+s with estimation samples of size 200. J-!P = J-!Q = 0,
+
+�P = I, f(x) = -log(p(x)).
+
+of a given problem. The methods we compared here were
+greedy importance sampling (GIS), direct sampling from
+the target distribution (DS), standard importance sampling
+(IS), Gibbs sampling, Metropolis sampling (Met), and Hy­
+brid Monte Carlo (HMC) [Nea93, Nea96]. For Metropo­
+lis sampling we used a Gaussian proposal distribution with
+covariance �met = I/2, and for GIS we set the step-size
+f = 1, walk-length m = IO n , and b = n/2.6, where n is
+the dimension of the problem.
+To test GIS on higher dimensional problems, we investigat­
+ed a series of multivariate Gaussian problems where the re­
+lationship between P, Q and f was varied. Here we used a
+fixed target function f(x) = -log(p(x)) (and hence were
+estimating the differential entropy of the target distribution
+P [CT91] ). Table 3 shows that GIS can scale up effectively
+in the number of dimensions, and seems to handle multi­
+dimensional problems quite well in this simple setting. In
+fact, Table 3 shows that the advantage demonstrated by GIS
+actually appears to grow with dimensionality.
+We also ran a series of experiments that varied the width of
+the proposal distribution Q. Table 4 shows that weakening
+Q damaged the performance of importance sampling (pre­
+dictably), while the greedy search seemed to mitigate the
+effects of a poor Q to the extent that its detrimental effects
+are significantly diminished.
+Next, to scale up to a slightly more complex task we con­
+sidered a distribution P that was a mixture of Gaussians
+while keeping Q unimodal. In this case, we once again find
+that GIS performs reasonably well. Table 5 shows that GIS
+exhibits good performance on this problem and appears to
+
+Table 5: Mixture of Gaussians experiment: Scaling in sampie size t. Target distribution is a mixture of two bivariate
+Gaussians, proposal distribution is a single bivariate Gaussian. 1000 repetitions. J-!Po = J-!Q = [0; 0], J-!P1 = (16; 16],
+�P; =I, �Q = 62I.
+Particle filter
+
+IS
+
+GIS
+
+bias
+
+2.7731
+
+1.0764
+
+0.8712
+
+stdev
+
+1.2107
+
+0.1079
+
+0.2134
+
+rmse
+
+3.0259
+
+1.0818
+
+0.8970
+
+Table 6: Dynamic probabilistic inference: Estimated value
+of final state given first six observations. 500 repetitions.
+
+be converging faster than the other methods as the sample
+size is increased.
+Finally, to attempt a more significant study, we applied
+GIS to an inference problem in graphical models: recov­
+ering the hidden state sequence from a dynamic proba­
+bilistic model, given a sequence of observations. Here
+we considered a simple Kalman filter model which had
+one state variable and one observation variable per time­
+step, and used the conditional distributions Xt IXt-1 "'
+N(xt-1. a;), ZtiXt ,...... N(xt, a�) and initial distribu­
+tion X1 ,...... N(O, a;). The problem was to infer the val­
+ue of the final state variable Xt given the observations
+z1, zz, . . , Zt. Table 6 again demonstrates that GIS has a
+sizeable advantage over standard importance sampling. (In
+fact, the greedy approach can be applied to "particle filter­
+ing" [IB96, KKR95] to obtain further improvements on this
+task, but space bounds preclude a detailed discussion.)
+.
+
+8
+
+Conclusions
+
+We have introduced a new approach to reducing the vari­
+ance of importance sampling that is provably unbiased in
+the multidimensional and continuous cases. Our experi­
+mental results, although limited to simple synthetic prob­
+lems, do suggest the bare plausibility of the approach. It
+appears that, by capturing a moderate size sample of inde­
+pendent high weight points, greedy importance sampling
+is able to outperform methods that are unlikely to observe
+such points by chance. Demonstrating the true effective­
+ness of the approach on real problems remains to be done.
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS
+
+For future work, an important research issue is to perfor­
+m a variance analysis of the various procedures to analyt­
+ically determine their relative advantages. An alternative
+approach to variance reduction is to use stratified sampling
+[Bou94]. This is an orthogonal approach to the method pur­
+sued in this paper, and incorporating stratified sampling in a
+greedy search scheme remains an interesting direction for
+future research. Another approach to variance reduction,
+specific to inference in Bayesian networks, is to modify the
+proposal distribution and weighting scheme as individual
+variables are sampled in the network [CHM96]. Incorpo­
+rating these ideas might also be a fruitful direction.
+
+A
+
+Appendix
+
+Let B; be the finite set of points visited by the greedy search
+procedure when starting at point x;; let Bj be the finite set
+of starting points that reach xj; and let B be the relation
+(x;,Xj) E B iff the greedy search process, starting at x;,
+reaches Xj. We wish to show that for a function h(x;,Xj)
+we can switch the order of integration
+
+1JRn
+
+L
+
+x;EBj
+
+531
+
+reach x j via the search mechanism. Partition A into a finite
+collection of equivalence classes At. A2,...,Ax, where the
+points in each equivalence class share the same predecessor
+tree topology. 3 That is, the trees in an equivalence class are
+just shifted versions of one another; sharing the same pat­
+tern of axis parallel, fixed step size search offsets. Note that
+there can only be a finite number of distinct tree topologies
+given a bounded search depth.
+For a given set of equivalent destination points, Ak, con­
+sider the shifted pre-images of Ak corresponding to the n­
+odes of the tree, Ak1,Ak2• ...,AkL· Note that these sets
+are disjoint, because the size of Ak 's containing cube, A, is
+smaller than the search step size t.
+Now consider the measure that gets assigned to the desti­
+nation set Ak given the a-weighted measures that are as­
+signed to the initiating sets Akt
+
+L
+
+L fl;(Akt) CY.kl
+
+l=l
+L
+
+LJJ;(Ak) CY.k£
+
+L h(x;,Xj) CY.ij p(dx;)
+1JRn XjEB;
+=
+
+2000
+
+l=l
+
+since p;(Akt) = p;(Ak) by shift invariance
+
+h(x;,xj)CY.ijJJ(dxj)
+
+l=l
+
+where JJ is Lebesgue measure on mn.
+
+fl;(Ak)
+
+Before addressing the main question, we first consider the
+underlying measures on the spaces X; = !Rn, Xj = !Rn,
+2
+and X; x Xj = IR n. Let p; ( ) denote the Lebesgue mea­
+sure on X;. For each initiating point x; we have a condi­
+tional measure given by
+
+since I::�=l akl = 1 by construction.
+
+·
+
+(
+Pili Xj I x;)
+
+=
+
+{ a;j
+0
+
+if(x;,xj)
+
+E
+
+B
+
+otherwise
+
+Note that p; and /Jjli will define a unique joint measure flij
+on X; x Xj via the (generalized) product measure theorem
+[Ash72, Theorem 2.6.2] (assuming benign technical con­
+ditions on B). Although this joint measure might seem a
+bit peculiar, since p; is Lebesgue measure and Pili is a dis­
+crete measure with "impulses" at xj E B; of weight a;j, it
+nevertheless gives a well defined measure on X; x Xj.
+We will now show that starting with a uniform measure fli
+on initiating points x; and passing through the weighted
+search process, the result will still be a uniform measure flj
+on destination points xj. That is, the marginal measure flj
+on Xj satisfies flj(A) = p;(A) for all Borel sets A, and
+hence is also Lebesgue measure.
+For any hypercube A C Xj with edge length
+less than the step size t:, flj(A) = p;(A).
+
+Lemma 1
+
+Consider some destination point xj E A. This
+point will have a predecessor tree of initiating points that
+
+Proof
+
+Therefore, since pj(Ak)
+haveJJj(A) = fl;(A).
+
+p;(Ak) fork = 1, ... ,K we
+
+0
+
+From the lemma it quickly follows that flj(A) = fl;(A) for
+any Borel set A, and hence flj = fli.
+Now note that the conditional measure on X; given Xj is
+if (x;,Xj) E B
+otherwise
+Thus, we have that for any joint event A;
+
+x
+
+Aj
+
+where fli and J-lj are both Lebesgue measure and flili and
+J-lijj are as given above. This establishes what we require
+of the underlying measures.
+Finally, returning to the original integration problem, by the
+(generalized) Fubini's theorem [Ash72, Theorem 2.6.4] we
+3
+
+Technically we require each Ak to be a Borel set, which im­
+
+poses another benign technical restriction on the given task.
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS 2000
+
+532
+
+have that for a function h(x;,Xj) (again, satisfying broad
+technical conditions)
+
+1JRn
+
+2:
+
+x;EB;
+
+h(x;, Xj) aij p;(dx;)
+
+;
+}rJRn }rJRn h(x ,Xj) J.lj(i(dxjlx;) J.l;(dx;)
+
+[FD94]
+
+R. Fung and B. Del Favero. Backward simula­
+tion in Bayesian networks. In UAI, 1994.
+
+[Fre98]
+
+B. Frey. Graphical Models for Machine Learn­
+ing and Digital Communication. MIT Press,
+Cambridge, MA, 1998.
+
+[Gew89]
+
+J. Geweke. Baysian inference in econometric
+models using Monte Carlo integration. Econo­
+metrica, 57: 1317-1339, 1989.
+
+by definition of J.lili
+
+}rJR2 n h(x;,Xj) J.lij(dx;,dxj)
+by Fubini's theorem
+
+}rJRn }rJRn h(x;,Xj) J.li(j(dx;jXj) J.lj(dxj)
+
+[GRS96] W. Gilks, S. Richardson, and D. Spiegelhalter.
+Markov chain Monte Carlo in practice. Chap­
+man and Hall, 1996.
+[Hen88]
+
+M. Henrion.
+Propagating uncertainty in
+Bayesian networks by probabilistic logic sam­
+pling. In Uncertainty in Artificial Intelligence
+2. Elsevier, 1988.
+
+[IB96]
+
+M. Isard and A. Blake. Coutour tracking by s­
+tochastic propagation of conditional density. In
+ECCV, 1996.
+
+by Fubini's theorem
+
+1JRn
+
+2:
+
+x;EB;
+
+h(x;,xj) a;j J.lj(dxj)
+
+by definition of J.li(j
+where both p; and J.li are Lebesgue measure. This gives
+the desired result.
+Acknowledgements
+
+Research supported by NSERC and MITACS.
+
+References
+
+[JGJS98] M. Jordan, Z. Ghahramani, T. Jaakkola, and
+L. Saul. An introduction to variational methods
+for graphical models. In Learning in Graphical
+Models. Kluwer, 1998.
+[KKR95] K. Kanazawa, D. Koller, and S. Russell. S­
+tochastic simulation algorithms for dynamic
+probabilistic networks. In UAI, 1995.
+
+[Ash72]
+
+R. Ash. Real Analysis and Probability. Aca­
+demic Press, San Diego, 1972.
+
+[Mac98]
+
+D. MacKay. Intro to Monte Carlo methods. In
+Learning in Graphical Models. Kluwer, 1998.
+
+[Bou94]
+
+R. Bouckaert. A stratified simulation scheme
+for inference in Bayesian belief networks. In
+UAI, 1994.
+
+[Nea93]
+
+R. Neal. Probabilistic inference using Markov
+chain Monte Carlo methods. 1993.
+
+[Nea96]
+
+R. Neal. Bayesian Learning for Neural Net­
+works. Springer, New York, 1996.
+
+[Pea88]
+
+J. Pearl. Probabilistic Reasoning in Intelligence
+Systems. Morgan Kaufmann, 1988.
+
+[Rot93]
+
+D. Roth. On the hardness of approximating ap­
+proximate reasoning. In IJCAI, 1993.
+
+[Rub81]
+
+R. Rubinstein. Simulation and the Monte Carlo
+Method. Wiley, New York, 1981.
+
+[Sch99]
+
+D. Schuurmans. Greedy importance sampling.
+In NIPS-12, 1999.
+
+[SP90]
+
+R. Shacter and M. Peot. Simulation approaches
+to general probabilistic inference in belief net­
+works. In Uncertainty in Artificial Intelligence
+5. Elsevier, 1990.
+
+[Tan93]
+
+M. Tanner. Tools for statistical inference: Meth­
+ods for exploration of posterior distributions
+and likelihood functions. Springer, New York,
+1993.
+
+[CHM96] J. Cano, L. Hernandez, and S. Moral. Impor­
+tance sampling algorithms for the propagation
+of probabilities in belief networks. Internal J of
+Approx Reason, 15:77-92, 1996.
+[Coo90]
+
+G. Cooper. The computational complexity of
+probabilistic inference using Bayesian belief
+networks. Artif Intell, 42:393-405, 1990.
+
+[CT91]
+
+T. Cover and J. Thomas. Elements of Informa­
+tion Theory. Wiley, New York, 1991.
+
+[DL93]
+
+P. Dagum and M. Luby. Approximating proba­
+bilistic inference in Bayesian belief networks is
+NP-hard. Artif Intell, 60:141-153, 1993.
+
+[DL97]
+
+P. Dagum and M. Luby. An optimal approxi­
+mation algorithm for Bayesian inference. Artif
+Intell, 93: 1-27, 1997.
+
+[Eva91]
+
+M. Evans. Chaining via annealing. Ann Statist,
+19:382-393, 1991.
+
+

@@ -1,0 +1,1280 @@
+We start by describing hold’em style poker games in general terms, and then give detailed descriptions of the casino
+game Texas hold’em along with a simplified research game
+called Leduc hold’em for which game theoretic results are
+known. We formally define our probabilistic model and
+show how the posterior over opponent strategies can be
+computed from observations of play. Using this posterior
+to exploit the opponent is non-trivial and we discuss three
+different approaches for computing a response. We have
+implemented the posterior and response computations in
+both Texas and Leduc hold’em, using two different classes
+of priors: independent Dirichlet and an informed prior provided by an expert. We show results on the performance of
+these Bayesian methods, demonstrating that they are capable of quickly learning enough to exploit an opponent.
+
+2 Poker
+There are many variants of poker.1 We will focus on hold
+’em, particularly the heads-up limit game (i.e., two players
+with pre-specified bet and raise amounts). A single hand
+consists of a number of rounds. In the first round, players are dealt a fixed number of private cards. In all rounds,
+1
+A more thorough introduction of the rules of poker can be
+found in [2].
+
+1
+r
+
+c
+
+2
+f
+
+r
+
+2
+c
+
+r
+
+1
+f
+
+c
+
+1
+c
+
+f
+
+r
+
+c
+
+2
+f
+
+c
+
+Figure 1: An example decision tree for a single betting
+round in poker with a two-bet maximum. Leaf nodes with
+open boxes continue to the next round, while closed boxes
+end the hand.
+some fixed number (possibly zero) of shared, public board
+cards are revealed. The dealing and/or revealing of cards is
+followed by betting. The betting involves alternating decisions, where each player can either fold (f), call (c), or raise
+(r). If a player folds, the hand ends and the other player
+wins the pot. If a player calls, they place into the pot an
+amount to match what the other player has already placed
+in the pot (possibly nothing). If a player raises, they match
+the other player’s total and then put in an additional fixed
+amount. The players alternate until a player folds, ending
+the hand, or a player calls (as long as the call is not the first
+action of the round), continuing the hand to the next round.
+There is a limit on the number of raises (or bets) per round,
+so the betting sequence has a finite length. An example
+decision tree for a single round of betting with a two-bet
+maximum is shown in Figure 1. Since folding when both
+players have equal money in the pot is dominated by the
+call action, we do not include this action in the tree. If
+neither player folds before the final betting round is over,
+a showdown occurs. The players reveal their private cards
+and the player who can make the strongest poker hand with
+a combination of their private cards and the public board
+cards wins the pot.
+Many games can be constructed with this simple format
+for both analysis (e.g., Kuhn poker [7] and Rhode Island
+hold’em [9]) and human play. We focus on the commonly
+played variant, Texas hold ’em, along with a simplified and
+more tractable game we constructed called Leduc hold ’em.
+Texas Hold ’Em. The most common format for hold ’em
+is “Texas Hold’em”, which is used to determine the human
+world champion and is widely considered the most strategically complex variant. A standard 52-card deck is used.
+There are four betting rounds. In the first round, the players
+are dealt two private cards. In the second round (or flop),
+three board cards are revealed. In the third round (turn)
+
+and fourth round (river), a single board card is revealed.
+We use a four-bet maximum, with fixed raise amounts of
+10 units in the first two rounds and 20 units in the final two
+rounds. Finally, blind bets are used to start the first round.
+The first player begins the hand with 5 units in the pot and
+the second player with 10 units.
+Leduc Hold ’Em. We have also constructed a smaller
+version of hold ’em, which seeks to retain the strategic elements of the large game while keeping the size of the game
+tractable. In Leduc hold ’em, the deck consists of two suits
+with three cards in each suit. There are two rounds. In the
+first round a single private card is dealt to each player. In
+the second round a single board card is revealed. There is
+a two-bet maximum, with raise amounts of 2 and 4 in the
+first and second round, respectively. Both players start the
+first round with 1 already in the pot.
+Challenges. The challenges introduced by poker are
+many. The game involves a number of forms of uncertainty,
+including stochastic dynamics from a shuffled deck, imperfect information due to the opponent’s private cards, and,
+finally, an unknown opponent. These uncertainties are individually difficult and together the difficulties only escalate.
+A related challenge is the problem of folded hands, which
+amount to partial observations of the opponent’s decisionmaking contexts. This has created serious problems for
+some opponent modelling approaches and our Bayesian approach will shed some light on the additional challenge that
+fold data imposes. A third key challenge is the high variance of payoffs, also known as luck. This makes it difficult
+for a program to even assess its performance over short periods of time. To aggravate this difficulty, play against human opponents is necessarily limited. If no more than two
+or three hundred hands are to be played in total, opponent
+modelling must be effective using only very small amounts
+of data. Finally, Texas hold’em is a very large game. It has
+on the order of 1018 states [1], which makes even straightforward calculations, such as best response, non-trivial.
+
+3 Modelling the Opponent
+We will now describe our probabilistic model for poker. In
+all of the following discussion, we will assume that Player 1
+(P1) is modelling its opponent, Player 2 (P2), and that all
+incomplete observations due to folding are from P1’s perspective.
+3.1 Strategies
+In game theoretic terms, a player makes decisions at information sets. In poker, information sets consist of the
+actions taken by all players so far, the public cards revealed
+so far, and the player’s own private cards. A behaviour
+strategy specifies a distribution over the possible actions
+
+for every information set of that player. Leaving aside the
+precise form of these distributions for now, we denote P1’s
+complete strategy by α and P2’s by β.
+We make the following simplifying assumptions regarding
+the player strategies. First, P2’s strategy is stationary. This
+is an unrealistic assumption but modelling stationary opponents in full-scale poker is still an open problem. Even the
+most successful approaches make the same assumption or
+use simple methods such as decaying histories to accommodate opponent drift. However, we believe this framework can be naturally extended to dynamic opponents by
+constructing priors that explicitly model changes in opponent strategy. The second assumption is that the players’ strategies are independent. More formally, P (α, β) =
+P (α)P (β). This assumption, implied by the stationarity,
+is also unrealistic. Hower, modelling opponents that learn,
+and effectively deceiving them, is a difficult task even in
+very small games and we defer such efforts until we are
+sure of effective stationary opponent modelling. Finally,
+we assume the deck is uniformly distributed, i.e., the game
+is fair. These assumptions imply that all hands are i.i.d.
+given the strategies of the players.
+
+3.3 Probability of Observations
+Suppose a hand is fully observed, i.e., a showdown occurs.
+The probability of a particular showdown hand Hs occurring given the opponent’s strategy is, 2
+
+P (Hs |β)
+= P (C, D, R1:k , A1:k , B1:k |β)
+= P (D|C)P (C)
+
+k
+Y
+
+
+i=1
+
+= P (D|C)P (C)
+
+k
+Y
+
+
+i=1
+
+= pshowcards
+
+k
+Y
+
+P (Bi |D, R1:i , A1:i , B1:i−1 , β)
+P (Ai |C, R1:i , A1:i−1, B1:i−1 )
+P (Ri |C, D, R1:i−1 )
+αYi ,C,Ai βZi ,D,Bi 
+P (Ri |C, D, R1:i−1 )
+
+αYi ,C,Ai βZi ,D,Bi
+
+i=1
+
+∝
+
+k
+Y
+
+βZi ,D,Bi ,
+
+i=1
+
+3.2 Hands
+The following notation is used for hand information. We
+consider a hand, H, with k decisions by each player. Each
+hand, as observed by an oracle with perfect information, is
+a tuple H = (C, D, R1:k , A1:k , B1:k ) where,
+• C and D denote P1 and P2’s private cards,
+
+where for notational convenience, we separate the information sets for P1 (P2) into its public part Yi (Zi ) and its
+private part C (D). So,
+
+Yi = (R1:i , A1:i−1 , B1:i−1 )
+Zi = (R1:i , A1:i , B1:i−1 ).
+
+• Ri is the set (possibly empty) of public cards dealt
+before either player makes their ith decision, and
+• Ai and Bi denote P1 and P2’s ith decisions (fold, call
+or raise).
+We can model any limit hold’em style poker with these
+variables. A hand runs to at most k decisions. The fact
+that particular hands may have fewer real decisions (e.g., a
+player may call and end the current betting round, or fold
+and end the hand) can be handled by padding the decisions
+with specific values (e.g., once a player has folded all subsequent decisions by both players are assumed to be folds).
+Probabilities in the players’ strategies for these padding decisions are forced to 1. Furthermore, the public cards for a
+decision point (Ri ) can be the empty set, so that multiple
+decisions constituting a single betting round can occur between revealed public cards. These special cases are quite
+straightforward and allow us to model the variable length
+hands found in real games with fixed length tuples.
+
+In addition, αYi ,C,Ai is the probability of taking action Ai
+in the information set (Yi , C), dictated by P1’s strategy,
+α. A similar interpretation applies to the subscripted β.
+pshowcards is a constant that depends only on the number of
+cards dealt to players and the number of public cards revealed. This simplification is possible because the deck
+has uniform distribution and the number of cards revealed
+is the same for all showdowns. Notice that the final unnormalized probability depends only on β.
+Now consider a hand where either player folds. In this
+case, we do not observe P2’s private cards, D. We must
+marginalize away this hidden variable by summing over all
+possible sets of cards P2 could hold.
+
+2
+Strictly speaking, this should be P (H|α, β) but we drop the
+conditioning on α here and elsewhere to simplify the notation.
+
+The probability of a particular fold hand Hf occurring is,
+P (Hf |β)
+= P (C, R1:k , A1:k , B1:k |β)
+X
+
+k
+Y
+
+
+P (Bi |D, R1:i , A1:i , B1:i−1 , β)
+i=1 P (Ai |C, R1:i , A1:i−1 , B1:i−1 )
+D
+
+P (Ri |C, D, R1:i−1 )
+" k
+#
+k
+Y
+XY
+= pfoldcards (Hf )
+βZi ,D0 ,Bi
+αYi ,C,Ai
+
+= P (C)
+
+P (D|C)
+
+D 0 i=1
+
+i=1
+
+∝
+
+k
+XY
+
+βZi ,D0 ,Bi
+
+We start with a simple objective,
+αBBR = argmax EH|O V (H)
+α
+X
+= argmax
+V (H)P (H|O, α)
+α
+
+= argmax
+α
+
+= argmax
+α
+
+D 0 i=1
+
+3.4 Posterior Distribution Over Opponent Strategies
+Given a set O = Os ∪ Of of observations, where Os are the
+observations of hands that led to showdowns and Of are the
+observations of hands that led to folds, we wish to compute
+the posterior distribution over the space of opponent strategies. A simple application of Bayes’ rule gives us,
+P (O|β)P (β)
+P (O)
+Y
+P (β) Y
+=
+P (Hs |β)
+P (Hf |β)
+P (O)
+Hs ∈Os
+Hf ∈Of
+Y
+Y
+P (Hs |β)
+P (Hf |β)
+∝ P (β)
+
+P (β|O) =
+
+Hs ∈Os
+
+Hf ∈Of
+
+4 Responding to the Opponent
+Given a posterior distribution over the opponent’s strategy
+space, the question of how to compute an appropriate response remains. We present several options with varying
+computational burdens. In all cases we compute a response
+at the beginning of the hand and play it for the entire hand.
+4.1 Bayesian Best Response
+The fully Bayesian answer to this question is to compute
+the best response to the entire distribution. We will call this
+the Bayesian Best Response (BBR). The objective here is
+to maximize the expected value over all possible hands and
+opponent strategies, given our past observations of hands.
+
+X
+
+V (H)
+
+H∈H
+
+X
+
+V (H)
+
+X
+
+V (H)
+
+H∈H
+
+= argmax
+α
+
+where D0 are sets of cards that P2 could hold given the
+observed C and R (i.e., all sets D that do not intersect with
+C ∪ R), and pfoldcards (Hf ) is a function that depends only on
+the number of cards dealt to the players and the number of
+public cards revealed before the hand ended. It does not
+depend on the specific cards dealt or the players’ strategies.
+Again, the unnormalized probability depends only on β.
+
+H∈H
+
+H∈H
+
+Z
+Z
+
+Z
+
+P (H|α, β, O)P (β|O)
+β
+
+P (H|α, β, O)P (O|β)P (β)
+β
+
+β
+
+
+
+P (H|α, β, O)P (β)
+k
+Y Y
+βZi ,D,Bi
+Hs ∈Os i=1
+
+k
+Y XY
+
+βZi ,D,Bi
+
+Hf ∈Of D 0 i=1
+
+
+
+where H is the set of all possible perfectly observed hands
+(in effect, the set of all hands that could be played). Although not immediately obvious from the equation above,
+one algorithm for computing Bayesian best response is a
+form of Expectimax [8], which we will now describe.
+Begin by constructing the tree of possible observations in
+the order they would be observed by P1, including P1’s
+cards, public cards, P2’s actions, and P1’s actions. At the
+bottom of the tree will be an enumeration of P2’s cards for
+both showdown and fold outcomes. We can backup values
+to the root of the tree while computing the best response
+strategy. For a leaf node the value should be the payoff to
+P1 multiplied by the probability of P2’s actions reaching
+this leaf given the posterior distribution over strategies. For
+an internal node, calculate the value from its children based
+on the type of node. For a P2 action node or a public card
+node, the value is the sum of the children’s values. For a
+P1 action node, the value is the maximum of its children’s
+values, and the best-response strategy assigns probability
+one to the action that leads to the maximal child for that
+node’s information set. Repeat until every node has been
+assigned a value, which implies that every P1 information
+set has been assigned an action. More formally Expectimax
+computes the following value for the root of the tree,
+X
+R1
+
+max
+A1
+
+X
+B1
+
+···
+
+X
+
+Z Y
+k
+
+Rk
+
+max
+Ak
+
+XX
+Bk
+
+V (H)
+
+D
+
+βZi ,D,Bi P (O|β)P (β)
+
+β i=1
+
+This corresponds to Expectimax, with the posterior inducing a probability distribution over actions at P2’s action
+nodes.
+It now remains to prove that this version of Expectimax
+
+computes the BBR. This will be done by showing that,
+Z
+X
+V (H) P (H|α, β, O)P (O|β)P (β)
+max
+α
+
+≤
+
+β
+
+H∈H
+
+X
+R1
+
+max
+A1
+
+Z Y
+k
+
+X
+
+X
+
+···
+
+B1
+
+Rk
+
+max
+Ak
+
+XX
+Bk
+
+V (H)
+
+D
+
+βZi ,D,Bi P (O|β)P (β)
+
+β i=1
+
+P
+First we rewrite maxα H as,
+XXXX
+XXX
+,
+···
+max · · · max
+α(1)
+
+α(k)
+
+Rk Ak Bk
+
+R1 A1 B1
+
+D
+
+where maxα(i) is a max over the set of all parameters inPα that govern
+Pthe ith decision. Then, because
+maxx y f (x, y) ≤ y maxx f (x, y), we get,
+max · · · max
+α(1)
+
+α(k)
+
+≤ max · · · max
+≤
+
+XXX
+
+X
+
+α(k)
+
+X
+
+XX
+
+max
+α(1)
+
+···
+
+R1 A1 B1
+
+α(2)
+
+R1
+
+XXXX
+
+R1
+
+max
+α(1)
+
+···
+
+max
+α(k)
+
+D
+
+XXXX
+
+···
+
+Rk Ak Bk
+
+A1 B1
+
+X
+Rk
+
+A1 B1
+
+Rk Ak Bk
+
+XX
+
+D
+
+XXX
+Ak Bk
+
+D
+
+Second, we note that,
+Z
+P (H|α, β, O)P (O|β)P (β)
+β
+
+∝
+
+k
+Y
+
+αYi ,C,Ai
+
+Z Y
+k
+
+βZi ,D,Bi
+
+β i=1
+
+i=1
+
+We can distribute parameters from α to obtain,
+X
+X
+X
+···
+αY1 ,C,A1
+max
+R1
+
+X
+Rk
+
+α(1)
+
+max
+α(k)
+
+Z Y
+k
+
+B1
+
+A1
+
+X
+
+αYk ,C,Ak
+
+XX
+Bk
+
+Ak
+
+D
+
+βZi ,D,Bi P (O|β)P (β)
+
+parameter setting is to take the highest-valued action with
+probability 1.
+Computing the integral over opponent strategies depends
+on the form of the prior but is difficult in any event. For
+Dirichlet priors (see Section 5), it is possible to compute
+the posterior exactly but the calculation is expensive except for small games with relatively few observations. This
+makes the exact BBR an ideal goal rather than a practical
+approach. For real play, we must consider approximations
+to BBR.
+One straightforward approach to approximating BBR is to
+approximate the integral over opponent strategies by importance sampling using the prior as the proposal distribution:
+Z
+X
+P (H|α, β̃, O)P (O|β̃)
+P (H|α, β, O)P (O|β)P (β) ≈
+β
+
+β̃
+
+where the β̃ are sampled from the prior, β̃ ∼ P (β). More
+effective Monte Carlo techniques might be possible, depending on the prior used.
+Note that P (O|β̃) need only be computed once for each β̃,
+while the much smaller computation P (H|α, β̃, O) must
+be computed for every possible hand. The running time
+of computing the posterior for a strategy sample scales
+linearly in the number of samples used in the approximation and the update is constant time for each hand
+played. This tractability facilitates other approximate response techniques.
+4.2 Max A Posteriori Response
+An alternate goal to BBR is to find the max a posteriori
+(MAP) strategy of the opponent and compute a best response to that strategy. Computing a true MAP strategy for
+the opponent is also hard, so it is more practical to approximate this approach by sampling a set of strategies from the
+prior and finding the most probable amongst that set. This
+sampled strategy is taken to be an estimate of a MAP strategy and a best response to it is computed and played. MAP
+is potentially dangerous for two reasons. First, if the distribution is multimodal, a best response to any single mode
+may be suboptimal. Second, repeatedly playing any single
+strategy may never fully explore the opponent’s strategy.
+
+β i=1
+
+=
+
+X
+R1
+
+max
+A1
+
+Z Y
+k
+
+X
+B1
+
+···
+
+X
+Rk
+
+max
+Ak
+
+XX
+Bk
+
+D
+
+βZi ,D,Bi P (O|β)P (β),
+
+β i=1
+
+which is the Expectimax algorithm. This last step is possible because parameters in α must sum to one over all possible actions at a given information set. The maximizing
+
+4.3 Thompson’s Response
+A potentially more robust alternative to MAP is to sample
+a strategy from the posterior distribution and play a best
+response to that strategy. As with BBR and MAP, sampling
+the posterior directly may be difficult. Again we can use
+importance sampling, but in a slightly different way. We
+sample a set of opponent strategies from the prior, compute
+their posterior probabilities, and then sample one strategy
+according to those probabilities.
+
+P (β̃i |H, O)
+P (i) = P
+j P (β̃j |H, O)
+
+This was first proposed by Thompson [10]. Thompson’s
+has some probability of playing a best-response to any nonzero probability opponent strategy and so offers more robust exploration.
+
+5 Priors
+As with all Bayesian approaches, the resulting performance
+and efficiency depends on the choice of prior. Obviously
+the prior should capture our beliefs about the strategy of
+our opponent. The form of the prior also determines the
+tractability of (i) computing the posterior, and (ii) responding with the model. As the two games of hold ’em are considerably different in size, we explore two different priors.
+Independent Dirichlet. The game of Leduc hold ’em is
+sufficiently small that we can have a fully parameterized
+model, with well-defined priors at every information set.
+Dirichlet distributions offer a simple prior for multinomials, which is a natural description for action probabilities.
+Any strategy (in behavioural form) specifies a multinomial
+distribution over legal actions for every information set.
+Our prior over strategies, which we will refer to as an independent Dirichlet prior, consists of independent Dirichlet distributions for each information set. We are using
+Dirichlet(2, 2, 2) distributions, whose mode is the multinomial (1/3, 1/3, 1/3) over fold, call, and raise.
+Informed. In the Texas hold ’em game, priors with independent distributions for each information set are both
+intractable and ineffective. The size of the game virtually
+guarantees that one will never see the same information set
+twice. Any useful inference must be across information
+sets and the prior must encode how the opponent’s decisions at information sets are likely to be correlated. We
+therefore employ an expert defined prior that we will refer
+to as an informed prior.
+The informed prior is based on a ten dimensional recursive
+model. That is, by specifying values for two sets of five
+intuitive parameters (one set for each player), a complete
+strategy is defined. Table 1 summarizes the expert defined
+meaning of these five parameters. From the modelling perspective, we can simply consider this expert abstraction to
+provide us with a mapping from some low-dimensional parameter space to the space of all strategies. By defining a
+density over this parameter space, the mapping specifies a
+resulting density over behaviour strategies, which serves as
+our prior. In this paper we use an independent Gaussian
+distribution over the parameter space with means and variances chosen by a domain expert. We omit further details
+
+Table 1: The five parameter types in the informed prior
+parameter space. A corresponding set of five are required
+to specify the opponent’s model of how we play.
+Parameter
+Description
+Fraction of opponent’s strength distribution that must be exceeded to
+r0
+raise after $0 bets (i.e., to initiate
+betting).
+Fraction of opponent’s strength disr1
+tribution that must be exceeded to
+raise after >$0 bets (i.e., to raise).
+Fraction of the game-theoretic opb
+timal bluff frequency.
+Fraction of the game-theoretic opf
+timal fold frequency.
+t
+Trap or slow-play frequency.
+of this model because it is not the intended contribution of
+this paper but rather a means to demonstrate our approach
+on the large game of Texas hold’em.
+
+6 Experimental Setup
+We tested our approach on both Leduc hold’em with the
+Dirichlet prior and Texas hold’em with the informed prior.
+For the Bayesian methods, we used all three responses
+(BBR, MAP, and Thompson’s) on Leduc and the Thompson’s response for Texas (BBR has not been implemented
+for Texas and MAP’s behaviour is very similar to Thompson’s, as we will describe below). For all Bayesian methods, 1000 strategies were sampled from the prior at the beginning of each trial and used throughout the trial.
+We have several players for our study. Opti is a Nash (or
+minimax) strategy for the game. In the case of Leduc, this
+has been computed exactly. We also sampled opponents
+from our priors in both Leduc and Texas, which we will
+refer to as Priors. In the experiments shown, a new opponent was sampled for each trial (200 hands), so results
+are averaged over many samples from the priors. Both Priors and Opti are static players. Finally, for state-of-the-art
+opponent modelling, we used Frequentist, (also known as
+Vexbot) described fully in [3] and implemented for Leduc.
+All experiments consisted of running two players against
+each other for two hundred hands per trial and recording
+the bankroll (accumulated winnings/losses) at each hand.
+These results were averaged over multiple trials (1000 trials for all Leduc experiments and 280 trials for the Texas
+experiments). We present two kinds of plots. The first is
+simply average bankroll per number of hands played. A
+straight line on such a plot indicates a constant winning
+rate. The second is the average winning rate per number of hands played (i.e., the first derivative of the aver-
+
+700
+
+5
+BBR
+MAP
+Thompson
+Freq
+Opti
+Best Response
+
+600
+
+BBR
+MAP
+Thompson
+Freq
+Opti
+Best Response
+
+4.5
+
+4
+
+Average Winning Rate
+
+Average Bankroll
+
+500
+
+400
+
+300
+
+3.5
+
+3
+
+2.5
+
+2
+
+200
+1.5
+100
+1
+
+0
+
+0.5
+0
+
+20
+
+40
+
+60
+
+80
+
+100
+120
+Hands Played
+
+140
+
+160
+
+180
+
+200
+
+0
+
+20
+
+40
+
+60
+
+80
+
+100
+120
+Hands Played
+
+140
+
+160
+
+180
+
+200
+
+Figure 2: Leduc hold’em: Avg. Bankroll per hands played
+for BBR, MAP, Thompson’s, Opti, and Frequentist vs. Priors.
+
+Figure 3: Leduc hold’em: Avg. Winning Rate per hands
+played for BBR, MAP, Thompson’s, Opti, and Frequentist
+vs. Priors.
+
+age bankroll). This allows one to see the effects of learning more directly, since positive changes in slope indicate
+improved exploitation of the opponent. Note that winning
+rates for small numbers of hands are very noisy, so it is difficult to interpret the early results. All results are expressed
+in raw pot units (e.g., bets in the first and second rounds of
+Leduc are 2 and 4 units respectively).
+
+Figures 4 and 5 show bankroll and winning rate results
+for BBR, MAP, Thompson’s, Opti, and Frequentist versus
+Opti on Leduc hold’em. Note that, on average, a positive
+bankroll again Opti is impossible, although sample variance allows for it in our experiments. From these plots
+we can see that the three Bayesian approaches behave very
+similarly. This is due to the fact that the posterior distribution over our sample of strategies concentrates very rapidly
+on a single strategy. Within less than 20 hands, one strategy dominates the rest. This means that the three responses
+become very similar (Thompson’s is almost certain to pick
+the MAP strategy, and BBR puts most of its weight on the
+MAP strategy). Larger sample sizes would mitigate this
+effect. The winning rate graphs also show little difference
+between the three Bayesian players.
+
+7 Results
+7.1 Leduc Hold’em
+Figures 2 and 3 show the average bankroll and average winning rate for Leduc against opponents sampled from the
+prior (a new opponent each trial). For such an opponent, we
+can compute a best response, which represents the best possible exploitation of the opponent. In complement, the Opti
+strategy shows the most conservative play by assuming that
+the opponent plays perfectly and making no attempt to exploit any possible weakness. This nicely bounds our results
+in these plots. Results are given for Best Response, BBR,
+MAP, Thompson’s, Opti, and Frequentist.
+As we would expect, the Bayesian players do well against
+opponents drawn from their prior, with little difference between the three response types in terms of bankroll. The
+winning rates show that MAP and Thompson’s converge
+within the first ten hands, whereas BBR is more erratic
+and takes longer to converge. The uninformed Frequentist
+is clearly behind. The independent Dirichlet prior is very
+broad, admitting a wide variety of opponents. It is encouraging that the Bayesian approach is able to exploit even this
+weak information to achieve a better result. However, it is
+unfair to make strong judgements on the basis of these results since, in general, playing versus its prior is the best
+possible scenario for the Bayesian approach.
+
+Frequentist performs slightly worse than the Bayes approaches. The key problem with it is that it can form models of the opponent that are not consistent with any behavioral strategy (e.g., it can be led to believe that its opponent
+can always show a winning hand). Such incorrect beliefs,
+untempered by any prior, can lead it to fold with high probability in certain situations. Once it starts folding, it can
+never make the observations required to correct its mistaken belief. Opti, of course, breaks even against itself. On
+the whole, independent Dirichlet distributions are a poor
+prior for the Opti solution, but we see a slight improvement
+over the pure frequentist approach.
+Our final Leduc results are shown in Figure 6, playing
+against the Frequentist opponent. These results are included for the sake of interest. Because the Frequentist
+opponent is not stationary, it violates the assumptions upon
+which the Bayesian (and, indeed, the Frequentist) player
+are based. We cannot drawn any real conclusions from
+this data. It is interesting, however, that the BBR response is substantially worse than MAP or Thompson’s.
+
+10
+
+100
+
+0
+
+90
+80
+
+-10
+
+70
+
+Average Bankroll
+
+-20
+Average Bankroll
+
+BBR
+MAP
+Thompson
+Freq
+Opti
+
+-30
+-40
+-50
+
+60
+50
+40
+30
+
+-60
+
+20
+
+-70
+
+10
+
+BBR
+MAP
+Thompson
+Freq
+Opti
+
+-80
+
+0
+
+-90
+
+-10
+0
+
+20
+
+40
+
+60
+
+80
+
+100
+120
+Hands Played
+
+140
+
+160
+
+180
+
+200
+
+Figure 4: Leduc hold’em: Avg. Bankroll per hands played
+for BBR, MAP, Thompson’s, Opti, and Frequentist vs.
+Opti.
+
+0
+
+20
+
+40
+
+60
+
+80
+
+100
+120
+Hands Played
+
+140
+
+160
+
+180
+
+200
+
+Figure 6: Leduc hold’em: Avg. Bankroll per hands played
+for BBR, MAP, Thompson’s, and Opti vs. Frequentist.
+1
+BBR
+MAP
+Thompson
+Freq
+Opti
+
+0.9
+
+-0.2
+
+0.8
+0.7
+Average Winning Rate
+
+Average Winning Rate
+
+-0.3
+
+-0.4
+
+-0.5
+
+0.6
+0.5
+0.4
+0.3
+0.2
+
+-0.6
+0.1
+0
+
+-0.7
+BBR
+MAP
+Thompson
+Freq
+
+-0.1
+0
+
+20
+
+40
+
+-0.8
+0
+
+20
+
+40
+
+60
+
+80
+
+100
+120
+Hands Played
+
+140
+
+160
+
+180
+
+60
+
+80
+
+100
+120
+Hands Played
+
+140
+
+160
+
+180
+
+200
+
+200
+
+Figure 5: Leduc hold’em: Avg. Winning Rate per hands
+played for BBR, MAP, Thompson’s, Opti, and Frequentist
+vs. Opti.
+It seems likely that the posterior distribution does not converge quickly against a non-stationary opponent, leading
+BBR to respond to several differing strategies simulataneously. Because the prior is independent for every information set, these various strategies could be giving radically different advice in many contexts, preventing BBR
+from generating a focused response. MAP and Thompson’s necessarily generate more focused responses. We
+show winning rates in Figure 7 for the sake of completeness, with the same caveat regarding non-stationarity.
+7.2 Texas Hold’em
+Figure 8 show bankroll results for Thompson’s, Opti, and
+Frequentist versus opponents sampled from the informed
+prior for Texas hold’em. Here Thompson’s and Frequentist
+give very similar performance, although there is a small
+
+Figure 7: Leduc hold’em: Avg. Winning Rate per hands
+played for BBR, MAP, Thompson’s, and Opti vs. Frequentist.
+advantage to Thompson’s late in the run. It is possible that
+even with the more informed prior, two hundred hands does
+not provide enough information to effectively concentrate
+the posterior on good models of the opponent in this larger
+game. It may be that priors encoding strong correlations
+between many information sets are required to gain a substantial advantage over the Frequentist approach.
+
+8 Conclusion
+This research has presented a Bayesian model for hold’em
+style poker, fully modelling both game dynamics and opponent strategies. The posterior distribution has been
+described and several approaches for computing appropriate responses considered. Opponents in both Texas
+hold’em and Leduc hold’em have been played against using Thompson’s sampling for Texas hold’em, and approximate Bayesian best response, MAP, and Thompson’s for
+
+telligence, 134(1–2):201–240, 2002.
+
+300
+Thompson
+Freq
+Opti
+
+[3] Darse Billings, Aaron Davidson, Terrance Schauenberg, Neil Burch, Michael Bowling, Rob Holte,
+Jonathan Schaeffer, and Duane Szafron. Game Tree
+Search with Adaptation in Stochastic Imperfect Information Games. In Nathan Netanyahu and Jaap van
+den Herik Yngvi Bjornsson, editor, Computers and
+Games’04. Springer-Verlag, 2004.
+
+250
+
+Average Bankroll
+
+200
+
+150
+
+100
+
+50
+
+0
+0
+
+20
+
+40
+
+60
+
+80
+
+100
+120
+Hands Played
+
+140
+
+160
+
+180
+
+200
+
+[4] Fredrik A. Dahl. A reinforcement learning algorithm applied to simplified two-player Texas Hold’em
+poker. In Proceedings of the 12th European Conference on Machine Learning (ECML-01), pages 85–96,
+September 2001.
+
+Figure 8: Texas hold’em: Avg. Bankroll per hands played
+for Thompson’s, Frequentist, and Opti vs. Priors.
+
+[5] D. Koller and A. Pfeffer. Representations and solutions for game-theoretic problems. Artificial Intelligence, 94(1):167–215, 1997.
+
+Leduc hold’em. These results show that, for opponents
+drawn from our prior, the posterior captures them rapidly
+and the subsequent response is able to exploit the opponent, even in just 200 hands. On Leduc, the approach
+performs favourably compared with state-of-the-art opponent modelling techniques against prior-drawn opponents
+and a Nash equilibrium. Both approaches can play quickly
+enough for real-time play against humans.
+
+[6] K. Korb, A. Nicholson, and N. Jitnah. Bayesian
+poker. In Uncertainty in Artificial Intelligence, pages
+343–350, 1999.
+
+The next major step in advancing the play of these systems is constructing better informed priors capable of modelling more challenging opponents. Potential sources for
+such priors include approximate game theoretic strategies,
+data mined from logged human poker play, and more sophisticated modelling by experts. In particular, priors that
+are capable of capturing correlations between related information sets would allow for generalization of observations
+over unobserved portions of the game. Finally, extending
+the approach to non-stationary approaches is under active
+investigation.
+Acknowledgements
+We would like to thank Rob Holte, Dale Schuurmanns,
+Nolan Bard, and the University of Alberta poker group for
+their insights. This work was funded by the Alberta Ingenuity Centre for Machine Learning, iCore, and NSERC.
+
+References
+[1] D. Billings, N. Burch, A. Davidson, R. Holte, J. Schaeffer, T. Schauenberg, and D. Szafron. Approximating game-theoretic optimal strategies for full-scale
+poker. In Eighteenth International Joint Conference
+on Artificial Intelligence (IJCAI’2003), 2003.
+[2] D. Billings, A. Davidson, J. Schaeffer, and
+D. Szafron. The challenge of poker. Artificial In-
+
+[7] H. W. Kuhn. A simplified two-person poker. Contributions to the Theory of Games, 1:97–103, 1950.
+[8] Stuart Russell and Peter Norvig. Artificial Intelligence: A Modern Approach. Prentice Hall, Englewood Cliffs, NJ, 2003.
+[9] J. Shi and M. Littman. Abstraction models for game
+theoretic poker. In Computer Games’00. SpringerVerlag, 2001. To appear.
+[10] William R. Thompson. On the likelihood that one
+unknown probability exceeds another in view of the
+evidence of two samples. Biometrika, 25:285–294,
+1933.
+
+

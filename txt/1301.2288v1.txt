@@ -1,0 +1,2100 @@
+LERNER & PARR
+
+310
+
+UAI2001
+
+Inference in Hybrid Networks: Theoretical Limits and Practical Algorithms
+
+Uri Lerner
+
+Ronald Parr
+
+Computer Science Department
+Stanford University
+
+Computer Science Department
+Duke University
+
+uri@cs.stanford.edu
+
+parr@cs.duke.edu
+
+Abstract
+An important subclass of hybrid Bayesian networks
+
+Conditional Linear Gaussian
+(CLG) distributions- a distribution with a multivari­
+
+are those that represent
+
+ate Gaussian component for each instantiation of the
+
+discrete variables. In this paper we explore the prob­
+lem of inference in CLGs, and provide complexity re­
+sults for an important class of CLGs, which includes
+Switching Kalman Filters. In particular, we prove that
+even if the CLG is restricted to an extremely simple
+structure of a polytree, the inference task is NP-hard.
+Furthermore, we show that, unless P=NP, even ap­
+proximate inference on these simple networks is in­
+tractable.
+Given the often prohibitive computational cost of even
+approximate inference, we must take advantage of spe­
+cial domain properties which may enable efficient in­
+ference. We concentrate on the fault diagnosis domain,
+and explore several approximate inference algorithms.
+These algorithms try to find a small subset of Gaus­
+sians which are a good approximation to the full mix­
+ture distribution. We consider two Monte Carlo ap­
+proaches and a novel approach that enumerates mix­
+ture components in order of prior probability. We com­
+pare these methods on a variety of problems and show
+that our novel algorithm is very promising for large,
+hybrid diagnosis problems.
+
+1
+
+Introduction
+
+Bayesian networks are a useful modeling language for
+complex stochastic domains. Lately there has been a grow­
+ing interest in hybrid models, which contain both discrete
+and continuous variables. An important class of hybrid
+models is conditional linear Gaussian ( CLG) Bayesian net­
+works. In these models, the conditional distribution of the
+continuous variables given the discrete ones is a multivari­
+ate Gaussian. CLG models are popular in a variety of ap­
+plications, in both static and dynamic settings. Example
+applications include target tracking [1], where the contin­
+uous variables represent the state of one or more targets
+and the discrete variables might model the maneuver type;
+visual tracking, (e.g., [13]) where the continuous variables
+
+represent the head, legs, and torso position of a person and
+the discrete variables the type of movement; fault diag­
+nosis [10], where discrete events can affect a continuous
+process; and speech recognition [7, ch.9], where a discrete
+phoneme determines a distribution over the acoustic signal.
+The first part of the paper deals with the complexity of in­
+ference in CLG models. Although CLG models are com­
+monly used, surprisingly little formal work has been done
+on analyzing their complexity. For the purposes of our
+analysis, we assume we are working with finite precision
+continuous variables and need to answer queries involv­
+ing discrete variables. Thus, we are interested in solving
+questions ofthe form, "given some evidence E, what is the
+probability distribution of some discrete variable A?", or
+phrased as a decision problem, "given some evidence E,
+is the probability that a discrete variable D takes on a the
+value d in the range ( l, h)?"
+
+Obviously CLGs are a generalization of discrete Bayesian
+Networks, and therefore must be at least as difficult. How­
+ever, it is not obvious whether network structures which are
+easy in the discrete case remain easy for CLGs. We prove
+this is not the case: Even for network structures for which
+inference in the discrete case is easy, inference for CLGs
+can still be NP-hard. In particular, we consider a very re­
+stricted class of CLG models, where the network structure
+is a polytree and every continuous variable has at most one
+(binary) discrete ancestor, and prove that even in this ex­
+traordinarily simple case, inference is NP-hard. After es­
+tablishing that exact inference is NP-hard for these simple
+networks, we consider the question of approximate infer­
+ence. We prove that unless P=NP there does not exist a
+polynomial time approximate inference algorithm with ab­
+solute error smaller than 0 .5. The class of networks we con­
+sider include Switching Kalman Filters [1, 6] as a special
+case; thus, we provide the first formal complexity results
+for this important class of models.
+The second part of the paper addresses the question of
+how to perform inference in CLG models in light of our
+complexity results. The commonly used approach for
+CLG models is the algorithm proposed by Lauritzen [8, 9],
+
+UAI 2001
+
+LERNER & PARR
+
+which is an extension of the standard clique tree algorithm.
+Not surprisingly, since inference in CLGs is NP-hard even
+for simple networks, the size of the resulting clique tree is
+often exponential, leading to unacceptable performance.
+In many domains, it is reasonable to expect that even
+though an exact answer might require an exponential num­
+ber of Gaussians (possibly one for every assignment of the
+discrete variables), a small subset of these Gaussians is suf­
+ficient to produce a reasonable approximation. As we shall
+discuss, we believe that this is the case in a surprisingly
+large number of applications. Of course, the difficult part
+is efficiently generating this relatively small set. We con­
+sider two Monte Carlo approaches: stochastic sampling
+with likelihood weighting and MCMC. We also consider
+a novel approach that generates the Gaussians in order of
+their prior likelihood. We discuss the advantages and dis­
+advantages of these three approaches and present some em­
+pirical results on a synthetic Bayesian Network.
+To test our algorithm on a real-life domain we apply our
+techniques to the problem of tracking in Dynamic Bayesian
+Networks in the fault diagnosis domain. Here we need to
+track the state of the system where some discrete events
+(e.g., whether some fault happened) are hidden. The clas­
+sical algorithms for this problem assume that there is only a
+small number of possible discrete events at every time step,
+and therefore do not scale up well for large systems. We
+show how our techniques, in combination with techniques
+described in [ 10], can circumvent this difficulty, leading to
+a practical algorithm for complex hybrid dynamic systems.
+2
+
+Preliminaries
+
+Bayesian networks (BNs) are a compact graphical rep­
+resentation of probability distributions. Let X1, ... , Xn
+be a set of random variables, each of which takes val­
+ues in some domain Dom(X;) . A graphical model over
+X 1, . . ., X n consists of two components: a directed acyclic
+graph whose nodes correspond to the random variables
+X1 , . . . 1 Xn, and a set of conditional probability distri­
+butions (CPDs) P(X; I Parents(Xi)). The structure of
+the network encodes a set of conditional independence as­
+sumptions that, together with the CPDs, uniquely define a
+joint distribution over X 1, . .., Xn. We use .6. to denote
+the discrete variables in the model and r to denote the con­
+tinuous ones.
+
+The semantics allows for any type of CPD, involving both
+discrete and continuous variables. One particularly impor­
+tant subclass of these hybrid Bayesian networks are con­
+ditional linear Gaussian (CLG) models. In a CLG model,
+a discrete node cannot have continuous parents. Further­
+more, the CPD of a continuous node is a conditional lin­
+ear Gaussian, i.e., for every combination of the discrete
+parents the node is a weighted linear sum of its continu­
+ous parents with some Gaussian noise. More formally, if a
+
+311
+
+node X has continuous parents {Y1, . . . 1 Y;,} and discrete
+parents D = {D1, . . . , Di}, we define its CPD using the
+following parameters: for every d E Dom(D), we have
+ad,o, ... , ad,k and o} The CPD is the defined as:
+P( X I
+
+y,
+
+d)
+
+=
+
+Normal( ad,o +
+
+k
+
+L
+i=:;l
+
+ad,iYi;
+
+0'�).
+
+It can be easily shown that any CLG model represents a
+joint distribution with one multivariate Gaussian over the
+continuous variables for every instantiation of discrete vari­
+ables. Conversely, any such distribution can be represented
+as a CLG model. We call each one of the possible discrete
+instantiations and the resulting Gaussian a hypothesis. Note
+that, in general, the number of hypotheses is exponential in
+the number of discrete variables.
+3
+
+NP-hardness of simple CLGs
+
+The simplest class of discrete Bayesian Networks are poly­
+trees, in which inference can be done in linear time. There­
+fore, it is important to ask whether we can perform infer­
+ence efficiently in polytree CLGs. In this section we prove
+that unless P
+N P the answer is that we cannot. As
+stated before, we consider queries over some discrete vari­
+able given some evidence. Our goal is to analyze polytree
+CLGs where every continuous variable has at most one dis­
+crete ancestor, but we start with a simpler case:
+=
+
+Theorem 1 Inference in CLG models with binary discrete
+
+variables and a polytree graphical structure is NP-hard.
+Furthermore, unless P=NP there does not exist any polyno­
+mial approximate inference algorithm with absolute error
+smaller than 0.5.
+Proof: Consider the NP-complete Subset Sum problem [5].
+We are given a setS
+{ s1, s2, .. . , sn}. where each ele­
+ment s; E S is a non-negative integer, and a positive inte­
+ger L. The question is whether there exists a subsetS' � S
+such that the sum of elements inS' is exactly L.
+=
+
+We reduce this problem to a polytree CLG model, shown
+in Fig. l(a). The discrete variables (shown as squares) are
+binary over {0, 1} and have a uniform prior distribution.
+The CPDs of the continuous variables are:
+
+Fori= 2,3, . . .,n:
+
+P(Xi) =
+P(Y)
+
+=
+
+{
+{
+
+Normal(X;_1, 0'2) 2
+Normal(Xi-1 + s;, 0' )
+Normal(L- v'271, 1)
+Normal(Xn, 0'2)
+
+A;= 0
+A;= 1
+
+B= 0
+B 1
+=
+
+LERNER & PARR
+
+312
+
+��
+
+�®-0
+
+�
+
+(a )
+
+Figure
+
+We choose
+
+O"
+
+1
+
+=
+
+(b )
+
+1: Networks used for the NP-hardness reductions
+
+C is a constant which we
+
+J2Cn(ntl).
+
+will later use, but for now we can simply assume
+We now prove that there exists a subset
+
+S'
+
+1/Y = L) > 0.5.
+uniform P(B = 1/Y = L) > 0.5 iff:
+
+First, we compute
+
+=
+
+2.
+
+P(Y = L/B = 1) =
+
+Since P(B) is
+
+LP(a"/B = 1)P(Y = L/B = 1,a") =
+
+= L/B = 1)
+P(Y = L/B = 0)
+
+P(Y
+=
+
+C
+
+not exist, we get that 'v'a" S(an) is an integer different from
+L, therefore /L- S(a")/ 2: 1.
+
+whose elements
+
+sum up to L iff P(B =
+
+P(B = 1/Y = L)
+P(B = 0/Y = L)
+
+>
+
+1
+
+� 1
+
+�
+
+P(Y = L/B = 0):
+
+l
+
+V2if
+
+(
+
+2n
+
+exp - (L- ffn- L ?
+2
+
+Let ak
+
+( at, a2, . . . , ak) be
+(A1, A2, ... , Ak) (a; E {0, 1}).
+
+E7=1
+
+1
+exp
+2" . )21r(n + 1k
+
+2"_!_ v'2Cn
+ex
+..j2i p
+
+P(Y = L/B = 0) =
+_
+_
+
+UAI2001
+
+)
+
+=
+
+�1V2Jren
+
+2(n + 1)o-2
+
+1
+(
++
+2 n 1)o-2
+
+)
+
+=
+
+�
+
+v'2Cn e-Cn
+y'21r
+
+Therefore:
+
+P(Y = L/B = 1)
+J2Cnen
+v'2Cn
+____:.
+_:_ __:_ <
+= e(C-l)n
+Cn
+P(Y = L/B = 0)
+e
+__
+
+some assignment to
+
+a;si. It is easy to show that for
+
+(
+
+( - (L- S(an))2 )
+
+S(ak)
+1 � i � n:
+
+Also, let
+
+_
+
+<
+
+1
+
+We can now explain the use of the constant C. By making
+
+C big enough, P( B = 1/Y
+
+=
+
+L)
+
+gets arbitrarily close to 1
+
+if S' exists and arbitrarily close to 0 if it does not. We could
+then use an approximation algorithm with an absolute er­
+
+3S' c; S whose ele­
+P(B = 1/Y = L) > 0.5.
+Define a" as a;= 1 iff s; E S'. Clearly S(a") = L, and
+P(Y = L/B = 1, a")= Normal(£, (n + 1) 0"2)
+For the first direction, we assume that
+
+.
+
+ments sum to L, and show that
+
+P(Y = L/B = 1) 2: P(Y = L,a"/B = l) =
+
+<
+
+0.5 to answer the decision problem: Construct
+P(B = 1/Y = L) � o;-'
+or P(B = 1 !Y = L) 2: 0 �±' and answer "yes" iff
+the algorithm answers that P(B = 1/Y = L) 2: 0.5.
+ror of
+
+E
+
+a problem instance where
+
+Therefore, unless P=NP, there does not exist a polynomial
+time approximate inference algorithm with an absolute er­
+ror smaller than
+
+0.5. I
+
+Theorem 2 Inference CLG models with binary discrete
+variables and a polytree graphical structure is NP-hard
+
+1
+
+2"
+
+1
+
+J21r(n +
+
+1)0"
+
+even
+
+,f'iCn
+2"v'2"1f
+
+any polynomial approximate inference algorithm with ab­
+
+solute error smaller than 0.5.
+
+Therefore:
+
+P(Y = L/B = 1)
+e"
+P(Y = L/B = 0) 2: 2" � >
+P(B = 1/Y
+
+=
+
+L)
+
+<
+
+.
+
+Proof: The reduction is very similar to the previous proof,
+but we have to use a different network stru cture
+
+l
+
+the structure shown in Fig. l(b).
+
+Conversely, we assume that there does not exist such
+Sand show that
+
+if every continuous variable has at most one discrete
+
+ancestor. Furthermore, unless P=NP there does not exist
+
+0.5.
+
+Since
+
+S'
+
+S' c;
+does
+
+variables are binary with uniform distribution, and:
+
+P(Xo)= Normal(O, u2)
+
+We use
+
+Again, all the discrete
+
+UAI2001
+
+For
+
+LERNER & PARR
+
+1�i�
+
+n:
+
+two Gaussians. Thus, it is somewhat more surprising that
+the seemingly benign structure of the continuous variables
+
+P( X; )= Normal(M, u� )
+;
+P(Z ) =
+
+P(Y) =
+
+{
+{
+
+can produce an NP-hard decision problem. Perhaps even
+
+Normal(X;- X;-t,o"i)
+
+Normal(X;- X;-t- s;,
+Normal(L- v'2n,
+Normal(Xn, u2)
+
+l:j sj.
+
+W here M =
+
+1)
+
+more important, and less obvious, is the fact that even the
+simplest type of approximate inference (an absolute error
+
+2
+u1)
+
+smaller than 0.5) is intractable.
+
+B =0
+B= 1
+
+Corollary 3 Finding the most likely instantiation of the
+
+discrete variables given some evidence is NP-hard.
+
+Our query is P(BIZ" = 0", Y = L),
+
+where zk = ok is a notation for Zt = 0, ..., Z�c =0.
+We now show how to choose the u's. Intuitively, 0"2 should
+be very big, representing a very weak prior on the X�c 's,
+while
+
+u1
+
+313
+
+should be very small. Then, with the evidence
+
+Z�.: = 0, X�c will have a distribution which is very close
+to Normal(X�c-t,
+
+ku2)
+
+or Normal(Xk-l + s�c,
+
+ku2),
+
+de­
+
+A;. If we could get exactly this
+
+pending on the value of
+
+distribution, we would be in the same situation as in Theo­
+
+Proof: A direct result of the reductions: Had we known
+the most likely instantiation of the discretes, it would have
+been easy to determine whether
+or
+
+B
+
+was more likely to be
+
+0
+
+1 given the evidence. I
+
+We conclude with a technical issue which is of interest
+mostly from a complexity theory point of view.
+
+Subset
+
+Sum is pseudo-polynomial; thus, it is possible that our NP­
+hardness results do not hold if all the parameters are poly­
+
+�. To show that this is not the case, we can
+
+rem 1 and we could use the same proof. Although we can­
+
+nomial in n and
+
+not get exactly to the desired distribution we can get very
+
+is NP-complete in the strong sense. We are given a set
+
+close. Namely, we can get exactly the desired variance and
+be within c:: away from the mean. For
+
+ul2 =
+
+€
+
+-
+
+n· M
+
+;
+
+2
+
+u2
+
+2
+
+=u
+
+(
+
+1+
+
+By induction we can prove that lfl
+
+f
+
+2
+a-
+
+> 0 we choose:
+
+2
+0"1
+
+)
+
+:::; k � n
+
+use the Subset Product problem
+
+T
+
+=
+
+{ t1, tz, ...
+
+elements t;
+
+,
+
+[5, problem SP14] which
+
+tn} and a number M, where all the set
+
+E T and
+
+M
+
+are positive integers. The ques­
+
+tion is whether there exists a subset
+
+T1 <;;;;
+
+product of elements in T1 is exactly M.
+
+T such that the
+
+The main idea is to use the same reduction as in Theorem
+
+We set s;
+
+=
+
+log(t;)
+
+1.
+
+and L = log(M), and the question be­
+
+comes whether we can find a subset of the s; 's whose sum
+
+is exactly L (note that these are not integers; thus, we do
+
+l?t�c -
+
+S(ak)l :::;
+
+:f.
+
+not have an instance of the Subset Sum problem). There
+We are now almost in the
+
+are two technical issues that need to be addressed. First,
+
+distribution Normal( S(an),
+) it has the distribution
+Normal(?tn,nu2), where l?tn- S(a")l � t.lf we choose
+
+sure that it is enough to represent them with precision that
+
+W here
+
+situation of Theorem
+
+c::
+
+=
+
+u,
+
+1. Instead of P( Xn Ia") having the
+nu 2 ,
+
+we can easily modify the inequalities from Theo­
+
+rem I and prove the desired result.
+
+I
+
+the numbers s; and
+
+L are not rational, and we must make
+
+requires polynomial space. Second, the difference between
+the s; 's is not fixed to
+
+1
+
+as before, and can become quite
+
+small. In particular, a subset of the
+up to L can get very close to
+
+It is interesting to note that the fact that exact inference
+in polytree CLGs is NP-hard, is not very surprising by it­
+self. Possibly the most popular CLG models are Switching
+
+Kalman Filters: See [I] for a good introduction to these
+
+models, and
+
+[6] for an up-to-date literature survey. If we
+
+unroll all the time steps of a Switching Kalman Filter, we
+get exactly the network in Fig. I(a). The continuous vari­
+able at the end of the chain has all the discrete variables as
+
+s;
+
+'s which does not sum
+
+L (unlike the situation before
+
+where the difference between L and any subset which did
+not sum up to
+
+L was at least 1). Fortunately, this differ­
+
+ence is bounded from below by a polynomial in
+
+� . so we
+
+can modify the proof from Theorem 1 to work in this case,
+using means which are polynomials in
+which are polynomials in
+
+log n and variances
+
+� ·The exact proof does not pro­
+
+vide any further insights into CLGs; thus, we omit it from
+this paper.
+
+ancestors, and therefore its distribution is a mixture of ex­
+ponentially many Gaussians. It was therefore reasonable to
+assume that inference in this case would be intractable, al­
+though no formal proof was known. The results in this pa­
+per go beyond giving a formal proof for this intuition. First,
+
+4
+4.1
+
+Approximate Inference Algorithms
+Domain Properties
+
+we concentrate on queries involving just discrete variables
+
+Given that inference for very simple CLGs is NP-hard, and
+
+whose posterior distribution is easy to represent (but not to
+
+that even approximate inference is not tractable, one might
+
+infer). Second, in Theorem 2, the prior distribution of ev­
+
+conclude that inference in CLG models is a lost cause.
+
+, ery continuous variable is either a Gaussian or a mixture of
+
+Fortunately, many real life domains have special features
+
+314
+
+LERNER & PARR
+
+UAI2001
+
+6 of A.
+
+Note that each instantiation 6 defines single
+
+which can be exploited by fast algorithms. In this paper
+
+ations
+
+we concentrate on the fault diagnosis domain. In this do­
+
+multivariate Gaussian distribution over
+
+main, it it is often the case that a relatively small subset
+
+P(qA, Qr,X I d) =
+
+of the mixture is a good approximation for the entire mix­
+ture. Thus, although we may need to deal with an expo­
+
+L
+
+nential number of hypotheses to answer a query exactly,
+we can get good approximations if we can find a small sub­
+
+OEDom(A)
+
+set which approximates the mixture well. Unfortunately,
+
+Fortunately, the problem of finding the most likely hy­
+
+of faults are much more likely than the others. We note
+that this situation is not unique to the fault diagnosis do­
+main. For example, in visual tracking based on past ev­
+idence many hypotheses are unlikely (e.g., given that two
+people are having a conversation, it is unlikely that one per­
+son would start running).
+
+P(fJ I d)P(Qr, X I 6)
+
+fiEDom(A),q""' r:;J>
+
+potheses is simpler in the fault diagnosis domain. Since
+the probability of failures is relatively small, we know a
+
+P(fJ I d)P (qA, Qr, X I 6, d) =
+
+L
+
+from Corrolary 3, even this problem is NP-hard.
+
+priori that hypotheses which correspond to small numbers
+
+Qr, thus:
+
+Where
+
+qA � 6 means that qA agrees with 6 on the values
+
+of the variables they share. The resulting expression is easy
+
+to compute: P(o I d) involves only discrete inference and
+P ( Qr, X I 6) is a multivariate Gaussian. The problem, of
+course, is the summation over all discrete combinations.
+
+First, observe that we do not need to sum over all the dis­
+
+crete variables in the network. Instead, it is enough to sum
+
+over the discrete variables which determine the distribution
+
+We consider two Monte Carlo approaches to this prob­
+
+of the continuous variables, i.e., the direct parents of the
+
+lem: sampling and MCMC. It turns out that sampling and
+
+continuous nodes which we note as
+
+MCMC both have difficulty with fault diagnosis because
+faults are generally quite unlikely and they are not sampled
+frequently. To overcome this difficulty, we consider a novel
+algorithm that uses the low probability of faults to its ad­
+
+Adp· Thus, from now
+def
+c
+on we assume that a ranges only over A1 = QA U Adp·
+We can still use the same summation, where we simply per­
+form some different discrete inference for P( 6
+
+I d).
+
+vantage: Our algorithm tries to find a good approximation
+
+It is often the case that even summing just over A1 is infea­
+
+for the full set of hypotheses by first considering the hy­
+
+sible. We present three methods that attempt to find a small
+
+potheses which are more likely a priori (hypotheses with a
+
+subset of Gaussians which approximates the full sum. The
+
+small number of failures, or failures which tend to happen
+
+first method is based on sampling- we use the probability
+
+together). This idea of concentrating on likely hypotheses
+
+distribution of
+
+with a small number of faults is very natural, and was used
+
+and then use these samples as our subset of hypotheses. To
+
+in
+
+[3], although the probabilistic model there was discrete
+
+and some strong independence assumptions were made.
+
+P(A1 I d)
+
+to sample assignments for A1,
+
+do so, we create a clique tree over the discrete variables,
+set the evidence
+
+d and then sample from the tree, ignoring
+
+anything which is not in A1. One can view this method as
+
+static version of Rao Blackwellized Particle Filtering or
+[4]- we sample the discrete variables and solve the
+remaining continuous problem analytically.
+
+a
+
+4.2
+
+Monte Carlo Methods
+
+RBPF
+
+We begin by presenting a naive algorithm that enumerates
+all the hypotheses resulting in a mixture of Gaussians. We
+show that sampling and, later, our incremental algorithm,
+can be viewed as approximations of this naive algorithm.
+Formally,
+
+consider
+
+P(QA, Qr I d, x )
+
+the
+
+general
+
+query
+
+of the
+
+form
+
+The sampling method runs into problems when the prior
+probability mass of a very small number of hypotheses
+dominates all the rest.
+
+This is typical in fault diagnosis
+
+problems, where for reasonably reliable systems, the prior
+probability of the "no fault" hypothesis can be bigger than
+
+Qr, x
+
+99%. In this case, we might waste most of our computa­
+
+are continuous. Instead of answering the query directly, it
+
+tional resources by generating duplicate samples instead of
+
+is easier to compute P(QA,
+
+exploring other hypotheses. Indeed, for many systems this
+
+where
+
+QA, dare
+
+discrete and
+
+Qr, X I d). The result would
+be a mixture of Gaussians over {Qr, X} for every combi­
+nation of QA. We can then get the answer to the original
+
+esis with any reasonable number of samples. This means
+
+query by conditioning every Gaussian in the mixture on the
+
+that our system will fail precisely when it is needed the
+
+evidence
+
+x
+
+and adjusting the weight of the mixture compo­
+
+nent accordingly (i.e., multiply the weight by the probabil­
+ity of
+
+x
+
+given the multivariate Gaussian).
+
+P(qA, Qr, X I d)
+
+most: when a fault has actually occurred.
+The problem with this approach to sampling is that it gen­
+erates hypotheses using
+
+P(QA, Qr, X I d)
+
+we compute
+
+for every possible value
+
+of
+
+In order to compute
+
+approach will be unlikely to ever generate a fault hypoth­
+
+qA
+
+QA.
+
+We do that by explicitly enumerating the possible instanti-
+
+P(A1 I d),
+
+whereas ideally we
+
+wish to generate the hypotheses using their posterior dis­
+
+tribution P(A1
+
+I d, x )
+
+ways generate the
+
+(if we could do that, we would al­
+
+K most likely hypotheses a-posteriori).
+
+LERNER & PARR
+
+UA12001
+
+315
+
+"""'
+
+1,2
+
+�
+�
+
+MCMC ._.....
+SIITlplilll .........
+
+/---- --····
+I
+i
+
+O.Ji
+
+______ _......
+
+.......................
+
+...........
+
+I
+�
+
+·
+
+06
+
+l
+1
+•
+r
+
+0.4
+0.2
+
+...........
+.. .. .. .
+
+..
+:" ..
+.
+
+'�··.w
+
+,J'·
+
+-�·
+.. i'
+
+•
+
+j
+
+I
+
+SOOO
+
+0.6
+0.4
+
+··
+
+-
+
+·
+·-·- ------·---------·-· ··-······- ·-·-·
+
+0.2
+
+. ���--���--��-k_�_J
+o
+
+...
+
+0
+
+10000 150ClJ 10000 2SWU )OIXX) J� ..0000 4SOOO SOOOO
+
+... ...--·····
+
+......... ...............-""
+
+... ....... . ...
+······"·•··· ......... .
+
+100000
+MiltureCOl'I\I)Ofleatli
+
+(a)
+
+1 sum
+
+''"''''''''''-'''''
+
+200000
+
+(b)
+
+Figure 2: (a) Results on the Subset Sum Problem (b) Results on the unrolled five-tank network
+
+An alternative approach is to try sampling hypotheses from
+the true posterior distribution, using an MCMC approach,
+namely Gibbs sampling [11]. To do so, we need to find the
+conditional distribution of some discrete variable A; given
+the rest of the variables in � 1 and the continuous evidence.
+For some assignment A;
+a, let �1[Ai = a] be the as­
+signment A1 except that Ai = a. For every uch a we
+need to compute:
+:::::
+
+s
+
+P(�1[Ai = aJ \ d,�)
+
+e<
+
+P(A1[Ai = a],�\d) =
+
+4.4
+
+P(�1[Ai =a] I d)P(xiA1[Ai =a])
+The first term involves a discrete inference and the second
+involves just one Gaussian, defi ed by �1 [Ai =a]. It fol­
+lows that the transition probabilities can be computed effi­
+ciently. Thus, we can use Gibbs sampling to generate sam­
+ples from the correct posterior distribution P(A1 I d, � ) ,
+and then use these samples as our subset of hypotheses.
+n
+
+4.3
+
+Generating in order of prior likelihood
+
+A different approach to the problem of concentrated prior
+probability is to generate hypotheses deterministically in
+decreasing order of the probability P(�1 I d), w ithout any
+duplicates. With this method the algorith uses all its run
+time to consider as many distinct hypotheses as possible.
+Note that we can ignore all the continuous variables in the
+BN for the purposes of the enumeration: we only care about
+the discrete problem of enumerating from P(�1 I d).
+m
+
+The key subroutine of this method is an algorithm pre­
+sented in (12] for enumerating the J( most likely config­
+urations of a discrete BN given some evidence. The al­
+gorithm generates a clique tree and uses it to generate the
+configurations in an anytime fashion. The complexity of
+the algorithm is
+
+all the discrete variables. To do so, we need to create a
+clique tree just over �1. One way to do so is to run variable
+elimination without eliminating the variables from A1, and
+then build a clique tree from the remaining factors. Since
+this is done only once per network, and we assume the
+structure of the network is simple, this operation is rela­
+tively cheap. However, if the tree over A1 is too large, it is
+always possible to fall back and use the full clique tree to
+enumerate the full instantiations over�-
+
+O(IAI + Kn + K c log(K c)) where lA I is
+
+the size of the clique tree (overall number of table entries),
+cis the number of cliques, and n is the number of variables.
+
+The only difficulty in using this subroutine is the fact that
+we want to enumerate instantiations only of �1 ather than
+r
+
+Approximate inference discussion
+
+We conclude with a few gen eral comments. First, after we
+decide which hyp th eses are in our representative subset,
+we need to determine their weights. One way to do so is to
+compute the discrete likelihood for each hypothesis, multi­
+ply by the continuous evidence likelihood and then normal­
+ize (ignoring duplicate hypotheses). Another way, possible
+for the sampling and MCMC based approaches, is to give
+weights based on the number of times each hypothesis was
+sampled multiplied by the continuous evidence likelihood.
+The latter is unbiased, but the former reduces the variance
+because it removes some of the randomness associated with
+sampling. Our experiments show that setting the weights
+using the likelihoods works well in practice.
+o
+
+An important issue is bounding the error of our approxi­
+mation. One possible approach is to bound the probability
+mass of hypotheses which were not generated. This mass
+is the sum L6 P( 6 I d)P(X I 6) over 6 which were not
+generated. To bound this sum, we must bound the densities
+P(X I 6) (which may bebiggerthan 1). It is easy to bound
+these densities if the network is a polytree and X has just
+one variable by greedily minimizing the variance of every
+continuous variable in topological order. However, when
+the network is not a polytree or when X has more than one
+variable, we must consider the covariances between vari­
+ables, and the problem becomes more difficult: minimizing
+the variance of a single query variable over the discrete in­
+stantiations in general network structures is NP-bard. We
+hope to further address this problem in future work.
+
+LERNER & PARR
+
+316
+
+UAI2001
+
+subsystem 2: subsystem 3:subsystern 4: subsystem 5
+.
+'
+.
+
+P4
+
+P3
+
+P2
+
+PI
+
+.
+.
+.
+
+'
+
+PS
+
+c=) =�easurement
+(a)
+
+(b)
+
+Figure 3: (a) The five tank system (b) DBN model (two tanks only)
+
+So far, we assumed that the algorithm returns is a mixture
+
+that corresponded to a valid subset sum, and then queried
+
+of Gaussians for every instantiation of Q a. We can relax
+
+P(B
+
+this assumption by letting the algorithm return only a sin­
+
+that the correct value is extremely close to
+
+=
+
+1IY
+
+=
+
+L). The results are shown in Fig. 2(a). Note
+
+gle Gaussian for every instantiation of Q a, such that the
+
+Carlo algorithms are averaged over
+
+1. The Monte
+
+100 runs, while the plot
+
+Gaussian has the same first and second order moments as
+
+for the enumeration algorithm was computed analytically.
+
+the mixture (similar to Lauritzen's algorithm). In this case,
+
+Recall that all discrete hypotheses have the same probabil­
+
+there is no need to keep all the Gaussians in memory -
+
+ity in this model; thus, the actual time at which the correct
+
+after generating a Gaussian and conditioning it on the ev­
+
+hypothesis is generated will be uniformly distributed over
+
+idence we can collapse it with the previous Gaussians and
+
+the number of hypotheses. We can therefore compute ex­
+
+discard it, reducing the space complexity of our algorithm.
+Another assumption was that we had to generate some hy­
+
+potheses for every assignment to Qa. Alternatively, we
+
+can enumerate hypotheses globally, initially ignoring Q a,
+
+and then estimate the probability of these variables from the
+hypotheses we have generated. The former approach guar­
+antees that we get some hypotheses for every assignment to
+the discretes in qa, while the latter may be more efficient
+if some of these assignments are extremely unlikely.
+We conclude by comparing our algorithm with Lauritzen's
+algorithm. For simple networks our algorithm will enumer­
+ate all the hypotheses and will have the same complexity
+as Lauritzen's algorithm. In these cases, Lauritzen's algo­
+rithm is usually preferable, as it leads to more efficient im­
+plementation. However, for large networks our algorithm
+has two important advantages. First, it is an anytime algo­
+rithm- it can give some answer (albeit an approximate
+one) whenever we request it.
+
+The second advantage is
+
+space complexity: Lauritzen's algorithm performs strong
+triangulation, which forces all the direct parents to be in
+one clique, leading to exponentially sized cliques even for
+simple networks such as the networks in Fig.
+
+1. In con­
+
+trast, our storage requirements are dictated by the size of
+the query and are often exponentially smaller.
+
+pectation in the number of samples required to find the cor­
+rect hypothesis (we performed a few runs to confirm that
+the algorithm worked correctly). The main conclusion to
+draw from these experiments is that for uniformly likely
+discrete instantiations, enumeration is expensive but prefer­
+able to sampling. Note that we present the results as a func­
+tion of the number of samples generated: all three algo­
+rithms spent much more time in generating the Gaussians
+corresponding to the discrete assignment than the discrete
+assignment itself; thus, we get a similar graph where the X
+axis represents CPU time.
+We next considered a variant on this model that is more
+closely related to the diagnosis domain. Instead of a uni­
+form prior over discretes, we gave each discrete a proba­
+bility of
+
+0.999 and considered an L that corresponded to
+
+two such events, i.e., a sum of two of the si. In the fault
+
+diagnosis domain, this would correspond to two simulta­
+neous faults, a one in a million event. This may seem far­
+
+fetched, but it is not that unlikely in the lifetime of real
+system with a cycle time on the order of tenths of a second.
+We do not show a performance graph for this problem be­
+cause neither sampling nor MCMC where able to find any
+reasonable hypotheses after
+
+50000
+
+samples. Enumeration
+
+from the prior found the correct hypothesis and concluded
+
+P(B = liY
+
+=
+
+L)
+
+=
+
+1 by considering up to 100 hypothe­
+
+ses. This is because the fault probabilities impose a partial
+
+5
+
+ordering on hypotheses and all the "two failures hypothe­
+
+Results for static networks
+
+ses" are within the first
+
+100 elements of this order.
+
+We began by testing the algorithms on a network of the type
+
+Finally, we considered whether additional evidence would
+
+1. We considered the Subset Sum problem
+
+help the Monte Carlo methods catch up with the enumer-
+
+used in Theorem
+with
+
+10 binary variables, picked a value for
+
+L as evidence
+
+UAI 2001
+
+LERNER & PARR
+
+ation algorithm. We allowed sampling and MCMC to ob­
+serve variable
+
+X5 which, for the selected value of
+
+L, par­
+
+t itioned the problem in two halves, each containing a sin­
+gle subset element. This did not help sampling at all, but
+MCMC estimated
+
+P(B
+
+=
+
+1IY
+
+=
+
+L)
+
+=
+
+0.16
+
+after
+
+50000
+
+samples, a slight improvement. Enumeration from the prior
+does not take continuous evidence into account when gen­
+erating hypotheses, so its performance was unaffected.
+
+317
+
+As a final test for our algorithm, we turn our attention to
+inference in actual DBNs,
+works.
+
+rather than unrolled static net­
+
+The most common inference task in a DBN is
+
+to track the state of the system as it evolves, based on
+sequence of observations
+
+o1,
+
+. . .
+
+1
+, o •
+
+a
+
+More precisely, the
+
+goal is to maintain a belief state, which is the distribution
+
+P(X1 I o 1 ... , d).
+,
+
+Once we have the belief state for time
+
+t we can compute the new belief state for timet+ 1 by per­
+
+forming inference in the 2TBN, treated as a static network.
+
+Application to Dynamic Systems
+
+6
+
+If the system is large, keeping even one Gaussian for every
+possible combination of discrete variables in the belief state
+
+We hoped to evaluate these algorithms on a realistic, large,
+
+may be too expensive. Our algorithm can also be integrated
+
+static CLG Bayesian network, but we had difficulty finding
+
+effectively with the BK algorith m [2], which was adopted
+
+such a network (most likely because of the lack of efficient
+
+for hybrid systems
+
+inference algorithms). Instead, we turned to dynamic sys­
+
+fact that large systems are often composed of subsystems,
+
+tems, from which we can generate large and realistic static
+
+in [10]. The key idea is to exploit the
+
+and while the subsystems are correlated, the interaction be­
+
+BNs. Dynamic Bayesian Networks (DBNs) are an exten­
+
+tween them is often not so strong. The BK algorithm ap­
+
+sion of Bayesian networks to dynamic systems. In a DBN,
+
+proximates the true belief state via separate belief states
+
+time is partitioned into regular time slices. The state at each
+time slice is some value of the random variables
+
+transition model, representing
+
+xt.
+
+The
+
+over the subsystems. We then plug these belief states into
+the
+
+DBN and use inference to find the belief states over
+
+P(xt+1 I xt), and the ob­
+servation model, representing P( ot I xt ) are represented
+
+systems. We can easily apply our inference algorithm to
+
+using a BN fragment called a 2TBN. We can create large
+
+this task.
+
+,
+
+static Bayesian Networks from a DBN by considering the
+
+timet+ 1, accounting for the correlations between the sub­
+
+We modified
+
+the algorithm described in [ 10] to enumerate
+
+k time steps. Dynamic sys­
+
+hypotheses from the prior distribution. In these systems it
+
+domains for CLG models, where they can be applied to
+
+over time, and these results are presented Fig. 4 (a). We
+
+result of unrolling the network
+
+tems are, perhaps, one of the most natural and important
+such problems as visual tracking and fault diagnosis.
+
+is interesting to track the state of the continuous variables
+picked the following very challenging sequence of events:
+
+We evaluate the performance of sampling, MCMC and enu­
+
+t
+
+meration from the prior as applied to the diagnosis problem
+
+starts a negative drift; t
+
+shown in Fig. 3(a). The physical system consists of five wa­
+
+failures of
+
+ter tanks, connected by pipes, and includes measurements
+of the flows in three of the pipes. The continuous variables
+
+=
+
+5: c23 (conductance of the pipe between tanks 2 and 3)
+=
+
+10: simultaneous measurement
+
+F23 (flow between tanks 2 and 3) and F50 (flow
+out of tank 5); t = 13: c23 bursts; t = 17, c45 starts a
+negative drift; t = 23, C45 bursts; t = 25, C12 bursts. For
+
+represent flows, pressures, conductances and flow measure­
+
+this track, we show the belief state against ground truth for
+
+ments in the various pipes. The discrete variables represent
+
+three continuous variables:
+
+the various failure modes. Fig. 3(b) shows the DBN model
+
+in tank
+
+of the system (due to space considerations, the DBN de­
+scribes a system with two water tanks rather than five).
+
+1
+
+cl2. c45 and p5 (the pressure
+5). We also considered the probability of discrete
+
+variables, which tracked the true events correctly (we do
+not show those due to space considerations).
+
+We unrolled this DBN by three time slices and created a
+
+It is interesting, although somewhat unfair, to compare our
+
+scenario with two failures, a burst in the pipe between tanks
+
+algorithm to
+
+1 and 2, and a burst in the pipe between tanks 3 and 4.
+
+Fig. 2(b) shows the estimate of the probability
+
+that both
+
+pipes have burst given measurements over the three time
+
+an
+
+"omniscient" Kalman filter.
+
+The omni­
+
+scient Kalman filter (Fig. 4(b)) knows the value
+
+of every
+
+discrete variable at every time step, and needs to track only
+the continuous state. Clearly, this should do a much bet­
+
+slices. The correct value is very close to 1, but neither sam­
+
+ter job of tracking the system than any method based on
+
+pling nor MCMC found this after
+
+Enu­
+
+imperfect, partial information. Nevertheless, our algorithm
+
+is guaranteed to find the double­
+
+mirrors this gold standard very closely, reflecting the suc­
+
+meration
+
+from the prior
+
+200000 samples.
+
+failure after enumerating no more than 1089 hypotheses.
+1
+
+An actual physical system would have a non-linear relation
+
+between pressures and flows, and cannot be described as a CLG.
+
+cess of our algorithm in fi n di n g the correct hypotheses.
+
+7
+
+Discussion and conclusions
+
+To deal with this problem we use a linear approximation, model­
+ing the flow as the product of the pressure and the conductance.
+This approximation is appropriate for slow flows. We plan to use
+better approximations in the future, but for the purposes of test­
+ing our algorithm on simulated data, the physical accuracy of the
+
+model is not an issue, and one can treat it simply as a given CLG.
+
+We have proven that even simple CLG models can be very
+challenging.
+
+We provided the first NP-hardness results
+
+for a very simple class of CLG models, and also showed
+that unless P=NP there is no efficient approximate infer
+
+-
+
+318
+
+LERNER & PARR
+
+t
+
+l.S
+
+•·+· •· · f ·f ·•·••••••·•·•·•·•·•·•·••••
+
+1 .6
+
+g
+
+!
+
+Cl2 Truth
+C I 2 8clicf
+C4S Truth
+C4S Belief
+P5 Truth
+P5 Belief
+
+1
+
+...... .
+
+.. ·
+
+. ..
+
+1 .8
+
+•·•·•· ·
+>+-<
+.... .. .
+
+>-+--<
+
+... . .
+
+.. ... ... . . ........ . . . .... . .. . ......
+
+.
+..
+
+1._
+
+Cl2 Truth .......
+Cl2 Belief >-+--<
+C45 Truth ......
+C45 Belief >+--<
+PS Truth . . ..
+P5 Belief l-ol!--ol
+
+1.6
+
+>-&--<
+
+1.4
+
+1.2
+
+UAl 2001
+
+i
+
+Jf.U.t.U.
+
+"0
+=
+0
+u
+
+. .U.U.I
+
+1.4
+
+1 .2
+
+··
+...�
+.
+··
+•
+
+..
+
+0.8
+
+0.8
+
+0.6
+
+0.6
+
+..
+
+...
+
+...
+
+.
+
+..
+
+!
+
+!
+:!
+
+.....
+... ...
+....... ......... ........�..............-:-:
+. .· ·-·...
+. .. ·=
+. . ��
+
+:
+
+-
+
+•
+
+•=.:- -J .....
+.
+... J
+
+H· ! ·!'·!' ·H ·I-H-�· •· H
+
+.. ..... ....
+
+... . . "' ·
+
+··· ·····
+
+"·•
+
+0.4
+
+10
+
+0
+
+IS
+
+20
+
+Time steps
+
+25
+
+30
+
+35
+
+0.4
+
+40
+
+L----'-----'--'
+
+0
+
+10
+
+15
+
+(a )
+
+20
+
+Time steps
+
+25
+
+30
+
+35
+
+40
+
+(b )
+
+Figure 4: Two runs on a difficult trajectory for the five-tank system: (a) our algorithm; (b) an omniscient Kalman filter.
+
+ence algorithm for these cases.
+
+As an i mmediate corro­
+
+grant number N000 1 4-00- 1 -0637.
+
+lary, we provided complexity results for the i mportant class
+of Switching Kalman Filters.
+
+We stress that our results
+
+do not imply that CLGs are not useful, but rather sug­
+
+References
+Y. B ar-Shalom and T. E. Fortmann. Tracking and Data Asso­
+
+gest that in order to use them efficiently one must make
+
+[1]
+
+some assumptions or observations under which inference
+
+[2] X. Boyen and D. Koller. Tractable inference for complex
+stochastic processes. In Proc. UA!, pages 33-42, 1 998.
+
+or approximate inference becomes tractable (e.g., the small
+number of l ikely hypotheses in fault diagnosis representing
+a small number of faults or faults that tend to happen simul­
+taneously). We feel that characterizing such sub-classes of
+CLGs is still an open problem, requiring further work.
+We compared several approximate inference algorithms,
+all of which have several advantages over exact inference.
+They are anytime in nature and have reduced space com­
+plexity. We presented a novel algorithm which takes ad­
+vantage of the partial ordering on combinations of faults
+i mposed by most fault diagnosis problems by generating
+hypotheses in decreasing order of likelihood. We found
+that the incremental algorithm has superior performance to
+sampling and MCMC for the type of unlikely evidence that
+is of greatest importance in fault diagnosis domains.
+While i nference for continuous variables was not an em­
+phasis of this paper, the superior tracking of discrete vari­
+ables also leads superior tracking of continuous variables.
+We are optimistic that the
+
+incremental algorithm for gener­
+
+ating hypotheses, combined with the architecture presented
+in [ 1 0] will provide basis for efficient and robust tracking
+and diagnosis for many large systems of practical i nterest.
+Acknowledgments.
+
+We are pleased to thank Daphne Koller, Carlos Guestrin
+and Simon Tong for many useful discussions. This research
+was supported by ONR Young Investigator (PECASE) un­
+der grant number
+
+NOOO 1 4-99- 1 -0464, and by ONR under
+
+the MURI program "Decision Making under Uncertainty",
+
+ciation. Academic Press, 1 988.
+
+[3] Johan de Kleer and Brian C. Williams. Diagnosing multiple
+faults. In Matthew L. Ginsberg, editor, Readings in Nonmono­
+tonic Reasoning, pages 372-3 8 8 . Morgan Kaufmann, Los Al­
+tos, California, 1987.
+
+[4]
+
+A. Doucet, S . Godsill, and C . Andrieu. On sequential Monte
+Carlo sampling methods for Bayesian filtering. Statistics and
+Computing, 1 0(3 ): 197 - 208, 2000.
+
+[5] Michael R. Garey and David S . Johnson. Computers and In­
+tractability. freeman, freeman-ad, 1 979.
+
+[6] Zoubin Ghahramani and Geoffrey E. Hinton. Variational
+learning for switching state-space models. Neural Computa·
+tion, 1 2(4):83 1 -864, 2000.
+
+[7] F. Jelinek. Statistical Methods for Speech Recognition. MIT
+Press, Cambridge, MA, 1997.
+
+[8] S .L. Lauritzen. Propagation of probabilities, means, and
+variances in mixed graphical association models.
+JASA ,
+87(420): 1089 - 1 1 08, 1 992.
+
+[9] S. Lauritzen and F. Jensen. Stable local compuation with con­
+ditional Gaussian distributions. Technical Report R-99-2014,
+Dept. Math. Sciences, Aalborg Univ., 1 999.
+
+[ 1 0] U. Lerner, R. Parr, D. Koller, and G. B iswas. B ayesian fault
+detection and diagnosis in dynamic systems. In Proc. AAAI,
+pages 5 3 1 -537, 2000.
+
+[ 1 1 } R Neal. Probabilistic inference using Markov Chain Monte
+Carlo methods. Technical Report CRG-TR-93-1, University of
+Toronto, 1 993.
+[12] D. Nilsson. An efficient algorithm for finding the M most
+probable configurations in probabilistic expert systems. Statis­
+tics and Computing, 8(2): 1 5 9 - 1 73 , 1 998.
+
+[ 1 3 ] V. Pavlovic, J. Rehg, T.-J. Cham, and K. Murphy. A dy ­
+namic B ayesian network approach to figure tracking using
+learned dynamical models. In Proc. /CCV, 1 999.
+
+

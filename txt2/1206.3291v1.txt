@@ -1,0 +1,1369 @@
+
+not always known or easy to specify, and the optimal
+policy may only decompose approximately. To that
+effect, Charlin et al. [4] showed how a hierarchy can
+be discovered automatically by formulating the planning problem as a non-convex quartically constrained
+optimization problem with variables corresponding to
+the parameters of the policy, including its hierarchical
+structure. Unfortunately, the inherent computational
+difficulty of solving this optimization problem prevents
+the approach from scaling to real-world problems. Furthermore, it is not clear that automated hierarchy discovery simplifies planning since the space of policies
+remains the same.
+We propose an alternative approach that demonstrates
+that hierarchy discovery (i) can be done efficiently
+and (ii) performs a policy search with a different bias
+than non-hierarchical approaches that is advantageous
+when there exists good hierarchical policies. The approach combines Murphy and Paskin’s [10] factored
+encoding of hierarchical structures (see also [17]) into
+a dynamic Bayesian network (DBN) with Toussaint
+et al.’s [18] maximum-likelihood estimation technique
+for policy optimization. More precisely, we encode
+POMDPs with hierarchical controllers into a DBN in
+such a way that the policy and hierarchy parameters
+are entries of some conditional probability tables. We
+also consider factored policies that are more general
+than hierarchical controllers. The policy and hierarchy parameters are optimized with the expectationmaximization (EM) algorithm [5]. Since each iteration
+of EM essentially consists of inference queries, the approach scales easily.
+Sect. 2 briefly introduces partially observable Markov
+decision processes, controllers and policy optimization
+by maximum likelihood estimation. Sect. 3 reviews
+previous work on hierarchical modeling and how to use
+a dynamic Bayesian network to encode a hierarchical
+structure. Sect. 4 describes our proposed approach,
+which combines a dynamic Bayesian network encoding with maximum likelihood estimation to simultane-
+
+ously optimize a hierarchy and the controller. Sect. 5
+demonstrates the scalability of the proposed approach
+on benchmark problems. Finally, Sect. 6 summarizes
+the paper and discusses future work.
+
+2
+
+Background
+
+Throughout the paper we denote random variables by
+upper case letters (e.g., X), values of random variables by their corresponding lower case letters (e.g.,
+x ∈ dom(X)) and sets of values by upper case letters with math calligraphy (e.g., X = {x1 , x2 , x3 }).
+We now review POMDPs (Sect. 2.1), how to represent
+policies as finite state controllers (Sect. 2.2) and how
+to optimize bounded controllers (Sect. 2.3).
+2.1
+
+POMDPs
+
+Partially observable Markov decision processes
+(POMDPs) provide a natural and principled framework for planning. A POMDP can be formally
+defined by a tuple hS, A, O, ps , ps0 |as , po0 |s0 a , ras i
+where S is the set of states s, A is the set of actions
+a, O is the set of observations o, ps = Pr(S0 = s) is
+the initial state distribution (a.k.a. initial belief),
+ps0 |as = Pr(St+1 = s0 | At = a, St = s) is the transition
+distribution, po0 |s0 a = Pr(Ot+1 = o0 | St+1 = s0 , At = a)
+is the observation distribution and ras = R(At =
+a, St = s) is the reward function. Throughout the
+paper, it is assumed that S, A and O are finite and
+discrete. The goal is to select actions to maximize
+the rewards. At any point in time, the information
+available to select the next action consists of the
+history of past actions and observations. Hence a
+policy π is defined as a mapping from histories to
+actions. However, since histories grow with time,
+it is common practice to summarize histories with
+a fixed-length sufficient statistic such as the belief
+distribution bs = Pr(S = s), which corresponds to the
+state distribution (conditioned on the history of past
+actions and observations). The belief distribution
+b can be updated at each time step, based on the
+0
+action a taken and the observation
+Po made according
+ao0
+to Bayes’ theorem: bs0 = k s bs ps0 |as po0 |s0 a (k
+is a normalization constant). Policies can then be
+defined as mappings from beliefs to actions (e.g.,
+π(b) = a). The value V π (b) of a policy π starting
+in belief b is measured byPthe discounted sum of
+π
+t
+expected
+P rewards: V (b) = t γ Ebt∗|π [rπ(bt )bt ] where
+rab = s bs ras . An optimal policy π is a policy with
+the highest value V ∗ for all beliefs: V ∗ (b) ≥ V π ∀π, b.
+The optimal value function also satisfies
+Bellman’s
+P
+∗ ao0
+0 |ab V (b
+equation: V ∗ (b)
+=
+max
+r
++
+p
+)
+0
+a
+ab
+o
+o
+P
+where po0 |ab = ss0 bs ps0 |as po0 |s0 a .
+
+2.2
+
+Finite State Controllers
+
+A convenient representation for an important class of
+policies consists of finite state controllers [6]. Instead
+of using beliefs as sufficient statistics of histories, the
+idea is to use a finite internal memory to retain relevant
+bits of information from histories. Each configuration
+of this memory can be thought of as a node in a finite
+state controller, where nodes select actions to be executed and edges indicate how to update nodes based
+on the observations received. A controller with a finite
+set N of nodes n can encode a stochastic policy π with
+three distributions: Pr(N0 = n) = pn (initial node distribution), Pr(At = a | Nt = n) = pa|n (action selection
+distribution) and Pr(Nt+1 = n0 | Nt = n, Ot+1 = o0 ) =
+pn0 |no0 (successor node distribution). Such a policy
+can be executed by starting in a node n sampled from
+pn , executing an action a sampled from pa|n , receiving
+observation o0 , transitioning to node n0 sampled from
+pn0 |no0 and so on. The value of a controller
+Pcan be computed
+by
+solving
+a
+linear
+system:
+V
+=
+ns
+a pa|n [ras +
+P
+0 ] ∀ns. The value at a
+γ s0 o0 n0 ps0 |as po0 |s0 a pn0 |no0 Vn0 sP
+P
+given belief b is then V π (b) = n s bs pn Vns .
+2.3
+
+Policy Optimization
+
+Several techniques have been proposed to optimize
+controllers of a given size, including gradient ascent [9], stochastic local search [2], bounded policy iteration [14], non-convex quadratically constrained optimization [1] and likelihood maximization [18]. We
+briefly describe the last technique since we will use it
+in Sect. 4.
+Toussaint et al. [18] recently proposed to convert
+POMDPs into equivalent dynamic Bayesian networks
+(DBNs) by normalizing the rewards and to optimize
+a policy by maximizing the likelihood of the normalized rewards. Let R̃ be a binary variable corresponding to normalized rewards. The reward function ras is then replaced by a reward distribution
+pr̃|sat = Pr(R̃ = r̃ | At = a, St = s, T = t) that assigns probability ras /(rmax − rmin ) to R̃ = 1 and
+1 − ras /(rmax − rmin ) to R̃ = 0 (rmin = minas ras
+and rmax = maxas ras ). An additional time variable
+T is introduced to simulate the discount factor and the
+summation of rewards. Since a reward is normally discounted by a factor γ t when earned t time steps in the
+future, the prior pt = Pr(T = t)P
+is set to γ t (1−γ) where
+∞
+the factor (1−γ) ensures that t=0 pt = 1. The resulting dynamic Bayesian network is illustrated in Fig. 1.
+It can be thought of as a mixture of finite processes of
+length t with a 0-1 reward R̃ earned at the end of the
+process. The nodes Nt encode the internal memory of
+the controller. Given the controller distributions pn ,
+pa|n and pn0 |no0 , it is possible to evaluate the controller
+
+N0
+
+T =0
+
+N0
+
+T =1
+
+A0
+
+S0
+
+R̂
+
+N1
+
+A0
+
+S0
+
+O1
+
+A1
+
+R̂
+
+S1
+
+...
+N0
+
+T = tmax
+
+N1
+
+A0
+
+O1
+
+Ntmax
+
+A1
+
+...
+
+Otmax
+
+we will empirically compare our approach to the nonconvex optimization techniques used to optimize recursive controllers. In another line of research, Murphy
+and Paskin [10] proposed to model hierarchical hidden
+Markov models (HMMs) with a dynamic Bayesian network (DBN). Theocharous et al. [17] also used DBNs
+to model hierarchical POMDPs. We briefly review this
+DBN encoding in Sect. 3.2 since we will use it in our
+approach to model factored controllers.
+
+Atmax
+
+3.1
+S0
+
+S1
+
+Stmax
+
+Figure 1: POMDP represented as a mixture of finite
+DBNs. For an infinite horizon, a large enough tmax
+can be selected at runtime to ensure that the approximation error is small.
+by computing the likelihood of R̃ = 1. More precisely,
+V π (ps ) = (Pr(R̃ = 1) − rmin )/[(rmax − rmin )(1 − γ)].
+Optimizing the policy can be framed as maximizing
+the likelihood of R̃ = 1 by varying the distributions
+pn , pa|n and pn0 |no0 encoding the policy. Toussaint et
+al. use the expectation-maximization (EM) algorithm.
+Since EM is guaranteed to increase the likelihood at
+each iteration, the controller’s value increases monotonically. However, EM is not guaranteed to converge
+to a global optimum. An important advantage of the
+EM algorithm is its simplicity both conceptually and
+computationally. In particular, the computation consists of inference queries that can be computed using
+a variety of exact and approximate algorithms.
+
+3
+
+Recursive Controllers
+
+R̂
+
+Hierarchical Modeling
+
+While optimizing a bounded controller allows an effective search in the space of bounded policies, such
+an approach is clearly suboptimal since the optimal
+controller of many problems grows doubly exponentially with the planning horizon and may be infinite
+for infinite horizons. Alternatively, hierarchical representations permit the representation of structured
+policies with exponentially fewer parameters. Several
+approaches were recently explored to model and learn
+hierarchical structures in POMDPs. Pineau et al. [13]
+sped up planning by exploiting a user specified action hierarchy. Hansen et al. [7] proposed hierarchical controllers and an alternative planning technique
+that also exploits a user specified hierarchy. Charlin et
+al. [4] proposed recursive controllers (which subsume
+hierarchical controllers) and an approach that discovers the hierarchy while optimizing a controller. We
+briefly review recursive controllers in Sect. 3.1 since
+
+A recursive controller [4] consists of a recursive automaton with concrete nodes n and abstract nodes n̄.
+Abstract nodes call a subcontroller before selecting an
+action. A controller is said to be recursive when it
+can call itself, essentially encoding an infinite hierarchy. Formally, a recursive controller is parametrized
+by an action selection distribution for each node (e.g.,
+pa|n and pa|n̄ ), a successor node distributions for each
+node (e.g., pn0 |no0 and pn0 |n̄o0 ) and a child node distribution for each abstract node (e.g., pn0 |n̄ )1 . Execution of a recursive controller is performed by executing the action selected by each node visited and
+continuing to the successor node selected by the observation made. However, when an abstract node is
+visited, before executing the action selected, its subcontroller is called and started in the child node selected by the child node distribution. A subcontroller
+returns control to its parent node when a special end
+node is reached. Charlin et al. [4] show that optimizing
+a recursive controller with a fixed number of concrete
+and abstract nodes can be framed as a non-convex
+quartically constrained optimization problem. The hierarchical structure is discovered as the controller is
+optimized since the variables of the optimization problem include the child node distributions which implicitly encode the hierarchy. Three techniques based on
+a general non-linear solver, a mixed-integer non-linear
+approximation and a form of bounded hierarchical policy iteration are experimented with, but do not scale
+beyond toy problems. Furthermore, Charlin et al. do
+not demonstrate whether searching in the space of hierarchical controllers can speed up planning. Although
+it is clear that planning is simplified when a hierarchy
+is given a priori since the policy space is reduced, it
+is not clear that hierarchy discovery is beneficial since
+the policy space remains the same while the parameter space changes. In Sect. 5, we demonstrate that
+hierarchy discovery can be beneficial when a simple
+hierarchical policy of high value exists.
+
+1
+The pa|n and pn0 |no0 distributions are combined in one
+distribution pn0 a|no0 in [14]
+
+S01
+
+S21
+
+S11
+
+E0
+
+...
+
+E1
+
+the tuple hpa|nl , pnl−1 |nl , pn0l |nl o0 i ∀l. The conditional
+probability distributions of the mixture of DBNs (denoted by p̂) are:
+• transition distribution: p̂s0 |as = ps0 |as
+
+Figure 2:
+HMM.
+
+S00
+
+S10
+
+S21
+
+O0
+
+O1
+
+O2
+
+DBN encoding of a 2-level hierarchical
+
+• observation distribution: p̂o0 |s0 a = po0 |s0 a
+• reward distribution:
+p̂r̃|as = (ras − rmin )/(rmax − rmin )
+• mixture distribution: p̂t = (1 − γ)γ t
+• action distribution: p̂a|n0 = pa|n0
+
+3.2
+
+Hierarchical HMMs
+
+Murphy and Paskin [10] proposed to model hierarchical hidden Markov models (HMMs) as dynamic
+Bayesian networks (DBNs). The idea is to convert a
+hierarchical HMM of L levels into a dynamic Bayesian
+network of L state variables, where each variable encodes abstract states at the corresponding level. Here,
+abstract states can only call sub-HMMs at the previous level. Fig. 2 illustrates a two-level hierarchical
+HMMs encoded as a DBN. The state variables Stl are
+indexed by the time step t and the level l. The Et variables indicate when a base-level sub-HMM has ended,
+returning its control to the top level HMM. The toplevel abstract state transitions according to the top
+HMM, but only when the exit variable Et indicates
+that the base-level concrete state is an exit state. The
+base-level concrete state transitions according to the
+base-level HMM. When an exit state is reached, the
+next base-level state is determined by the next toplevel abstract state. Factored HMMs subsume hierarchical HMMs in the sense that there exists an equivalent factored HMM for every hierarchical HMM. In
+Sect. 4.1, we will use a similar technique to convert
+hierarchical controllers into factored controllers.
+
+4
+
+Factored Controllers
+
+We propose to combine the DBN encoding techniques
+of Murphy et al. [10] and Toussaint et al. [18] to convert a POMDP with a hierarchical controller into a
+mixture of DBNs. The hierarchy and the controller
+are simultaneously optimized by maximizing the reward likelihood of the DBN. We also consider factored
+controllers which subsume hierarchical controllers.
+4.1
+
+DBN Encoding
+
+Fig. 3a illustrates two consecutive slices of one DBN in
+the mixture (rewards are omitted) for a three-level hierarchical controller. Consider a POMDP defined by
+the tuple hS, A, O, ps , ps0 |as , po0 |s0 a , ras i and a threelevel hierarchical (non-recursive) controller defined by
+
+• base
+p̂n00 |n0 n01 o0 e0
+ level node distribution:
+0
+if e = exit
+pn00 |n01
+=
+pn00 |o0 n0 otherwise
+• middle
+p̂n01 |n1 n02 o0 e0 e1
+ level node distribution:
+if e1 = exit
+ pn01 |n02
+p 01 0 1 if e0 = exit and e1 6= exit
+=
+ n |o n
+δn01 n1
+otherwise
+• toplevel node distribution: p̂n02 |o0 n2 e1
+pn02 |o0 n2 if e1 = exit
+=
+δn02 n2
+otherwise
+• base-level
+exit distribution: p̂e0 |n0
+
+1 if n0 is an end node
+=
+0 otherwise
+• middle-level
+exit distribution: p̂e1 |n1 e0
+
+1 if e0 = exit and n1 is an end node
+=
+0 otherwise
+While the Etl variables help clarify when the end of
+a sub-controller is reached, they are not necessary.
+Eliminating them yields a simpler DBN illustrated in
+Fig. 3b. The conditional probability distributions of
+the Ntl variables become:
+• base
+p̂n00 |n0 n01 o0
+ level node distribution:
+pn00 |n01
+if n0 is an end node
+=
+pn00 |o0 n0 otherwise
+• middle
+p̂n01 |n1 n02 o0
+ level node distribution:
+1
+0
+if n and n are end nodes
+ pn01 |n02
+pn01 |o0 n1 if n0 is an end node, but not n1
+=
+
+δn01 n1
+otherwise
+• toplevel node distribution: p̂n02 |n2 o0 e1
+pn02 |n2 o0 if n1 and n0 are end nodes
+=
+δn02 n2
+otherwise
+Note that ignoring the above constraints in the conditional distributions yields a factored controller that
+is more flexible than a hierarchical controller since the
+conditional probability distributions of the Ntl variables do not have to follow the structure imposed by
+a hierarchy
+
+(a)
+
+N 02
+
+N2
+
+(b)
+
+N2
+
+N 02
+
+4.2.1
+
+W.l.o.g. we initialize the start node N0top of the top
+layer to be the first node (i.e., Pr(N0top = 1) = 1). The
+node conditional distributions pn0l |φ(n0l ) are initialized
+randomly as a mixture of three distributions:
+
+E1
+N 01
+
+N1
+
+N 01
+
+N 00
+
+N0
+
+N 00
+
+O0
+
+O
+
+S
+
+S0
+
+S
+
+N2
+
+N 02
+
+N1
+E0
+N0
+
+O
+
+(c)
+
+A
+
+A
+
+O0
+
+S0
+
+(d)
+N 2 N 1 N 0 SS 0
+N 2 N 1 N 0 S0
+
+N1
+
+N 01
+
+Parameter initialization
+
+pn0l |φ(n0l ) ∝ c1 + c2 Un0l φ(n0l ) + c3 δn0l nl
+The mixture components are a uniform distribution, a
+random distribution Uφ(n0l ) (an array of uniform random numbers in [0, 1]), and a term enforcing nl to stay
+unchanged. For the node distributions at the base level
+we choose c1 = 1, c2 = 1, c3 = 0 and for all other levels
+we choose c1 = 1, c2 = 1, c3 = 10. Similarly we initialize
+the action probabilities as
+
+N 2 N 02 N 1 N 0 S 0
+
+pa|nbase ∝ c1 + c2 Uanbase + c3 δa(nbase %a)
+
+N 02 N 1 N 0 S 0
+
+N0
+
+N 00
+N 02 N 1 N 01 N 0 S 0
+N 02 N 01 N 0 S 0
+N 02 N 01 N 0 N 00 S 0
+
+S
+
+S0
+
+Figure 3: (a) Two slices of the DBN encoding the hierarchical POMDP controller. (b) A version where exit
+variables are eliminated. (c) Variables O and A are
+eliminated. (d) The corresponding junction tree (or
+rather chain) for inference.
+
+4.2
+
+Maximum Likelihood Estimation
+
+Following Toussaint et al.’s technique [18], we optimize
+a factored controller by maximizing the reward likelihood. Since the policy parameters are conditional
+probability distributions of the DBN, the EM algorithm can be used to optimize them. Computation
+alternates between the E and M steps below. We denote by ntop and nbase the top and base nodes in a
+given time slice. We also denote by φ(V ) and φ(v) the
+parents of V and a configuration of the parents of V .
+E-step: expected frequency of the hidden variables
+top
+top
+1)
+Entop = Pr(N
+P 0 = n |R̃ =base
+Eanbase = t Pr(At = a, Nt
+= nbase |R̃ = 1)
+En0l φ(n0l ) =
+P
+l
+0l
+l
+l
+t Pr(Nt+1 = n , φ(Nt+1 ) = φ(nt+1 )|R̃ = 1) ∀l
+M-step: relativeP
+frequency computation
+pntop = Entop / ntop
+PEntop
+pa|nbase = Eanbase / a P
+Eanbase
+pn0l |φ(n0l ) = En0l φ(n0l ) / n0l En0l φ(n0l ) ∀l
+
+with c1 = 1, c2 = 1, c3 = 100, where the last term enforces each node nbase = i to be associated with action
+a = i%a.
+4.2.2
+
+E-step
+
+To speed up the computation of the inference queries
+in the E-step, we compute intermediate terms using a
+forward-backward procedure. Let tmax be the largest
+value of T , then a simple scheme that answers each
+query separately takes O(t2max ) time since there are
+O(tmax ) queries and each query takes O(tmax ) time
+to run over the entire network. However, since part
+of the computation is duplicated in several queries,
+it is possible to compute intermediate terms α and β
+in O(tmax ) time from which each expectation can be
+computed in constant time (w.r.t. tmax ). To simplify
+notation, N and n denote all the nodes and their joint
+configuration in a given time slice.
+t
+Forward term: αns
+= Pr(Nt = n, St = s)
+0
+αns = pnP
+ps
+t−1
+αnt 0 s0 = n,s αns
+pn0 s0 |ns
+τ
+Backward term: βns
+= Pr(R̃ = 1|Nt−τ = n, St−τ =
+s, T = t) P
+0
+βns
+= a pa|n ras
+P
+τ
+βns
+= n0 ,s0 pn0 s0 |ns βnτ −1
+0 s0
+
+To fully take advantage of the structure of the DBN,
+we first marginalize the DBN w.r.t. the observations
+and actions to get the DBN in Fig. 3c. This 2-slice
+DBN corresponds to the joint transition distribution
+pn0 s0 |ns used in the above equations. Then we compile this 2-slice DBN into the junction tree (actually
+junction chain) given in Fig. 3d.
+P
+P
+τ
+Let βns =
+τ Pr(T = τ )βns and αns =
+t Pr(T =
+t
+t)αns
+, then the last two expectations of the E-step
+
+can be computed as follows:2
+
+P
+Eanbase ∝ s,n−{nbase } αns pa|nbase ras +
+
+P
+0 0
+γ s0P
+,o0 ,n0 ps0 |as po0 |s0 a pn0 |o0 n βn s
+En0l φ(n0l ) ∝ s,s0 ,a,n−φ(n0l ),n0−l αns pa|nbase ps0 |as
+
+
+po0 |s0 a pn0 |o0 n ras + γβn0 s0 ∀l
+4.2.3
+
+M-step
+
+The standard M-step adjusts each parameter pv|φ(v)
+by normalizing the expectations computed in the Estep, i.e., pnew
+v|φ(v) ∝ Evφ(v) . To speed up convergence,
+we instead use a variant that performs a soften greedy
+M-step. In the greedy M-step, each parameter pnew
+v|φ(v)
+is greedily set to 1 when v = argmaxv̄ fv̄φ(v̄) and 0
+otherwise, where fvφ(v) = Evφ(v) /pold
+v|φ(v) . The greedy
+M-step can be thought of as the limit of an infinite
+sequence of alternating partial E-step and standard
+M-step where the partial E-step keeps f fixed. The
+combination of a standard M-step with this specific
+partial E-step updates pv|φ(v) by a multiplicative factor
+proportional to fvφ(v) . In the limit, the largest fvφ(v)
+ends up giving all the probability to the corresponding pv|φ(v) . EM variants with certain types of partial
+E-steps ensure monotonic improvement of the likelihood when the hidden variables are independent [11].
+This is not the case here, however by softening the
+greedy M-step we can still obtain monotonic improvement most of the time while speeding up convergence.
+We update pv|φ(v) as follows:
+v ∗ = argmax fvφ(v)
+pnew
+v|φ(v)
+
+∝
+
+v
+old
+pv|φ(v) [δvv∗
+
+# parameters
+flat
+|O||N |2 + |A||N |
+fact. 2|O||N |1.5 + |A||N |0.5
+forward-backward complexity
+flat
+O(tmax (|N ||S|2 + |N |2 |S|))
+fact. O(tmax (|N ||S|2 + |N |1.5 |S|))
+expectation complexity
+flat
+O(|N ||A|(|S|2 + |S||O|) + |N |2 |S||O|)
+fact. O(|N ||A|(|S|2 + |S||O|) + |N |1.5 |O||S| + |N |2 |O|)
+
+level have fewer parameters and a smaller complexity,
+but also a smaller policy space due to the structure imposed by the hierarchy/factorization. While there is a
+tradeoff between policy space and complexity, hierarchical and factored controllers are often advantageous
+in practice since they can find more quickly a good
+hierarchical/factored policy when there exists one.
+A 2-level factored controller with |N |0.5 nodes at each
+level has 2|O||N |1.5 parameters for pn0top |o0 nbase ntop
+and pn0base |n0top o0 nbase , and |A||N |0.5 parameters for
+The complexity of the forward (backpa|nbase .
+ward) procedure is O(tmax (|N ||S|2 + |N |1.5 |S|)) and
+the complexity of computing the expectations is
+O(|N ||A|(|S|2 + |S||O|) + |N |1.5 |O||S| + |N |2 |O|). A
+2-level hierarchical controller is further restricted and
+therefore has fewer parameters, but the same time
+complexity.
+
++ c + ] .
+
+For c = 0 and  = 0 this is the greedy M-step. We
+use c = 3 which softens (shortens) the step and improves convergence. Furthermore, adding small Gaussian noise  ∼ N (0, 10−3 ) helps to escape local minima.
+4.2.4
+
+Table 1: Number of parameters and computational
+complexity for the flat controller with |N | nodes and
+a 2-layer factored controller with |N top | = |N base | =
+|N |0.5 nodes.
+
+Complexity
+
+For a flat controller, the number of parameters (neglecting normalization) is |O||N |2 for pn0 |o0 n and
+|A||N | for pa|n . The complexity of the forward (backward) procedure is O(tmax (|N ||S|2 + |N |2 |S|)) where
+the two terms correspond to the size of the two cliques
+for inference in the 2-slice DBN after O and A are eliminated. The complexity of computing the expectations
+from α and β is O(|N ||A|(|S|2 + |S||O|) + |N |2 |S||O|),
+which corresponds to the clique sizes of the 2-slice
+DBN including O and A.
+In comparison, 2-level hierarchical and factored controllers with |N top | = |N base | = |N |0.5 nodes at each
+2
+The first expectation of the E-step does not need to be
+computed since Pr(N0top = 1) = 1.
+
+5
+
+Experiments
+
+We first compared the performance of the maximum
+likelihood (ML) approach to previous optimizationbased approaches from [4]. Table 2 summarizes the results for 2-layer controllers with certain combinations
+of |N base | and |N top |. The problems include paint,
+shuttle and 4x4 maze (previously used in [4]) and
+three additional problems: chain-of-chains (described
+below), hand-washing (reduced version from [8]) and
+cheese-taxi (variant from [12]). On the first three
+problems, ML reaches the same values as the previous optimization-based approaches, but with larger
+controllers. We attribute this to EM’s weaker ability to avoid local optima than the optimization-based
+approaches. However, the optimization-based approaches run out of memory on the last three problems (memory needs exceed 2 Gb of RAM), while ML
+scales gracefully (as analyzed in Sect. 4.2.4). ML approach demonstrates that hierarchy discovery can be
+tackled with tractable algorithms. We also report the
+values reached with a state of the art point-based value
+
+Table 2: V ∗ denotes optimal values (with truncated trajectories) [3] except for handwashing and cheese-taxi
+where we show the optimal value of the equivalent fully-observable problem. HSVI2 found a solution in less than
+1s for every problem except handwashing where the algorithm was halted after 12 hours of computation. The
+ML approach optimizes a factored controller for 200 EM iterations with a planning horizon of tmax = 100. (5,3)
+nodes means |N base | = 5 and |N top | = 3. For cheese-taxi, we get a maximum value of 2.25. N/A indicates that
+the solver did not complete successfully. All tests are done on a dual-core x64 processor @2.2GHz.
+Problem
+paint
+shuttle
+4x4 maze
+chain-of-chains
+handwashing
+cheese-taxi
+
+|S|, |A|, |O|
+
+V∗
+
+4, 4, 2
+8, 3, 5
+16, 4, 2
+10, 4, 1
+84, 7, 12
+33, 7, 10
+
+3.28
+32.7
+3.7
+157.1
+61052
+65.3
+
+HSVI2
+V
+3.29±0.04
+32.9±0.8
+3.75±0.1
+157.1±0
+N/A
+2.53±0.3
+
+Best results from [4]
+nodes t(s)
+V
+(1,3)
+<1
+3.29
+(1,3)
+2
+31.87
+(1,2)
+30
+3.73
+(3,3)
+10
+0.0
+N/A
+N/A
+
+iteration method (HSVI2 [15]).
+The next question is whether there are computational
+savings when automatically discovering a hierarchy.
+Recall that previous work has shown that policy optimization is simplified when a hierarchy is known a
+priori since the space of policies is restricted. The
+next experiment demonstrates that policy optimization while discovering a hierarchy can be done faster
+and/or yield higher value when there exists good hierarchical policies. Table 3 compares the performance
+when optimizing flat, hierarchical and factored controllers on chain-of-chains, hand-washing and cheesetaxi. Here, the factored and hierarchical controllers
+have two levels and correspond respectively to the
+DBNs in Fig. 3(a) and 3(b).3 The x-axis is the number of nodes for flat controllers and the product of the
+number of nodes at each level for hierarchical and factored controllers. Taking the product is justified by the
+fact that the equivalent flat controllers of some hierarchical/factored controllers require that many nodes.
+The graphs in the right column of Table 3 demonstrate that hierarchical and factored controllers can
+be optimized faster, confirming the analysis done in
+Sect. 4.2.4. There is no difference in computational
+complexity between the strictly hierarchical and unconstrained factored architectures. Recall however
+that the efficiency gains of the hierarchical and factored controllers are obtained at the cost of a restricted
+policy space. Nevertheless, the graphs in the left column of Table 3 suggest that hierarchical/factored controllers can still find equally good policies when there
+exist one. Factored controllers are generally the most
+robust. With a sufficient number of nodes, they find
+the best policies on all three problems. Note that factored and hierarchical controllers need at least a number of nodes equal to the number of actions in the base
+layer in order to represent a policy that uses all actions.
+3
+Factored controllers are hierarchical controllers where
+the restrictions imposed by the Et variables are removed.
+
+Level 1
+
+ML approach (avg. over 10 runs)
+nodes
+t(s)
+V
+(5,3)
+0.96±0.3
+3.26±0.004
+(5,3)
+2.81±0.2
+31.6±0.5
+(3,3)
+2.8±0.8
+3.72±8e−5
+(10,3)
+6.4±0.2
+151.6±2.6
+(10,5)
+655±2
+984±1
+(10,3)
+311±14
+−9±11(2.25∗ )
+
+0
+0.16
+
+Level 0
+
+0.84
+
+A
+
+1
+
+2
+B
+
+3
+D
+
+C
+
+Figure 4: Hierarchical controller learnt for the chainof-chains. The diamond indicates an exit node, for
+which p̂e0 |n0 = 1.
+
+This explains why hierarchical and factored controllers
+with less than 4 base nodes (for chain-of-chains) and
+7 base nodes (for hand-washing and cheese-taxi) do
+poorly. The optimization of flat controllers tend to get
+stuck in local optima if too many nodes are used. Comparing the unconstrained factored architecture versus
+hierarchical, we find that the additional constraints
+in the hierarchical controller make the optimization
+problem harder although there are less parameters to
+optimize. As a result, EM gets stuck more often in
+local optima.
+We also examine whether learnt hierarchies make intuitive sense. Good policies for the cheese-taxi and handwashing problems can often be represented hierarchically, however the hierarchical policies found didn’t
+match hierarchies expected by the authors. Since these
+are non-trivial problems for which there may be many
+ways to represent good policies in a hierarchical fashion that is not intuitive, we designed the chain-ofchains problem, which is much simpler to analyze. The
+optimal policy of this problem consists of executing n
+times the same chain of n actions followed by a submit
+action to earn the only reward. The optimal policy requires n2 + 1 nodes for flat controllers and n + 1 nodes
+at each level for hierarchical controllers. For n = 3,
+ML found a hierarchical controller of 4 nodes at each
+level, illustrated in Fig. 4. The controller starts in
+node 0. Nodes at level 1 are abstract and descend
+into concrete nodes at level 0 by following the dashed
+
+180
+(7,3) (10,3)
+(5,7)
+(5,7)
+(5,5)
+(5,5) (7,5)
+
+140
+
+(10,5)
+
+(10,7)
+
+(5,10)
+(7,7)
+
+(7,10)
+
+120
+(5,3)
+
+100
+80
+
+(5,3)
+
+60
+40
+
+(7,3) (3,10)
+(7,5)
+(3,3)(3,5)(3,7)
+(3,3)(3,5)(3,7) (3,10)
+
+20
+
+(7,7)
+
+0
+0
+
+10
+
+20
+
+30
+
+40
+
+990
+970
+
+50
+
+flat
+(7,10)
+factored
+hierarchical
+60
+
+(7,5)
+(7,3) (10,3)
+
+(7,7)
+
+(7,5)
+(7,3)
+(5,5)
+(5,3)
+
+940
+930
+
+(5,3)
+
+(5,5)
+
+(5,7)
+
+(7,7)
+(10,5)
+(5,10)
+
+(5,7)
+
+(5,10)
+
+920
+900
+0
+
+10
+
+20
+
+30
+
+90
+
+100
+
+(7,10)
+(10,7)
+
+(10,10)
+
+40
+
+50
+
+60
+
+70
+
+80
+
+flat
+factored
+hierarchical
+
+10
+
+(10,10)
+
+(10,7)
+
+0
+-5
+flat
+factored
+hierarchical
+
+-10
+-15
+(7,7)
+(5,5)
+(7,5)
+(5,7)
+(3,3)(5,3)
+(3,5)(7,3)
+(3,7)
+(3,10)
+(5,5)
+(7,5)
+(5,7)
+(3,3)(5,3)
+(3,5)(7,3)
+(3,7)
+(3,10)
+
+-20
+
+(5,10)
+(7,7)
+(5,10)
+
+40
+
+50
+
+60
+
+70
+
+80
+
+90
+
+100
+
+50
+
+60
+
+70
+
+80
+
+90
+
+100
+
+50
+
+60
+
+70
+
+80
+
+90
+
+100
+
+3000
+2500
+2000
+1500
+1000
+500
+
+100
+
+0
+
+(7,10)
+(7,10)
+
+cheese-taxi: time (seconds)
+
+(10,5)
+
+30
+
+flat
+factored
+hierarchical
+
+3500
+
+3500
+(10,3)
+
+20
+
+0
+90
+
+5
+cheese-taxi: best value
+
+100
+90
+80
+70
+60
+50
+40
+30
+20
+10
+0
+0
+4000
+
+(10,10)
+
+flat
+factored
+hierarchical
+
+(3,3)(3,5)(3,7) (3,10)
+(3,3)(3,5)(3,7) (3,10)
+
+910
+
+80
+
+(7,10)
+
+960
+950
+
+70
+(10,7)
+
+(10,5)
+
+(10,3)
+
+980
+handwashing: value
+
+(10,10)
+
+handwashing: time (seconds)
+
+chain-of-chains: value
+
+160
+
+chain-of-chains: time (seconds)
+
+Table 3: Left: The reached values depending on the number of nodes in the controller. For the factored
+and hierarchical controller we indicate the number of nodes in both layers (e.g., (5,3) means |N base | = 5 and
+|N top | = 3) and plot the data point at |N base ||N top | on the x-axis. For instance, in the case of handwashing
+we see how the performance depends critically on |N base |. Right: The optimization time. In all cases, 200 EM
+iterations are performed with a planning horizon of tmax = 100. The results for each controller are the average
+of 10 runs with error bars of ±1 standard deviation.
+
+-25
+
+10
+
+20
+
+30
+
+40
+
+flat
+factored
+hierarchical
+
+3000
+2500
+2000
+1500
+1000
+500
+0
+
+0
+
+10
+
+20
+
+30
+
+40
+
+50
+
+60
+
+70
+
+80
+
+90
+
+100
+
+0
+
+10
+
+20
+
+nodes
+
+edges. Control is returned to level 1 when an end node
+(denoted by a diamond) is reached. Here, the optimal
+policy is to do A-B-C three times followed by D. Hence
+a natural hierarchy would abstract A-B-C and D into
+separate subcontrollers. While the controller in Fig. 4
+is not completely optimal (the vertical transition from
+abstract node 0 should have probability 1 of reaching node A), it found an equivalent, but less intuitive
+abstraction by having subcontrollers that do A-B-C
+and D-A-B-C. This suggests that for real-world problems there will be many valid abstractions that are
+not easily interpretable by humans and the odds that
+an automated procedure finds an intuitive hierarchy
+without any additional guidance are slim.
+
+30
+
+40
+
+nodes
+
+6
+
+Conclusion
+
+The key advantage of maximum likelihood is that it
+can exploit the factored structure in a controller architecture. This facilitates hierarchy discovery when the
+hierarchical structure of the controller is encoded into
+a corresponding dynamic Bayesian network (DBN).
+Our complexity analysis and the empirical run time
+analysis confirm the favorable scaling. In particular,
+we solved problems like handwashing and cheese-taxi
+that could not be solved with the previous approaches
+in [4]. Compared to flat controllers, factored controllers are faster to optimize and less sensitive to local
+optima when they have many nodes. Our current implementation does not exploit any factored structure
+
+in the state, action and observation space, however we
+envision that a factored implementation would naturally scale to large factored POMDPs.
+For the chain-of-chains problem, maximum likelihood
+finds a valid hierarchy. For other problems like handwashing, there might be many hierarchies and the one
+found by our algorithm is usually hard to interpret.
+We cannot expect our method to find a hierarchy that
+is human readable. Interestingly, although the strictly
+hierarchical architectures have less parameters to optimize, they seem to be more susceptible to local optima
+as compared to a factored but otherwise unconstrained
+controller. Future work will investigate various heuristics to escape local optima during optimization.
+In this paper we made explicit assumptions about the
+structure – we prefixed the structure of the DBN to
+mimic a strict hierarchy or a level-wise factorization
+and we fixed the number of nodes in each level. However, the DBN framework allows us to build on existing
+methods for structure learning of graphical models. A
+promising extension would be to use such structure
+learning techniques to optimize the factored structure
+of the controller. Since the computational complexity
+for evaluating (training) a single structure is reasonable, techniques like MCMC could sample and evaluate a variety of structures. This variety might also help
+to circumvent local optima, which currently define the
+most dominant limit of our approach.
+Acknowledgments
+Part of this work was completed while Charlin was at
+the University of Waterloo. Toussaint acknowledges support by the German Research Foundation (DFG), Emmy
+Noether fellowship TO 409/1-3. Poupart and Charlin were
+supported by grants from the Natural Sciences and Engineering Research Council of Canada, the Canada Foundation for Innovation and the Ontario Innovation Trust.
+
+References
+[1] C. Amato, D. Bernstein, and S. Zilberstein. Solving POMDPs using quadratically constrained linear programs. In IJCAI, pages 2418–2424, 2007.
+[2] D. Braziunas and C. Boutilier. Stochastic local
+search for POMDP controllers. In AAAI, pages
+690–696, 2004.
+[3] A. Cassandra. Exact and approximate algorithms
+for partially observable Markov decision processes.
+PhD thesis, Brown University, Dept. of Computer
+Science, 1998.
+[4] L. Charlin, P. Poupart, and R. Shioda. Automated hierarchy discovery for planning in par-
+
+tially observable environments. In NIPS, pages
+225–232, 2006.
+[5] A. Dempster, N. Laird, and D. Rubin. Maximum
+likelihood from incomplete data via the EM algorithm. Journal of the Royal Statistical Society,
+Series B, 39(1):1–38, 1977.
+[6] E. Hansen. An improved policy iteration algorithm for partially observable MDPs. In NIPS,
+1998.
+[7] E. Hansen and R. Zhou. Synthesis of hierarchical
+finite-state controllers for POMDPs. In ICAPS,
+pages 113–122, 2003.
+[8] J. Hoey, A. von Bertoldi, P. Poupart, and A. Mihailidis. Assisting persons with dementia during
+handwashing using a partially observable Markov
+decision process. In ICVS, 2007.
+[9] N. Meuleau, L. Peshkin, K.-E. Kim, and L. Kaelbling. Learning finite-state controllers for partially observable environments. In UAI, pages
+427–436, 1999.
+[10] K. Murphy and M. Paskin. Linear time inference
+in hierarchical HMMs. In NIPS, 2001.
+[11] R. Neal and G. Hinton. A view of the EM algorithm that justifies incremental, sparse, and other
+variants. In M. I. Jordan, editor, Learning in
+Graphical Models. Kluwer, 1998.
+[12] J. Pineau. Tractable Planning Under Uncertainty:
+Exploiting Structure. PhD thesis, Robotics Institute, Carnegie Mellon University, 2004.
+[13] J. Pineau, G. Gordon, and S. Thrun. Policycontingent abstraction for robust robot control.
+In UAI, pages 477–484, 2003.
+[14] P. Poupart and C. Boutilier. Bounded finite state
+controllers. In NIPS, 2003.
+[15] T. Smith and R. Simmons. Heuristic search value
+iteration for POMDPs. In UAI, 2004.
+[16] P. Stone and M. Veloso. A layered approach to
+learning client behaviors in the RoboCup soccer
+server. Applied Artificial Intelligence, 12:165–188,
+1998.
+[17] G. Theocharous, K. Murphy, and L. Pack Kaelbling. Representing hierarchical POMDPs as
+DBNs for multi-scale robot localization. In ICRA,
+pages 1045–1051. IEEE, 2004.
+[18] M. Toussaint, S. Harmeling, and A. Storkey.
+Probabilistic inference for solving (PO)MDPs.
+Technical Report EDI-INF-RR-0934, School of
+Informatics, University of Edinburgh, 2006.
+
+

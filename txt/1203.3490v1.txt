@@ -1,0 +1,1491 @@
+Anytime Planning for Decentralized POMDPs
+using Expectation Maximization
+
+Akshat Kumar
+Computer Science Dept.
+University of Massachusetts, Amherst
+akshat@cs.umass.edu
+
+Abstract
+Decentralized POMDPs provide an expressive framework for multi-agent sequential decision making. While finite-horizon DECPOMDPs have enjoyed significant success,
+progress remains slow for the infinite-horizon
+case mainly due to the inherent complexity of
+optimizing stochastic controllers representing
+agent policies. We present a promising new
+class of algorithms for the infinite-horizon
+case, which recasts the optimization problem
+as inference in a mixture of DBNs. An attractive feature of this approach is the straightforward adoption of existing inference techniques in DBNs for solving DEC-POMDPs
+and supporting richer representations such
+as factored or continuous states and actions.
+We also derive the Expectation Maximization
+(EM) algorithm to optimize the joint policy represented as DBNs. Experiments on
+benchmark domains show that EM compares
+favorably against the state-of-the-art solvers.
+
+1
+
+Introduction
+
+Decentralized partially observable MDPs (DECPOMDPs) have emerged in recent years as an important framework for modeling sequential decision
+making by a team of agents [5]. Their expressive
+power makes it possible to tackle coordination problems in which agents must act based on different partial information about the environment and about each
+other to maximize a global reward function. Applications of DEC-POMDPs include coordinating the
+operation of planetary exploration rovers [3], coordinating firefighting robots [14], broadcast channel protocols [5] and target tracking by a team of sensor
+agents [13]. However, the rich model comes with a
+price–optimally solving a finite-horizon DEC-POMDP
+
+Shlomo Zilberstein
+Computer Science Dept.
+University of Massachusetts, Amherst
+shlomo@cs.umass.edu
+
+is NEXP-Complete [5]. In contrast, finite-horizon
+POMDPs are PSPACE-complete [12], a strictly lower
+complexity class that highlights the difficulty of solving DEC-POMDPs.
+Recently, a multitude of point-based approximate algorithms have been proposed for solving finite-horizon
+DEC-POMDPs [11, 8, 16]. However, unlike their
+point-based counterparts in POMDPs ([15, 17]), they
+cannot be easily adopted for the infinite-horizon case
+due to a variety of reasons. For example, POMDP algorithms represent the policy compactly as α-vectors,
+whereas all DEC-POMDP algorithms explicitly store
+the policy as a mapping from observation sequences
+to actions, making them unsuitable for the infinitehorizon case. In POMDPs, the Bellman equation
+forms the basis of most point-based solvers, but as
+Bernstein et. al. [4] highlight, no analogous equation
+exists for DEC-POMDPs.
+To alleviate such problems, most infinite-horizon algorithms represent agent policies as finite-state controllers [1, 4]. So far, only two algorithms have
+shown promise for effectively solving infinite-horizon
+DEC-POMDPs–decentralized bounded policy iteration (DEC-BPI) [4] and a non-linear programming
+based approach (NLP) [1]. However, both of these
+algorithms have significant drawbacks in terms of the
+representative class of problems that can be handled.
+For example, solving DEC-POMDPs with continuous
+state or action spaces is not supported by either of
+these approaches. Scaling up to structured representations such as factored or hierarchical state-space is
+difficult due to convergence issues in DEC-BPI and
+a potential increase in the number of non-linear constraints in the NLP solver. Further, none of the above
+approaches have been shown to work for more than
+2 agents, a significant bottleneck for solving practical
+problems.
+To address these shortcomings, we present a promising new class of algorithms which amalgamates planning with probabilistic inference and opens the door
+
+to the application of rich inference techniques to solving infinite-horizon DEC-POMDPs. Our technique is
+based on Toussaint et. al.’s approach of transforming the planning problem to its equivalent mixture
+of dynamic Bayes nets (DBNs) and using likelihood
+maximization in this framework to optimize the policy
+value [20, 19]. Earlier work on planning by probabilistic inference can be found in [2]. Such approaches have
+been successful in solving MDPs and POMDPs [19].
+They also easily extend to factored or hierarchical
+structures [18] and can handle continuous action and
+state spaces thanks to advanced probabilistic inference
+techniques [10]. We show how DEC-POMDPs, which
+are much harder to solve than MDPs or POMDPs,
+can also be reformulated as a mixture of DBNs. We
+then present the Expectation Maximization algorithm
+(EM) to maximize the reward likelihood in this framework. The EM algorithm naturally has the desirable
+anytime property as it is guaranteed to improve the
+likelihood (and hence the policy value) with each iteration. We also discuss its extension to large multiagent systems. Our experiments on benchmark domains show that EM compares favorably against the
+state-of-the-art algorithms, DEC-BPI and NLP-based
+optimization. It always produces better quality policies than DEC-BPI and for some instances, it nearly
+doubles the solution quality of the NLP solver. Finally, we discuss potential pitfalls, which are inherent
+in the EM based approach.
+
+This added uncertainty about other agents in the system make DEC-POMDPs NEXP complete [5].
+We are concerned with solving infinite-horizon DECPOMDPs with a discount factor γ. We represent
+the stationary policy of each agent using a fixed
+size, stochastic finite-state controller (FSC) similar to [1]. An FSC can be described by a tuple
+hN, π, λ, νi. N denotes a finite set of controller nodes
+n; π : N → ∆A represents the actions selection model
+or the probability πan = P (a|n); λ : N × Y → ∆N
+represents the node transition model or the probability λn0 ny = P (n0 |n, y); ν : N → ∆N represents
+the initial node distribution νn = P (n). We adopt
+the convention that nodes of agent 1’s controller are
+denoted by p and agent 2’s by q. Other problem
+parameters such as observation function P (y, z|s, a, b)
+are represented using subscripts as Pyzsab . The value
+for starting the controllers in nodes hp, qi at state s is
+given by:
+h
+X
+V (p, q, s) =
+πap πbq Rsab +
+i
+X a,b X
+X
+γ
+Ps0 sab
+Pyzs0 ab
+λp0 py λq0 qz V (p0 , q 0 , s0 ) .
+s0
+
+p0 ,q 0
+
+y,z
+
+The goal is to set the parameters hπ, λ, νi of the agents’
+controllers (of some given size) that maximize the expected discounted reward for the initial belief b0 :
+X
+V (b0 ) =
+νp νq b0 (s)V (p, q, s)
+p,q,s
+
+2
+
+The DEC-POMDP model
+
+In this section, we introduce the DEC-POMDP model
+for two agents [5]. Note that finite-horizon DECPOMDPs are NEXP complete even for two agents.
+The set S denotes the set of environment states, with
+a given initial state distribution b0 . The action set
+of agent 1 is denoted by A and agent 2 by B. The
+state transition probability P (s0 |s, a, b) depends upon
+the actions of both the agents. Upon taking the joint
+action ha, bi in state s, agents receive the joint reward
+R(s, a, b). Y is the finite set of observations for agent 1
+and Z for agent 2. O(s, ab, yz) denotes the probability
+P (y, z|s, a, b) of agent 1 observing y ∈ Y and agent 2
+observing z ∈ Z when the joint action ha, bi was taken
+and resulted in state s.
+To highlight the differences between a single agent
+POMDP and a DEC-POMDP, we note that in a
+POMDP an agent can maintain a belief over the environment state. However, in a DEC-POMDP, an agent
+is not only uncertain about the environment states but
+also about the actions and observations of the other
+agent. Therefore in a DEC-POMDP a belief over the
+states cannot be maintained during execution time.
+
+3
+
+DEC-POMDPs as mixture of DBNs
+
+In this section, we describe how DEC-POMDPs can
+be reformulated as a mixture of DBNs such that maximizing the reward likelihood (to be defined later) in
+this framework is equivalent to optimizing the joint
+policy. Our approach is based on the framework proposed in [19, 20] to solve Markovian planning problems
+using probabilistic inference. First we informally describe the intuition behind this reformulation (for details please refer to [19]) and then we describe in detail
+the steps specific to DEC-POMDPs.
+A DEC-POMDP can be described using a single DBN
+where the reward is emitted at each time step. However, in our approach, it is described by an infinite
+mixture of a special type of DBNs where reward is
+emitted only at the end. For example, Fig. 1(a) describes the DBN for time t = 0. The key intuition
+is that for the reward emitted at any time step T ,
+we have a separate DBN with the general structure
+as in Fig. 1(b). Further, to simulate the discounting of rewards, probability of time variable
+T is set as
+P∞
+P (T = t) = γ t (1 − γ). This ensures that t=0 pt = 1.
+In addition, the random variable r shown in Fig. 1(a,b)
+
+p0
+
+p0
+
+p1
+a0
+
+a0
+
+y1
+
+a1
+
+y1z1
+s0
+
+r
+
+s1
+b0
+
+q0
+
+(a)
+
+pT
+
+y2
+
+yT
+
+y2z2
+
+yT zT
+
+p0
+
+p1
+
+s2
+z1
+q1
+
+b1
+
+pT
+
+aT
+
+a0
+s0
+
+b0
+q0
+
+p2
+
+sT
+
+y1
+
+a1
+
+yT
+
+aT
+
+r
+
+z2
+
+zT
+
+q2
+
+qT
+
+(b)
+
+bT
+s0
+
+s1
+
+sT
+
+r
+
+(c)
+
+Figure 1: a) DEC-POMDP DBN for time step 0. b) for time step T . c) POMDP DBN for time step T
+
+is a binary variable with its conditional distribution
+(for any time T ) described using the normalized immediate reward as R̂sab = P (r = 1|sT = s, aT = a, bT =
+b) = (Rsab − Rmin )/(Rmax − Rmin ). This scaling of
+the reward is the key to transforming the optimization
+problem from the realm of planning to likelihood maximization as stated below. θ denotes the parameters
+hπ, λ, νi for each agent’s controller.
+Theorem 1. Let the1 CPT of binary rewards r be such
+that R̂sab ∝ Rsab and the discounting time
+prior be set
+1
+as P (T ) = γ T (1 − γ). Then, maximizing the likelihood
+Lθ = P (r = 1; θ) in the mixture of DBNs is equivalent
+to optimizing the DEC-POMDP policy. Furthermore,
+the joint-policy value relates linearly P
+to the likelihood
+as V θ = (Rmax − Rmin )Lθ /(1 − γ) + T γ T Rmin
+The proof is omitted as it is very similar to that of
+MDPs and POMDPs [19]. Before detailing the EM algorithm, we describe the DBN representation of DECPOMDPs–the basis for any inference technique.
+The DBN for any time step T is shown in Fig. 1(b).
+Every node is a random variable with subscripts indicating time. pi denotes controller nodes for agent 1
+and qi for agent 2. The remaining nodes represent the
+states, actions, and observations. There are four kinds
+of dependencies induced by the DEC-POMDP model
+that the DBN must represent:
+• State transitions: State transitions as a result
+of the joint action of both agents and the previous
+state, shown by the DBN’s middle layer.
+• Controller node transitions (λ): These transitions depend on the last controller state and the
+most recent individual observation received. They
+are shown in the top and bottom layers.
+• Action probabilities (π): The action taken at
+any time step t depends on the current controller
+state. The links between controller nodes (pi or qi )
+and action nodes (ai or bi ) model this.
+• Observation probabilities: First, the probability of receiving joint observation yi zi depends on
+the joint action of both agents and the domain
+
+state. This relationship is modeled by the DBN
+nodes labeled yi zi . Second, the individual observation each agent receives is a deterministic function of the joint observation. That is Pyy0 z0 =
+P (y|y 0 z 0 ) = 1 if y = y 0 else 0. This is modeled
+by a link between yi zi and the nodes yi and zi .
+To highlight the differences from a POMDP, Fig. 1(c)
+shows the DBN for a POMDP. The sheer scale of interactions present in a DEC-POMDP DBN become clear
+1
+from this comparison, also highlighting
+the difficulty
+of solving DEC-POMDPs even approximately. In a
+POMDP, an agent receives the observation which is
+affected by the environment state, whereas in a DECPOMDP agents only perceive the individual part of
+the joint observation yi zi . Such differences in the interaction structure make the E and M steps of a DECPOMDP EM very different from that of a POMDP,
+despite sharing the same high-level principles.
+
+4
+
+EM algorithm for DEC-POMDPs
+
+This section describes the EM algorithm [7] for maximizing the reward likelihood in the mixture of DBNs
+representing DEC-POMDPs. In the corresponding
+DBNs, only the binary reward is treated as observed
+(r = 1); all other variables are latent. While maximizing the likelihood, EM yields the DEC-POMDP
+joint-policy parameters θ. EM also possesses the desirable anytime characteristic as the likelihood (and the
+policy value which is proportional to the likelihood) is
+guaranteed to increase per iteration until convergence.
+We note that EM is not guaranteed to converge to
+the global optima. However, in the experiments we
+show that EM almost always achieves similar values
+as the state-of-the-art NLP based solver [1] and much
+better than DEC-BPI [4]. The main advantage of using EM lies in its ability to easily generalize to much
+richer representations than currently possible for DECPOMDPs such as factored or hierarchical controllers,
+continuous state and action spaces. Another important advantage is the ability to generalize the solver to
+larger multi-agent systems with more than 2 agents.
+
+The E step we derive next is generic as any probabilistic inference technique can be used.
+4.1
+
+E-step
+
+p,q,s
+
+In the E-step, for the fixed parameter θ, forward messages α and backward messages β are propagated.
+First, we define the following Markovian transitions on
+the (p, q, s) state in the DBN of Fig. 1(b). These transitions are independent of the time t due to the stationary joint policy. We also adopt the convention that for
+any random variable v, v 0 refers to the next time slice
+and v̄ refers to the previous time slice. For any group
+of variables v, Pt (v, v0 ) refers to P (vt = v, vt+1 = v0 ).
+P (p0, q 0, s0 |p, q, s) =
+X
+λp0 py0 λq0 qz0 Py0 z0 abs0 πap πbq Ps0 sab
+
+(1)
+
+aby 0 z 0
+
+α0 (p, q, s)
+0
+
+= νp νq b0 (s)
+X
+=
+P (p0 , q 0 , s0 |p, q, s)αt−1 (p, q, s)
+
+0
+
+αt (p , q , s )
+
+p,q,s
+
+Intuitively, α messages compute the probability of visiting a particular (p, q, s) state in the DBN as per the
+current policy. The β messages are similar to computing the value of starting the controllers in nodes hp, qi
+at state s using dynamic programming. They are propagated backwards and are defined as Pt (r = 1|p, q, s).
+However, this particular definition would require separate inference for each DBN as for T and T 0 step
+DBN, βt will be different due to difference in the
+time-to-go (T − t and T 0 − t). To circumvent this
+problem, β messages are indexed backward in time as
+βτ (p, q, s) = PT −τ (r = 1|p, q, s) using the index τ such
+that τ = 0 denotes the time slice t = T . Hence we get:
+X
+β0 (p, q, s) =
+Rsab πap πbq
+ab
+
+βτ (p, q, s)
+
+If both α and
+β messages are propagated for k steps
+P2k−1
+and Lθ2k  T =0 γ T LθT , then the message propagation can be stopped.
+4.1.1
+
+=
+
+X
+
+βτ −1 (p0 , q 0 , s0 )P (p0 , q 0 , s0 |p, q, s)
+
+p0 ,q 0 ,s0
+
+Based on the α and β messages
+P we also calculate two
+more quantities α̂(p, q, s) = t P (T = t)α(p, q, s) and
+P
+β̂(p, q, s) = t P (T = t)β(p, q, s), which will be used
+in the M-step. The cut-off time for message propagation can either be fixed a priori or be more flexible
+based on the likelihood accumulation. If α messages
+
+Complexity
+
+Calculating the Markov transitions on the (p, q, s)
+chain has complexity O(N 4 S 2 A2 Y 2 ), where N is the
+maximum number of nodes for a controller. The
+message propagation has complexity O(Tmax N 4 S 2 ).
+Techniques to effectively reduce this complexity without sacrificing accuracy will be discussed later.
+4.2
+
+αt is defined as Pt (p, q, s; θ). It might appear that
+we need to propagate α messages for each DBN separately, but as pointed out in [19], only one sweep is
+required as the head of the DBN is shared among all
+the mixture components. That is, α2 is the same for
+all the T-step DBNs with T ≥ 2. We will omit using
+θ as long as it is unambiguous.
+
+0
+
+are propagated for t-steps and β-messages for τ steps,
+then the likelihood for T = t + τ is given by
+X
+Lθt+τ = P (r = 1|T = t + τ ; θ) =
+αt (p, q, s)βτ (p, q, s)
+
+M-step
+
+In the DBNs of Fig. 1(a,b) every variable is hidden except the reward variable. After each M-step, EM provides better estimates of these variables, improving the
+likelihood Lθ and hence the policy value. For details
+of EM, we refer to [7]. The parameters to estimate are
+hπ, λ, νi for each agent. For a particular DBN for time
+T , let L̃ = (P, Q, A, B, S) denote the latent variables,
+where each variable denotes a sequence of length T .
+That is, P = p0:T . EM maximizes the following expected complete log-likelihood for the DEC-POMDP
+DBN mixture. θ denotes the previous parameters and
+θ? denotes new parameters.
+XX
+Q(θ, θ? ) =
+P (r = 1, L̃, T ; θ) log P (r = 1, L̃, T ; θ? )
+T
+
+L̃
+
+In the rest of the section, all the derivations refer to
+the general DBN structure of the DEC-POMDP as in
+Fig. 1(b). The joint probability of all the variables is:
+T
+
+
+Y
+P (r = 1, L̃, T ; θ) = P (T ) Rsab t=T
+πap πbq Pss̄āb̄
+
+
+t=1
+Pyyz Pzyz Pyzsāb̄ λpp̄y λqq̄z πap πbq νp νq b0 (s) t=0
+(2)
+
+where
+
+ brackets indicate the time slices, i.e.,
+Rsab t=T = R(sT , aT , bT ). Taking the log, we get:
+log P (r = 1, L̃, T ) = . . . +
++
+
+T
+X
+t=1
+
+log λpt pt−1 yt +
+
+T
+X
+t=0
+T
+X
+
+log πat pt +
+
+T
+X
+
+log πbt qt
+
+t=0
+
+log λqt qt−1 zt
+
+t=1
+
++ log νp0 + log νq0
+
+(3)
+
+where the missing terms represents the quantities independent of θ. As all the policy parameters hπ, λ, νi get
+separated out for each agent in the log above, we first
+derive the action updates for an agent by substituting
+Eq. 3 in Q(θ, θ? )
+
+4.2.1
+
+Action updates
+
+?
+The update for action parameters πap
+for agent 1 can
+?
+be derived by simplifying Q(θ, θ ) as follows:
+
+Q(θ, θ? ) =
+
+∞
+X
+
+P (T )
+
+T X
+X
+
+
+?
+P (r = 1, a, p|T ; θ) t log πap
+t=0 a,p
+
+T =0
+
+By breaking the above summation between t = T and
+t = 0 to T − 1, we get
+∞
+X
+
+P (T )
+
+T =0
+
+X
+
+?
+Rsab πap πbq αT (p, q, s) log πap
++
+
+X
+
+p0 q 0 s0 y 0 z 0
+
+b
+
+The above expression is maximized by setting the pa?
+rameter πap
+to be:
+
+P (T )
+
+T =0
+
+apqbs
+T
+−1
+X
+
+∞
+X
+
+The product P (s0 |a, q, s)P (y 0 z 0 |a, q, s0 ) can be further
+simplified by marginalizing out over actions b of agent
+2 as follows:
+X
+X
+X
+γ
+?
+=
+πap log πap
+α̂(p, q, s)
+Rsab πbq +
+1
+−
+γ
+ap
+qs
+b
+
+X
+X
+0 0 0
+0
+0
+0
+0
+0
+0
+0
+0
+β̂(p , q , s )λp py λq qz
+Py z s ab πbq Ps sab
+
+X
+πap X
+γ
+α̂(p, q, s)
+Rsab πbq +
+Cp qs
+1−γ
+b
+
+X
+X
+β̂(p0 , q 0 , s0 )λp0 py0 λq0 qz0
+Py0 z0 s0 ab πbq Ps0 sab (4)
+?
+πap
+=
+
+?
+βT −t−1 (p0 , q 0 , s0 )Pt (a, p, p0 , q 0 , s0 ) log πap
+
+t=0 app0 q 0 s0
+
+p0 q 0 s 0 y 0 z 0
+
+In the above equation, we marginalized the last time
+slice over the variables (q, b, s). For the intermediate
+time slice t, we condition upon the variables (p0 , q 0 , s0 )
+in the next time slice t + 1. We now use the definition
+of α̂ and move the summation over time T inside for
+the last time slice and further marginalize over the
+remaining variables (q, s) in the intermediate slice t:
+=
+
+X
+
+?
+Rsab πap πbq α̂(p, q, s) log πap
++
+
+b
+
+where Cp is a normalization constant. The action pa?
+rameters πbq
+of the other agent can be found similarly
+by the analogue of the previous equation.
+4.2.2
+
+Controller node transition updates
+
+The update for controller node transition parameters
+λpp̄y for agent 1 can be found by maximizing Q(θ, θ? )
+w.r.t λ?pp̄y as follows.
+
+a,p,q,b,s
+∞
+X
+
+P (T )
+
+T
+−1 X
+X
+
+?
+log πap
+
+0
+
+0
+
+0
+
+βT −t−1 (p , q , s )πap
+
+Upon further marginalizing over the joint observations
+y 0 z 0 and simplifying we get:
+X
+XX
+?
+=
+πap log πap
+Rsab πbq α̂(p, q, s) +
+qs
+
+X
+
+∞
+X
+
+p0 q 0 s0 y 0 z 0 T =0
+
+P (T )
+
+b
+T
+−1
+X
+
+∞
+X
+
+P (T )
+
+T =0
+
+P (p , q , s |a, p, q, s)αt (p, q, s)
+
+ap
+
+Q(θ, θ? ) =
+
+p0 q 0 s0 sq
+0 0 0
+
+t=0 ap
+
+T =0
+
+X
+
+0
+
+0
+
+0
+
+0
+
+βT −t−1 (p , q , s )P (s |a, q, s)
+
+t=0
+
+λp0 py0 λq0 qz0 P (y 0 z 0 |a, q, s0 )αt (p, q, s)
+
+=
+
+∞
+X
+T =0
+
+P (T )
+
+T X
+X
+
+log λ?pp̄y βT −t (p, q, s)Pt (p, p̄, y, s, q|T ; θ)
+
+t=1 pp̄ysq
+
+By further marginalizing over the variables (s̄, q̄) for
+the previous time slice of t and over the observations
+z of the other agent, we get
+=
+
+X
+
+λpp̄y log λ?pp̄y
+
+pp̄y
+
+p0 q 0 s 0 y 0 z 0
+
+t=1 pp̄y
+
+By marginalizing over the variables (q, s) for the current time slice t, we get
+
+
+
+We resolve the above time summation, as in [19], based
+P∞ PT −1
+on the fact that
+t=0 f (T − t − 1)g(t) can be
+T =0
+P∞ P
+∞
+rewritten as t=0 T =t+1 fP
+(T − t − 1)g(t)
+P∞ and then
+∞
+setting τ = T − t − 1 to get t=0 g(t) τ =0 f (τ ).
+Finally we get:
+X
+X
+X
+γ
+?
+=
+πap log πap
+α̂(p, q, s)
+Rsab πbq +
+1
+−
+γ
+ap
+qs
+b
+
+X
+0 0 0
+0
+0 0
+0
+β̂(p , q , s )λp0 py0 λq0 qz0 P (s |a, q, s)P (y z |a, q, s )
+
+T X
+X
+
+
+P (r = 1, p, p̄, y|T ; θ) t log λ?pp̄y
+
+∞
+X
+
+P (T )
+
+T X
+X
+
+βT −t (p, q, s)λqq̄z
+
+t=1 sqs̄q̄z
+
+T =0
+
+P (yz|p̄, q̄, s)P (s|p̄, q̄, s̄)αt−1 (p̄, q̄, s̄)
+The above equation can be further simplified by
+marginalizing the product P (yz|p̄, q̄, s)P (s|p̄, q̄, s̄) over
+actions a and b of both the agents as follows:
+=
+
+X
+pp̄y
+
+λpp̄y log λ?pp̄y
+
+∞
+X
+T =0
+
+P (T )
+
+T X
+X
+
+βT −t (p, q, s)λqq̄z
+
+t=1 sqs̄q̄z
+
+αt−1 (p̄, q̄, s̄)
+
+X
+ab
+
+Pyzsab Pss̄ab πap̄ πbq̄
+
+Upon resolving the time summation as before, we get
+the final M-step estimate:
+λ?pp̄y =
+
+λpp̄y X
+α̂(p̄, q̄, s̄)β̂(p, q, s)λqq̄z
+Cp̄y sqs̄q̄z
+X
+Pyzsab Pss̄ab πap̄ πbq̄
+
+The parameters λ?qq̄z for the other agent can be found
+in an analogous way.
+Initial node distribution
+
+The initial node distribution ν for controller nodes of
+agent 1 and 2 can be updated as follows. We do not
+show the complete derivation as it is similar to that of
+the other parameters.
+νp X
+β̂(p, q, s)νq Ps b0 (s)
+(6)
+νp? =
+Cp qs
+4.2.4
+
+Complexity and implementation issues
+
+The complexity of updating all action parameters is
+O(N 4 S 2 AY 2 ). Updating node transitions requires
+O(N 4 S 2 Y 2 + N 2 S 2 Y 2 A2 ). This is relatively high
+when compared to the POMDP updates requiring
+O(N 2 S 2 AY ) mainly due to the scale of the interactions present in DEC-POMDPs.
+In our experimental settings, we observed that having a relatively small sized controller (N ≤ 5) suffices to yield good quality solutions. The main contributor to the complexity is the factor S 2 as we
+experimented with large domains having nearly 250
+states. The good news is that the structure of the
+E and M-step equations provides a way to effectively
+reduce this complexity by significant factor without
+sacrificing accuracy. For a given state s, joint action
+ha, bi and joint observation hy, zi, the possible next
+states can be calculated as follows: succ(s, a, b, y, z) =
+{s0 |P (s0 |s, a, b)P (y, z|s0 , a, b) > 0}. For most of the
+problems, the size of this set is typically a constant
+k < 10. Such simple reachability analysis and other
+techniques could speed up the EM algorithm by more
+than an order of magnitude for large problems. The
+effective complexity reduces to O(N 4 SAY 2 k) for the
+action updates and O(N 4 SY 2 k+N 2 SY 2 A2 k) for node
+transitions. Other enhancements of the EM implementation are discussed in Section 6.
+
+5
+
+DEC-BPI
+4.687
+4.068
+8.637
+7.857
+
+NLP
+9.1
+9.1
+9.1
+9.1
+
+EM
+9.05
+9.05
+9.05
+9.05
+
+DEC-BPI
+< 1s
+< 1s
+2s
+5s
+
+EM
+< 1s
+< 1s
+1.7s
+4.62s
+
+Table 1: Broadcast channel: Policy value, execution time
+
+(5)
+
+ab
+
+4.2.3
+
+Size
+1
+2
+3
+4
+
+Experiments
+
+We experimented with several standard 2-agent DECPOMDP benchmarks with discount factor 0.9. Complete details of these problems can be found in [1, 4].
+
+We compare our approach with the decentralized
+bounded policy iteration (DEC-BPI) algorithm [4] and
+a non-convex optimization solver (NLP) [1]. The
+DEC-BPI algorithm iteratively improves the parameters of a node using a linear program while keeping
+the other nodes’ parameters fixed. The NLP approach
+recasts the policy optimization problem as a non-linear
+program and uses an off-the-shelf solver, Snopt [9], to
+obtain a solution. We implemented the EM algorithm
+in JAVA. All our experiments were on a Mac with
+4GB RAM and 2.4GHz CPU. Each data point is an
+average of 10 runs with random initial controller parameters. In terms of solution quality, EM is always
+better than DEC-BPI and it achieves similar or higher
+solution quality than NLP. We note that our current
+implementation is mainly a proof-of-concept; we have
+not yet implemented several enhancements (discussed
+later) that could improve the performance of the EM
+approach. In contrast, the NLP solver [9] is an optimized package and therefore for larger problems is
+currently faster than the EM approach. The fact that
+a crude implementation of the EM approach works so
+well is very encouraging.
+Table 1 shows results for the broadcast channel problem, which has 4 states, 2 actions per agent and 5 observations. This is a networking problem where agents
+must decide whether or not to send a message on a
+shared channel and must avoid collision to get a reward. We tested with different controller sizes. On
+this problem, all the algorithms compare reasonably
+well, with EM being better than DEC-BPI and very
+close in value to NLP. The time for NLP is also ≈ 1s.
+Fig. 2(a) compares the solution quality of the EM approach against DEC-BPI and NLP for varying controller sizes on the recycling robots problem. In this
+problem, two robots have the task of picking up cans
+in an office building. They can search for a small can, a
+big can or recharge the battery. The large item is only
+retrievable by the joint action of the two robots. Their
+goal is to coordinate their actions to maximize the joint
+reward. EM(2) and NLP(2) show the results with controller size 2 for both agents in Fig. 2(a). For this
+problem, EM works much better than both DEC-BPI
+and the NLP approach. EM achieves a value of ≈ 62
+for all controller sizes, providing nearly 12% improvement over DEC-BPI (= 55) and 20% improvement
+over NLP (= 51). Fig. 2(b) shows the time comparisons for EM with different controller sizes. Both the
+NLP and DEC-BPI take nearly 1s to converge. EM
+
+8
+
+7
+
+7
+
+55
+
+6
+
+6
+
+45
+40
+EM(2)
+EM(4)
+NLP(2)
+NLP(4)
+DEC-BPI(2)
+DEC-BPI(4)
+
+35
+30
+25
+20
+0
+
+(a)
+
+50
+
+100
+
+150 200
+Iteration
+
+250
+
+300
+
+5
+4
+3
+
+4
+3
+2
+
+1
+
+1
+
+EM(2)
+EM(4)
+0
+
+50
+
+100
+
+150
+200
+Iteration
+
+250
+
+300
+
+(b)
+
+|S| = 3, |A| = 3, |Y | = 2
+
+0
+350
+
+50
+
+5
+
+2
+
+0
+350
+
+60
+
+Time (sec)
+
+50
+
+Policy Value
+
+8
+
+60
+
+Time (sec)
+
+Policy Value
+
+65
+
+EM(2)
+EM(3)
+NLP(2)
+NLP(3)
+0
+
+(c)
+
+50
+
+100
+
+150
+200
+Iteration
+
+250
+
+40
+30
+20
+10
+
+300
+
+350
+
+|S| = 16, |A| = 5, |Y | = 4
+
+0
+
+EM(2)
+EM(3)
+0
+
+50
+
+100
+
+150 200
+Iteration
+
+250
+
+300
+
+350
+
+(d)
+
+Figure 2: Solution quality and runtime for recycling robots (a) & (b) and meeting on a grid (c) & (d)
+
+with controller size 2 has comparable performance, but
+as expected, EM with 4-node controllers takes longer
+as the complexity of EM is proportional to O(N 4 ).
+Fig. 2(c) compares the solution quality of EM on the
+meeting on a grid problem. In this problem, agents
+start diagonally across in a 2 × 2 grid and their goal
+is to take actions such that they meet each other (i.e.,
+share the same square) as much as possible. As the figure shows, EM provides much better solution quality
+than the NLP approach. EM achieves a value of ≈ 7,
+which nearly doubles the solution quality achieved by
+NLP (= 3.3). DEC-BPI results are not plotted as it
+performs much worse and achieves a solution quality of
+0, essentially unable to improve the policy at all even
+for large controllers. Both DEC-BPI and NLP take
+around 1s to converge. Fig. 2(d) shows the time comparison for EM versions. EM with 2-node controllers
+is very fast and takes < 1s to converge (50 iterations).
+Also note that in both the cases, EM could run with
+much larger controller sizes (≈ 10), but the increase in
+size did not provide tangible improvement in solution
+quality.
+Fig. 3 shows the results for the multi-agent tiger problem, involving two doors with a tiger behind one door
+and a treasure behind the other. Agents should coordinate to open the door leading to the treasure [1].
+Fig. 3(a) shows the quality comparisons. EM does
+not perform well in this case; even after increasing the
+controller size, it achieves a value of −19. NLP works
+better with large controller sizes. However, this experiment presents an interesting insight into the workings
+of EM as related to the scaling of the rewards. Recalling the relation between the likelihood and the policy
+value from Theorem 1, the equation for this problem
+0
+
+0.85
+
+-10
+
+0.75
+Likelihood
+
+Policy Value
+
+0.8
+
+-20
+-30
+
+EM(2)
+EM(4)
+EM(10)
+NLP(2)
+NLP(5)
+NLP(10)
+
+-40
+-50
+
+(a)
+
+0
+
+100
+
+200
+Iteration
+
+300
+
+0.7
+0.65
+0.6
+0.55
+0.5
+0.45
+
+400
+
+|S| = 2, |A| = 3, |Y | = 2
+
+0.4
+
+EM(2)
+EM(10)
+0
+
+100
+
+200
+Iteration
+
+300
+
+400
+
+(b)
+
+Figure 3: Solution quality (a) and likelihood (b) for “tiger”
+
+is: V θ = 1210Lθ − 1004.5. For EM to achieve the
+same solution as the best NLP setting (= −3), the
+likelihood should be .827. Fig. 3(b) shows that the
+likelihood EM converges to is .813. Therefore, from
+EM’s perspective, it is finding a really good solution.
+Thus, the scaling of rewards has a significant impact
+(in this case, adverse) on the policy value. This is a
+potential drawback of the EM approach, which applies
+to other Markovian planning problems too when using
+the technique of [19]. Incidently, DEC-BPI performs
+much worse on this problem and gets a quality of −77.
+Fig. 4 shows the results for the two largest DECPOMDP domains–box pushing and Mars rovers. In
+the box pushing domain, agents need to coordinate
+and push boxes into a goal area. In the Mars rovers
+domain, agents need to coordinate their actions to perform experiments at multiple sites. Fig. 4(a) shows
+that EM performs much better than DEC-BPI for every controller size. For controller size 2, EM achieves
+better quality than NLP with comparable runtime
+(Fig. 4(b), 500 iterations). However, for the larger controller size (= 3), it achieves slightly lower quality than
+NLP. For the largest Mars rovers domain (Fig. 4(c)),
+EM achieves better solution quality (= 9.9) than NLP
+(= 8.1). However, EM also takes many more iterations
+to converge than for previous problems and hence, requires more time than NLP. EM is also much better
+than DEC-BPI, which achieves a quality of −1.18 and
+takes even longer to converge (Fig. 4(d)).
+
+6
+
+Conclusion and future work
+
+We present a new approach to solve DEC-POMDPs
+using inference in a mixture of DBNs. Even a simple
+implementation of the approach provides good results.
+Extensive experiments show that EM is always better
+than DEC-BPI and compares favorably with the stateof-the-art NLP solver. The experiments also highlight
+two potential drawbacks of the EM approach: the adverse effect of reward scaling on solution quality and
+slow convergence rate for large problems. We are currently addressing the runtime issue by parallelizing the
+algorithm. For example, α and β can be propagated
+in parallel. Even updating each node’s parameters can
+
+10000
+
+10
+0
+
+EM(2)
+EM(3)
+NLP(2)
+NLP(3)
+DEC-BPI(2)
+DEC-BPI(3)
+
+-10
+-20
+-30
+
+(a)
+
+0
+
+200
+
+400
+
+600 800 1000 1200 1400
+Iteration
+
+|S| = 100, |A| = 4, |Y | = 5
+
+1000
+
+5
+
+100
+10
+EM(2)
+EM(3)
+NLP(2)
+NLP(3)
+DEC-BPI(2)
+
+1
+0.1
+0
+
+200 400
+
+600 800 1000 1200 1400
+Iteration
+
+(b)
+
+Policy Value
+
+20
+
+Time (sec, logscale)
+
+Policy Value
+
+30
+
+100000
+
+10
+
+40
+
+Time (sec, logscale)
+
+50
+
+0
+-5
+-10
+EM(2)
+NLP(2)
+DEC-BPI(2)
+
+-15
+-20
+
+(c)
+
+0
+
+1000
+
+2000
+3000
+Iteration
+
+4000
+
+5000
+
+|S| = 256, |A| = 6, |Y | = 8
+
+10000
+1000
+100
+10
+1
+
+EM(2)
+NLP(2)
+DEC-BPI(2)
+0
+
+1000
+
+2000
+3000
+Iteration
+
+4000
+
+5000
+
+(d)
+
+Figure 4: Solution quality and runtime for box pushing (a) & (b) and Mars rovers (c) & (d)
+
+be done in parallel for each iteration. Furthermore, the
+structure of EM’s update equations is very amenable
+to Google’s Map-Reduce paradigm [6], allowing each
+parameter to be computed by a cluster of machines in
+parallel using Map-Reduce. Such scalable techniques
+will certainly make our approach many times faster
+than the current serial implementation. We are also
+investigating how a different scaling of rewards affects
+the convergence properties of EM.
+The main benefit of the EM approach is that it opens
+up the possibility of using powerful probabilistic inference techniques to solve decentralized planning problems. Using a graphical DBN structure, EM can easily
+generalize to richer representations such as factored or
+hierarchical controllers, or continuous state and action
+spaces. Unlike the existing techniques, EM can easily
+extend to larger multi-agent systems with more than 2
+agents. The ND-POMDP model [13] is a class of DECPOMDPs specifically designed to support large multiagent systems. It makes some restrictive yet realistic assumptions such as locality of interaction among
+agents, and transition and observation independence.
+EM can naturally exploit such independence structure
+in the DBN and scale to larger multi-agent systems,
+something that current infinite-horizon algorithms fail
+to achieve. Hence the approach we introduce offers
+great promise to overcome the shortcomings of the prevailing approaches to multi-agent planning.
+
+Acknowledgments
+Support for this work was provided in part by the
+National Science Foundation Grant IIS-0812149 and
+by the Air Force Office of Scientific Research Grant
+FA9550-08-1-0181.
+
+References
+[1] C. Amato, D. S. Bernstein, and S. Zilberstein. Optimizing fixed-size stochastic controllers for POMDPs
+and decentralized POMDPs. JAAMAS, 2009.
+[2] H. Attias. Planning by probabilistic inference. In
+Workshop on AISTATS, 2003.
+[3] R. Becker, S. Zilberstein, V. Lesser, and C. V. Goldman. Solving transition independent decentralized
+markov decision processes. JAIR, 22:423–455, 2004.
+
+[4] D. S. Bernstein, C. Amato, E. A. Hansen, and S. Zilberstein. Policy iteration for decentralized control of
+Markov decision processes. JAIR, 34:89–132, 2009.
+[5] D. S. Bernstein, R. Givan, N. Immerman, and S. Zilberstein. The complexity of decentralized control of
+Markov decision processes. J. MOR, 27:819–840, 2002.
+[6] J. Dean and S. Ghemawat. MapReduce: a flexible
+data processing tool. CACM, 53(1):72–77, 2010.
+[7] A. P. Dempster, N. M. Laird, and D. B. Rubin. Maximum likelihood from incomplete data via the EM algorithm. Journal of the Royal Statistical society, Series
+B, 39(1):1–38, 1977.
+[8] J. S. Dibangoye, A.-I. Mouaddib, and B. Chaib-draa.
+Point-based incremental pruning heuristic for solving
+finite-horizon DEC-POMDPs. In AAMAS, pages 569–
+576, 2009.
+[9] P. E. Gill, W. Murray, and M. A. Saunders. SNOPT:
+An SQP algorithm for large-scale constrained optimization. SIOPT, 12(4):979–1006, 2002.
+[10] M. Hoffman, H. Kueck, N. de Freitas, and A. Doucet.
+New inference strategies for solving Markov decision
+processes using reversible jump MCMC. In UAI, 2009.
+[11] A. Kumar and S. Zilberstein. Point based backup for
+decentralized POMDPs: Complexity and new algorithms. In AAMAS, pages 1315 – 1322, 2010.
+[12] M. Mundhenk, J. Goldsmith, C. Lusena, and E. Allender. Complexity of finite-horizon Markov decision
+process problems. J. ACM, 47(4):681–720, 2000.
+[13] R. Nair, P. Varakantham, M. Tambe, and M. Yokoo.
+Networked distributed POMDPs: A synthesis of distributed constraint optimization and POMDPs. In
+AAAI, pages 133–139, 2005.
+[14] F. A. Oliehoek, M. T. J. Spaan, and N. A. Vlassis.
+Optimal and approximate Q-value functions for decentralized POMDPs. JAIR, 32:289–353, 2008.
+[15] J. Pineau, G. Gordon, and S. Thrun. Anytime pointbased approximations for large POMDPs. JAIR,
+27:335–380, 2006.
+[16] S. Seuken and S. Zilberstein. Memory-bounded dynamic programming for DEC-POMDPs. In IJCAI,
+pages 2009–2015, 2007.
+[17] T. Smith and R. Simmons. Heuristic search value iteration for POMDPs. In UAI, pages 520–527, 2004.
+[18] M. Toussaint, L. Charlin, and P. Poupart. Hierarchical POMDP controller optimization by likelihood
+maximization. In UAI, pages 562–570, 2008.
+[19] M. Toussaint, S. Harmeling, and A. Storkey. Probabilistic inference for solving (PO)MDPs. Technical
+Report EDIINF-RR-0934, University of Edinburgh,
+School of Informatics, 2006.
+[20] M. Toussaint and A. J. Storkey. Probabilistic inference for solving discrete and continuous state markov
+decision processes. In ICML, pages 945–952, 2006.
+
+

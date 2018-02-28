@@ -1,0 +1,1810 @@
+arXiv:1308.4747v3 [stat.ME] 13 Nov 2014
+
+The Annals of Applied Statistics
+2014, Vol. 8, No. 3, 1281–1313
+DOI: 10.1214/14-AOAS742
+c Institute of Mathematical Statistics, 2014
+
+JOINT MODELING OF MULTIPLE TIME SERIES VIA THE BETA
+PROCESS WITH APPLICATION TO MOTION
+CAPTURE SEGMENTATION
+By Emily B. Fox1,∗ , Michael C. Hughes1,2,† ,
+Erik B. Sudderth1,† and Michael I. Jordan1,‡
+University of Washington∗ , Brown University†
+and University of California, Berkeley‡
+We propose a Bayesian nonparametric approach to the problem
+of jointly modeling multiple related time series. Our model discovers
+a latent set of dynamical behaviors shared among the sequences, and
+segments each time series into regions defined by a subset of these
+behaviors. Using a beta process prior, the size of the behavior set
+and the sharing pattern are both inferred from data. We develop
+Markov chain Monte Carlo (MCMC) methods based on the Indian
+buffet process representation of the predictive distribution of the beta
+process. Our MCMC inference algorithm efficiently adds and removes
+behaviors via novel split-merge moves as well as data-driven birth and
+death proposals, avoiding the need to consider a truncated model.
+We demonstrate promising results on unsupervised segmentation of
+human motion capture data.
+
+1. Introduction. Classical time series analysis has generally focused on
+the study of a single (potentially multivariate) time series. Instead, we consider analyzing collections of related time series, motivated by the increasing
+abundance of such data in many domains. In this work we explore this problem by considering time series produced by motion capture sensors on the
+joints of people performing exercise routines. An individual recording provides a multivariate time series that can be segmented into types of exercises
+(e.g., jumping jacks, arm-circles, and twists). Each exercise type describes
+Received May 2013; revised January 2014.
+Supported in part by AFOSR Grant FA9550-12-1-0453 and ONR Contracts/Grants
+N00014-11-1-0688 and N00014-10-1-0746.
+2
+Supported in part by an NSF Graduate Research Fellowship under Grant
+DGE0228243.
+Key words and phrases. Bayesian nonparametrics, beta process, hidden Markov models, motion capture, multiple time series.
+1
+
+This is an electronic reprint of the original article published by the
+Institute of Mathematical Statistics in The Annals of Applied Statistics,
+2014, Vol. 8, No. 3, 1281–1313. This reprint differs from the original in pagination
+and typographic detail.
+1
+
+2
+
+FOX, HUGHES, SUDDERTH AND JORDAN
+
+locally coherent and simple dynamics that persist over a segment of time.
+We have such motion capture recordings from multiple individuals, each of
+whom performs some subset of a global set of exercises, as shown in Figure 1. Our goal is to discover the set of global exercise types (“behaviors”)
+and their occurrences in each individual’s data stream. We would like to
+take advantage of the overlap between individuals: if a jumping-jack behavior is discovered in one sequence, then it can be used to model data for other
+individuals. This allows a combinatorial form of shrinkage involving subsets
+of behaviors from a global collection.
+A flexible yet simple method of describing single time series with such patterned behaviors is the class of Markov switching processes. These processes
+assume that the time series can be described via Markov transitions between
+a set of latent dynamic behaviors which are individually modeled via temporally independent linear dynamical systems. Examples include the hidden
+Markov model (HMM), switching vector autoregressive (VAR) process, and
+switching linear dynamical system (SLDS). These models have proven useful in such diverse fields as speech recognition, econometrics, neuroscience,
+remote target tracking, and human motion capture. In this paper, we focus our attention on the descriptive yet computationally tractable class of
+switching VAR processes. Here, the state of the underlying Markov process
+encodes the behavior exhibited at a given time step, and each dynamic behavior defines a VAR process. That is, conditioned on the Markov-evolving
+state, the likelihood is simply a VAR model with time-varying parameters.
+To discover the dynamic behaviors shared between multiple time series,
+we propose a feature-based model. The entire collection of time series can
+be described by a globally shared set of possible behaviors. Individually,
+however, each time series will only exhibit a subset of these behaviors. The
+goal of joint analysis is to discover which behaviors are shared among the
+time series and which are unique. We represent the behaviors possessed by
+time series i with a binary feature vector fi , with fik = 1 indicating that time
+series i uses global behavior k (see Figure 1). We seek a prior for these feature
+vectors which allows flexibility in the number of behaviors and encourages
+the sharing of behaviors. Our desiderata motivate a feature-based Bayesian
+nonparametric approach based on the beta process [Hjort (1990), Thibaux
+and Jordan (2007)]. Such an approach allows for infinitely many potential
+behaviors, but encourages a sparse representation. Given a fixed feature set,
+our model reduces to a collection of finite Bayesian VAR processes with
+partially shared parameters.
+We refer to our model as the beta-process autoregressive hidden Markov
+model, or BP-AR-HMM. We also consider a simplified version of this model,
+referred to as the BP-HMM, in which the AR emission models are replaced
+with a set of conditionally independent emissions. Preliminary versions of
+these models were partially described in Fox et al. (2009) and in Hughes, Fox
+
+JOINT MODELING OF MULTIPLE TIME SERIES VIA THE BETA PROCESS 3
+
+Fig. 1. Motivating data set: 6 sequences of motion capture data [CMU (2009)], with
+manual annotations. Top: Skeleton visualizations of 12 possible exercise behavior types
+observed across all sequences. Middle left: Binary feature assignment matrix F produced
+by manual annotation. Each row indicates which exercises are present in a particular sequence. Middle right: Discrete segmentations z of all six time series into the 12 possible
+exercises, produced by manual annotation. Bottom: Sequence 2’s observed multivariate
+time series data. Motion capture sensors measure 12 joint angles every 0.1 seconds. Proposed model: The BP-AR-HMM takes as input the observed time series sensor data across
+multiple sequences. It aims to recover the global behavior set, the binary assignments F,
+and the detailed segmentations z. When segmenting each sequence, our model only uses
+behaviors which are present in the corresponding row of F.
+
+and Sudderth (2012), who developed improved Markov chain Monte Carlo
+(MCMC) inference procedures for the BP-AR-HMM. In the current article
+we provide a unified and comprehensive description of the model and we
+also take further steps toward the development of an efficient inference algo-
+
+4
+
+FOX, HUGHES, SUDDERTH AND JORDAN
+
+rithm for the BP-AR-HMM. In particular, the unbounded nature of the set
+of possible behaviors available to our approach presents critical challenges
+during posterior inference. To efficiently explore the space, we introduce two
+novel MCMC proposal moves: (1) split-merge moves to efficiently change the
+feature structure for many sequences at once, and (2) data-driven reversible
+jump moves to add or delete features unique to one sequence. We expect
+the foundational ideas underlying both contributions (split-merge and datadriven birth–death) to generalize to other nonparametric models beyond the
+time-series domain. Building on an earlier version of these ideas in Hughes,
+Fox and Sudderth (2012), we show how to perform data-driven birth–death
+proposals using only discrete assignment variables (marginalizing away continuous HMM parameters), and demonstrate that annealing the Hastings
+term in the acceptance ratio can dramatically improve performance.
+Our presentation is organized as follows. Section 2 introduces motion capture data. In Section 3 we present our proposed beta-process-based model
+for multiple time series. Section 4 provides a formal specification of all prior
+distributions, while Section 5 summarizes the model. Efficient posterior computations based on an MCMC algorithm are developed in Section 6. The
+algorithm does not rely on model truncation; instead, we exploit the finite
+dynamical system induced by a fixed set of features to sample efficiently,
+while using data-driven reversible jump proposals to explore new features.
+Section 7 introduces our novel split-merge proposals, which allow the sampler to make large-scale improvements across many variables simultaneously.
+In Section 8 we describe related work. Finally, in Section 9 we present results on unsupervised segmentation of data from the CMU motion capture
+database [CMU (2009)]. Further details on our algorithms and experiments
+are available in the supplemental article [Fox et al. (2014)].
+2. Motion capture data. Our data consists of motion capture recordings
+taken from the CMU MoCap database (http://mocap.cs.cmu.edu). From
+the available set of 62 positions and joint angles, we examine 12 measurements deemed most informative for the gross motor behaviors we wish to
+capture: one body torso position, one neck angle, two waist angles, and a
+symmetric pair of right and left angles at each subject’s shoulders, wrists,
+knees, and feet. As such, each recording provides us with a 12-dimensional
+time series. A collection of several recordings serves as the observed data
+which our model analyzes.
+An example data set of six sequences is shown in Figure 1. This data set
+contains three sequences from Subject 13 and three from Subject 14. These
+sequences were chosen because they had many exercises in common, such as
+“squat” and “jog,” while also containing several unique behaviors appearing
+in only one sequence, such as “side bend.” Additionally, we have human annotations of these sequences, identifying which of 12 exercise behaviors was
+
+JOINT MODELING OF MULTIPLE TIME SERIES VIA THE BETA PROCESS 5
+
+present at each time step, as shown in Figure 1. These human segmentations
+serve as ground-truth for assessing the accuracy of our model’s estimated
+segmentations (see Section 9). In addition to analyzing this small data set,
+we also consider a much larger 124 sequence data set in Section 9.
+3. A featural model for relating multiple time series. In our applications
+of interest, we are faced with a collection of N time series representing realizations of related dynamical phenomena. Our goal is to discover dynamic
+behaviors shared between the time series. Through this process, we can infer
+how the data streams relate to one another as well as harness the shared
+structure to pool observations from the same behavior, thereby improving
+our estimates of the dynamic parameters.
+We begin by describing a model for the dynamics of each individual time
+series. We then describe a mechanism for representing dynamics which are
+shared between multiple data streams. Our Bayesian nonparametric prior
+specification plays a key role in this model, by addressing the challenge
+of allowing for uncertainty in the number of dynamic behaviors exhibited
+within and shared across data streams.
+3.1. Per-series dynamics. We model the dynamics of each time series
+as a Markov switching process (MSP). Most simply, one could consider a
+hidden Markov model (HMM) [Rabiner (1989)]. For observations yt ∈ Rd
+and hidden state zt , the HMM assumes
+zt |zt−1 ∼ πzt−1 ,
+
+(1)
+
+yt |zt ∼ F (θzt ),
+
+for an indexed family of distributions F (·). Here, πk is the state-specific
+transition distribution and θk the emission parameters for state k.
+The modeling assumption of the HMM that observations are conditionally independent given the latent state sequence is insufficient to capture the
+temporal dependencies present in human motion data streams. Instead, one
+can assume that the observations have conditionally linear dynamics. Each
+latent HMM state then models a single linear dynamical system, and over
+time the model can switch between dynamical modes by switching among
+the states. We restrict our attention in this paper to switching vector autoregressive (VAR) processes, or autoregressive HMMs (AR-HMMs), which
+are both broadly applicable and computationally practical.
+We consider an AR-HMM where, conditioned on the latent state zt , the
+observations evolve according to a state-specific order-r VAR process:3
+r
+X
+yt =
+(2)
+Aℓ,zt yt−ℓ + et (zt ) = Ak ỹt + et (zt ),
+ℓ=1
+
+3
+
+We denote an order-r VAR process by VAR(r).
+
+6
+
+FOX, HUGHES, SUDDERTH AND JORDAN
+
+T ]T are the aggregated
+T
+· · · yt−1
+where et (zt ) ∼ N (0, Σzt ) and ỹt = [ yt−1
+past observations. We refer to Ak = [ A1,k · · · Ar,k ] as the set of lag matrices. Note that an HMM with zero-mean Gaussian emissions arises as a
+special case of this model when Ak = 0 for all k. Throughout, we denote the
+VAR parameters for the kth state as θk = {Ak , Σk } and refer to each VAR
+process as a dynamic behavior. For example, these parameters might each
+define a linear motion model for the behaviors walking, running, jumping,
+and so on; our time series are then each modeled as Markov switches between these behaviors. We will sometimes refer to k itself as a “behavior,”
+where the intended meaning is the VAR model parameterized by θk .
+
+3.2. Relating multiple time series. There are many ways in which a collection of data streams may be related. In our applications of interest, our N
+time series are related by the overlap in the set of dynamic behaviors each
+exhibits. Given exercise routines from N actors, we expect both sharing and
+variability: some people may switch between walking and running, while
+others switch between running and jumping. Formally, we define a shared
+set of dynamic behaviors {θ1 , θ2 , . . .}. We then associate some subset of these
+behaviors with each time series i via a binary feature vector fi = [fi1 , fi2 , . . .].
+Setting fik = 1 implies that time series i exhibits behavior k for some subset
+of values t ∈ {1, . . . , Ti }, where Ti is the length of the ith time series.
+The feature vectors are used to define a set of feature-constrained transition distributions that restrict each time series i to only switch between
+(i)
+its set of selected behaviors, as indicated by fi . Let πk denote the feature(i)
+constrained transition distribution from state k for time series i. Then, πk
+P (i)
+satisfies j πkj = 1, and
+
+ π (i) = 0,
+if fij = 0,
+kj
+(3)
+ π (i) > 0,
+if fij = 1.
+kj
+See Figure 2. Note that here we assume that the frequency at which the time
+series switch between the selected behaviors might be time-series-specific.
+
+(i)
+
+Fig. 2. Illustration of generating feature-constrained transition distributions πj . Each
+time series’ binary feature vector fi limits the support of the transition distribution to the
+sparse set of selected dynamic behaviors. The nonzero components are Dirichlet distributed,
+as described by equation (12). The feature vectors are as in Figure 1.
+
+JOINT MODELING OF MULTIPLE TIME SERIES VIA THE BETA PROCESS 7
+
+That is, although two actors may both run and walk, they may alternate
+between these behaviors in different manners.
+The observations for each data stream then follow an MSP defined by the
+feature-constrained transition distributions. Although the methodology described thus far applies equally well to HMMs and other MSPs, henceforth
+we focus our attention on the AR-HMM and develop the full model specification and inference procedures needed to treat our motivating example of
+(i)
+visual motion capture. Specifically, let yt represent the observed value of
+(i)
+the ith time series at time t, and let zt denote the latent dynamical state.
+Assuming an order-r AR-HMM as defined in equation (2), we have
+(i)
+
+(i)
+
+zt |zt−1 ∼ π
+(4)
+
+(i)
+
+(i)
+(i)
+
+zt−1
+
+,
+(i)
+
+(i)
+
+yt |zt ∼ N (Az (i) ỹt , Σz (i) ).
+t
+
+t
+
+Conditioned on the set of feature vectors, fi , for i = 1, . . . , N , the model
+reduces to a collection of N switching VAR processes, each defined on the
+finite state space formed by the set of selected behaviors for that time series.
+The dynamic behaviors θk = {Ak , Σk } are shared across all time series. The
+(i)
+feature-constrained transition distributions πj restrict time series i to select
+among the dynamic behaviors available in its feature vector fi . Each time
+(i)
+step t is assigned to one behavior, according to assignment variable zt .
+This proposed featural model has several advantages. By discovering the
+pattern of behavior sharing (i.e., discovering fik = fjk = 1 for some pair of
+sequences i, j), we can interpret how the time series relate to one another.
+Additionally, behavior-sharing allows multiple sequences to pool observations from the same behavior, improving estimates of θk .
+4. Prior specification. To maintain an unbounded set of possible behaviors, we take a Bayesian nonparametric approach and define a model for a
+globally shared set of infinitely many possible dynamic behaviors. We first
+explore a prior specification for the corresponding infinite-dimensional feature vectors fi . We then address the challenge of defining a prior on infinitedimensional transition distributions with support constraints defined by the
+feature vectors.
+4.1. Feature vectors. Inferring the structure of behavior sharing within a
+Bayesian framework requires defining a prior on the feature inclusion probabilities. Since we want to maintain an unbounded set of possible behaviors (and thus require infinite-dimensional feature vectors), we appeal to a
+Bayesian nonparametric featural model based on the beta process-Bernoulli
+process. Informally, one can think of the formulation in our case as follows. A
+
+8
+
+FOX, HUGHES, SUDDERTH AND JORDAN
+
+P
+beta process (BP) random measure, B = k ωk δθk , defines an infinite set of
+coin-flipping probabilities ωk —one for each behavior θP
+k . Each time series i
+is associated with a Bernoulli process realization, Xi = k fik δθk , that is the
+outcome of an infinite coin-flipping sequence based on the BP-determined
+coin weights. The set of resulting heads (fik = 1) indicates the set of selected
+behaviors, and implicitly defines an infinite-dimensional feature vector fi .
+The properties of the BP induce sparsity in the feature space by encouraging sharing of features among the Bernoulli process realizations. Specifically,
+the total sum of coin weights is finite, and only certain behaviors have large
+coin weights. Thus, certain features are more prevalent, although feature
+vectors clearly need not be identical. As such, this model allows infinitely
+many possible behaviors, while encouraging a sparse, finite representation
+and flexible sharing among time series. The inherent conjugacy of the BP
+to the Bernoulli process allows for an analytic predictive distribution for
+a feature vector based on the feature vectors observed so far. As outlined
+in Section 6.1, this predictive distribution can be described via the Indian
+buffet process [Ghahramani, Griffiths and Sollich (2006)] under certain parameterizations of the BP. Computationally, this representation is key.
+The beta process—Bernoulli process featural model. The BP is a special
+case of a general class of stochastic processes known as completely random
+measures [Kingman (1967)]. A completely random measure B is defined such
+that for any disjoint sets A1 and A2 (of some sigma algebra A on a measurable space Θ), the corresponding random variables B(A1 ) and B(A2 ) are
+independent. This idea generalizes the family of independent increments processes on the real line. All completely random measures can be constructed
+from realizations of a nonhomogenous Poisson process [up to a deterministic
+component; see Kingman (1967)]. Specifically, a Poisson rate measure ν is
+defined on a product space Θ ⊗ R, and a draw from the specified Poisson
+process yields a collection of points {θj , ωj } that can be used to define a
+completely random measure:
+(5)
+
+B=
+
+∞
+X
+
+ωk δθk .
+
+k=1
+
+This construction assumes ν has infinite mass, yielding a countably infinite
+collection of points from the Poisson process. Equation (5) shows that completely random measures are discrete. Consider a rate measure defined as
+the product of an arbitrary sigma-finite base measure B0 , with total mass
+B0 (Θ) = α, and an improper beta distribution on the interval [0, 1]. That is,
+on the product space Θ ⊗ [0, 1] we have the following rate measure:
+(6)
+
+ν(dω, dθ) = cω −1 (1 − ω)c−1 dω B0 (dθ),
+
+JOINT MODELING OF MULTIPLE TIME SERIES VIA THE BETA PROCESS 9
+
+where c > 0 is referred to as a concentration parameter. The resulting completely random measure is known as the beta process, with draws denoted by
+B ∼ BP(c, B0 ). With this construction, the weights ωk of the atoms in B lie
+in the interval (0, 1), thus defining our desired feature-inclusion probabilities.
+The BP is conjugate to a class of Bernoulli processes [Thibaux and Jordan
+(2007)], denoted by BeP(B), which provide our desired feature representation. A realization
+Xi |B ∼ BeP(B),
+
+(7)
+
+with B an atomic measure, is a collection of unit-mass atoms on Θ located at
+some subset of the atoms in B. In particular, fik ∼ Bernoulli(ωk ) is sampled
+independently for each atom θk in B, and then
+X
+(8)
+Xi =
+fik δθk .
+k
+
+One can visualize this process as walking along the atoms of a discrete measure B and, at each atom θk , flipping a coin with probability of heads given
+by ωk . Since the rate measure ν is σ-finite, Campbell’s theorem [Kingman
+(1993)] guarantees that for α finite, B has finite expected measure resulting
+in a finite set of “heads” (active features) in each Xi .
+Computationally, Bernoulli process realizations Xi are often summarized
+by an infinite vector of binary indicator variables fi = [fi1 , fi2 , . . .]. Using the
+BP measure B to tie together the feature vectors encourages the Xi to share
+similar features while still allowing significant variability.
+4.2. Feature-constrained transition distributions. We seek a prior for tran(i)
+sition distributions π (i) = {πk } defined on an infinite-dimensional state
+space, but with positive support restricted to a finite subset specified by
+fi . Motivated by the fact that Dirichlet-distributed probability mass functions can be generated via normalized gamma random variables, for each
+time series i we define a doubly-infinite collection of random variables:
+(9)
+
+(i)
+
+ηjk |γ, κ ∼ Gamma(γ + κδ(j, k), 1).
+
+Here, the Kronecker delta function is defined by δ(j, k) = 0 when j 6= k
+and δ(k, k) = 1. The hyperparameters γ, κ govern Markovian state switching probabilities. Using this collection of transition weight variables, denoted
+by η (i) , we define time-series-specific, feature-constrained transition distributions:
+(10)
+
+(i)
+πj
+
+(i)
+(i)
+[ ηj1
+ηj2
+=
+P
+
+· · · ] ⊙ fi
+
+(i)
+k|fik =1 ηjk
+
+,
+
+10
+
+FOX, HUGHES, SUDDERTH AND JORDAN
+
+where ⊙ denotes the element-wise, or Hadamard, vector product. This con(i)
+struction defines πj over the full set of positive integers, but assigns positive
+mass only at indices k where fik = 1, constraining time series i to only transition among behaviors indicated by its feature vector fi . See Figure 2.
+The preceding generative process can be equivalently represented via a
+P
+(i)
+sample π̃j from a finite Dirichlet distribution of dimension Ki = k fik ,
+(i)
+
+containing the nonzero entries of πj :
+(i)
+
+π̃j |fi , γ, κ ∼ Dir([γ, . . . , γ, γ + κ, γ, . . . , γ]).
+
+(11)
+
+This construction reveals that κ places extra expected mass on the selftransition probability of each state, analogously to the sticky HDP-HMM [Fox
+et al. (2011b)]. We also use the representation
+(i)
+
+πj |fi , γ, κ ∼ Dir([γ, . . . , γ, γ + κ, γ, . . .] ⊙ fi ),
+
+(12)
+(i)
+
+(i)
+implying πj = [ πj1
+(i)
+πjk .
+
+(i)
+
+πj2
+
+· · · ] has only a finite number of nonzero en-
+
+This representation is an abuse of notation since the Dirichlet
+tries
+distribution is not defined for infinitely many parameters. However, the notation of equation (12) is useful in reminding the reader that the indices of
+(i)
+π̃j defined by equation (11) are not over 1 to Ki , but rather over the Ki
+values of k such that fik = 1. Additionally, this notation is useful for concise
+representations of the posterior distribution.
+We construct the model using the unnormalized transition weights η (i)
+instead of just the proper distributions π (i) so that we may consider adding
+or removing states when sampling from the nonparametric posterior. Working with η (i) here simplifies expressions, since we need not worry about the
+normalization constraint required with π (i) .
+4.3. VAR parameters. To complete the Bayesian model specification,
+a conjugate matrix-normal inverse-Wishart (MNIW) prior [cf., West and
+Harrison (1997)] is placed on the shared collection of dynamic parameters
+θk = {Ak , Σk }. Specifically, this prior is comprised of an inverse Wishart
+prior on Σk and (conditionally) a matrix normal prior on Ak :
+(13)
+
+Σk |n0 , S0 ∼ IW(n0 , S0 ),
+Ak |Σk , M, L ∼ MN (Ak ; M, Σk , L),
+
+with n0 the degrees of freedom, S0 the scale matrix, M the mean dynamic
+matrix, and L a matrix that together with Σk defines the covariance of Ak .
+This prior defines the base measure B0 up to the total mass parameter α,
+which has to be separately assigned (see Section 6.5). The MNIW density
+function is provided in the supplemental article [Fox et al. (2014)].
+
+JOINT MODELING OF MULTIPLE TIME SERIES VIA THE BETA PROCESS 11
+
+Fig. 3. Graphical model representation of the BP-AR-HMM. For clarity, the feature-inclusion probabilities, ωk , and VAR parameters, θk , of the beta process base measure
+B ∼ BP(c, B0 ) are decoupled. Likewise, the Bernoulli process realizations Xi associated
+with each time series are compactly represented in terms of feature vectors fi indexed over
+the θk ; here, fik |ωk ∼ Bernoulli(ωk ). See equation (5) and equation (8). The fi are used to
+(i)
+define feature-constrained transition distributions πj |fi ∼ Dir([γ, . . . , γ, γ + κ, γ, . . .] ⊙ fi ).
+(i)
+π can also be written in terms of transition weights η (i) , as in equation (10). The state
+(i)
+(i)
+(i) (i)
+evolves as zt |zt ∼ π (i) and defines conditionally VAR dynamics for yt as in equazt
+tion (4).
+
+5. Model overview. Our beta-process-based featural model couples the
+dynamic behaviors exhibited by different time series. We term the resulting
+model the BP-autoregressive-HMM (BP-AR-HMM). Figure 3 provides a
+graphical model representation. Considering the feature space (i.e., set of
+autoregressive parameters) and the temporal dynamics (i.e., set of transition
+distributions) as separate dimensions, one can think of the BP-AR-HMM
+as a spatio-temporal process comprised of a (continuous) beta process in
+space and discrete-time Markovian dynamics in time. The overall model
+specification is summarized as follows:
+(1) Draw beta process realization B ∼ BP(c, B0 ):
+B=
+
+∞
+X
+
+ωk θk
+
+where θk = {Ak , Σk }.
+
+k=1
+
+(2) For each sequence i from 1 to N :
+(a) Draw feature vector fi |B ∼ BeP(B).
+(b) Draw feature-constrained transition distributions
+(i)
+
+πj |fi ∼ Dir([. . . , γ + δ(j, k)κ, . . .] ⊙ fi ).
+(c) For each time step t from 1 to Ti :
+(i)
+(i) (i)
+(i) Draw state sequence zt |zt−1 ∼ π (i) .
+zt−1
+
+(ii) Draw observations
+
+(i) (i)
+yt |zt
+
+(i)
+
+∼ N (Az (i) ỹt , Σz (i) ).
+t
+
+t
+
+12
+
+FOX, HUGHES, SUDDERTH AND JORDAN
+
+One can also straightforwardly consider conditionally independent emissions
+in place of the VAR processes, resulting in a BP-HMM model.
+6. MCMC posterior computations. In this section we develop an MCMC
+algorithm which aims to produce posterior samples of the discrete indicator variables (binary feature assignments F = {fi } and state sequences z =
+{z(i) }) underlying the BP-AR-HMM. We analytically marginalize the continuous emission parameters θ = {Ak , Σk } and transition weights η = {η (i) },
+since both have conditionally conjugate priors. This focus on discrete parameters represents a major departure from the samplers developed by Fox
+et al. (2009) and Hughes, Fox and Sudderth (2012), which explicitly sampled
+continuous parameters and viewed z as auxiliary variables.
+Our focus on the discrete latent structure has several benefits. First, fixed
+feature assignments F instantiate a set of finite AR-HMMs, so that dynamic
+programming can be used to efficiently compute marginal likelihoods. Second, we can tractably compute the joint probability of (F, z, y), which allows meaningful comparison of configurations (F, z) with varying numbers
+K+ of active features. Such comparison is not possible when instantiating
+θ or η, since these variables have dimension proportional to K+ . Finally,
+our novel split-merge and data-driven birth moves both consider adding
+new behaviors to the model, and we find that proposals for fixed-dimension
+discrete variables are much more likely to be accepted than proposals for
+high-dimensional continuous parameters. Split-merge proposals with high
+acceptance rates are essential to the experimental successes of our method,
+since they allow potentially large changes at each iteration.
+At each iteration, we cycle among seven distinct sampler moves:
+(1)
+(2)
+(3)
+(4)
+(5)
+(6)
+(7)
+
+(Section 6.4) Sample behavior-specific auxiliary variables: θ, η|F, z.
+(Section 6.2) Sample shared features, collapsing state sequences: F|θ, η.
+(Section 6.3) Sample each state sequence: z|F, θ, η.
+(Section 6.5) Sample BP hyperparameters: α, c|F.
+(Section 6.5) Sample HMM transition hyperparameters: γ, κ|F, η.
+(Section 6.6) Propose birth/death moves on joint configuration: F, z.
+(Section 7) Propose split/merge move on joint configuration: F, z.
+
+Note that some moves instantiate θ, η as auxiliary variables to make computations tractable and block sampling possible. However, we discard these
+variables after step 5 and only propagate the core state space (F, z, α, c, γ, κ)
+across iterations. Note also that steps 2–3 comprise a block sampling of F, z.
+Our MCMC steps are detailed in the remainder of this section, except for
+split-merge moves which are discussed in Section 7. Further information for
+all moves is also available in the supplemental article [Fox et al. (2014)],
+including a summary of the overall MCMC procedure in Algorithm D.1.
+
+JOINT MODELING OF MULTIPLE TIME SERIES VIA THE BETA PROCESS 13
+
+Computational complexity. The most expensive step of our sampler occurs when sampling the entries of F (step 2). Sampling each binary entry
+requires one run of the forward–backward algorithm to compute the likeli(i)
+hood p(y1 : Ti |fi , η (i) , θ); this dynamic programming routine has complexity
+O(Ti Ki2 ), where Ki is the number of active behavior states in sequence i and
+Ti is the number of time steps. Computation may be significantly reduced
+by caching the results of some previous sampling steps, but this remains the
+most costly step. Resampling the N state sequences z (step 3) also requires
+an O(Ti Ki2 ) forward–backward routine, but harnesses computations made in
+sampling F and is only performed N times rather than N K, where K is the
+total number of instantiated features. The birth/death moves (step 6) basically only involve the computational cost of sampling the state sequences.
+Split-merge moves (step 7) are slightly more complex, but again primarily
+result in repeated resampling of state sequences. Note that although each
+iteration is fairly costly, the sophisticated sampling updates developed in
+the following sections mean that fewer iterations are needed to achieve reasonable posterior estimates.
+Conditioned on the set of instantiated features F and behaviors θ, the
+model reduces to a collection of independent, finite AR-HMMs. This structure could be harnessed to distribute computation, and parallelization of
+our sampling scheme is a promising area for future research.
+6.1. Background: The Indian buffet process. Sampling the features F
+requires some prerequisite knowledge. As shown by Thibaux and Jordan
+(2007), marginalizing over the latent beta process B in the beta processBernoulli process hierarchy and taking c = 1 induces a predictive distribution
+on feature indicators known as the Indian buffet process (IBP) [Ghahramani,
+Griffiths and Sollich (2006)].4 The IBP is based on a culinary metaphor in
+which customers arrive at an infinitely long buffet line of dishes (features).
+The first arriving customer (time series) chooses Poisson(α) dishes. Each
+subsequent customer i selects a previously tasted dish k with probability
+mk /i proportional to the number of previous customers mk to sample it,
+and also samples Poisson(α/i) new dishes.
+For a detailed derivation of the IBP from the beta process-Bernoulli process formulation of Section 4.1, see Supplement A of Fox et al. (2014).
+6.2. Sampling shared feature assignments. We now consider sampling
+each sequence’s binary feature assignment fi . Let F−ik denote the set of all
+−i
+be the number of behaviors used
+feature indicators excluding fik , and K+
+−i
+features may also be shared by
+by all other time series. Some of the K+
+4
+
+Allowing any c > 0 induces a two-parameter IBP with a similar construction.
+
+14
+
+FOX, HUGHES, SUDDERTH AND JORDAN
+
+time series i, but those unique to this series are not included. For simplicity,
+−i
+}. The IBP prior
+we assume that these behaviors are indexed by {1, . . . , K+
+differentiates between this set of “shared” features that other time series
+have already selected and those “unique” to the current sequence and appearing nowhere else. We may safely alter sequence i’s assignments to shared
+−i
+} without changing the number of behaviors present in
+features {1, . . . , K+
+F. We give a procedure for sampling these entries below. Sampling unique
+features requires adding or deleting features, which we cover in Section 6.6.
+(i)
+Given observed data y1 : Ti , transition variables η (i) , and emission parameters θ, the feature indicators fik for the ith sequence’s shared features
+−i
+} have posterior distribution
+k ∈ {1, . . . , K+
+(14)
+
+(i)
+
+(i)
+
+p(fik |F−ik , y1 : Ti , η (i) , θ) ∝ p(fik |F−ik )p(y1 : Ti |fi , η (i) , θ).
+
+−i
+Here, the IBP prior implies that p(fik = 1|F−ik ) = m−i
+k /N , where mk denotes the number of sequences other than i possessing k. This exploits the
+exchangeability of the IBP [Ghahramani, Griffiths and Sollich (2006)], which
+follows from the BP construction [Thibaux and Jordan (2007)].
+When sampling binary indicators like fik , Metropolis–Hastings proposals
+can mix faster [Frigessi et al. (1993)] and have greater efficiency [Liu (1996)]
+than standard Gibbs samplers. To update fik given F−ik , we thus use equation (14) to evaluate a Metropolis–Hastings proposal which flips fik to the
+binary complement f¯ = 1 − f of its current value f :
+
+(15)
+
+fik ∼ ρ(f¯|f )δ(fik , f¯) + (1 − ρ(f¯|f ))δ(fik , f ),
+ p(f = f¯|F−ik , y(i) , η (i) , θ
+
+−i , c)
+ik
+1 : Ti
+1 : K+
+¯
+ρ(f |f ) = min
+,1 .
+(i)
+p(fik = f |F−ik , y1 : Ti , η (i) , θ1 : K −i , c)
++
+
+(i)
+
+To compute likelihoods p(y1 : Ti |fi , η(i) , θ), we combine fi and η (i) to con(i)
+
+struct the transition distributions πj as in equation (10), and marginalize
+over the possible latent state sequences by applying a forward–backward
+message passing algorithm for AR-HMMs [see Supplement C.2 of Fox et al.
+(2014)]. In each sampler iteration, we apply these proposals sequentially to
+each entry of the feature matrix F, visiting each entry one at a time and
+retaining any accepted proposals to be used as the fixed F−ik for subsequent
+proposals.
+6.3. Sampling state sequences z. For each sequence i contained in z, we
+(i)
+block sample z1 : Ti in one coherent move. This is possible because fi defines
+a finite AR-HMM for each sequence, enabling dynamic programming with
+
+JOINT MODELING OF MULTIPLE TIME SERIES VIA THE BETA PROCESS 15
+(i)
+
+auxiliary variables π (i) , θ. We compute backward messages mt+1,t (zt ) ∝
+(i)
+(i) (i)
+(i)
+p(yt+1 : Ti |zt , ỹt , π (i) , θ), and recursively sample each zt :
+(i)
+
+(i)
+
+(i)
+
+(16) zt |zt−1 , y1 : Ti , π (i) , θ ∼ π
+
+(i)
+
+(i)
+
+(i)
+
+(i)
+
+(i)
+
+(i)
+
+zt−1
+
+(zt )N (yt ; Az (i) ỹt , Σz (i) )mt+1,t (zt ).
+t
+
+t
+
+Supplement Algorithm D.3 of Fox et al. (2014) explains backward-filtering,
+forward-sampling in detail.
+6.4. Sampling auxiliary parameters: θ and η. Given fixed features F and
+state sequences z, the posterior over auxiliary parameters factorizes neatly:
+(17)
+
+p(θ, η|F, z, y) =
+
+K+
+Y
+
+(i)
+
+(i)
+
+p(θk |{yt : zt = k})
+
+p(η (i) |z(i) , fi ).
+
+i=1
+
+k=1
+
+We can thus sample each θk and
+
+N
+Y
+
+η(i)
+
+independently, as outlined below.
+
+Transition weights η (i) . Given state sequence z(i) and features fi , sequence i’s Markov transition weights η (i) have posterior distribution
+(i)
+
+(i)
+
+(18)
+
+(i)
+
+(ηjk )njk +γ+κδ(j,k)−1 e−ηjk
+= 1, fik = 1) ∝
+,
+P
+(i) (i)
+[ k′ : f ′ =1 ηjk′ ]nj
+
+(i)
+p(ηjk |z(i) , fij
+
+ik
+
+P (i)
+(i)
+(i)
+where
+counts the transitions from state j to k in z1 : Ti , and nj = k njk
+counts all transitions out of state j.
+Although the posterior in equation (18) does not belong to any standard parametric family, simulating posterior draws is straightforward. We
+use a simple auxiliary variable method which inverts the usual gamma-toDirichlet scaling transformation used to sample Dirichlet random variables.
+(i)
+We explicitly draw πj , the normalized transition probabilities out of state
+j, as
+(i)
+njk
+
+(19)
+
+(i)
+
+(i)
+
+πj |z(i) ∼ Dir([. . . , γ + njk + κδ(j, k), . . .] ⊙ fi ).
+(i)
+
+The unnormalized transition parameters ηj
+ministic transformation
+(20)
+
+(i)
+ηj
+(i)
+
+(i) (i)
+= Cj π j ,
+
+are then given by the deter-
+
+where
+(i)
+
+Cj ∼ Gamma(K+ γ + κ, 1).
+
+P
+(i)
+Here, K+ = k fik . This sampling process ensures that transition weights
+η (i) have magnitude entirely informed by the prior, while only the relative
+proportions are influenced by z(i) . Note that this is a correction to the pos(i)
+terior for ηj presented in the earlier work of Fox et al. (2009).
+
+16
+
+FOX, HUGHES, SUDDERTH AND JORDAN
+
+Emission parameters θk . The emission parameters θk = {Ak , Σk } for
+each feature k have the conjugate matrix normal inverse-Wishart (MNIW)
+prior of equation (13). Given z, we form θk ’s MNIW posterior using sufficient statistics from observations assigned to state k across all sequences
+(i)
+(i)
+(i)
+(i)
+i and time steps t. Letting Yk = {yt : zt = k} and Ỹk = {ỹt : zt = k},
+define
+X
+X
+(i) (i)T
+(k)
+(i) (i)T
+(k)
+yt ỹt + ML,
+Syỹ =
+ỹt ỹt + L,
+Sỹỹ =
+(i)
+
+(i)
+
+(t,i)|zt =k
+
+(t,i)|zt =k
+
+(21)
+
+(k)
+Syy
+=
+
+X
+
+(i) (i)T
+
+yt yt
+
++ MLMT ,
+
+(k) −(k) (k)T
+
+(k)
+
+(k)
+− Syỹ Sỹỹ Sỹỹ .
+Sy|ỹ = Syy
+
+(i)
+
+(t,i)|zt =k
+
+Using standard MNIW conjugacy results, the posterior is then
+(k) −(k)
+
+(22)
+
+(k)
+
+Ak |Σk , Yk , Ỹk ∼ MN (Ak ; Syỹ Sỹỹ , Σk , Sỹỹ ),
+(k)
+
+Σk |Yk , Ỹk ∼ IW(|Yk | + n0 , Sy|ỹ + S0 ).
+Through sharing across multiple time series, we improve inferences about
+{Ak , Σk } compared to endowing each sequence with separate behaviors.
+6.5. Sampling the BP and transition hyperparameters. We additionally
+place priors on the transition hyperparameters γ and κ, as well as the BP
+parameters α and c, and infer these via MCMC. Detailed descriptions of
+these sampling steps are provided in Supplement G.2 of Fox et al. (2014).
+6.6. Data-driven birth–death proposals of unique features. We now consider exploration of the unique features associated with each sequence. One
+might consider a birth–death version of a reversible jump proposal [Green
+(1995)] that either adds one new feature (“birth”) or eliminates an existing unique feature. This scheme was considered by Fox et al. (2009), where
+each proposed new feature k∗ (HMM state) was associated with an emission
+(i)
+(i)
+parameter θk∗ and associated transition parameters {ηjk∗ , ηk∗ j } drawn from
+their priors. However, such a sampling procedure can lead to extremely low
+acceptance rates in high-dimensional cases since it is unlikely that a random draw of θk∗ will better explain the data than existing, data-informed
+parameters. Recall that for a BP-AR-HMM with VAR(1) likelihoods, each
+θk = {Ak , Σk } has d2 + d(d + 1)/2 scalar parameters. This issue was addressed by the data-driven proposals of Hughes, Fox and Sudderth (2012),
+which used randomly selected windows of data to inform the proposal distribution for θk∗ . Tu and Zhu (2002) employed a related family of data-driven
+MCMC proposals for a very different image segmentation model.
+
+JOINT MODELING OF MULTIPLE TIME SERIES VIA THE BETA PROCESS 17
+
+The birth–death frameworks of Fox et al. (2009) and Hughes, Fox and
+Sudderth (2012) both perform such moves by marginalizing out the state
+sequence z(i) and modifying the continuous HMM parameters θ, η. Our proposed sampler avoids the challenge of constructing effective proposals for θ, η
+by collapsing away these high-dimensional parameters and only proposing
+modifications to the discrete assignment variables F, z, which are of fixed
+(i)
+dimension regardless of the dimensionality of the observations yt . Our experiments in Section 9 show the improved mixing of this discrete assignment
+approach over previously proposed alternative samplers.
+At a high level, our birth–death moves propose changing one binary entry
+in fi , combined with a corresponding change to the state sequence z(i) . In
+−i
+particular, given a sequence i with Ki active features (of which ni = Ki −K+
+are unique), we first select the type of move (birth or death). If ni is empty,
+we always propose a birth. Otherwise, we propose a birth with probability
+1
+1
+2 and a death of unique feature k with probability 2ni . We denote this
+proposal distribution as qf (fi∗ |fi ). Once the feature proposal is selected, we
+then propose a new state sequence configuration z∗(i) .
+Efficiently drawing a proposed state sequence z∗(i) requires the backwardfiltering, forward-sampling scheme of equation (16). To perform this dynamic
+programming we deterministically instantiate the HMM transition weights
+and emission parameters as auxiliary variables: η̂, θ̂. These quantities are
+deterministic functions of the conditioning set used solely to define the proposal and are not the same as the actual sampled variables used, for example,
+in steps 1–5 of the algorithm overview. The variables are discarded before
+subsequent sampling stages. Instantiating these variables allows efficient collapsed proposals of discrete indicator configuration (F∗ , z∗ ). To define good
+auxiliary variables, we harness the data-driven ideas of Hughes, Fox and
+Sudderth (2012). An outline is provided below with a detailed summary
+and formal algorithmic presentation in Supplement E of Fox et al. (2014).
+Birth proposal for z ∗(i) . During a birth, we create a new state sequence
+that can use any features in fi∗ , including the new “birth” feature k∗ . To
+construct this proposal, we utilize deterministic auxiliary variables θ̂, η̂ (i) .
+(i)
+(i)
+For existing features k such that fik = 1, we set η̂kj to the prior mean of ηkj
+z∗(i)
+
+and θ̂k to the posterior mean of θk given all data in any sequence assigned
+to k in the current sample z(i) . For new features k∗ , we can similarly set
+(i)
+η̂k∗ j to the prior mean. For θ̂k∗ , however, we use a data-driven construction
+since using the vague MNIW prior mean would make this feature unlikely
+to explain any data at hand.
+The resulting data-driven proposal for z(i) is as follows. First, we choose
+a random subwindow W of the current sequence i. W contains a contiguous
+region of time steps within {1, 2, . . . , Ti }. Second, conditioning on the chosen
+
+18
+
+FOX, HUGHES, SUDDERTH AND JORDAN
+
+window, we set θ̂k∗ to the posterior mean of θk given the data in the window
+(i)
+{yt : t ∈ W }. Finally, given auxiliary variables θ̂, η̂ (i) for all features, not
+just the newborn k∗ , we sample the proposal z∗(i) using the efficient dynamic
+programming algorithm for block-sampling state sequences. This sampling
+allows any time step in the current sequence to be assigned to the new
+feature, not just those in W , and similarly does not force time steps in W to
+use the new feature k∗ . These properties maintain reversibility. We denote
+this proposal distribution by qz -birth (z∗ |F∗ , z, y).
+Death proposal for z ∗(i) . During a death move, we propose a new state
+sequence z∗(i) that only uses the reduced set of behaviors in fi∗ . This requires
+deterministic auxiliary variables θ̂, η̂(i) constructed as in the birth proposal,
+but here only for the features in fi∗ which are all already existing. Again,
+using these quantities we construct the proposed z∗(i) via block sampling
+and denote the proposal distribution by qz -death (z∗ |F∗ , z, y).
+Acceptance ratio. After constructing the proposal, we decide to accept
+or reject via the Metropolis–Hastings ratio with probability min(1, ρ), where
+for a birth move
+(23)
+
+ρbirth-in-seq-i =
+
+p(y, z∗ , fi∗ ) qz -death (z|F, z∗ , y) qf (fi |fi∗ )
+.
+p(y, z, fi ) qz -birth (z∗ |F∗ , z, y) qf (fi∗ |fi )
+
+Note that evaluating the joint probability p(y, z, fi ) of a new configuration
+in the discrete assignment space requires considering the likelihood of all
+sequences, rather than just the current one, because under the BP-ARHMM collapsing over θ induces dependencies between all data time steps
+assigned to the same feature. This is why we use notation z, even though our
+proposals only modify variables associated with sequence i. The sufficient
+statistics required for this evaluation are needed for many other parts of
+our sampler, so in practice the additional computational cost is negligible
+compared to previous birth–death approaches for the BP-AR-HMM.
+Finally, we note that we need not account for the random choice of the
+window W in the acceptance ratio of this birth–death move. Each possible
+W is chosen independently of the current sampler configuration, and each
+choice defines a valid transition kernel over a reversible pair of birth–death
+moves satisfying detailed balance.
+7. Split-merge proposals. The MCMC algorithm presented in Section 6
+defines a correct and tractable inference scheme for the BP-AR-HMM, but
+the local one-at-a-time sampling of feature assignments can lead to slow
+mixing rates. In this section we propose split-merge moves that allow efficient
+exploration of large changes in assignments, via simultaneous changes to
+
+JOINT MODELING OF MULTIPLE TIME SERIES VIA THE BETA PROCESS 19
+
+multiple sequences, and can be interleaved with the sampling updates of
+Section 6. Additionally, in Section 7.3 we describe how both split-merge
+and birth–death moves can be further improved via a modified annealing
+procedure that allows fast mixing during sampler burn-in.
+7.1. Review: Split-merge for Dirichlet processes. Split-merge MCMC
+methods for nonparametric models were first employed by Jain and Neal
+(2004) in the context of Dirichlet process (DP) mixture models with conjugate likelihoods. Conjugacy allows samplers to operate directly on discrete
+partitions of observations into clusters, marginalizing emission parameters.
+Jain and Neal use restricted Gibbs (RG) sampling to create reversible proposals that split a single cluster km into two (ka , kb ) or merge two clusters
+into one.
+To build an initial split, the RG sampler first assigns items originally in
+cluster km at random to either ka or kb . Starting from this partition, the
+sampler performs one-at-a-time Gibbs updates, forgetting an item’s current
+cluster and reassigning to either ka or kb conditioned on the remaining partitioned data. A proposed new configuration is obtained after several sweeps.
+For nonconjugate models, more sophisticated proposals are needed to also
+instantiate emission parameters [Jain and Neal (2007)].
+Even in small data sets, performing many sweeps for each RG proposal is
+often necessary for good performance [Jain and Neal (2004)]. For large data
+sets, however, requiring many sweeps for a single proposal is computationally expensive. An alternative method, sequential allocation [Dahl (2005)],
+replaces the random initialization of RG. Here, two randomly chosen items
+“anchor” the initial assignments of the two new clusters ka , kb . Remaining
+items are then sequentially assigned to either ka or kb one at a time, using RG moves conditioning only on previously assigned data. This creates a
+proposed partition after only one sampling sweep. Recent work has shown
+some success with sequentially allocated split-merge moves for a hierarchical
+DP topic model [Wang and Blei (2012)].
+Beyond the DP mixture model setting, split-merge MCMC moves are not
+well studied. Both Meeds et al. (2006) and Mørup, Schmidt and Hansen
+(2011) mention adapting an RG procedure for relational models with latent
+features based on the beta process. However, neither work provides details
+on constructing proposals, and both lack experimental validation that splitmerge moves improve inference.
+7.2. Split-merge MCMC for the BP-AR-HMM. In standard mixture models, such as considered by Jain and Neal (2004), a given data item i is associated with a single cluster ki , so selecting two anchors i and j is equivalent
+to selecting two cluster indices ki , kj . However, in feature-based models such
+
+20
+
+FOX, HUGHES, SUDDERTH AND JORDAN
+
+Fig. 4. Illustration of split-merge moves for the BP-AR-HMM, which alter binary feature
+matrix F (white indicates present feature) and state sequences z. We show F, z before
+( top) and after ( bottom) feature km ( yellow) is split into ka , kb ( red, orange). An item
+possessing feature km can have either ka , kb , or both after the split, and its new z sequence
+is entirely resampled using any features available in fi . An item without km cannot possess
+ka , kb , and its z does not change. Note that a split move can always be reversed by a merge.
+
+as the BP-AR-HMM, each data item i possesses a collection of features indicated by fi . Therefore, our split-merge requires a mechanism not only for
+selecting anchors, but also for choosing candidate features to split or merge
+from fi , fj . After proposing modified feature vectors, the associated state
+sequences must also be updated. Following the motivations for our datadriven birth–death proposals, our split-merge proposals create new feature
+matrices F∗ and state sequences z∗ , collapsing away HMM parameters θ, η.
+Figure 4 illustrates F and z before and after a split proposal. Motivated by
+the efficiencies of sequential allocation [Dahl (2005)], we adopt a sequential
+approach. Although a RG approach that samples all variables (F, z, θ, η) is
+also possible and relatively straightforward, our experiments [Supplement I
+of Fox et al. (2014)] show that our sequential collapsed proposals are vastly
+preferred. Intuitively, constructing high acceptance rate proposals for θ, η
+can be very difficult since each behavior-specific parameter is high dimensional.
+Selecting anchors. Following Dahl (2005), we first select distinct anchor
+data items i and j uniformly at random from all time series. The fixed choice
+of i, j defines a split-merge transition kernel satisfying detailed balance [Tierney (1994)]. Next, we select from each anchor one feature it possesses, denoted ki , kj , respectively. This choice determines the proposed move: we
+merge ki , kj if they are distinct, and split ki = kj into two new features
+otherwise.
+Selecting ki , kj uniformly at random is problematic. First, in data sets
+with many features choosing ki = kj is unlikely, making split moves rare.
+
+JOINT MODELING OF MULTIPLE TIME SERIES VIA THE BETA PROCESS 21
+
+We need to bias the selection process to consider splits more often. Second,
+in a reasonably fit model most feature pairs will not make a sensible merge.
+Selecting a pair that explains similar data is crucial for efficiency. We thus
+develop a proposal distribution which first draws ki uniformly from the
+positive entries in fi , and then selects kj given fixed ki as follows:
+(24)
+(25)
+
+qk (ki , kj |fi , fj ) = Unif(ki |{k : fik = 1})q(kj |ki , fj ),
+
+if k = ki ,
+ 2Rj fjk ,
+q(kj = k|ki , fj ) ∝
+m(Yki , Yk )
+ fjk
+,
+otherwise,
+m(Yki )m(Yk )
+
+where Yk denotes all observed data in any segment assigned to k (determined by z) and m(·) denotes the marginal likelihood of pooled data observam(Y ,Y )
+
+k
+i
+tions under the emission distribution. A high value for the ratio m(Yk k)m(Y
+k)
+i
+indicates that the model prefers to explain all data assigned to ki , kj together
+rather than use a separate feature for each. This choice biases selection toward promising merge candidates, leading to higher acceptance rates. We
+P
+m(Yki ,Ykj )
+to ensure the probability of a split (when
+set Rj = kj 6=ki fjkj m(Yk )m(Y
+k )
+i
+
+j
+
+possible) is 2/3.
+For the VAR likelihood of interest, the marginal likelihood m(Yk ) of all
+data assigned to feature k, integrating over parameters θk = {Ak , Σk }, is
+m(Yk ) = p(Yk |M, L, S0 , n0 )
+ZZ
+(26)
+=
+p(Yk |Ak , Σk )p(Ak |M, Σk , L)p(Σk |n0 , S0 ) dΣk dAk
+=
+
+1
+(2π)(nk d)/2
+
+·
+
+|L|1/2
+Γd ((nk + n0 )/2)
+|S0 |n0 /2
+· (k)
+,
+· (k)
+Γd (n0 /2)
+|Sy|ȳ |(nk +n0 )/2 |Sȳȳ |1/2
+
+where Γd (·) is the d-dimensional multivariate gamma function, | · | denotes
+the determinant, nk counts the number of observations in set Yk , and suffi(k)
+cient statistics S·,· are defined in equation (21). Further details on this feature selection process are given in Supplement F.1, especially Algorithm F.2,
+of Fox et al. (2014).
+Once ki , kj are fixed, we construct the candidate state F∗ , z∗ for the proposed move. This construction depends on whether a split or merge occurs,
+as detailed below. Recall from Figure 4 that we only alter fℓ , z(ℓ) for data
+sequences ℓ which possess either ki or kj . We call this set of items the active
+set S. Items not in the active set are unaltered by our proposals.
+Split. Our split proposal is defined in Algorithm 1. Iterating through a
+∗ ,f∗ }
+random permutation of items ℓ in the active set S, we sample {fℓk
+ℓkb
+a
+
+22
+
+FOX, HUGHES, SUDDERTH AND JORDAN
+
+Algorithm 1 Construction of candidate split configuration (F, z), replacing
+feature km with new features ka , kb via sequential allocation
+1: fi,[ka ,kb ]
+
+←
+
+[1 0]
+
+z
+
+(i)
+(i)
+
+←
+
+ka
+
+(j)
+
+←
+
+kb
+
+t : zt =km
+
+use anchor i to create feature ka
+2: fj,[ka ,kb ]
+
+←
+
+[0 1]
+
+z
+
+(j)
+t : zt =km
+
+use anchor j to create feature kb
+3: θ̂ ← E[θ|y, z] [Algorithm E.4]
+
+set emissions to posterior mean
+
+4: η̂ (ℓ) ← E[η (ℓ) ], ℓ ∈ S [Algorithm E.4] set transitions to prior mean
+
+5: Sprev = {i, j}
+
+initialize set of previously visited items
+
+6: for nonanchor items 
+ℓ in random permutation of active set S:
+
+7:
+
+fℓ,[ka kb ]
+
+∼
+
+rithm F.4]
+
+[0 1]
+
+
+
+[1 0] ∝ p(fℓ,[ka kb ] |FSprev ,[ka kb ] )p(y(ℓ) |fℓ , θ̂, η̂ (ℓ) )
+
+
+
+[1 1]
+
+8:
+
+z(ℓ) ∼ p(z(ℓ) |y(ℓ) , fℓ , θ̂, η̂ (ℓ) ) [Algorithm D.3]
+
+9:
+
+add ℓ to Sprev
+
+add latest sequence to set of visited items
+
+(n)
+(n)
+ka , kb : θ̂k ← E[θk |{yt : zt
+
+for k =
+(
+[1 0]
+11: fi,[ka kb ] ∼
+[1 1]
+10:
+
+fj,[ka kb ] ∼
+
+12: z(i) ∼ p(z(i) |y(i) , fi , θ̂, η̂
+
+[Algo-
+
+(i)
+
+)
+
+(
+
+[0 1]
+[1 1]
+
+= k, n ∈ Sprev }]
+
+finish by sampling f , z for anchors
+
+z(j) ∼ p(z(j) |y(j) , fj , θ̂, η̂(j) )
+
+Note: Algorithm references found in the supplemental article [Fox et al. (2014)]
+
+from its conditional posterior given previously visited items in S, requiring
+that ℓ must possess at least one of the new features ka , kb . We then block
+sample its state sequence z∗(ℓ) given fℓ∗ . After sampling all non-anchor sequences in S, we finally sample {fi∗ , z∗(i) } and {fj∗ , z∗(j) } for anchor items
+∗ = 1 and f ∗ = 1 so the move remains reversible under a
+i, j, enforcing fik
+jkb
+a
+merge. This does not force z∗i to use ka nor z∗j to use kb .
+The dynamic programming recursions underlying these proposals use nonrandom auxiliary variables in a similar manner to the data-driven birth–
+death proposals. In particular, the HMM transition weights η̂ (ℓ) are set to
+
+JOINT MODELING OF MULTIPLE TIME SERIES VIA THE BETA PROCESS 23
+
+the prior mean of η (ℓ) . The HMM emission parameters θ̂ k are set to the posterior mean of θk given the current data assigned to behavior k in z across
+all sequences. For new states k∗ ∈ {ka , kb }, we initialize θ̂ k∗ from the anchor
+sequences and then update to account for new data assigned to k∗ after each
+item ℓ. As before, η̂, θ̂ are deterministic functions of the conditioning set
+used to define the collapsed proposals for F∗ , z∗ ; they are discarded prior to
+subsequent sampling stages.
+Merge. To merge ka , kb into a new feature km , constructing F∗ is de∗
+= 1 for ℓ ∈ S, and 0 otherwise. We thus need only
+terministic: we set fℓk
+m
+∗
+to sample zℓ for items in S. We use a block sampler that conditions on
+fℓ∗ , θ̂, η̂ (ℓ) , where again θ̂, η̂(ℓ) are auxiliary variables.
+Accept–reject. After drawing a candidate configuration (F∗ , z∗ ), the final
+step is to compute a Metropolis–Hastings acceptance ratio ρ. Equation (27)
+gives the ratio for a split move which creates features ka , kb from km :
+(27) ρsplit =
+
+p(y, F∗ , z∗ ) qmerge (F, z|y, F∗ , z∗ , ka , kb ) qk (ka , kb |y, F∗ , z∗ , i, j)
+.
+p(y, F, z) qsplit (F∗ , z∗ |y, F, z, km ) qk (km , km |y, F, z, i, j)
+
+Recall that our sampler only updates discrete variables F, z and marginalizes
+out continuous HMM parameters η, θ. Our split-merge moves are therefore
+only tractable with conjugate emission models such as the VAR likelihood
+and MNIW prior. Proposals which instantiate emission parameters θ, as in
+Jain and Neal (2007), would be required in the nonconjugate case.
+For complete split-merge algorithmic details, consult Supplement F of Fox
+et al. (2014). In particular, we emphasize that the nonuniform choice of features to split or merge requires some careful accounting, as does the correct
+computation of the reverse move probabilities. These issues are discussed in
+the supplemental article [Fox et al. (2014)].
+7.3. Annealing MCMC proposals. We have presented two novel MCMC
+moves for adding or deleting features in the BP-AR-HMM: split-merge and
+birth–death moves. Both propose a new discrete variable configuration Ψ∗ =
+(F∗ , z∗ ) with either one more or one fewer feature. This proposal is accepted
+or rejected with probability min(1, ρ), where ρ has the generic form
+(28)
+
+ρ=
+
+p(y, Ψ∗ ) q(Ψ|Ψ∗ , y)
+.
+p(y, Ψ) q(Ψ∗ |Ψ, y)
+
+This Metropolis–Hastings ratio ρ accounts for improvement in joint probability [via the ratio of p(·) terms] and the requirement of reversibility [via the
+ratio of q(·) terms]. We call this latter ratio the Hastings factor. Reversibility
+ensures that detailed balance is satisfied, which is a sufficient condition for
+convergence to the true posterior distribution.
+
+24
+
+FOX, HUGHES, SUDDERTH AND JORDAN
+
+The reversibility constraint can limit the effectiveness of our proposal
+framework. Even when a proposed configuration Ψ∗ results in better joint
+probability, its Hastings factor can be small enough to cause rejection. For
+example, consider any merge proposal. Reversing this merge requires returning to the original configuration of the feature matrix F via a split proposal.
+Ignoring anchor sequence constraints for simplicity, split moves can produce
+roughly 3|S| possible feature matrices, since each sequence in the active set
+S could have its new features ka , kb set to [0 1], [1 0], or [1 1]. Returning
+to the exact original feature matrix out of the many possibilities can be
+very unlikely. Even though our proposals use data wisely, the vast space of
+possible split configurations means the Hastings factor will always be biased
+toward rejection of a merge move.
+As a remedy, we recommend annealing the Hastings factor in the acceptance ratio of both split-merge and data-driven birth–death moves. That is,
+we use a modified acceptance ratio
+
+
+p(y, Ψ∗ ) q(Ψ|Ψ∗ , y) 1/Ts
+(29)
+,
+ρ=
+p(y, Ψ) q(Ψ∗ |Ψ, y)
+where Ts indicates the “temperature” at iteration s. We start with a temperature that is very large, so that T1s ≈ 0 and the Hastings factor is ignored.
+The resulting greedy stochastic search allows rapid improvement from the
+initial configuration. Over many iterations, we gradually decrease the temperature toward 1. After a specified number of iterations we fix T1s = 1, so
+that the Hastings factor is fully represented and the sampler is reversible.
+In practice, we use an annealing schedule that linearly interpolates T1s between 0 and 1 over the first several thousand iterations. Our experiments in
+Section 9 demonstrate improvement in mixing rates based on this annealing.
+8. Related work. Defining the number of dynamic regimes presents a
+challenging problem in deploying Markov switching processes such as the
+AR-HMM. Previously, Bayesian nonparametric approaches building on the
+hierarchical Dirichlet process (HDP) [Teh et al. (2006)] have been proposed
+to allow uncertainty in the number of regimes by defining Markov switching
+processes on infinite state spaces [Beal, Ghahramani and Rasmussen (2001),
+Teh et al. (2006), Fox et al. (2011a, 2011b)]. See Fox et al. (2010) for a
+recent review. However, these formulations focus on a single time series,
+whereas in this paper our motivation is analyzing multiple time series. A
+naı̈ve approach to this setting is to simply couple all time series under a
+shared HDP prior. However, this approach assumes that the state spaces
+of the multiple Markov switching processes are exactly shared, as are the
+transitions among these states. As demonstrated in Section 9 as well as our
+extensive toy data experiments in Supplement H of Fox et al. (2014), such
+
+JOINT MODELING OF MULTIPLE TIME SERIES VIA THE BETA PROCESS 25
+
+strict sharing can limit the ability to discover unique dynamic behaviors and
+reduces predictive performance.
+In recent independent work, Saria, Koller and Penn (2010) developed an
+alternative model for multiple time series via the HDP-HMM. Their time
+series topic model (TSTM) describes coarse-scale temporal behavior using a
+finite set of “topics,” which are themselves distributions on a common set of
+autoregressive dynamical models. Each time series is assumed to exhibit all
+topics to some extent, but with unique frequencies and temporal patterns.
+Alternatively, the mixed HMM [Altman (2007)] uses generalized linear models to allow the state transition and emission distributions of a finite HMM
+to depend on arbitrary external covariates. In experiments, this is used to
+model the differing temporal dynamics of a small set of known time series
+classes.
+More broadly, the problem we address here has received little previous
+attention, perhaps due to the difficulty of treating combinatorial relationships with parametric models. There are a wide variety of models which
+capture correlations among multiple aligned, interacting univariate time series, for example, using Gaussian state space models [Aoki and Havenner
+(1991)]. Other approaches cluster time series using a parametric mixture
+model [Alon et al. (2003)], or a Dirichlet process mixture [Qi, Paisley and
+Carin (2007)], and model the dynamics within each cluster via independent
+finite HMMs.
+Dynamic Bayesian networks [Murphy (2002)], such as the factorial HMM
+[Ghahramani and Jordan (1997)], define a structured representation for the
+latent states underlying a single time series. Factorial models are widely used
+in applied time series analysis [Lehrach and Husmeier (2009), Duh (2005)].
+The infinite factorial HMM [Van Gael, Teh and Ghahramani (2009)] uses the
+IBP to model a single time series via an infinite set of latent features, each
+evolving according to independent Markovian dynamics. Our work instead
+focuses on discovering behaviors shared across multiple time series.
+Other approaches do not explicitly model latent temporal dynamics and
+instead aim to align time series with consistent global structure [Aach and
+Church (2001)]. Motivated by the problem of detecting temporal anomalies,
+Listgarten et al. (2006) describe a hierarchical Bayesian approach to modeling shared structure among a known set of time series classes. Independent
+HMMs are used to encode nonlinear alignments of observed signal traces
+to latent reference time series, but their states do not represent dynamic
+behaviors and are not shared among time series.
+9. Motion capture experiments. The linear dynamical system is a common model for describing simple human motion [Hsu, Pulli and Popović
+(2005)], and the switching linear dynamical system (SLDS) has been successfully applied to the problem of human motion synthesis, classification,
+
+26
+
+FOX, HUGHES, SUDDERTH AND JORDAN
+
+and visual tracking [Pavlović et al. (1999), Pavlović, Rehg and MacCormick
+(2000)]. Other approaches develop nonlinear dynamical models using Gaussian processes [Wang, Fleet and Hertzmann (2008)] or are based on a collection of binary latent features [Taylor, Hinton and Roweis (2006)]. However,
+there has been little effort in jointly segmenting and identifying common dynamic behaviors among a set of multiple motion capture (MoCap) recordings
+of people performing various tasks. The ability to accurately label frames
+of a large set of movies is useful for tasks such as querying an extensive
+database without relying on expensive manual labeling.
+The BP-AR-HMM provides a natural way to model complex MoCap data,
+since it does not require manually specifying the set of possible behaviors.
+In this section, we apply this model to sequences from the well-known CMU
+MoCap database [CMU (2009)]. Using the smaller 6-sequence data set from
+Figure 1, we first justify our proposed MCMC algorithm’s benefits over prior
+methods for inference, and also show improved performance in segmenting
+these sequences relative to alternative parametric models. We then perform
+an exploratory analysis of a larger 124-sequence MoCap data set.
+9.1. Data preprocessing and hyperparameter selection. As described in
+Section 2, we examine multivariate time series generated by 12 MoCap sensors. The CMU data are recorded at a rate of 120 frames per second, and
+as a preprocessing step we block-average and downsample the data using a
+window size of 12. We additionally scale each component of the observation
+vector so that the empirical variance of the set of first-difference measurements, between observations at neighboring time steps, is equal to one.
+We fix the hyperparameters of the MNIW prior on θk in an empirical
+Bayesian fashion using statistics derived from the sample covariance of the
+observed data. These settings are similar to prior work [Hughes, Fox and
+Sudderth (2012)] and are detailed in Supplement J of Fox et al. (2014).
+The IBP hyperparameters α, c and the transition hyperparameters γ, κ are
+sampled at every iteration [see Supplement G of Fox et al. (2014), which
+also discusses hyperprior settings].
+9.2. Comparison of BP-AR-HMM sampler methods. Before comparing
+our BP-AR-HMM to alternative modeling techniques, we first explore the
+effectiveness of several possible MCMC methods for the BP-AR-HMM. As
+baselines, we implement several previous methods that use reversible jump
+procedures and propose moves in the space of continuous HMM parameters. These include proposals for θk from the prior [Fox et al. (2009), “Prior
+Rev. Jump”], and split-merge moves interleaved with data-driven proposals
+for θk [Hughes, Fox and Sudderth (2012), “SM + cDD”]. The birth–death
+moves for these previous approaches act on the continuous HMM parameters, as detailed in Supplement E of Fox et al. (2014). We compare these to
+
+JOINT MODELING OF MULTIPLE TIME SERIES VIA THE BETA PROCESS 27
+
+Fig. 5. Analysis of six MoCap sequences, comparing sampling methods. Baselines are
+reversible jump proposals from the prior [Fox et al. (2009)], and split-merge moves interleaved with data-driven proposals of continuous parameters (SM + cDD) [Hughes, Fox and
+Sudderth (2012)]. The proposed sampler interleaves split-merge and data-driven discrete
+variable proposals (SM + zDD), with and without annealing. Top row: Log-probability and
+Hamming distance for 25 runs of each method over 10 hours. Bottom row: Estimated
+state sequence z for three fragments from distinct sequences that humans label “arm circles” ( left) or “jogging” ( right). Each recovered feature is depicted by one unique color and
+letter. We compare segmentations induced by the most probable samples from the annealed
+SM + zDD ( top) and Prior Rev. Jump ( bottom) methods. The latter creates extraneous
+features.
+
+our proposed split-merge and birth–death moves on the discrete assignment
+variables from Section 6.6 (“SM + zDD”). Finally, we consider annealing the
+SM + zDD moves (Section 7.3).
+We run 25 chains of each method for 10 hours, which allows at least
+10,000 iterations for each individual run. All split-merge methods utilize a
+parsimonious initialization starting from just a single feature shared by all
+sequences. The Prior Rev. Jump algorithm rarely creates meaningful new
+features from this simple initialization, so instead we initialize with five
+unique features per sequence as recommended in Fox et al. (2009). The results are summarized in Figure 5. We plot traces of the joint log probability
+of data and sampled variables, p(y, F, z, α, c, γ, κ), versus elapsed wall-clock
+time. By collapsing out the continuous HMM parameters θ, η, the marginalized form allows direct comparison of configurations despite possible differences in the number of instantiated features [see Supplement C of Fox et al.
+(2014) for computation details]. We also plot the temporal evolution of the
+normalized Hamming distance between the sampled segmentation z and the
+human-provided ground truth annotation, using the optimal alignment of
+each “true” state to a sampled feature. Normalized Hamming distance measures the fraction of time steps where the labels of the ground-truth and
+estimated segmentations disagree. To compute the optimal (smallest Ham-
+
+28
+
+FOX, HUGHES, SUDDERTH AND JORDAN
+
+ming distance) alignment of estimated and true states, we use the Hungarian
+algorithm.
+With respect to both the log-probability and Hamming distance metrics,
+we find that our SM + zDD inference algorithm with annealing yields the
+best results. Most SM + zDD runs using annealing (blue curves) converge
+to regions of good segmentations (in terms of Hamming distance) in under two hours, while no run of the Prior Rev. Jump proposals (teal curves)
+comes close after ten hours. This indicates the substantial benefit of using a
+data-driven proposal for adding new features efficiently. We also find that on
+average our new annealing approach (blue) improves on the speed of convergence compared to the nonannealed SM + zDD runs (green). This indicates
+that the Hastings factor penalty discussed in Section 7.3 is preventing some
+proposals from escaping local optima. Our annealing approach offers a practical workaround to overcome this issue, while still providing valid samples
+from the posterior after burn-in.
+Our split-merge and data-driven moves are critical for effectively creating
+and deleting features to produce quality segmentations. In the lower half of
+Figure 5, we show sampled segmentations z for fragments of the time series
+from distinct sequences that our human annotation labeled “arm-circle” or
+“jogging.” SM + zDD with annealing successfully explains each action with
+one primary state reused across all subjects. In contrast, the best Prior Rev.
+Jump run (in terms of joint probability) yields a poor segmentation that
+assigns multiple unique states for one common action, resulting in lower
+probability and much larger Hamming distance. This over-segmentation is
+due to the 5-unique-features-per-sequence initialization used for the Prior
+Rev. Jump proposal, but we found that a split-merge sampler using the
+same initialization could effectively merge the redundant states. Our merge
+proposals are thus effective at making global changes to remove redundant
+features; such changes are extremely unlikely to occur via the local moves of
+standard samplers. Overall, we find that our data-driven birth–death moves
+(zDD) allow rapid creation of crucial new states, while the split-merge moves
+(SM) enable global improvements to the overall configuration.
+Even our best segmentations have nearly 20% normalized Hamming distance error. To disentangle issues of model mismatch from mixing rates, we
+investigated whether the same SM + zDD sampler initialized to the true
+human segmentations would retain all ground-truth labeled exercise behaviors after many iterations. (Of course, such checks are only possible when
+ground-truth labels are available.) We find that these runs prefer to delete
+some true unique features, consistently replacing “K: side-bend” with “F:
+twist.” Manual inspection reveals that adding missing unique features back
+into the model actually decreases the joint probability, meaning the true
+segmentation is not quite a global (or even local) mode for the BP-ARHMM. Furthermore, the result of these runs after burn-in yield similar joint
+
+JOINT MODELING OF MULTIPLE TIME SERIES VIA THE BETA PROCESS 29
+
+Fig. 6. Comparison of the BP-AR-HMM analysis using SM + zDD inference (Figure 5)
+to parametric HMM and Gaussian mixture model (GMM) approaches. Left: Hamming
+distance versus number of GMM clusters/HMM states on raw observations and first-difference observations, with the BP-AR-HMM segmentation and true feature count K = 12
+( magenta, vertical dashed) shown for comparison. Right: Feature matrices associated with
+(a) the human annotation, (b) BP-AR-HMM averaged across MCMC samples, and maximum-likelihood assignment of the (c) GMM and (d) HMM using first-difference observations and 12 states. We set feature k present in sequence i only if z(i) is assigned to k for
+at least 2% of its time steps. White indicates a feature being present.
+
+log-probability to the best run of our SM + zDD sampler initialized to just
+one feature. We therefore conclude that our inference procedure is reasonably effective and that future work should concentrate on improving the
+local dynamical model to better capture the properties of unique human
+behaviors.
+9.3. Comparison to alternative time series models. We next compare the
+BP-AR-HMM to alternative models to assess the suitability of our nonparametric feature-based approach. As alternatives, we consider the Gaussian
+mixture model (GMM) method of Barbič et al. (2004).5 We also consider
+a GMM on first-difference observations (which behaves like a special case
+of our autoregressive model) and an HMM on both first-difference and raw
+observations. Note that both the GMM and HMM models are parametric,
+requiring the number of states to be specified a priori, and that both methods are trained via expectation maximization (EM) to produce maximum
+likelihood parameter estimates.
+In Figure 6 we compare all methods’ estimated segmentation accuracy,
+measuring Hamming distance between the estimated label sequence z and
+5
+
+Barbič et al. (2004) also present an approach based on probabilistic principal component analysis (PCA), but this method focuses primarily on change-point detection rather
+than behavior clustering.
+
+30
+
+FOX, HUGHES, SUDDERTH AND JORDAN
+
+human annotation on the six MoCap sequences. The GMM and HMM results
+show the most likely of 25 initializations of EM using the HMM Matlab
+toolbox [Murphy (1998)]. Our BP-AR-HMM Hamming distance comes from
+the best single MCMC sample (in log probability) among all runs of SM +
+zDD with annealing in Figure 5. The BP-AR-HMM provides more accurate
+segmentations than the GMM and HMM, and this remains true regardless
+of the number of states set for these parametric alternatives.
+The BP-AR-HMM’s accuracy is due to better recovery of the sparse behavior sharing exhibited in the data. This is shown in Figure 6, where we
+compare estimated binary feature matrices for all methods. In contrast to the
+sequence-specific variability modeled by the BP-AR-HMM, both the GMM
+and HMM assume that each sequence uses all possible behaviors, which results in the strong vertical bands of white in almost all columns. Overall, the
+BP-AR-HMM produces superior results due to its flexible feature sharing
+and allowance for unique behaviors.
+9.4. Exploring a large motion capture data set. Finally, we consider a
+larger motion capture data set of 124 sequences, all “Physical Activities &
+Sports” examples from the CMU MoCap data set (including all sequences in
+our earlier small data set). The median length is T = 95.5 times steps (minimum 16, maximum 1484). Human-produced segmentations for ground-truth
+comparison are not available for data of this scale. Furthermore, analyzing
+this data is computationally infeasible without split-merge and data-driven
+birth–death moves. For example, the small data set required a special “5
+unique features per sequence” initialization to perform well with Prior Rev.
+Jump proposals, but using this initialization here would create over 600 features, requiring a prohibitively long sampling run to merge related behaviors.
+In contrast, our full MCMC sampler (SM-zDD with annealing) completed
+2000 iterations in 24 hours. Starting from just one feature shared by all 124
+sequences, our SM + zDD moves identify a diverse set of 33 behaviors in
+this data set. A set of 16 representative behaviors are shown in Figure 7.
+The resulting clusterings of time series segments represent coherent dynamic
+behaviors. Note that a full quantitative analysis of the segmentations produced on this data set is not possible because we lack manual annotations.
+Instead, here we simply illustrate that our improved inference procedure
+robustly explores the posterior, enabling this large-scale analysis and producing promising results.
+10. Discussion. We have presented a Bayesian nonparametric framework
+for discovering dynamical behaviors common to multiple time series. Our
+formulation reposes on the beta process, which provides a prior distribution
+on overlapping subsets of binary features. This prior allows both for commonality and series-specific variability in the use of dynamic behaviors. We
+
+JOINT MODELING OF MULTIPLE TIME SERIES VIA THE BETA PROCESS 31
+
+Fig. 7. Analysis of 124 MoCap sequences by interleaving of split-merge and data-driven
+MCMC moves. 16 exemplars of the 33 recovered behaviors are displayed, with text label
+applied post-hoc to aid human interpretation. Skeleton trajectories were visualized from
+contiguous segments of at least 1 second of data as segmented by the sampled state sequence
+z(i) . Boxes group segments from distinct sequences assigned to the same behavior type.
+
+additionally developed an exact sampling algorithm for the BP-AR-HMM
+model, as well as novel split-merge moves and data-driven birth moves which
+efficiently explore the unbounded feature space. The utility of our BP-ARHMM was demonstrated on the task of segmenting a large set of MoCap
+sequences. Although we focused on switching VAR processes, our approach
+(and sampling algorithms) could also be applied to other Markov switching
+processes, such as switching linear dynamical systems.
+The idea proposed herein of a feature-based approach to relating multiple
+time series is not limited to nonparametric modeling. One could just as easily
+employ these ideas within a parametric model that prespecifies the number
+of possible dynamic behaviors. We emphasize, however, that conditioned on
+the infinite feature vectors of our BP-AR-HMM, which are guaranteed to
+be sparse, our model reduces to a collection of Markov switching processes
+on a finite state space. The beta process simply allows for flexibility in the
+overall number of globally shared behaviors, and computationally we do not
+rely on any truncations of this infinite model.
+One area of future work is further improving the split-merge proposals.
+Despite the clear benefits of these proposals, we found sometimes that one
+
+32
+
+FOX, HUGHES, SUDDERTH AND JORDAN
+
+“true” state would be split among several recovered features. The root of
+the splitting issue is twofold. One is the issue of mixing, which the annealing partially addresses, however, the fundamental issue of maintaining the
+reversibility of split-merge moves limits the acceptance rates due to the combinatorial number of configurations. The second is due to modeling issues.
+Our model assumes that the dynamic behavior parameters (i.e., VAR parameters) are identical between time series and do not change over time.
+This assumption can be problematic in grouping related dynamic behaviors
+and might be addressed via hierarchical models of behaviors or by ideas similar to those of the dependent Dirchlet process [MacEachern (1999), Griffin
+and Steel (2006)] that allows for time-varying parameters.
+Overall, the MoCap results appeared to be fairly robust to examples of
+only slightly dissimilar behaviors, such as squatting to different levels or
+twisting at different rates. However, in cases such as the running motion
+where only portions of the body moved in the same way while others did
+not, the behaviors can be split (e.g., third jogging example in Figure 5). This
+observation could motivate local partition processes [Dunson (2009, 2010)]
+rather than global partition processes. That is, our current model assumes
+that the grouping of observations into behavior categories occurs along all
+components of the observation vector rather than just a portion (e.g., lower
+body measurements). Allowing for greater flexibility in the grouping of observations becomes increasingly important in high dimensions.
+SUPPLEMENTARY MATERIAL
+Details on prior specification, derivation of MCMC sampler, and further
+experimental results (DOI: 10.1214/14-AOAS742SUPP; .pdf). We provide
+additional background material on our prior specification, including the beta
+process, Indian buffet process, and inverse Wishart and matrix normal distributions. We also detail aspects of our MCMC sampler, with further information on the birth–death and split-merge proposals. Finally, we include
+synthetic data experiments and details on the settings used for our MoCap
+experiments.
+REFERENCES
+Aach, J. and Church, G. (2001). Aligning gene expression time series with time warping
+algorithms. Bioinformatics 17 495–508.
+Alon, J., Sclaroff, S., Kollios, G. and Pavlovic, V. (2003). Discovering clusters
+in motion time-series data. In Proc. of the IEEE Conference on Computer Vision and
+Pattern Recognition (CVPR). Madison, WI, USA.
+Altman, R. M. (2007). Mixed hidden Markov models: An extension of the hidden
+Markov model to the longitudinal data setting. J. Amer. Statist. Assoc. 102 201–210.
+MR2345538
+
+JOINT MODELING OF MULTIPLE TIME SERIES VIA THE BETA PROCESS 33
+Aoki, M. and Havenner, A. (1991). State space modeling of multiple time series. Econometric Rev. 10 1–99. MR1108250
+Barbič, J., Safonova, A., Pan, J.-Y., Faloutsos, C., Hodgins, J. K. and Pollard, N. S. (2004). Segmenting motion capture data into distinct behaviors. In Proc.
+of Graphics Interface. London, Ontario, Canada.
+Beal, M., Ghahramani, Z. and Rasmussen, C. (2001). The infinite hidden Markov
+model. In Advances in Neural Information Processing Systems (NIPS) 14. Vancouver,
+Canada.
+CMU (2009). Carnegie Mellon University graphics lab motion capture database. Available
+at http://mocap.cs.cmu.edu/.
+Dahl, D. B. (2005). Sequentially-allocated merge-split sampler for conjugate and nonconjugate dirichlet process mixture models. Technical report, Texas A&M Univ., College
+Station, TX.
+Duh, K. (2005). Jointly labeling multiple sequences: A factorial HMM approach. In 43rd
+Annual Meeting of the Assoc. for Computational Linguistics (ACL). Ann Arbor, MI.
+Dunson, D. B. (2009). Nonparametric Bayes local partition models for random effects.
+Biometrika 96 249–262. MR2507141
+Dunson, D. B. (2010). Multivariate kernel partition process mixtures. Statist. Sinica 20
+1395–1422. MR2777330
+Fox, E. B., Sudderth, E. B., Jordan, M. I. and Willsky, A. S. (2009). Sharing features among dynamical systems with beta processes. In Advances in Neural Information
+Processing Systems (NIPS) 22. Vancouver, Canada.
+Fox, E. B., Sudderth, E. B., Jordan, M. I. and Willsky, A. S. (2010). Bayesian
+nonparametric methods for learning Markov switching processes. IEEE Signal Process.
+Mag. 27 43–54.
+Fox, E. B., Sudderth, E. B., Jordan, M. I. and Willsky, A. S. (2011a). Bayesian nonparametric inference of switching dynamic linear models. IEEE Trans. Signal Process.
+59 1569–1585.
+Fox, E. B., Sudderth, E. B., Jordan, M. I. and Willsky, A. S. (2011b). A sticky
+HDP–HMM with application to speaker diarization. Ann. Appl. Stat. 5 1020–1056.
+MR2840185
+Fox, E. B., Hughes, M. C., Sudderth, E. B. and Jordan, M. I. (2014). Supplement to
+“Joint modeling of multiple time series via the beta process with application to motion
+capture segmentation.” DOI:10.1214/14-AOAS742SUPP.
+Frigessi, A., di Stefano, P., Hwang, C.-R. and Sheu, S. J. (1993). Convergence rates
+of the Gibbs sampler, the Metropolis algorithm and other single-site updating dynamics.
+J. Roy. Statist. Soc. Ser. B 55 205–219. MR1210432
+Ghahramani, Z., Griffiths, T. L. and Sollich, P. (2006). Bayesian nonparametric latent feature models. In Proc. of the Eighth Valencia International Meeting on Bayesian
+Statistics (Bayesian Statistics 8). Alicante, Spain.
+Ghahramani, Z. and Jordan, M. I. (1997). Factorial hidden Markov models. Machine
+Learning 29 245–273.
+Green, P. J. (1995). Reversible jump Markov chain Monte Carlo computation and
+Bayesian model determination. Biometrika 82 711–732. MR1380810
+Griffin, J. E. and Steel, M. F. J. (2006). Order-based dependent Dirichlet processes.
+J. Amer. Statist. Assoc. 101 179–194. MR2268037
+Hjort, N. L. (1990). Nonparametric Bayes estimators based on beta processes in models
+for life history data. Ann. Statist. 18 1259–1294. MR1062708
+
+34
+
+FOX, HUGHES, SUDDERTH AND JORDAN
+
+Hsu, E., Pulli, K. and Popović, J. (2005). Style translation for human motion. In Proc.
+of the 32nd International Conference on Computer Graphics and Interactive Technologies (SIGGRAPH). Los Angeles, CA.
+Hughes, M., Fox, E. B. and Sudderth, E. B. (2012). Effective split merge Monte
+Carlo methods for nonparametric models of sequential data. In Advances in Neural
+Information Processing Systems (NIPS) 25. Lake Tahoe, NV, USA.
+Jain, S. and Neal, R. M. (2004). A split-merge Markov chain Monte Carlo procedure for the Dirichlet process mixture model. J. Comput. Graph. Statist. 13 158–182.
+MR2044876
+Jain, S. and Neal, R. M. (2007). Splitting and merging components of a nonconjugate
+Dirichlet process mixture model. Bayesian Anal. 2 445–472. MR2342168
+Kingman, J. F. C. (1967). Completely random measures. Pacific J. Math. 21 59–78.
+MR0210185
+Kingman, J. F. C. (1993). Poisson Processes. Oxford Univ. Press, New York. MR1207584
+Lehrach, W. P. and Husmeier, D. (2009). Segmenting bacterial and viral DNA sequence
+alignments with a trans-dimensional phylogenetic factorial hidden Markov model. J. R.
+Stat. Soc. Ser. C. Appl. Stat. 58 307–327. MR2750008
+Listgarten, J., Neal, R., Roweis, S., Puckrin, R. and Cutler, S. (2006). Bayesian
+detection of infrequent differences in sets of time series with shared structure. In Advances in Neural Information Processing Systems (NIPS) 19. Vancouver, Canada.
+Liu, J. S. (1996). Peskun’s theorem and a modified discrete-state Gibbs sampler.
+Biometrika 83 681–682. MR1423883
+MacEachern, S. N. (1999). Dependent nonparametric processes. In ASA Proc. of the
+Section on Bayesian Statistical Science. Amer. Statist. Assoc., Alexandria, VA.
+Meeds, E., Ghahramani, Z., Neal, R. M. and Roweis, S. T. (2006). Modeling dyadic
+data with binary latent factors. In Advances in Neural Information Processing Systems
+(NIPS) 19. Vancouver, Canada.
+Mørup, M., Schmidt, M. N. and Hansen, L. K. (2011). Infinite multiple membership
+relational modeling for complex networks. In IEEE International Workshop on Machine
+Learning for Signal Processing. Beijing, China.
+Murphy, K. P. (1998). Hidden Markov model (HMM) toolbox for MATLAB. Available
+at http://www.cs.ubc.ca/ murphyk/Software/HMM/hmm.html.
+Murphy, K. P. (2002). Dynamic Bayesian networks: Representation, inference and learning. Ph.D. thesis, Univ. California, Berkeley. MR2704368
+Pavlović, V., Rehg, J. M. and MacCormick, J. (2000). Learning switching linear models of human motion. In Advances in Neural Information Processing Systems (NIPS)
+13. Vancouver, Canada.
+Pavlović, V., Rehg, J. M., Cham, T. J. and Murphy, K. P. (1999). A dynamic
+Bayesian network approach to figure tracking using learned dynamic models. In Proc. of
+the 7th IEEE International Conference on Computer Vision (ICCV). Kerkyra, Greece.
+Qi, Y., Paisley, J. W. and Carin, L. (2007). Music analysis using hidden Markov
+mixture models. IEEE Trans. Signal Process. 55 5209–5224. MR2469377
+Rabiner, L. R. (1989). A tutorial on hidden Markov models and selected applications in
+speech recognition. Proceedings of the IEEE 77 257–286.
+Saria, S., Koller, D. and Penn, A. (2010). Discovering shared and individual latent
+structure in multiple time series. Available at arXiv:1008.2028.
+Taylor, G. W., Hinton, G. E. and Roweis, S. T. (2006). Modeling human motion
+using binary latent variables. In Advances in Neural Information Processing Systems
+(NIPS) 19. Vancouver, Canada.
+
+JOINT MODELING OF MULTIPLE TIME SERIES VIA THE BETA PROCESS 35
+Teh, Y. W., Jordan, M. I., Beal, M. J. and Blei, D. M. (2006). Hierarchical Dirichlet
+processes. J. Amer. Statist. Assoc. 101 1566–1581. MR2279480
+Thibaux, R. and Jordan, M. I. (2007). Hierarchical beta processes and the Indian buffet
+process. In Proc. of the Eleventh International Conference on Artificial Intelligence and
+Statistics (AISTATS). San Juan, Puerto Rico.
+Tierney, L. (1994). Markov chains for exploring posterior distributions. Ann. Statist. 22
+1701–1762. MR1329166
+Tu, Z. and Zhu, S. C. (2002). Image segmentation by data-driven Markov chain Monte
+Carlo. IEEE Trans. Pattern Anal. Mach. Intell. 24 657–673.
+Van Gael, J., Teh, Y. W. and Ghahramani, Z. (2009). The infinite factorial hidden Markov model. In Advances in Neural Information Processing Systems (NIPS) 21.
+Vancouver, Canada.
+Wang, C. and Blei, D. (2012). A split-merge MCMC algorithm for the hierarchical
+Dirichlet process. Available at arXiv:1201.1657.
+Wang, J. M., Fleet, D. J. and Hertzmann, A. (2008). Gaussian process dynamical
+models for human motion. IEEE Trans. Pattern Anal. Mach. Intell. 30 283–298.
+West, M. and Harrison, J. (1997). Bayesian Forecasting and Dynamic Models, 2nd ed.
+Springer, New York. MR1482232
+E. B. Fox
+Department of Statistics
+University of Washington
+Box 354322
+Seattle, Washington 98195
+USA
+E-mail: ebfox@stat.washington.edu
+
+M. C. Hughes
+E. B. Sudderth
+Department of Computer Science
+Brown University
+115 Waterman St., Box 1910
+Providence, Rhode Island 02912
+USA
+E-mail: mhughes@cs.brown.edu
+sudderth@cs.brown.edu
+
+M. I. Jordan
+Department of Statistics
+and Department of EECS
+University of California, Berkeley
+427 Evans Hall
+Berkeley, California 94720
+USA
+E-mail: jordan@stat.berkeley.edu
+
+

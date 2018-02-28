@@ -1,0 +1,1154 @@
+Cambridge, MA 02139
+lsz@csail.mit.edu
+
+Leslie Pack Kaelbling
+MIT CSAIL
+Cambridge, MA 02139
+lpk@csail.mit.edu
+
+Algorithms have been developed for learning relational
+probabilistic planning rules by observing the effects of actions [Pasula et al., 2004; Zettlemoyer et al., 2005]. But
+with current algorithms, if a robot learns planning rules for
+one kitchen and then moves to a new kitchen where its actions have slightly different effects (because, say, the cabinets are built differently), it must learn a new rule set from
+scratch. Current rule learning algorithms fail to capture an
+important aspect of human learning: the ability to transfer knowledge from one task to another. We address this
+transfer learning problem in this paper.
+In statistics, the problem of transferring predictions across
+related data sets has been addressed with hierarchical
+Bayesian models [Lindley, 1971]. The first use of such
+models for the multi-task learning problem appears to
+be due to Baxter [1997]; the approach has recently become quite popular [Yu et al., 2005; Marx et al., 2005;
+Zhang et al., 2006]. The basic idea of hierarchical Bayesian
+learning is to regard the task-specific models R1 , . . . , RK
+as samples from a global prior distribution G. This prior
+distribution over models is not fixed in advance, but is
+learned by the system; thus, the system discovers what the
+task-specific models have in common.
+However, applying the hierarchical Bayesian approach to
+sets of first-order probabilistic planning rules poses both
+conceptual and computational challenges. In most existing
+applications, the models Rk are represented as real-valued
+parameter vectors, and the hypothesis space for G is a class
+of priors over real vectors. But a rule set is a discrete structure that may contain any number of rules, and each rule
+includes a precondition and a set of outcomes that are represented as arbitrary-length conjunctions of first-order literals. How can we define a class of prior distributions over
+such rule sets? Our proposal is to let G be defined by a
+rule set prototype that is modified stochastically to create
+the task-specific rule sets.
+Our goal is to take data from K source tasks, plus a limited set of examples from a target task K + 1, and find the
+∗
+rule set RK+1
+for the target task with the greatest posterior
+probability. In principle, this involves integrating out the
+
+84
+
+DESHPANDE ET AL.
+
+pickup(X, Y ) :
+
+→
+
+8
+>
+>
+>
+<
+>
+>
+>
+:
+
+on(X, Y ), clear(X), inhand-nil,
+block(Y ), ¬wet
+inhand(X), ¬clear(X), ¬inhand-nil,
+.7 :
+¬on(X, Y ), clear(Y )
+.2 : on(X, TABLE), ¬on(X, Y )
+.05 : no change
+.05 : noise
+
+pickup(X, Y ) :
+8
+>
+>
+.2 :
+>
+<
+.2 :
+→
+>
+>
+>
+: .3 :
+.3 :
+
+s in sentence 1 and a = pickup(B-A, B-B), both of the rules
+in Fig. 1 would have the binding θ = {X/B-A, Y /B-B}. The
+first rule would apply, since its preconditions are all satisfied, while the second one would not because wet is not
+true in s. We disallow rule sets in which two or more rules
+apply to the same (s, a) pair (these are called overlapping
+rules). In cases where no rules apply, a default rule is used
+that has an empty context and two outcomes: no change
+and noise, which will be described shortly.
+
+on(X, Y ), clear(X), inhand-nil,
+block(Y ), wet
+inhand(X), ¬clear(X), ¬inhand-nil,
+¬on(X, Y ), clear(Y )
+on(X, TABLE), ¬on(X, Y )
+no change
+noise
+
+Figure 1: Two rules for the pickup action in the “slippery
+gripper” blocks world domain.
+other rule sets R1 , . . . , RK and the rule set prototype G.
+As an approximation, however, we use estimates of G∗ and
+∗
+found by a greedy local search algorithm. We
+R1∗ , . . . , RK
+present experiments with this algorithm on blocks world
+tasks, showing that transferring data from related tasks significantly reduces the number of training examples required
+to achieve high accuracy on a new task.
+
+2
+
+Probabilistic Planning Rules
+
+Probabilistic planning rule sets define a state transition distribution p(st |st−1 , at ). In this section, we present a simplified version of the representation developed by [Zettlemoyer et al., 2005]. A state st is represented by a conjunctive formula with constants denoting objects in the world
+and proposition and function symbols representing the objects’ properties and relations. The sentence
+inhand-nil ∧ on(B-A, B-B) ∧ on(B-B, TABLE) ∧ clear(B-A)
+∧block(B-A) ∧ block(B-B) ∧ table(TABLE)
+
+(1)
+
+represents a blocks world where the gripper holds nothing
+and the two blocks are in a single stack on the table. This
+is a full description of the world; all of the false literals
+are omitted for compactness. Block B-A is on top of the
+stack, while B-B is below B-A and on the table TABLE. Actions
+at are ground literals where the predicate names the action
+to be performed and the arguments are constant terms that
+correspond to the objects which will be manipulated. For
+example, at = pickup(B-A, B-B) would represent an attempt
+to pick block B-A up off of block B-B.
+Each rule r has two parts that determine when it is applicable: an action z and a context Ψ that encodes a set
+of preconditions. Both of the rules in Fig. 1 model the
+pickup(X, Y ) action. Given a particular state st−1 and action a, we can determine whether a rule applies by computing a binding θ that finds objects for all the variables,
+by matching against a, and then testing whether the preconditions hold for this binding. For example, for the state
+
+Given the applicable rule r, the discrete distribution p over
+outcomes O, described on the right of the →, defines what
+changes may happen from st−1 to st . Each non-noise outcome o ∈ O implicitly defines a successor state function fo
+with associated probability po , an entry in p. The function
+fo builds st from st−1 by copying st−1 and then changing
+the values of the relevant literals in st to match the corresponding values in θ(o). In our running example of executing pickup(B-A, B-B) in sentence 1, for the first outcome of
+the first rule, where the picking up succeeds, fo would set
+five truth values, including setting on(B-A, B-B) to be false.
+In the third outcome, which indicates no change, fo is the
+identity function. In this paper, we will enforce the restriction that outcomes do not overlap: for each pair of outcomes o1 and o2 in a rule r, there cannot exist a state–action
+pair (s, a) such that r is applicable and fo1 (s) = fo2 (s). In
+other words, if we observe the state that results from applying a rule, then there is no ambiguity about which outcome
+occurred.1 Finally, the noise outcome is treated as a special
+case. There is no associated successor function, which allows the rule to define a type of partial model where r does
+not describe how to construct the next state with probability pnoise . Noise outcomes allow rule learners to ignore
+overly complex, rare action effects and have been shown
+to improve learning in noisy domains [Zettlemoyer et al.,
+2005]. Since rules with noise outcomes are partial models,
+the distribution p(st |st−1 , at ) is replaced with an approximation:
+
+p̂(st |st−1 , at ) =
+
+po
+pnoise pmin
+
+if fo (st−1 ) = st
+otherwise
+
+(2)
+
+where the set of possible outcomes o ∈ O is determined by the applicable rule. The probabilities po and
+pnoise make up the parameter vector p. The constant
+pmin can be viewed as an approximation to a distribution
+p(st |st−1 , at , onoise ) that would provide a complete model.
+
+3
+
+Hierarchical Bayesian Model
+
+In a hierarchical Bayesian model, as illustrated in Fig. 2,
+the data points xkn in task k come from a task-specific dis1
+
+This restriction simplifies parameter estimation (as we will
+see in Sec. 4) without limiting the class of transition distributions
+that can be defined. Any rule with overlapping outcomes can be
+replaced by an equivalent set of rules applying to more specific
+contexts, with non-overlapping outcomes.
+
+DESHPANDE ET AL.
+G
+
+R1
+
+...
+
+R2
+
+x1n
+
+x2n
+N1
+
+RK
+
+xKn
+N2
+
+NK
+
+Figure 2: A hierarchical Bayesian model with K tasks,
+where the number of examples for task k is Nk .
+tribution p(xkn |Rk ), and the task-specific parameters Rk
+are in turn modeled by a prior distribution p(Rk |G). The
+hyperparameter G has its own prior distribution p(G). By
+observing data from the first K tasks, the learner gets information about R1 , . . . , RK and hence about G. For instance, the learner can compute (perhaps approximately)
+∗
+the values (R1∗ , . . . , RK
+, G∗ ) that have maximum a posteriori (MAP) probability given the data on the first K tasks.
+Then when it encounters task K +1, the learner’s estimates
+of the task-specific model RK+1 are influenced by both the
+data observed for task K + 1 and the prior p(RK+1 |G∗ ),
+which captures its expectations about the model based on
+the preceding tasks.
+3.1
+
+Rule Set Prototypes
+
+In the context of learning planning rules, the task-specific
+models Rk are rule sets. Our intuition is that if the tasks
+are related, then these rule sets have some things in common. Certain rules may appear in the rule sets for many
+tasks, perhaps with some modifications to their contexts,
+outcomes, and outcome probabilities. To capture these
+commonalities, we assume that the rule sets are all generated from an underlying rule set prototype G.
+A rule set prototype consists of a set of rule prototypes.
+A rule prototype is like an ordinary rule, except that rather
+than specifying a probability distribution over its outcomes,
+it specifies a vector of Dirichlet parameters that define a
+prior over outcome distributions. For a rule prototype with
+n explicit outcomes, this is a vector Φ of n+2 non-negative
+real numbers: Φn+1 corresponds to a special seed outcome
+o∗n+1 that generates new outcomes in local rules, and Φn+2
+accounts for the noise outcome. Unlike in local rule sets,
+we allow overlapping rules and outcomes in rule set prototype to allow for better generalization.
+3.2
+
+85
+
+can be found by identifying the single rule in Rk that applies to (st−1 , at ) (or the default rule, if no explicit rule
+applies) and using Eq. 2. Then theQprobability of the entire
+Nk
+data set for task k is p(xk |Rk ) = n=1
+p(xkn |Rk ).
+The distribution for G and R1 , . . . , Rk is defined by a
+generative process that first creates G, and then creates
+R1 , . . . , Rk by modifying G. Note that this generative process is purely a conceptual device for defining our probability model: we never actually draw samples from it. As we
+will see in Sec. 4, our learning algorithm uses the generative model solely to define a scoring function for evaluating
+rule sets and prototypes.
+Two difficulties arise in using our generative process to define a joint distribution. One is that the process can yield
+rule sets Ri that are invalid, in the sense of containing overlapping rules or outcomes. It is difficult to design a generative process that avoids creating invalid rule sets, but still
+allows the probability of a rule set to be computed efficiently. Intuitively, we want to discard runs of the generative process that yield invalid rule sets. The other difficulty is that there may be many possible runs of a generative process that yield the same rule set. For instance, as
+we will see, a rule set prototype is generated by choosing
+a number m, generating a sequence of m rule prototypes
+independently, and then returning the set of distinct rule
+prototypes that were generated. In principle, a set of m∗
+distinct rules could be created by generating a list of any
+length m ≥ m∗ (with duplicates); we do not want to force
+ourselves to sum over all these possibilities to compute the
+probability of a given rule set prototype. Again, it is convenient to discard certain non-canonical runs of the generative
+process: in this case, runs where the same rule prototype is
+generated twice.
+Thus, we will define measures PG (G) and Pmod (Rk |G)
+that give the probability of generating a rule set prototype
+G, or a rule set Rk , through a “valid” sampling run. Because some runs are considered invalid, these measures do
+not sum to one. The resulting joint distribution is:
+p(G, R1 , . . . , RK , x1 , . . . , xK ) =
+K
+
+Y
+1
+PG (G)
+Pmod (Rk |G)p(xk |Rk )
+Z
+
+(3)
+
+k=1
+
+The normalization constant Z is the total probability of
+valid runs of our generative process. Since we are just interested in the relative probabilities of hypotheses, we never
+need to compute this normalization constant.2
+
+Overview of Model
+
+Our hierarchical model defines a joint probability distribution p(G, R1 , . . . , RK , x1 , . . . , xK ). In our setting, each
+example xkn is a state st obtained by performing a known
+action at in a known initial state st−1 . Thus, p(xkn |Rk )
+
+2
+
+One might be tempted to define a model where the normalization is more local: for instance, to replace the factor Pmod (Rk |G)
+in Eq. 3 with a normalized distribution Pmod (Rk |G)/Z(G).
+However, the normalization factor Z(G) is not constant, so it
+would have to be computed to compare alternative values of G.
+
+86
+
+DESHPANDE ET AL.
+
+3.3
+
+set R of size m from a prototype G of size m∗ is:
+
+Modifying the Rule Set Prototype
+
+Pmod (R|G) =
+
+We begin the discussion of our generative process by describing how a rule set prototype G is modified to create a
+rule set R (the process that generates G will be a simplified version of this process). The first step is to choose the
+rule set size m from a distribution Pnum (m|m∗ ), where
+m∗ is the number of rule prototypes in G. We define
+Pnum (m|m∗ ) so that all natural numbers have non-zero
+probability, but m is likely to be close to m∗ , and the probability drops off geometrically for greater values of m.
+
+Pnum (m|m∗ ) =
+
+Geom[α](m − m∗ )
+(1 − α)Binom[m∗ , β](m)
+
+if m > m∗
+otherwise
+
+(4)
+
+Here Geom[α] is a geometric distribution with success
+probability α. Thus, if m > m∗ , then Pnum (m|m∗ ) =
+∗
+(1 − α)α(m−m ) . We set α to a small value to discourage
+the rule set R from being much larger than G. The sum of
+the Geom[α] distribution over all values greater than zero
+is α, leaving a probability mass of 1 − α to be apportioned
+over rule set sizes from 0 through m∗ . The binomial distribution Binom[m∗ , β] — which yields the probability of
+getting exactly m heads when flipping m∗ coins with heads
+probability β — is a convenient distribution over this range
+of integers. We set β to a value close to 1 to express a preference for local rule sets that are not much smaller than the
+prototype set.
+Next, for i = 1 to m, we generate a local rule ri . The
+first step in generating ri is to choose which rule prototype
+in G it will be derived from. This choice is represented
+by an assignment variable Ai , whose value is either a rule
+prototype in G, or a special value NIL indicating that this
+rule is generated from scratch with no prototype. The distribution PA (ai |G) assigns the probability γrule to NIL and
+spreads the remaining mass uniformly over the rule prototypes. Since the Ai are chosen independently, a single
+rule in G may serve as the prototype for several rules in R,
+or for none. Next, given the rule prototype (or null value)
+ai , the local rule ri is generated according to a distribution
+Prule (ri |ai ). We discuss this distribution in Section 3.4.
+The rule set generated by this process is the set of distinct
+rules in the list r1 , . . . , rm . We consider a run of the generative process to be invalid if any of these rules have overlapping contexts; in particular, this constraint rules out cases
+where the same rule occurs twice. So the probability of
+generating a set {r1 , . . . , rm } on a valid run is the sum of
+the probabilities of all permutations of this set. This is m!
+times the probability of generating the rules in any particular order. Thus, the probability of getting a valid local rule
+
+Pnum (m|m∗ ) · m! ·
+
+m
+Y
+i=1
+
+3.4
+
+X
+
+PA (ai |G)Prule (ri |ai )
+
+(5)
+
+ai ∈
+G∪{NIL}
+
+Modifying and Creating Rules
+
+We will now define the distribution Prule (r|r∗ ), where r∗
+may be either a rule prototype, or the value NIL, indicating
+that r is generated from scratch. Suppose r consists of a
+context formula Ψ, an action term z, a set of non-noise
+outcomes O, and a probability vector p. The corresponding
+parts of r∗ will be referred to as Ψ∗ , z ∗ , O∗ , and Φ (recall
+that this last component is a vector of Dirichlet parameters).
+If r∗ = NIL, then Ψ∗ is an empty formula, z ∗ is NIL, O∗
+consists of just the seed outcome, and Φ is a two-element
+vector consisting of a 1 for the seed outcome and a 1 for
+the noise outcome.
+For rules derived from a rule prototype, we assume the action term is unchanged. So if z ∗ is not NIL, we use the distribution Pact (z|z ∗ ) that assigns probability one to z ∗ . If a
+rule is generated from scratch, we need to generate its action term. For simplicity, we assume that each action term
+consists of an action symbol and a distinct logical variable
+for each argument; we do not allow repeated variables or
+more complex terms in the argument list. The distribution
+Pact (z|z ∗ ) chooses the action term uniformly from the set
+of such terms when z ∗ = NIL.
+The next step in generating r is to choose its context Ψ. We
+define the distribution for Ψ by means of a general formulamodification distribution Pfor (Ψ|Ψ∗ , v̄), where v̄ is the set
+of logical variables that occur in z and thus are eligible to
+be included in Ψ. This distribution is explained in Sec. 3.5.
+To generate the outcome set O from O∗ , we use essentially
+the same method we used to generate the rule set R from G.
+We begin by choosing the size n of the outcome set from
+the distribution Pnum (n|n∗ ), where n∗ = |O∗ |. The distribution Pnum here is the same one used in Sec. 3.3 (one
+could use different α and β parameters here). Then, for
+i = 1 to n, we choose which prototype outcome serves as
+the source for the ith local outcome. This choice is represented by an assignment variable Bi . As in the case of
+rules, we allow some local outcomes to be generated from
+scratch rather than from a prototype; this choice is represented by the seed outcome. The value of Bi is chosen
+from PB (bi |O∗ ), which assigns probability γout to the seed
+outcome and is uniform over the rest of the outcomes.
+Once the source for each local outcome has been chosen,
+the next step is to generate the outcomes themselves. Recall
+that an outcome is just a formula. Thus, we define the outcome modification distribution using the general formula-
+
+DESHPANDE ET AL.
+modification process Pfor (oi |bi , v̄) that we will discuss in
+Sec. 3.5 (again, v̄ is the set of logical variables in z). If bi is
+the seed outcome, then Pfor treats it as an empty formula. A
+list of outcomes is considered valid if it contains no repeats
+and no overlapping outcomes. Since repeats are excluded,
+the probability of a set of n outcomes is n! times the probability of any corresponding list. Thus, we get the following
+probability of generating a valid outcome set O and an assignment vector b, given that the prototype outcome set is
+O∗ and the number of local outcomes is n:
+Pout (O, b|O∗ , n) = n!
+
+n
+Y
+
+PB (bi |O∗ )Pfor (oi |bi , v̄)
+
+(6)
+
+i=1
+
+The last step is to generate the outcome probabilities p.
+These probabilities are sampled from a Dirichlet distribution whose parameter vector depends on the prototype parameters Φ and the assignment vector b ≡ (b1 , . . . , bn ).
+Specifically, define the function f (Φ, b) to yield a parameter vector (Φ01 , . . . , Φ0n+1 ) such that:
+Φ0i
+
+=
+
+8
+<
+:
+
+Φb
+i
+C(b,bi )
+
+Φn+2
+
+if i ≤ n
+
+(7)
+
+if i = n + 1
+
+87
+
+where T is a set of simple terms and I is a function from
+elements of T to values. This representation guarantees
+that the elements of T are unordered, and each element is
+mapped to only one value.
+So to define our formula-modification distribution
+Pfor (ϕ|ϕ∗ , v̄), we will suppose ϕ = (T, I) and
+ϕ∗ = (T ∗ , I ∗ ). Recall that v̄ is the set of logical
+variables that may be used in ϕ and ϕ∗ . To generate ϕ,
+we first choose a set Tkeep ⊆ T ∗ , where each term in
+T ∗ is included in Tkeep independently with probability
+βterm . The terms in Tkeep will be included in T . Next,
+we generate a set Tnew of new terms to include in T . The
+size of Tnew , denoted knew , is chosen from a geometric
+distribution with parameter αterm . Then, for i = 1 to
+knew , we generate a term ti according to a distribution
+Pterm (ti |v̄). This distribution chooses a predicate or
+function symbol f uniformly at random, and then chooses
+each argument of f uniformly from the set of constant
+symbols plus v̄. We consider a run invalid if any element
+of Tnew is in T ∗ : this ensures that while computing the
+probability of a term set T given a prototype term set T ∗ ,
+we can recover Tkeep as T ∩ T ∗ and Tnew as T \ T ∗ .
+
+This definition says that if oi is generated from prototype
+outcome bi (including the seed outcome), then Φ0i is obtained by dividing up Φbi over all the local outcomes derived from bi . The number of such outcomes is computed
+by the function C(b, bi ), which returns the number of indices j ∈ {1, . . . , n} such that bj = bi . Finally, for the
+noise outcome, we have Φ0n+1 = Φn+2 .
+
+Next, we choose the term-to-value function I. For a term
+t ∈ T ∩ T ∗ , the value I(t) is equal to I ∗ (t) with probability
+ρ, and with probability (1 − ρ) it is sampled according to
+a distribution Pvalue (x|v̄). If t ∈
+/ T ∗ , then I(t) is always
+sampled from Pvalue (x|v̄). This distribution Pvalue (x|v̄) is
+uniform over the constant symbols in the language, plus v̄.
+
+To define the overall distribution for a local rule r given a
+rule prototype r∗ , we sum out the assignment variables Bi .
+For valid rules r, we get:
+
+3.6
+
+Prule (r|r∗ ) = Pact (z|z ∗ ) Pfor (Ψ|Ψ∗ , v̄) Pnum (n|n∗ ) ·
+X
+Pout (O, b|O∗ , n) Dir[f (Φ, b)](p)
+
+(8)
+
+b∈
+(O ∪{NIL})n
+∗
+
+Here Dir[f (Φ, b)] is the Dirichlet distribution with parameter vector f (Φ, b).
+
+Generative Model for Rule Set Prototypes
+
+The process that generates rule set prototypes G is similar
+to the process that generates local rule sets from G, but
+all the rule prototypes are generated from scratch — there
+are no higher-level prototypes from which they could be
+derived. We assume that the number of rule prototypes in
+G has a geometric distribution with parameter αproto . Thus
+the probability of a rule set prototype G of size m∗ with
+∗
+rule prototypes {r1∗ , . . . , rm
+∗ } is:
+∗
+
+3.5
+
+Modifying Formulas
+
+The formulas that serve as contexts and outcomes are very
+simple: they are just conjunctions of literals, where a literal
+has the form t = x for some term t and value x. The term
+must be simple in the sense that each of its arguments is
+either a constant symbol or a logical variable; similarly,
+x must be a constant symbol or a logical variable.3 We
+do not care about the order of literals in a formula, and
+we would also like to rule out self-contradictory formulas
+in which multiple values are assigned to the same term.
+It is convenient to think of a formula ϕ as a pair (T, I),
+3
+We are treating true and false as constant symbols, so a literal
+such as ¬on(X, Y ) is represented as on(X, Y ) = false.
+
+PG (G) = Geom[αproto ](m∗ ) · m∗ ! ·
+
+m
+Y
+
+Pproto (ri∗ )
+
+(9)
+
+i=1
+
+We consider a generative run to be invalid if it generates
+the same rule prototype more than once, although we allow
+rule prototypes to have overlapping contexts.
+The rule prototypes are generated independently from the
+distribution Pproto (r∗ ). This is similar to the distribution
+for generating a local rule from scratch (as given by Eq. 8).
+The action term z ∗ is chosen from the uniform distribution
+Pact (z ∗ |NIL); the context formula Ψ∗ is generated by running our formula modification process on the empty formula ∅ given the logical variables v̄ from z ∗ ; the number of outcomes n∗ has a geometric distribution; and each
+outcome o∗ in the outcome set O∗ is also generated from
+
+88
+
+DESHPANDE ET AL.
+
+Pfor (o∗ |∅, v̄). The main difference from the case of local
+rules is that rather than generating an outcome probability vector p, we generate a vector of Dirichlet weights Φ,
+defining a prior over outcome distributions. We use a hyperprior PΦ (Φ|n∗ ) on Φ in which the sum of the Dirichlet
+weights has an exponential distribution. Thus, if r∗ consists of an action term z ∗ containing logical variables v̄, a
+context Ψ∗ , and an outcome set O∗ of size n∗ , then:
+Pproto (r∗ ) = Pact (z ∗ |NIL) Pfor (Ψ∗ |∅, v̄)
+Y
+· Geom[α](n∗ )PΦ (Φ|n∗ )
+Pfor (o|∅, v̄)
+o∈O ∗
+
+4
+
+Learning
+
+In our problem formulation, we are given sets of examples x1 , ..., xK from K source tasks, and a set of examples
+(xK+1 ) from the target task . In principle, one could maximize the objective in Eq. 3 using the data from the source
+and target tasks simultaneously. However, if K is fairly
+large, the data from task K + 1 is unlikely to have a large
+effect on our beliefs about the rule set prototype G. Thus,
+we work in two stages. First, we find the best rule set prototype G∗ given the data for the K source tasks. Then,
+∗
+given G∗
+holding G∗ fixed, we find the best rule set RK+1
+and xK+1 . This approach has the benefit of allowing us to
+throw away our data from the source tasks, and just transfer
+the relatively small G∗ .
+Our goal in the first stage, then, is to find the prototype G∗
+with the greatest posterior probability given x1 , . . . , xK .
+Doing this exactly would involve integrating out the source
+rule sets R1 , . . . , RK . It turns out that if we think of each
+rule set Rk as consisting of a structure RkS and parameters RkP (namely the outcome probability vectors for all the
+rules), then we can integrate out RkP efficiently. However,
+summing over all the discrete structures RkS is difficult.
+Thus, we apply another MAP approximation, searching for
+S
+the prototype G and rule set structures R1S , . . . , RK
+that together have maximal posterior probability. It is important
+that we integrate out the parameters RkP , because the posterior density for RkP is defined over a union of spaces of
+different dimensions (corresponding to different numbers
+of rules and outcomes in Rk ). The heights of density peaks
+in spaces of differing dimension are not necessarily comparable. So it would not be correct to use a MAP estimate
+of RkP obtained by maximizing this density.
+
+the outcome probabilities:
+S
+P (G, R1S , . . . , RK
+)∝
+
+PG (G)
+
+K Z
+Y
+k=1
+
+Scoring Function
+
+S
+In our search over G and R1S , . . . , RK
+, our goal is to maximize the marginal probability obtained by integrating out
+
+(10)
+
+This equation trades off three factors: the complexity of the
+rule set prototype, represented by PG (G); the differences
+between the local rule sets and the prototype, Pmod (Rk |G),
+and how well the local rule sets fit the data, P (xk |Rk ).
+Computing the value of Eq. 10 for a given choice of G
+and R1 , . . . , RK is expensive, because it involves summing
+over all possible mappings from local rules to global rules
+(the a values in Eq. 5) and all mappings from local outcomes to prototype outcomes (the b values in Eq. 8). Integrating out the outcome probabilities p in each rule is not a
+computational bottleneck: we can push the integral inside
+the sums over a and b, and use a modified version of a standard estimation technique [Minka, 2003] for the Polya (or
+Dirichlet-multinomial) parameters.4
+Rather than summing over all possible local-to-global
+correspondences for rules and outcomes, we approximate by using a single correspondence. Specifically,
+for each rule set Rk ≡ {r1 , . . . , rm }, we choose
+the rule correspondence vector â that maximizes the
+probability of the local rule contexts Ψi given the
+global rule
+Qmcontexts Ψ(ai ) (ignoring outcomes) â =
+argmaxa i=1 PA (ai |G)Pfor (Ψi |Ψ∗(ai ) , v̄i ). Since each
+factor contains only one assignment variable ai , we can
+find the corresponding rule prototype for each local rule
+separately. Given the rule correspondence â, we next construct an outcome correspondence for each rule ri . We use
+the outcome correspondence that maximizes the probability of the local outcomes o1 , . . . , on given the outcome set
+O∗ of the rule prototype
+Qn âi (ignoring the outcome probabilities) b̂ = argmaxb i=1 PB (bi |O∗ )Pfor (oi |bi , v̄). Again,
+the maximization decomposes into a separate maximization for each outcome. This greedy matching scheme can
+yield a poor result if a local rule ri has a context similar to
+a prototype rule, but very different outcomes. So as a final
+step, we compute the probability of each ri being generated
+from scratch, and set âi to NIL if this is a better correspondence.
+These approximations yield the following scoring function
+(an approximate version of Eq. 10), which we use to guide
+our search.
+S
+Score(G, R1S , . . . , RK
+)=
+K Z
+Y
+PG (G)
+k=1
+
+4.1
+
+Pmod (Rk |G)P (xk |Rk )
+P
+Rk
+
+P
+Rk
+
+Pbmod (Rk |G)P (xk |Rk )
+
+(11)
+
+4
+We modify the standard technique to take into account our
+hyperprior PΦ . Also, we adjust for cases where some global outcomes are not included in a corresponding local rule. For a more
+detailed explanation, see the master’s thesis by Deshpande [2007].
+
+DESHPANDE ET AL.
+
+Here Pbmod is a version of the measure Pmod from Eq. 5 in
+which we simply use â rather than summing over ai values,
+and we replace Prule with a modified version that uses b̂
+rather than summing over b vectors.
+4.2
+
+Coordinate Ascent
+
+We find a local maximum of Eq. 3 using a coordinate ascent algorithm. We alternate between maximizing over local rule set structures given an estimate of the rule set prototype G, and maximizing over the rule set prototype given
+S
+estimates of the rule set structures (R1S , ..., RK
+):
+K Z
+Y
+
+argmaxRS ,...,RS
+1
+
+K
+
+k=1
+
+argmaxG P (G)
+
+K
+Y
+
+P (xk |Rk )P (Rk |G)
+
+P (RkS |G)
+
+We begin with an empty rule set prototype, and use a
+greedy local search algorithm (described below) to optimize the local rule sets. Since R1 , . . . , RK are conditionally independent given G, we can do this search for each
+task separately. When these searches stabilize — that is,
+no search operator improves the objective function — we
+run another greedy local search to optimize G. We repeat
+this alternation until no more changes occur.
+Learning Local Rule Sets
+
+During the coordinate ascent one task is to find the highest
+scoring local rule set Rk∗ given the rule set G. The search
+is closely related the rule set learning algorithm problem
+in Zettlemoyer et al. [2005]. There are three major differences: (1) G provides a prior that did not exist before;
+(2) the outcomes O for each rule are constrained to be nonoverlapping; and (3) the rule parameters p are integrated
+out instead of being set to maximum likelihood estimates.
+4.3.1
+
+uses a subalgorithm to find the best set of outcomes. This
+outcome learning is done with a greedy search algorithm,
+as described in the next section. The following operators
+construct changes to the current rule set.
+Add/Remove Rule. Two types of new rules can be added
+to the set. Rules can be created by an ExplainExamples
+procedure [Zettlemoyer et al., 2005] which uses a heuristic
+search to find high quality potential rules in a data driven
+manner. In addition, rules can be created by copying the
+action and context of one of the prototypes in the global
+rule set. This provides a strong search bias towards rules
+that have been found to be useful for other tasks. New rule
+sets can also be created by removing one of the existing
+rules in the current set.
+
+P
+Rk
+
+k=1
+
+4.3
+
+89
+
+Rule Set Search
+
+In this section, we briefly outline a local rule learning algorithm that is a direct adaptation of the approach of Zettlemoyer et al. [2005] and highlight the places where the two
+algorithms differ. The search starts with a rule set that contains only the noisy default rule. At every step, we take the
+current rule set and apply a set of search operators to create new rule sets. Each of these new rule sets is scored, as
+described in section 4.1. The highest scoring set is selected
+and set as the new Rk , and the search continues until no
+new improvements are found.
+The operators create new rule sets by directly manipulating
+the current set: either adding or removing some number of
+the existing rules. Whenever a new rule is created, the relevant operator constructs the rule’s action and context and
+
+Add/Remove Literal. This operator selects a rule in the
+current rule set, and replaces it with a new rule that is the
+same except that one literal is added or removed from the
+context. All possible additions and deletions are proposed.
+Split on Literal. This operator chooses an existing rule
+and a new term that does not occur in that rule’s context. It
+removes the chosen rule and adds multiple new rules, one
+for each possible assignment of a value to the chosen term.
+Any time a new rule is added to a rule set, there is a check to
+make sure that only one rule is applicable for each training
+example. Any preexisting rules with overlapping applicability are removed from the rule set.
+4.3.2
+
+Outcome Search
+
+Given a rule action z and a context Ψ, the set of outcomes
+O is learned with a greedy search that optimizes the score,
+computed as described in section 4.1. This algorithm is
+a modified version of a previous outcome search procedure
+[Pasula et al., 2004], which has been changed to ensure that
+the outcomes do not overlap. Initially, O contains only the
+noise outcome, which can never be removed. It each step,
+a set of search operators is applied to build new outcome
+sets, which are scored and the best one is selected. The
+search finishes when no improvements can be found. The
+operators include:
+Add/Remove Outcome. This operator adds or removes
+an outcome from the set. Possible additions include any
+outcomes from the corresponding prototype rule or an outcome derived from concatenating the changes seen as a result of action effects in a training example (following [Pasula et al., 2004]). Any existing outcome can be removed.
+Add/Remove Literal. This operator appends or removes
+a literal from a specific outcome in the set. Any literal that
+is not present can be added and any currently present literal
+can be removed.
+
+90
+
+DESHPANDE ET AL.
+
+Split on Literal. This operator takes an existing outcome
+and replaces it with multiple new outcomes, each containing one of the possible value assignments for a new term.
+Merge Outcomes. This operator creates a new outcome
+computing the union of an existing outcome and one that
+could be added by the add operator described above. The
+original outcome is removed from the set.
+Two of the operators, add outcome and remove function,
+have the potential to create overlapping outcomes. To fix
+this condition, functions are greedily added to overlapping
+outcomes until no pair of outcomes overlap. This new outcome set is scored, and the search continues.
+4.4
+
+Estimating the Dirichlet parameters for the Polya distribution does not have a closed form solution, but gradient
+ascent techniques have been developed for the maximum
+likelihood solution [Minka, 2003]. To estimate the parameters for a rule prototype r∗ , the required occurrence counts
+are computed for each prototype outcome and each local
+rule that corresponds to r∗ (under the correspondence â
+described in Sec. 4.1). If a local rule contains several outcomes corresponding to the same prototype outcome (under b̂), their counts are merged.
+
+Experiments
+
+We evaluate our learning algorithm on synthetic data from
+four families of related tasks, all variants of the classic
+blocks world. We restrict ourselves to learning the effects
+of a single action, pickup(X, Y ). Adding more actions
+would not significantly change the problem: since the action is always observed, one can learn a rule set for multiple
+actions by learning a rule set for each action separately.
+5.1
+
+2. For each source task, generate a set of Nsource state
+transitions to serve as a training set. In each state transition, the action is pickup(A, B) and the initial state is
+created by assigning random values to all functions on
+{A, B}.5 Then the resulting state is sampled according
+to the task-specific rule set. Note that the state transitions are sampled independently of each other; they
+do not form a trajectory.
+
+Learning the Rule Set Prototype
+
+The second optimization involves finding the highest scor∗
+).
+ing rule set prototype G given rule sets (R1∗ , ..., RK
+Again, we adopt an approach based on greedy search
+through the space of possible rule sets. This search has exactly the same initialization and uses all of the same search
+operators as the local rule set search. There are three differences: (1) the AddRule operator tries to add rules that are
+present in the local rule sets, without directly referencing
+the training sets; (2) we relax the restriction that rules and
+outcomes can not overlap, simplifying some of the checking that the operators have to perform; and (3) we need to
+estimate the Dirichlet parameters for the outcomes for each
+new prototype rule considered by the structure search.
+
+5
+
+1. Generate K “source task” rule sets from a prior distribution. This prior distribution is implemented by
+a special-purpose program for each family of tasks.
+This is slightly more realistic than generating the rule
+sets from a rule set prototype expressed in our modeling language.
+
+Methodology
+
+3. Run our full learning algorithm on the K source-task
+training sets to find the best rule set prototype G∗ .
+4. Generate a “target task” rule set RK+1 from the same
+distribution used in Step 1.
+5. Generate a training set of Ntarget state transitions as in
+Step 2, using RK+1 as the rule set.
+bK+1 for the target task using the
+6. Learn a rule set R
+algorithm from Sec. 4.3, with G∗ as the fixed rule set
+prototype.
+7. Generate a test set of 1000 initial states using the same
+distribution as in Step 2. For each initial state s, compute the variational distance between the next-state
+distributions defined by the true rule set RK+1 and
+bK+1 . This is defined in our case
+the learned rule set R
+as follows, with a equal to pickup(A, B) and s0 ranging
+over possible next states:
+X
+
+Finally, compute the average variational distance over
+the test set.
+Variational distance is a measure of error, but we would like
+the y-axis in our graphs to be a measure of accuracy, so we
+use 1 − (variational distance).
+The free parameters in our hierarchical Bayesian model
+(and hence in our scoring function) are set to the same values in all experiments. While we found that the scoring
+function in Eq. 11 leads to good results on large training
+sets, we also saw that with small training sets, the very
+small probabilities of formulas (in contexts and outcomes)
+tend to dominate the score. For the experiments reported
+5
+
+Each run of our experiments consists of the following steps:
+
+bK+1 )
+p(s0 |s, a, RK+1 ) − p(s0 |s, a, R
+
+s0
+
+The distribution used here is biased so that A is always a
+block and the robot’s gripper is usually empty; this focuses our
+evaluation on cases where pickup(A, B) has a chance of success.
+
+DESHPANDE ET AL.
+
+91
+Slippery Gripper Domain
+1
+
+No Transfer
+1x5000
+2x2500
+20
+
+40
+
+1-(Variational Distance)
+
+1-(Variational Distance)
+
+Gripper Size Domain
+1
+0.98
+0.96
+0.94
+0.92
+0.9
+0.88
+0.86
+0.84
+0.82
+0.8
+
+0.9
+0.8
+0.7
+0.6
+
+No Transfer
+1x5000
+2x2500
+
+0.5
+
+60 80 100 120 140 160 180 200
+Target Task Examples
+
+20
+
+40
+
+(a)
+
+(b)
+
+Slippery Gripper with Size Domain
+
+Random Domain
+1
+
+0.95
+0.9
+0.85
+0.8
+
+No Transfer
+1x5000
+2x2500
+
+0.75
+20
+
+40
+
+60 80 100 120 140 160 180 200
+Target Task Examples
+
+(c)
+
+1-(Variational Distance)
+
+1
+1-(Variational Distance)
+
+60 80 100 120 140 160 180 200
+Target Task Examples
+
+0.9
+0.8
+0.7
+No Transfer
+1x1000
+4x250
+10x100
+
+0.6
+0.5
+20
+
+40
+
+60 80 100 120 140 160 180 200
+Target Task Examples
+
+(d)
+
+Figure 3: Accuracy using an empty rule set prototype (labeled “No Transfer”) and transfer learning, labeled KxN where
+K represents the number of source tasks and N represents the number of examples per source task.
+here, we use a modified scoring function in which each occurrence of the formula distribution Pfor is raised to the
+power 0.5. The fact that this ad hoc modification yields
+better results suggests that our distribution over formulas
+is overly flat, and it would be worthwhile to develop a formula distribution that gives common literals or subformulas higher probability.
+5.2
+
+Results
+
+In this section, we present results in the four blocks world
+domains. For each domain, we briefly describe the task
+generation distribution and then present results.6 For each
+experiment, we graph variational distance as a function of
+the number of training examples in the target task. Each
+experiment was repeated 20 times; our graphs show the average results with 95% confidence bars. The time required
+for each run varied from 30 seconds to 10 minutes depending on the complexity of the domain.
+Our first experiment investigates transfer learning in a domain where the rule sets are very simple — just single
+rules — but the rule contexts vary across tasks. We use
+a family of tasks where the robot is equipped with grippers of varying sizes. There are seven different sizes of
+6
+Deshpande [2007] presents a more detailed description of
+these domains.
+
+blocks on the table; the robot can only pick up blocks that
+are the same size as its gripper. Thus, each task can be
+described by a single rule saying that if block X has the
+proper size, then pickup(X, Y ) succeeds with some significant probability (this probability also varies across tasks).
+If X has the wrong size, then no rule applies and there is
+no change. Since the “proper size” varies from task to task,
+the rules for different tasks have different contexts. To increase the learning difficulty, two extra distracter predicates
+(color and texture) are randomly set to different values in
+each example state.
+Fig. 3(a) shows the transfer learning curves for this domain. The transfer learners are consistently able to learn
+the dynamics of the domain with fewer examples than the
+non-transfer learner. In practice, in each source task, the
+algorithm learns the specific pickup rule with the appropriate size literal in the context. The algorithm learns a single
+rule prototype whose context also contains some size literal. This rule prototype provides a strong bias for learning
+the correct target-task rule set: the learner only has to replace the size literal in the prototype with the correct size
+literal for the given task.
+To see how transfer learning works for more complex rule
+sets, our next experiment uses a “slippery gripper” domain
+adapted from [Kushmerick et al., 1995]. The correct model
+for this domain has four fairly complex rules, describing
+
+92
+
+DESHPANDE ET AL.
+
+cases where the gripper is wet or not wet (which influences
+the success probability for pickup) and the block is being
+picked up from the table or from another block (in the latter case, the rule must include an additional outcome for the
+block falling on the table). The various tasks are all modeled by rules with the same structure, but include relatively
+large variation in outcome probabilities.
+Fig. 3(b) shows the transfer learning curves for the slippery gripper domain. Again, transfer significantly reduces
+the number of examples required to achieve high accuracy.
+We found that the transfer learners create prototype rule
+sets that effectively represent the dynamics of the domain.
+However, the structure of the prototype rules do not exactly match the structure of the four specific rules that are
+present in each source task. Despite this fact, these prototypes still capture common structure that can be specialized
+to quickly learn the correct rules in the target task.
+Our third domain, the slippery gripper domain with size, is
+a cross between the slippery gripper domain and the gripper size domain. In this domain, all four rules of the slippery gripper domain apply with the addition that each rule
+can only succeed if the targeted block is of a certain taskspecific size. Thus, the domain exhibits both structural and
+parametric variation between tasks.
+As can be seen in Fig. 3(c), the transfer learners perform
+significantly better than the non-transfer learner. In this
+case, the rule set prototype provides both a parametric and
+structural bias to better learn the domain.
+Our final experiment investigates whether our algorithm
+can avoid erroneous transfer when the tasks are actually
+unrelated. For this experiment, we generate random source
+and target rule sets with 1 to 4 rules. Rule contexts and
+outcomes are of random length and contain random sets
+of literals. Since rule sets sampled this way may contain
+overlapping rules or outcomes, we use rejection sampling
+to ensure that a valid rule set is generated for each task.
+As can be seen in Fig. 3(d), the transfer and non-transfer
+learners’ performances are statistically indistinguishable.
+The learning algorithm often builds a rule set prototype
+containing a few rules with random structure and high variance outcome distribution priors. These prototype rules do
+not provide any specific guidance about the structure or parameters of the specific rules to be learned in the target task.
+However, their presence does not lower performance in the
+target task.
+
+6
+
+Conclusion
+
+In this paper, we developed a transfer learning approach for
+relational probabilistic world dynamics. We presented a hierarchical Bayesian model and an algorithm for learning a
+generic rule set prior which, at least in our initial experiments, holds significant promise for generalizing across
+
+different tasks. This learning problem is particularly difficult due to the need to learn relational structure along with
+probabilities simultaneously for a large number of tasks.
+The current approach addresses many of the fundamental
+challenges for this task and provides a strong example that
+can be extended to work in more complex domains and
+with a wide range of representation languages.
+References
+[Baxter, 1997] J. Baxter. A Bayesian/information theoretic
+model of learning to learn via multiple task sampling. Machine Learning, 28:7–39, 1997.
+[Blum and Langford, 1999] A. L. Blum and J. C. Langford.
+Probabilistic planning in the Graphplan framework. In
+Proc. 5th European Conference on Planning, 1999.
+[Deshpande, 2007] A. Deshpande. Learning probabilistic
+relational dynamics for multiple tasks. Master’s thesis,
+Massachusets Institute of Technology, 2007.
+[Kushmerick et al., 1995] N. Kushmerick, S. Hanks, and
+D. S. Weld. An algorithm for probabilistic planning. Artificial Intelligence, 76:239–286, 1995.
+[Lindley, 1971] D. V. Lindley. The estimation of many parameters. In V. P. Godambe and D. A. Sprott, editors, Foundations of Statistical Inference. Holt, Rinehart and Winston, Toronto, 1971.
+[Marx et al., 2005] Z. Marx, M. T. Rosenstein, L. P. Kaelbling, and T. G. Dietterich. Transfer learning with an ensemble of background tasks. In NIPS Workshop on Inductive Transfer, 2005.
+[Minka, 2003] T. P. Minka. Estimating a Dirichlet distribution.
+Available at http://research.microsoft.com/
+∼minka/papers/dirichlet, 2003.
+[Pasula et al., 2004] H. M. Pasula, L. S. Zettlemoyer, and
+L. P. Kaelbling. Learning probabilistic relational planning
+rules. In Proc. 14th International Conference on Automated Planning and Scheduling, 2004.
+[Yu et al., 2005] K. Yu, V. Tresp, and A. Schwaighofer.
+Learning Gaussian processes from multiple tasks. In
+Proc. 22nd International Conference on Machine Learning, 2005.
+[Zettlemoyer et al., 2005] L. S. Zettlemoyer, H. M. Pasula,
+and L. P. Kaelbling. Learning planning rules in noisy
+stochastic worlds. In Proc. 20th National Conference on
+Artificial Intelligence, 2005.
+[Zhang et al., 2006] J. Zhang, Z. Ghahramani, and Y. Yang.
+Learning multiple related tasks using latent independent
+component analysis. In Advances in Neural Information
+Processing Systems 18. MIT Press, 2006.
+
+

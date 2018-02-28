@@ -1,0 +1,1017 @@
+Approximate Linear Programming for First-order MDPs
+
+Scott Sanner
+University of Toronto
+Department of Computer Science
+Toronto, ON, M5S 3H5, CANADA
+ssanner@cs.toronto.edu
+
+Abstract
+We introduce a new approximate solution technique
+for first-order Markov decision processes (FOMDPs).
+Representing the value function linearly w.r.t. a set
+of first-order basis functions, we compute suitable
+weights by casting the corresponding optimization as a
+first-order linear program and show how off-the-shelf
+theorem prover and LP software can be effectively
+used. This technique allows one to solve FOMDPs
+independent of a specific domain instantiation; furthermore, it allows one to determine bounds on approximation error that apply equally to all domain instantiations. We apply this solution technique to the
+task of elevator scheduling with a rich feature space
+and multi-criteria additive reward, and demonstrate
+that it outperforms a number of intuitive, heuristicallyguided policies.
+
+1 Introduction
+Markov decision processes (MDPs) have become the de
+facto standard model for decision-theoretic planning problems. While classic dynamic programming algorithms for
+MDPs [14] require explicit state and action enumeration,
+recent techniques for exploiting propositional structure in
+factored MDPs [2] avoid explicit state and action enumeration, thus making it possible to optimally solve extremely
+complex problems containing 108 states [9]. Approximation techniques for factored MDPs using basis functions
+have also been successful, yielding approximate solutions
+to problems with up to 1040 states [8, 17].
+While such techniques for factored MDPs have proven effective, they cannot generally exploit first-order structure.
+Yet many realistic planning domains are best represented
+in first-order terms, exploiting the existence of domain objects, relations over these objects, and the ability to express
+objectives and action effects using quantification. As a
+result, a new class of algorithms have been introduced to
+
+Craig Boutilier
+University of Toronto
+Department of Computer Science
+Toronto, ON, M5S 3H5, CANADA
+cebly@cs.toronto.edu
+
+explicitly handle MDPs with relational (RMDP) and firstorder (FOMDP) structure.1 Symbolic dynamic programming (SDP) [3], first-order value iteration (FOVIA) [10],
+and the relational Bellman algorithm (ReBel) [11] are
+model-based algorithms for solving FOMDPs and RMDPs,
+using appropriate generalizations of value iteration [14].
+Approximate policy iteration [5] induces rule-based policies from sampled experience in small-domain instantiations of RMDPs and generalizes these policies to larger
+domains. In a similar vein, inductive policy sslection using first-order regression [6] uses regression to provide the
+hypothesis space over which a policy is induced. Approximate linear programming (for RMDPs) [7] is an approximation technique using linear program optimization to find
+a best-fit value function over a number of sampled RMDP
+domain instantiations.2
+In this paper, we provide a novel approach to approximation of FOMDP value functions by representing them as a
+linear combination of first-order basis functions and using
+a first-order generalization of approximate linear programming techniques for propositional MDPs [7, 17] to solve
+for the required weights. While many FOMDP solution
+techniques need to instantiate a ground FOMDP w.r.t. a
+set of domain objects to obtain a propositional version of
+the FOMDP (usually performing this grounding operation
+multiple times for many different domain sizes), our approach exploits the power of full first-order reasoning taken
+by SDP, thus avoiding the exponential blowup that can result from domain instantiation. Since the use of first-order
+reasoning techniques allows our solution to abstract over all
+possible ground domain instantiations, the bounds that we
+derive for approximation error apply equally to all domain
+instantiations (i.e., the bounds are independent of domain
+size and and thus do not rely on a distribution over domain
+sizes).
+1
+
+We use the term relational MDP to refer models that allow
+implicit existential quantification, and first-order MDP for those
+with explicit existential and universal quantification.
+2
+Because the language in this work allows count aggregators
+in the transition and reward functions, it is more expressive than
+typical RMDPs.
+
+2 Markov Decision Processes
+Formally, a finite state and action MDP [14] is a tuple
+hS, A, T, Ri where: S is a finite state space; A is a finite set
+of actions; T : S × A × S → [0, 1] is a transition function,
+with T (s, a, ·) a distribution over S for all s ∈ S, a ∈ A;
+and R : S × A → R is a bounded reward function. Our
+goal is to find a policy π that maximizes the value function, defined using the P
+infinite horizon, discounted reward
+∞
+criterion: Vπ (s) = Eπ [ t=0 γ t · rt |S0 = s], where rt is a
+reward obtained at time t, 0 ≤ γ < 1 is a discount factor,
+and S0 is the initial state.
+A stationary policy takes the form π : S → A, with π(s)
+denoting the action to be executed in state s. Policy π is
+optimal if Vπ (s) ≥ Vπ0 (s) for all s ∈ S and all policies π 0 .
+The optimal value function V ∗ is the value of any optimal
+policy and satisfies the following:
+X
+T (s, a, t) · V ∗ (t)
+(1)
+V ∗ (s) = R(s, a) + max γ
+a
+
+t∈S
+
+In the approximate linear programming solution to MDPs
+[8, 17] on which our work is based, we represent the value
+function as the weighted sum of k basis functions Bi (s):
+V (s) =
+
+k
+X
+
+wi Bi (s)
+
+(2)
+
+i=1
+
+Our goal is to find a good setting of weights that approximates the optimal value function. One way of doing this is
+to cast the optimization problem as a linear program that directly solves for the weights of an L1 -minimizing approximation of the optimal value function:
+Variables: w1 , . . . , wk
+
+Minimize:
+
+k
+XX
+
+wi Bi (s)
+
+s∈S i=1
+
+Subject to: 0 ≥
+
+R(s, a) + γ
+
+X
+t∈S
+
+k
+X
+
+T (s, a, t) ·
+
+k
+X
+
+!
+wi Bi (t)
+
+−
+
+i=1
+
+wi Bi (s) ; ∀a ∈ A, s ∈ S
+
+(3)
+
+i=1
+
+While the size of the objective and the number of constraints in this LP is proportional to the number of states
+(and therefore exponential), recent techniques use compact,
+factored basis functions and exploit the reward and transition structure of factored MDPs [8, 17], making it possible
+to avoid generating an exponential number of constraints
+(and rendering the entire LP compact).
+
+of actions, situations, and fluents. Actions are first-order
+terms involving action function symbols. For example,
+the action of moving an elevator e up one floor might be
+denoted by the action term up(e). A situation is a firstorder term denoting the occurrence of a sequence of actions. These are represented using a binary function symbol do: do(α, s) denotes the situation resulting from doing
+action α in situation s. In an elevator domain, the situation
+term
+do(up(E), do(open(E), do(down(E), S0 )))
+denotes the situation resulting from executing sequence
+[down(E),open(E),up(E)] in S0 . Relations whose truth values vary from state to state are called fluents, and are denoted by predicate symbols whose last argument is a situation term. For example, EAt(e, 10, s) is a relational fluent
+meaning that elevator e is at floor 10 in situation s.3
+A domain theory is axiomatized in the situation calculus
+with four classes of axioms [15]. For this paper, the most
+important of these axioms are the successor state axioms
+(SSAs). There is one such axiom for each fluent F (~x, s),
+with syntactic form F (~x, do(a, s)) ≡ ΦF (~x, a, s) where
+ΦF (~x, a, s) is a formula with free variables among a, s, ~x.
+These characterize the truth values of the fluent F in the
+next situation do(a, s) in terms of the current situation s,
+and embody a solution to the frame problem for deterministic actions [15].
+Following is a a simple example of an SSA for EAt (assuming 1 is the ground floor):
+EAt(e, 1, do(a, s)) ≡
+EAt(e, 2, s) ∧ a = down(e) ∨ EAt(e, 1, s) ∧ a 6= up(e)
+
+This states that an elevator e is at the first floor after doing
+action a in situation s if e was at the second floor in s and
+the action down(e), or if e was already at the first floor in s
+and the action was not to move up.
+The regression of a formula ψ through an action a is a formula ψ 0 that holds prior to a being performed iff ψ holds
+after a. Successor state axioms support regression in a natural way. Suppose that fluent F ’s SSA is F (~x, do(a, s)) ≡
+ΦF (~x, a, s). We inductively define the regression of a formula whose situation arguments all have the form do(a, s)
+as follows:
+Regr(F (~
+x, do(a, s)))
+Regr(¬ψ)
+Regr(ψ1 ∧ ψ2 )
+Regr((∃x)ψ)
+
+3 First-Order Representation of MDPs
+3
+
+3.1 The Situation Calculus
+The situation calculus [13] is a first-order language for axiomatizing dynamic worlds. Its basic ingredients consist
+
+=
+=
+=
+=
+
+ΦF (~
+x, a, s)
+¬Regr(ψ)
+Regr(ψ1 ) ∧ Regr(ψ2 )
+(∃x)Regr(ψ)
+
+In contrast to states, situations reflect the entire history of
+action occurrences. As we will see, the specification of dynamics
+in the situation calculus will allow us to recover state properties
+from situation terms, and indeed, the form we adopt for successor
+state axioms renders the process Markovian.
+
+For example, regressing ¬EAt(e, 1, do(a, s)) exploits the
+the SSA for EAt to obtain the following description of the
+conditions on the “pre-action” situation s under which this
+formula is true:
+Regr(∃e ¬EAt(e, 1, do(a, s)) =
+∃e ¬[EAt(e, 2, s) ∧ a = down(e) ∨ EAt(e, 1, s) ∧ a 6= up(e)]
+
+3.2 Stochastic Actions and the Situation Calculus
+The classical situation calculus relies on the deterministic
+form of actions to allow compact and natural representation of dynamics using SSAs as described in the previous
+section. To generalize this to stochastic actions, as required
+by FOMDPs, we decompose stochastic actions (those in
+the control of some agent) into a collection of deterministic
+actions, each corresponding to a possible outcome of the
+stochastic action. We then specify a distribution according
+to which “nature” may choose a deterministic action from
+this set whenever that stochastic action is executed. As a
+consequence we need formulate SSAs using only these deterministic nature’s choices [1, 3], obviating the need for a
+special treatment of stochastic actions in SSAs.
+We illustrate this approach with a simple example in an elevator domain consisting of elevators, floors, and people. At
+each time step, an elevator can move up, down, or can open
+its doors at the current floor. Suppose the open action is
+stochastic with two possible outcomes, success and failure
+(we suppose up and down action are deterministic and always succeed). We decompose open into two deterministic
+choices, openS and openF, corresponding to success and
+failure. The probability of each choice is then specified,
+for example:
+EAt(e, 1, s) ⊃ prob(openS(e), open(e), s) = 0.85
+EAt(e, 1, s) ⊃ prob(openF(e), open(e), s) = 0.15
+EAt(e, f, s) ∧ f 6= 1 ⊃ prob(openS(e), open(e), s) = 0.9
+EAt(e, f, s) ∧ f 6= 1 ⊃ prob(openF(e), open(e), s) = 0.1
+prob(upS(e), up(e), s) = 1.0
+prob(downS(e), down(e), s) = 1.0
+
+Here we see that the probability of the door failing to open
+is slightly higher on the first floor (0.15) than on other floors
+(0.10); this is simply to illustrate the “style” of the representation. Next, we define the SSAs in terms of these
+deterministic choices. However, in order to formalize the
+Elevator domain independent of any fixed set of floors, we
+must first introduce an axiomatization of above and below
+functions (f a(x) and f b(x) respectively) as well as transitive closure predicates above(x, y) and below(x, y) over
+these functions:4
+4
+
+While transitive closure is technically not first-order definable, the axiomatization of above(x, y) and below(x, y) given
+here suffices to yield a contradiction when an assertion conflicts
+with an inference derivable from these axioms. Inconsistency detection is all that is needed by our algorithms.
+
+∀x, y(∃z below(x, z) ∧ below(z, y)) ⊃ below(x, y)
+∀x, y(∃z above(x, z) ∧ above(z, y)) ⊃ above(x, y)
+∀x, y above(x, y) ⊃ ¬below(x, y)
+∀x, y above(x, y) ⊃ below(y, x)
+∀x, y below(x, y) ⊃ ¬above(x, y)
+∀x, y below(x, y) ⊃ above(y, x)
+∀x, y above(x, y) ⊃ x 6= y; ∀x, y below(x, y) ⊃ x 6= y
+∀x, y x = y ⊃ ¬above(x, y); ∀x, y x = y ⊃ ¬below(x, y)
+∀x above(f a(x), x); ∀x below(f b(x), x)
+∀x x = f a(f b(x)); ∀x x = f b(f a(x))
+
+Given these foundational axioms, we can define the SSAs
+in a straightforward way.5 For the fluent EAt(e, f, s)
+(meaning elevator e is at floor f ), we have the following
+SSA:
+EAt(e, f, do(a, s)) ≡
+EAt(e, f b(f ), s) ∧ a = upS(e) ∨
+EAt(e, f a(f ), s) ∧ a = downS(e) ∨
+EAt(e, f, s) ∧ a 6= upS(e) ∧ a 6= downS(e)
+
+Intuitively, e is at floor f after doing a only if e (successfully) moved up or down from an suitable floor above or
+below, or if e was already at f and did not (successfully)
+move up or down. The SSA PAt(p, f, s) (person p is at
+floor f ) is:
+PAt(p, f, do(a, s)) ≡
+[∃e EAt(e, f, s) ∧ OnE(p, e, s)∧
+Dst(p, f ) ∧ a = openS(e))] ∨ [PAt(p, f, s)∧
+¬(∃e EAt(e, f, s) ∧ ¬Dst(p, f ) ∧ a = openS(e))]
+
+Intuitively, person p is at floor f in the situation resulting
+from doing a iff p has destination f and was on e, which
+had (stopped and successfully) opened its doors at f ; or p
+was at f already and it’s not the case that e opened its doors
+at f and p was not at their destination. Finally, OnE(p, e, s)
+(person p is on elevator e) has the following SSA (with
+obvious meaning):
+OnE(p, e, do(a, s))
+[∃f EAt(e, f, s) ∧ PAt(p, f, s)∧
+¬Dst(p, f ) ∧ a = openS(e)] ∨ [OnE(p, e, s)∧
+¬(∃f EAt(e, f, s) ∧ Dst(p, f ) ∧ a = openS(e))]
+
+3.3 Case Representation
+When working with first-order specifications of rewards,
+probabilities, and values, one must be able to assign values
+to different portions of state space. For this purpose we use
+5
+SSAs can often be compiled directly from “effect” axioms
+that directly specify the effects of actions [15].
+
+the notation t = case[φ1 , t1 ; · · · ; φn , tn ] as an abbreviation
+for the logical formula:
+_
+{φi ∧ t = ti }.
+i≤n
+
+Here the φi are state formulae (whose situation term does
+not use do) and the ti are terms. We sometimes write this
+case[φi , ti ]. Often the ti will be constants and the φi will
+partition state space. For example, we may represent our
+reward function as:
+case[∀p, f PAt(p, f, s) ⊃ Dst(p, f ) , 10;
+∃p, f PAt(p, f, s) ∧ ¬Dst(p, f ) , 0]
+
+This specifies that we receive a reward of 10 if all people
+are at their destinations and 0 if not. We introduce the following operators on case statements:
+case[φi , ti : i ≤ n] ⊗ case[φj , vj : j ≤ m] =
+case[φi ∧ ψj , ti · vj : i ≤ n, j ≤ m]
+case[φi , ti : i ≤ n] ⊕ case[φj , vj : j ≤ m] =
+case[φi ∧ ψj , ti + vj : i ≤ n, j ≤ m]
+case[φi , ti : i ≤ n] case[φj , vj : j ≤ m] =
+case[φi ∧ ψj , ti − vj : i ≤ n, j ≤ m]
+Intuitively, to perform an operation on two case statements,
+we simply take the cross-product of their partitions and perform the corresponding operation on the resulting paired
+partitions. Letting each φi and ψj denote generic firstorder formulae, we can perform the cross-sum ⊕ of two
+case statements in the following manner:
+case[φ1 , 10; φ2 , 20] ⊕ case[ψ1 , 1; ψ2 , 2] =
+case[φ1 ∧ ψ1 , 11; φ1 ∧ ψ2 , 12; φ2 ∧ ψ1 , 21; φ2 ∧ ψ2 , 22]
+
+Note that the conjunction of two first-order formalae in a
+partition may be inconsistent, implying that that partition
+formula can never be satisfied and thus discarded.
+We can also represent choice probabilities using case notation. Letting A(~x) be a stochastic action with choices
+n1 (~x), · · · , nk (~x), we define:
+pCase(nj (~
+x), A(~
+x), s) = case[φj1 (~
+x, s), pj1 ; · · · ; φjn (~
+x, s), pjn ],
+
+where the φji partition state space and pji is the probability
+of choice ni (~x) being executed under condition φji (~x, s)
+when the agent executes stochastic action A(~x).
+We can likewise use case statements (or sums over case
+statements) to represent the reward and value functions. We
+use the notation rCase(s) and vCase(s) to respectively denote these case representations.
+
+A(~x) yields a case statement containing the logical description of states that would give rise to vCase(s) after doing
+action A(~x), as well as the values thus obtained. This is
+analogous to classical goal regression, the key difference
+being that action A(~x) is stochastic. In MDP terms, the
+result of such a backup is a case statement representing a
+Q-function.
+There are in fact two types of backups that we can perform. The first, B A(~x) , regresses a value function through
+an action and produces a case statement with free variables
+for the action parameters. The second, B A , existentially
+quantifies over the free variables ~x in B A(~x) and takes the
+max over the resulting partitions. The application of this
+operator results in a case description of the regressed value
+function indicating the best value that could be achieved by
+any instantiation of A(~x) in the pre-action state.
+To define the B A(~x) operator, we first define the first-order
+decision theoretic regression (FODTR) operator [3]:
+FODTR(vCase(s), A(~
+x)) =
+γ [⊕j {pCase(nj (~
+x), s) ⊗ Regr(vCase(do(nj (~
+x), s)))}]
+
+(Unlike the original definition of FODTR [3], we do not
+include the sum of rCase(s) in the FODTR definition since
+it is useful to keep it separate in this paper.) Thus, we can
+express the B A(~x) operator as follows:
+B A(~x) (vCase(s)) = rCase(s) ⊕ FODTR(vCase(s), A(~
+x)) (4)
+
+To obtain the result of the B A operator on this same value
+function, we need only existentially quantify the free variables ~x in B A(~x) , which we denote as ∃~x B A(~x) . Since
+the case notation is disjunctively defined, we can distribute
+the existential quantification into each individual case partition. However, even if the partitions were mutually exclusive prior to the backup operation, the existential quantification can result in overlap between the partitions. Thus,
+we modify the existential quantification operator to ensure
+that the highest possible value is achieved in every state by
+sorting each partition hφ(~x), ti i by the ti values (such that
+i < j ⊃ ti > tj ) and ensuring that a partition can be satisfied only when no higher value partition can be satisfied:
+∃~
+x case[φ1 (~
+x), t1 ; · · · ; φn (~
+x), tn ] ≡
+^
+case[∃~
+x φi (~
+x) ∧
+¬∃~
+x φj (~
+x), vi : i ≤ n]
+j≤i
+
+Assuming that the rCase(s) statement does not depend on
+the parameters of the action (this can be easily relaxed, if
+needed) and exploiting the fact ⊕ is conjunctively defined,
+we arrive at the definition of the B A operator:
+B A (vCase(s)) = rCase(s) ⊕ ∃~
+x FODTR(vCase(s), A(~
+x))
+
+3.4 Symbolic Dynamic Programming
+
+4 Approximate Linear Programming for
+FOMDPs
+
+Suppose we are given a value function in the form
+vCase(s). Backing up this value function through an action
+
+We now generalize the approximate linear programming
+techniques from propositional factored MDPs to FOMDPs.
+
+4.1 Value Function Representation
+We represent the value function as a weighted sum of
+k first-order basis functions, denoted bCasei (s), each of
+which is intended to contain small partitions of formulae
+that provide a first-order abstraction of the state space:
+vCase(s) = ⊕ki=1 wi · bCasei (s)
+
+(5)
+
+As in the propositional case [8, 17], the fact that basis functions are represented compactly using logical formulae to
+specify partitions of state space means that the value function can be represented very concisely using Eq. 5. Our
+approach is distinguished by the use of first-order formulae
+to represent the partition specifications.
+We can easily apply our previously defined backup operators B A(~x) and B A to this representation and obtain some
+simplification as a result of the structure in Eq. 5. For
+B A(~x) , we substitute value function expression in Eq. 5
+into the definition B A(~x) (Eq. 4). Exploiting the fact that
+⊕ is conjunctively defined and that Regr(ψ1 ∧ ψ2 ) =
+Regr(ψ1 ) ∧ Regr(ψ2 ), we push the regression down to the
+individual basis functions and reorder the summations. As
+a consequence, we find that the backup of a linear combination of basis functions is simply the linear combination
+of the FODTR of each basis function:
+B A(~x) (⊕i wi bCasei (s)) =
+rCase(s) ⊕ (⊕i wi FODTR(bCasei (s), A(~
+x))) (6)
+
+By representing the value function as a linear combination of basis functions, we can often achieve a reasonable approximation of the exact value function by exploiting additive structure inherent in many real-world problems
+(e.g. additive reward functions or problems with independent subgoals). Unlike exact solution methods where value
+functions can grow exponentially in size during the solution process and must be logically simplified [3], here we
+necessarily achieve a compact form of the value function
+that requires no simplification, just the discovery of good
+weights.
+To apply the B A operator for a linear combination of basis
+functions, we let FA denote the set of indices for basis functions affected by action A(~x) (thus having free variables ~x),
+and let NA denote the set of indices for basis functions not
+affected by the action.6 Then, we again exploit the fact that
+⊕ is defined by conjunction and push the ∃~x through to the
+the sum over case statements with free variables ~x. This
+yields the following definition of B A :
+B (⊕i wi bCasei (s)) = rCase(s) ⊕ (⊕i∈NA wi bCasei (s))
+⊕ ∃~
+x (⊕i∈FA wi FODTR(bCasei (s), A(~
+x)))
+A
+
+6
+Since an action typically affects only a few fluents and basis
+functions contain relatively few fluents, only a few of the basis
+functions will be affected by an action. This fact holds for many
+domains, including the elevator domain in this paper.
+
+It is important to note that the backup operator results in
+the “cross sum” ⊕ of a collection of case statements, performing the explicit sum only over those case statements
+affected by the action being backed up. This results in a
+representation of the backed-up value function that often
+retains most of its original additive structure.
+As a concrete example of the application of backup operators B A(x) and B A , suppose we have a reward function
+that assigns 10 for being in a state where all people are at
+their intended destination, and 0 otherwise:7
+rCase(s) = case[ ∀p, f PAt(p, f, s) ⊃ Dst(p, f ), 10 ; ¬ ”, 0 ]
+
+Suppose our value function is represented by the following
+weighted sum of two basis functions (the first basis function indicates whether some person is at a floor that is not
+their destination, the second whether there is a person on
+an elevator stopped at a floor that is their destination):
+vCase(s) =
+w1 ·case[ ∃p, f PAt(p, f, s) ∧ ¬Dst(p, f ), 1 ; ¬ ”, 0 ] ⊕
+w2 ·case[ ∃p, f, e Dst(p, f ) ∧ OnE(p, f, s) ∧ EAt(e, f, s), 1 ;
+¬ ”, 0 ]
+
+Because down(x) is a deterministic action, FODTR is simply the direct regression of each case statement through nature’s choice downS(x). Thus, we obtain the following expression for B down(x) :
+B down(x) (vCase(s)) =
+case[ ∀p, f PAt(p, f, s) ⊃ Dst(p, f ), 10 ; ¬ ”, 0 ]
+⊕ γ w1 · case[ ∃p, f PAt(p, f, s) ∧ ¬Dst(p, f ), 1 ; ¬ ”, 0 ]
+⊕ γ w2 · case[ ∃p, f, e Dst(p, f ) ∧ OnE(p, f, s)∧
+((EAt(e, f, s) ∧ e 6= x) ∨ (EAt(e, f a(f ), s) ∧ e = x)), 1 ;
+¬ ”, 0 ]
+
+Applying B down yields:
+B down (vCase(s)) =
+∃x B down(x) (vCase(s)) =
+case[ ∀p, f PAt(p, f, s) ⊃ Dst(p, f ), 10 ; ¬ ”, 0 ]
+⊕ γ w1 · case[ ∃p, f PAt(p, f, s) ∧ ¬Dst(p, f ), 1 ; ¬ ”, 0 ]
+⊕ γ w2 · case[ ∃x, p, f, e Dst(p, f ) ∧ OnE(p, f, s)∧
+((EAt(e, f, s) ∧ e 6= x) ∨ (EAt(e, f a(f ), s) ∧ e = x)), 1 ;
+¬ ” ∧ ∃x ∀p, f, e ¬Dst(p, f ) ∨ ¬OnE(p, f, s)∨
+((¬EAt(e, f, s) ∨ e = x)∧
+(¬EAt(e, f a(f ), s) ∨ e 6= x)), 0 ]
+
+Note that in the computation of B down above, we push the
+existential into the only case statement containing free variable x. We then make the second partition in this case statement mutually exclusive of the first partition to ensure that
+the highest value gets assigned to every state. This results
+7
+We replace the partition formula with ¬ ” when the formula
+is just the negation of its predecessor in the case statement.
+
+in a logical description of states that describes the maximum value that can be obtained by applying any instantiation of action down(e) and subsequently obtaining value
+dictated by vCase(s). Thus, as noted in [3], the symbolic
+dynamic programming approach provides both state and
+action space abstraction.
+
+Input: A set c of case statements being summed and an ordering
+R1 . . . Rn of all relations in c.
+Output: The maximum value achievable and the consistent partition which achieves that value.
+1. Convert the first-order formulae in each case partition to a
+set of CNF clauses.
+2. For each relation R ∈ R1 . . . Rn (in order):
+
+4.2 First-order Linear Program Formulation
+We now generalize the approximate linear programming
+approach for propositional factored MDPs (i.e., Eq. 3)
+to first-order MDPs. If we simply substitute appropriate notation, we arrive at the following formulation of
+the first-order approximate linear programming approach
+(FOALP):
+Variables: wi ; ∀i ≤ k
+Minimize:
+
+k
+XX
+s
+
+wi · bCasei (s)
+
+(a) Remove all case statements in c containing R and
+store their explicit “cross-sum” ⊕ in tmp.
+(b) Do the following for each partition in tmp:
+• Resolve all clauses on relation R.
+• Remove all clauses containing R (sound because
+we are doing ordered resolution).
+• If a resolvent of ∅ exists in this partition, remove
+this partition from tmp and continue.
+• Remove dominated partitions whose clauses are
+a superset of another partition with greater value.
+(c) Insert tmp back into c.
+3. Find the maximum partition in each of the case statements
+in c and return it along with its corresponding value.
+
+i=1
+
+Subject to: 0 ≥ B A (⊕ki=1 wi · bCasei (s))
+(⊕ki=1 wi · bCasei (s)) ; ∀ A, s
+
+(7)
+
+Figure 1: The first-order factored max (FOM AX) algorithm for
+finding the max consistent partition in a first-order cost network.
+
+Unfortunately, while the objective and constraints in the approximate LP for a propositional factored MDP range over
+a finite number of states s, this direct generalization to the
+FOALP approach for FOMDPs requires dealing with infinitely (or indefinitely) many situations s.
+Since we are summing over infinitely many situations in the
+FOALP objective, it is ill-defined. Thus, we redefine the
+FOALP objective in a manner which preserves the intention
+of the original approximate linear programming solution
+for MDPs. In the propositional LP (Eq. 3), the objective
+weights each state equally and minimizes the sum of the
+values of all states. Consequently, rather than count ground
+states in our FOALP objective—of which there would be
+an infinite number per partition—we suppose that each basis function partition is chosen because it represented a potentially useful partitioning of state space, and thus weight
+each case partition equally. Consequently, we write the
+above FOALP objective as the following:
+k
+XX
+s
+
+wi · bCasei (s)
+
+=
+
+i=1
+
+k
+X
+
+wi
+
+∼
+
+i=1
+
+bCasei (s)
+
+(8)
+
+s
+
+i=1
+k
+X
+
+X
+
+wi
+
+X
+hφj ,tj i∈bCasei
+
+tj
+|bCasei |
+
+With the issue of the infinite objective resolved, this leaves
+us with one final problem—the infinite number of constraints (i.e., one for every situation s). Fortunately, we can
+work around this since case statements are finite. Since the
+value ti for each case partition hφi (s), ti i is constant over
+all situations satisfying the φi (s), we can explicitly sum
+over the casei (s) statements in each constraint to yield a
+
+single case statement. For this “flattened” case statement,
+we can easily verify that the constraint holds in each of
+the finite number of resulting first-order partitions of state
+space.
+Furthermore, we can avoid generating the full set of case
+partitions in the explicit sum by using constraint generation [17]. But before we formally define the algorithm for
+solving first-order LPs via constraint generation, we first
+outline an important subroutine.
+First-order Cost Network Maximization
+One of the most important computations in the approximate
+FOMDP solution algorithms is efficiently finding the consistent set of case partitions which maximizes a first-order
+cost network of the following form:
+max (⊕j casej (s))
+s
+
+(9)
+
+Recall that this is precisely the form of the constraints (the
+backed up linear value function) in Equation 7. The FOM AX algorithm given in Figure 1 efficiently carries out this
+computation. It is similar to variable elimination [4], except that we use first-order ordered resolution in place of
+propositional ordered resolution.8
+8
+We note that the ordered resolution strategy is not refutationcomplete as it may loop infinitely at an intermediate relation elimination step before finding a latter relation with which to resolve
+a contradiction. To prevent infinite looping, we simply bound the
+number of inferences performed at each relation elimination step.
+While a missed refutation in the FOM AX algorithm may result
+in the generation of unneccessary constraints during the FOCG
+algorithm, and this in turn may overconstrain the set of feasible
+
+Input: An LP objective obj, a convergence tolerance
+tol, and a set of first-order constraints, each encoded as
+0 ≥ maxs ⊕i casei (s) where there are wi variables embedded
+in the values of the case partitions.
+Output: Weights for the optimal LP solution (within tolerance
+tol).
+1. Initialize the weights: wi = 0 ; ∀i ≤ k
+2. Initialize the LP constraint set: C = ∅
+3. Initialize Cnew = ∅
+4. For each constraint inequality:
+(a) Calculate ϕ = arg maxs ⊕i casei (s) using FOM AX.
+(b) If eval(ϕ) ≥ tol, let c encode the linear constraint
+for 0 ≥ ⊕i casei (ϕ).
+(c) Cnew = Cnew ∪ {c}
+5. If Cnew = ∅, terminate with wi as the solution to this LP.
+6. C = C ∪ Cnew
+7. Solve the LP with objective obj and updated constraints C.
+8. Return to step 3.
+
+Figure 2: The first-order constraint generation (FOCG) algorithm for solving a first-order linear program.
+
+In the first-order constraint generation (FOCG) algorithm
+given in Figure 2, we initialize our LP with an initial setting of weights, but no constraints. Then we alternate between generating constraints based on maximal constraint
+violations at the current solution and re-solving the LP with
+these additional constraints. This process repeats until no
+constraints are violated and we have found the optimal solution. In practice, this approach typically generates far
+fewer constraints than the full set. And using FOCG, we
+can now efficiently solve the FOALP given in Equation 7.
+To make the FOM AX and FOCG algorithms more concrete, we provide a simple example of finding the most violated constraint in Figure 3.
+4.3 Obtaining Error Bounds
+Following [17], we can also compute an upper bound on
+the error of the approximated value function:
+s
+
+vCaseπgreedy (⊕i wi ·bCasei ) (s) ≤
+"
+
+γ
+min max (⊕i wi · bCasei (s))
+1−γ A s
+
+5 Experimental Results
+We have applied the first-order approximate linear programming algorithm to the FOMDP domain of elevator
+scheduling. We refer to Section 3 for a rough description of
+the FOMDP specification of certain aspects of this domain.
+To this we have added a rich set of features used in elevator
+planning domains [12]: VIP(p) indicating that person p is
+a VIP, Group(p, g) indicating that a person p is in group
+g (persons in certain differing groups should not share the
+same elevator), and Attended(p) to indicate that person p
+requires someone to accompany them in the elevator. We
+have also added action costs of 1 for open, up, down and a
+simple noop action with cost 0.9 We require that all policies observe typical elevator scheduling constraints [12] by
+specifying appropriate action preconditions; for example,
+the elevator cannot reverse direction if it has a passenger
+whose destination is in the current direction of travel.
+Given this domain specification, we have defined a multicriteria reward function rCase(s) with positive additive
+rewards for satisfying each of the following conditions:
+
+First-Order Constraint Generation
+
+max vCase∗ (s)
+
+of computing a strict upper bound on the error of executing
+a greedy policy according to an approximated value function that applies equally to all domain instantiations.
+
+(10)
+#
+
+B (⊕i wi · bCasei (s))
+A
+
+The inner maxs can be efficiently computed by the FOM AX algorithm (Figure 1) leaving only a few simple arithmetic operations to carry out. This yields an efficient means
+solutions, this has not led to infeasibility problems in practice.
+
++2 : ∀p, f PAt(p, f, s) ⊃ Dst(p, f )
++2 : ∀p, f Dst(p, f ) ∧ ¬PAt(p, f, s) ⊃ ∃e On(p, e, s)
++2 : ∀p, f VIP(p) ∧ PAt(p, f, s) ⊃ Dst(p, f )
++2 : ∀p, f VIP(p) ∧ Dst(p, f ) ∧ ¬PAt(p, f, s)
+⊃ ∃e OnE(p, e, s)
++4 : ∀p, e OnE(p, e, s) ∧ Attended(p) ⊃ ∃p2 OnE(p2 , e, s)
++8 : ∀p1 , p2 , g1 , g2 , e OnE(p1 , e, s) ∧ OnE(p2 , e, s)
+∧p1 6= p2 ∧ Group(p1 , g1 ) ∧ Group(p2 , g2 ) ⊃ g1 = g2
+
+In our FOALP solution, we have used a set of basis functions that represent each of the additive reward criteria
+above, in addition to one constant basis function. We experimented with a variety of more complex compound basis
+functions in addition to the ones above but found that they
+received negligible weight and did not affect the resulting
+policy. Thus, it seems that a linear combination of these
+six basis functions may approximate a reasonable amount
+of structure in the optimal value function.
+We evaluated two simple myopic policies that take the best
+action from the current state based on one- and two-step
+lookahead. We also evaluated several intuitive, heuristic
+policies that seem to offer reasonable performance in the
+elevator domain. The basic heuristic policy always picks
+up passengers at each floor. The other policies are specified
+by adding the following constraints to this basic policy in
+various combinations: always prioritize picking up VIPs
+9
+
+Since these costs are constant for each action, the backup operators can be easily modified to handle action costs by subtracting the constant cost from one of the cases being backed up.
+
+!
+Suppose we are given the following constraint specification (using a tabular case notation) for a first-order linear program:
+∀p, f Dst(p, f ) ⊃ PAt(p, f, s) : 10
+∃p, f Dst(p, f ) ∧ ¬PAt(p, f, s) : w1
+∃p, eOnE(p, e, s) : w2
+0 ≥ max
+⊕
+⊕
+¬”
+: 0
+¬”
+: −w1
+¬”
+: 0
+s
+Now, suppose that we are at step 4 of the FOCG algorithm and the last LP solution yielded weights w1 = 2 and w2 = 1. We can
+efficiently compute the most violated constraint (if one exists) by evaluating the weights in the constraint and applying the FOM AX
+algorithm. We begin with step 1 of FOM AX where we convert all first-order formulae to CNF:
+!
+{¬Dst(p, f ) ∨ PAt(p, f, s)} : 10
+{Dst(c3 , c4 ), ¬PAt(c3 , c4 , s)} : 2
+{OnE(c5 , c6 , s)} : 1
+0 ≥ max
+⊕
+⊕
+{Dst(c1 , c2 ), ¬PAt(c1 , c2 , s)} : 0
+{¬Dst(p, f ) ∨ PAt(p, f, s)} : −2
+{¬OnE(p, e, s)} : 0
+s
+Given relation elimination order PAt, Dst, OnE, we now proceed to step 2 of FOM AX. We begin by eliminating the PAt relation: we
+take the cross-sum ⊕ of case statements containing PAt, resolve all clauses in each partition, and remove all clauses containing PAt
+(indicated by struck-out text):
+0 ≥ max
+s
+
+{¬Dst(p, f ) ∨ PAt(p, f, s),¬Dst(p, f ) ∨ PAt(p, f, s), ∅ } : 12
+!
+{¬Dst(p, f ) ∨ PAt(p, f, s)}
+: 8
+{OnE(c5 , c6 , s)} : 1
+⊕
+{Dst(c1 , c2 ), Dst(c3 , c4 ),¬PAt(c1 , c2 , s),¬PAt(c3 , c4 , s) } : 2
+{¬OnE(p, e, s)} : 0
+{¬Dst(p, f ) ∨ PAt(p, f, s),¬Dst(p, f ) ∨ PAt(p, f, s), ∅ } : −2
+
+Because the partitions valued 12 and −2 contain the empty clause (i.e. they are inconsistent), we can remove them. And because the
+partition of value 8 dominates the partition of value 2 (i.e. 2 < 8 and the clauses of the value 2 partition are a superset of the clauses of
+the value 8 partition), we can remove it as well. This yields the following simplified result:
+!
+{OnE(c5 , c6 , s)} : 1
+{}:8 ⊕
+0 ≥ max
+{¬OnE(p, e, s)} : 0
+s
+From here it is obvious that the Dst elimination step will have no effect and the OnE elimination step will yield a maximal consistent
+partition with value 9. Since this is a positive value and thus a violation of the original constraint, we can generate the new linear
+constraint 0 ≥ 10 + −w1 + w2 based on the original constituent partitions that led to this maximal constraint violation.
+
+Figure 3: An example of using FOMA X to find the maximally violated constraint during an iteration of the FOCG algorithm.
+over regular passengers (V); never allow an attended person
+to be unaccompanied in the elevator (A); and never allow a
+group conflict in the elevator (G).
+
+Policy
+{ }, {A}
+{V}, {V,A}
+{G}, {A,G}
+
+We used the Vampire [16] theorem prover and the CPLEX
+LP solver in our FOALP implementation.10 The performance of various policies, measured using the average total discounted reward obtained over 100 simulated trials of
+50 stages each, are shown in Table 1. While the results
+have relatively high standard deviation due to the stochasticity of the domain, the difference in performance between
+FOALP with six basis functions and the best of the heuristic policies is statistically significant at the 93% confidence
+level for each domain size. Thus, we can conclude that
+the FOALP approach with six basis functions outperforms
+the heuristic policies with some confidence. This appears
+to be due to the fact that the additive value function allows FOALP to tradeoff various domain features while the
+hard constraints must be applied in all situations (leading
+to suboptimal performance in many cases) and the myopic
+policies cannot see far enough ahead to make good choices
+for the long-term. We note that while the upper bounds on
+
+{V,G}, {V,A,G}
+
+10
+
+We note that while the full FOALP specification with six basis functions contained over 250,000 constraints, only 40 of these
+constraints needed to be generated to determine the optimal solution. Nonetheless, a considerable time is spent in theorem proving
+deriving and ensuring the consistency of constraints. We note that
+running times ranged from 5 minutes for one basis function to 120
+minutes for six basis functions on a 2Ghz Pentium-IV machine.
+
+Myopic 1
+Myopic 2
+FOALP {1,2}
+FOALP {3,4}
+FOALP {5}
+FOALP {6}
+
+F5
+116 ± 28
+115 ± 30
+125 ± 24
+119 ± 30
+118 ± 10
+123 ± 12
+133 ± 31
+148 ± 26
+147 ± 26
+154 ± 25
+
+F10
+106 ± 27
+108 ± 30
+119 ± 21
+114 ± 24
+119 ± 9
+122 ± 5
+114 ± 32
+129 ± 23
+126 ± 17
+130 ± 19
+
+F15
+105 ± 28
+107 ± 28
+114 ± 20
+115 ± 23
+120 ± 13
+120 ± 12
+112 ± 23
+117 ± 23
+120 ± 17
+125 ± 19
+
+ME
+N/A
+N/A
+N/A
+N/A
+N/A
+N/A
+177
+159
+146
+92
+
+Table 1: The performance of various policies in elevator domains
+with 5, 10, and 15 floors (denoted F5, F10, and F15, respectively),
+with passenger arrivals distributed according to N (0.1, 0.35) per
+time-step, and discount rate γ = 0.9. Heuristic policies, shown at
+the top, are designated by the sets of constraints used: (V) prioritize VIP, (A) no attended conflict, and (G) no group conflict. For
+example, the empty set policy {} uses no constraints and picks
+up everyone at each floor it passes. The one- and two-step lookahead myopic policies are labeled Myopic 1 and 2. FOALP policies are labeled using the number of basis functions used, counting from the top of the above list of reward criteria (e.g., FOALP
+{3,4} represents two FOALP-derived policies using the first three
+and first four basis functions, respectively). Policies are grouped
+when they turn out to be identical (e.g., FOALP-3 and FOALP-4
+are identical, as are heuristic policies {V } and {V, A}). Performance is measured using the the sum of discounted rewards obtained by time step 50, averaged over 100 random simulations.
+The best results for each group of policies and number of floors
+are in boldface. FOALP error bounds are computed according to
+Equation 10 and are shown in the max error (ME) column.
+
+error are not tight, there is nevertheless a strong correlation
+between these values and actual policy performance.
+
+6 Related Work
+While our work incorporates elements of symbolic dynamic programming (SDP) [3], it uses this in an efficient
+approximation framework that represents the value function compactly and avoids the need for logical simplification. This is in contrast to an exact value iteration
+framework that proves intractable in many cases for SDP,
+FOVIA [10], and ReBel [11] due to the combinatorial explosion of the value function representation and the need
+to perform complex logical simplifications. FOALP uses a
+model-based approach to avoid domain instantiation unlike
+the non-SDP approaches [5, 7] which need to instantiate
+domains. In addition, FOALP does not use inductive methods [5, 6] that generally require substantial simulation to
+generalize from experience. The work by Guestrin et al. [7]
+is the only other RMDP approximation work that can provide bounds on policy quality, but these are PAC-bounds
+under the assumption that the probability of domains falls
+off exponentially with their size. In contrast, the policy
+bounds obtained by FOALP apply equally to all domains.
+
+7 Concluding Remarks
+
+References
+[1] F. Bacchus, J. Y. Halpern, and H. J. Levesque. Reasoning
+about noisy sensors in the situation calculus. Proc. IJCAI
+95, pp.1933–1940, Montreal, 1995.
+[2] C. Boutilier, T. Dean, and S. Hanks. Decision-theoretic
+planning: Structural assumptions and computational leverage. J. Artificial Intelligence Research 11:1–94, 1999.
+[3] C. Boutilier, R. Reiter, and B. Price. Symbolic dynamic programming for first-order MDPs. Proc. IJCAI-01, pp.690–
+697, Seattle, 2001.
+[4] R. Dechter. Bucket elimination: A unifying framework for
+reasoning. Artificial Intelligence 113:41–85, 1999.
+[5] A. Fern, S. Yoon, and R. Givan. Approximate policy iteration with a policy language bias. Proc. NIPS-2003, Vancouver, 2003.
+[6] C. Gretton and S. Thiebaux. Exploiting first-order regression in inductive policy selection. Proc. UAI-04, pp.217–
+225, Banff, 2004.
+[7] C. Guestrin, D. Koller, C. Gearhart, and N. Kanodia. Generalizing plans to new environments in relational MDPs. Proc.
+IJCAI-03, pp.1003–1010, Acapulco, 2003.
+[8] C. Guestrin, D. Koller, R. Parr, and S. Venktaraman. Efficient solution methods for factored MDPs. J. Artificial Intelligence Research 19:399-468, 2003.
+[9] J. Hoey, R. St-Aubin, A. Hu, and C. Boutilier. SPUDD:
+Stochastic planning using decision diagrams. Proc. UAI-99,
+pp.279–288, Stockholm, 1999.
+[10] S. Hölldobler and O. Skvortsova. A logic-based approach to
+dynamic programming. Learning and Planning in Markov
+Processes–AAAI-04 Workshop, pp.31–36, San Jose, 2004.
+
+We have introduced a novel approximate linear programming technique for FOMDPs that represents an approximately optimal value function as a linear combination of
+first-order basis functions. This technique allows us to efficiently solve for an approximation of the value function using off-the-shelf theorem prover and LP software. It offers
+us the advantage that we can approximately solve FOMDPs
+independent of a domain instantiation and it additionally allows us to determine upper bounds on approximation error
+that apply equally to all possible domain instantiations. We
+have applied our algorithm to the task of elevator scheduling and have found that it is not only efficient, but that
+its policies outperform a number of intuitive, heuristicallyguided policies for this domain.
+
+[11] K. Kersting, M. van Otterlo, and L. de Raedt. Bellman goes
+relational. Proc. ICML-04, Banff, 2004.
+
+An interesting question for future work is whether the uniform weighting of partitions in the FOALP objective is the
+best approach. It would be informative to explore alternative FOALP objective specifications and to evaluate their
+impact on value function quality over a variety of domains.
+In addition, it is an interesting question as to whether dynamic reweighting schemes could improve solution quality
+by identifying state partitions with large error and adjusting
+their weights so they receive more emphasis on the next LP
+iteration. Altogether, such improvements to FOALP could
+bolster an already promising approach for efficiently and
+compactly approximating FOMDP value functions.
+
+[17] D. Schuurmans and R. Patrascu. Direct value approximation
+for factored MDPs. Proc. NIPS-01, pp.1579–1586, 2001.
+
+[12] J. Koehler and K. Schuster. Elevator control as a planning
+problem. Proc. AIPS, pp.331–338, Breckenridge, 2000.
+[13] J. McCarthy. Situations, actions and causal laws. Technical
+report, Stanford University, 1963. Reprinted in Semantic
+Information Processing (M. Minsky ed.), MIT Press, Cambridge, Mass., 1968, pp.410-417.
+[14] M. L. Puterman. Markov Decision Processes: Discrete
+Stochastic Dynamic Programming. Wiley, New York, 1994.
+[15] R. Reiter. Knowledge in Action: Logical Foundations for
+Specifying and Implementing Dynamical Systems. MIT
+Press, 2001.
+[16] A. Riazanov and A. Voronkov. The design and implementation of Vampire. AI Commun., 15(2):91–110, 2002.
+
+

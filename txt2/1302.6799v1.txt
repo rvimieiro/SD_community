@@ -1,0 +1,1178 @@
+Dean et al. (1993a; 1993b) have proposed a planning
+method that relaxes these requirements. An envelope
+or subset of states that might be relevant to the plan­
+ning problem at hand (e.g., given particll:lar initia: and
+_
+goal states) is constructed , and an optimal pohcy 1s
+computed for this restricted space in an anytime fash­
+ion. Clearly, optimality is sacrificed since important
+states might lie outside the envelope, as is general­
+ity, for the policy makes no mention of these ignored
+
+Craig Boutilier
+
+Department of Computer Science,
+University of British Columbia
+Vancouver, BC, CANADA, V6T 1Z4
+cebly@cs. ubc.ca
+
+states. In (Dean et al. 1993b) it is suggested that
+domain-specific heuristics will aid in initial envelope
+selection and envelope alteration.
+We propose an alternative method for dealing with
+Markov decision models in a real-time environment.
+We suggest that MOPs be explicitly v iewed as search
+problems. Real-time constraints can be incorporated
+by restricting the search horizon. This is the basic idea
+behind for example, Korf's real-time heuristic search
+algorithm (1990). In stochastic domains there is an­
+other important reason for interleaving execution into
+the planning process, namely, to restrict the search
+space to the actual outcomes of probabilistic actions.
+In particular, once a certain action is deemed best (for
+a given state) it should be executed and its outcome
+_
+observed. Subsequent search for the best next actwn
+can proceed from the actual out�ome, ignoring other
+_
+unrealized outcomes of that actiOn. To further Im­
+prove real-time performance, we can cache the best
+action for a state once it has been computed and use
+the cached value if the agent returns to that state.
+·
+
+In general, a fixed-depth search will tend to be greedy,
+choosing actions that provide immediate reward at the
+expense of long-term gain. To alleviate this problem
+we assume a heuristic function that estimates the value
+of each state, accounting for future states that might
+be reached in addition to that state's immediate re­
+ward. This prevents (to some extent) the problem of
+globally suboptimal choices due to finite horizo� e!­
+.
+fects. Knowledge of certain propert1es of the heunst1c
+function allow the search tree to be pruned. We de­
+scribe one method of constructing heuristic functions
+that allows this pruning information to be easily de­
+termined. T his construction also produces default ac­
+tions for each state, in essence, generating a reactive
+policy. Our search procedure �an be viewed as using
+deliberation to refine the reactive strategy.
+The next section presents the MOP model in detail
+and also looks at a more natural representation for de­
+scribing worlds and actions. Section 3 describes the al­
+_
+gorithm, the interleaving of searc� and e::cecutwn,
+and
+possible pruning methods. Sect1on 4 discusses ways
+of constructing the heuristic evaluation functions, and
+Section 5 examines the computational cost of the al­
+gorithm, and provides some experimental results.
+
+Integrating Planning and Execution in Stochastic Domains
+
+2
+
+The Decision Model
+
+163
+
+Action
+Move
+
+Let S be a finite set of world states. In many do­
+mains the states will be the models ( or worlds) asso­
+ciated with some logical language, so lSI will be ex­
+p onenti al in the number of atoms generating this lan­
+guage. Let A be a finite set of actions available to an
+agent. An action takes the agent from one world to an­
+other, but the result of an action is known only with
+some probability. An action may then be viewed as
+a mapping from S into probability distributions over
+S. We write Pr( s1, a, s2) to denote the probability
+that s2 is reached given that action a is performed
+in state s1 ( embodying the usual Markov assump­
+tion) . We assume that an agent, once it has performed
+an act io n , can observe the resulting state; hence the
+process is completely observable. Uncertainty in this
+
+model results only from the outcomes of actions be­
+ing p robabilis tic , not from uncertainty about the state
+of the wo r ld . We assume a real-valued reward func­
+tion R, with R(s) denoting the (i mmed iate ) u t ility
+of being in state s. For our purposes an MDP con­
+sists of S, A, R and the set of transition distributions
+{Pr(·, a,·): a E A}.
+A control policy 7l' is a function 7l' : S -+ A. If this pol­
+icy is adopted , 7r ( s) is the action an agent will perform
+whenever it finds itself in state s. Given an MDP, an
+agent ought to adopt an optimal policy that maximizes
+the expected rewards accumulated as it perfor ms the
+specified actions. We concentrate here on discounted
+infinite horizon problems: the value of a reward is dis­
+counted by some factor f3 (0 < ,B < 1) at each step
+in the future; and we want to maximize the expected
+accumulated discounted rewards over an infinite time
+period. Intuitively, a DTP problem can be viewed as
+finding a good ( or optimal ) policy.
+The expected value of
+state s is specified by
+
+V,..(s)
+
+=
+
+a
+
+fixed policy
+
+1r
+
+at any given
+
+R(s) + f3 L Pr(s, 1r(s), t) V,..(t)
+·
+
+tES
+
+Since the factors V,.. ( s ) are mutually dependent, the
+value of 7l' at any initial state s c an be computed by
+solving this system of linear equations. A policy 7l' is
+optimal if V1r( s ) � V,.., ( s) for all s E S and p oli cies 7T1•
+we represent actions as sets of stochastic
+transitions from state to state, we expect that domains
+and actions will usually be specified in a more tra­
+ditional form for planning purposes. Figure 1 shows
+a stochastic variation of STRIPS rules (Kushmerick,
+Hanks and Weld 1993) for a domain i n which the robot
+must deliver coffee to the user . An effect E is a set of
+lit e r als. If we app ly E to some state s, the resulting
+st ate satisfies all the literals in E and agrees w ith s
+for all other literals. The probabilistic effect of an ac­
+tion is a finite set E1, ... En of effects, with associated
+probabilities Pl, ... ,pn where LPi = 1.
+
+Although
+
+Since actions may have different results in different
+contexts, we associate with each action a finite set
+D1, ... , Dn of mutually exclusive and exhaustive sen-
+
+Move
+
+ce
+ce
+
+Umbrella
+
+0.2
+1.0
+Figure 1: An example domain presented as STRIPS­
+style action descriptions. Note that HUC and HRC
+are HasUserCoffee and HasRobotCoffee respectively.
+
+Figure 2: An example of a reward function for the·
+coffee delivering robot domain.
+
+tences called discriminants, with probabilistic effects
+EL1, ... , ELn. If the action is performed in a state
+s satisfying D;, then a random effect from EL; is ap­
+plied to s. For example, in F igure 1, if the agent carries
+out the GetUmbrella acti on in a state where Office i s
+
+true, then with probability 0.9 Umbrella will b e true,
+and every other proposition will remain unchanged,
+and with probability 0.1 there will be no change of
+state. For convenience, we may also w rite actions as
+sets of action aspects as illustrated for the Move ac­
+tion in Figure 1 ( Bou tilier and Dearden 1994). The
+action has two descriptions which represent two inde­
+pendent sets of discriminants and the cross product of
+the aspects is used to determine the actual effects. For
+example, if Rain and Office are true, and a Move action
+is performed then with probability 0.81 -.Office, Wet
+will result, and so on. Action aspects allow in d epen ­
+dence to be rep resented exp licitly , in a similar manner
+to causal networks. The representation of domains in
+terms of propositions also provides a natural way of
+expressing rewards. Figure 2 shows a re presen t ation
+of rewards for this domain. The reward for any given
+state depends only on the values of the propositions
+Has UserCoffee and Wet in that state.
+This framework is flexible enough to allow a wide vari­
+ety of different reward functions. One important situ­
+ation is that in which there is some set 89 � S of go al
+states, and the agent tries to reach a goal state in as
+
+164
+
+Dearden and Boutilier
+
+few moves as possible.1 Since we are interleaving plan
+construction and plan execution, the time required to
+plan is significant when measuring success; but as a
+first approximation we can represent this type of sit­
+uation with the reward function (Dean et al. 1993b):
+R(s) = 0 if s E Sg and R(s) -1 otherwise.
+=
+
+3
+
+The Algorithm
+
+Our algorithm for integrating planning and execution
+proceeds by searching for a best action, executing that
+action, observing the result of this execution, and it­
+erating. The underlying search algorithm constructs a
+partial decision tree to determine the best action for
+the current state (the root of this tree). We assume
+the existence of a heuristic function that estimates the
+value of each state (such heuristics are described in
+Section 4). The search tree may be pruned if certain
+properties of the heuristic function are known. This
+search can be terminated when the tree has been ex­
+panded to some specified depth, when real-time pres­
+sures are brought to bear, or when the best action is
+known (e.g., due to complete pruning, or because the
+best action has been cached for this state ).
+Once the search algorithm selects a best action for the
+state, the action is executed and the resulting
+state is observed. By observing the new state, we es­
+tablish which of the possible action outcomes actually
+occurred. W ithout this information, the search for the
+best next action would be forced to account for every
+possible outcome of the previous action. By interleav­
+ing execution and observation with search, we need
+only search from the actual resulting state.
+In skeletal form, the algorithm is as follows. We denote
+by s the current state, and by A*(t) the best action
+for state t.2
+current
+
+If state s has not been previously visited, build
+a partial decision tree of all possible actions and
+their outcomes beginning at state s, using some
+criteria to decide when to stop expanding the
+leaves of the tree. Using the partial tree and
+the heuristic function, calculate the best action
+A*s
+( ) E A to perform in states. (This value may
+be cached in casesis revisited.)
+2. Execute A* (s).
+3. Observe the actual outcome of A*s
+( .) Updates
+to be this observed state (the state is known with
+certainty, given the assumption of complete ob­
+servability).
+4. Repeat.
+1.
+
+1 If a "final" state stops the process, we may use
+self-absorbing states or include a null action which does
+nothing.
+2Initially A•(t) might be undefined for all t. However, if
+
+the heuristic function provides default reactions (see Sec­
+tion 4), it is useful to think of these as the best actions
+determined by a depth 0 search.
+
+The point at which the algorithm stops depends on the
+characteristics of the domain. For example, if there are
+goal states, and the agent's task is to reach one, plan­
+ning may continue until a goal state is reached, while
+in process-oriented domains, the algorithm continues
+indefinitely. In our experiments, we have typically run
+the algorithm for a constant number of steps. Note
+that by caching the best action for each state, the
+agent slowly constructs a policy for all the states it
+is likely to reach. The use of caching here is similar to
+that of Learning RTA search (Korf 1990).
+*
+
+3.1
+
+Action Selection
+
+Here we discuss step one of the high-level algorithm
+given above. To select the best action for a given
+state, the agent needs to estimate the value of per­
+forming each action. In order to do this, it builds a
+partial decision tree of actions and resulting states,
+and uses the tree to approximate the expected utility
+of each action. This search technique is related to the
+*-minimax algorithm of Ballard (1983). As we shall
+see in Section 3.2, there are similarities in the way we
+can prune the search tree as well. Figure 3 shows a
+partial tree of actions two levels deep. From the initial
+state s, if we perform action A, we reach state t with
+probability 0.8, and state u with probability 0.2. The
+agent expands these states with a second action to pro­
+duce the set of second states. To determine the action
+to perform in a given state, the agent estimates the
+expected utility of each action. If s and t are states,
+f3 is the factor by which the reward for future states is
+discounted, and V(t) is the heuristic function at state
+t, the estimated expected utility of action A; is:
+U(A;\s) =
+
+V(s)
+
+=
+
+{
+
+L Pr ( s,A;, t)V(t)
+tES
+
+V(s)
+ifsis a leaf node
+R(s) + /3 max{U(Aj\s): Ai
+otherwise
+·
+
+E
+
+A}
+
+Figure 3 illustrates the process with a discounting fac­
+tor of 0.9. The utility of performing action A if the
+world were in state tis the weighted sum of the values
+of being in states x and y, which is 2.1. Since the util­
+ity of action B is 0.3, we select action A as the best
+( given our current information) for state t, and make
+V(t) = R(t) + /3U(A\t) 2.39. The utility of action A
+in states is Pr(sA
+, , t)V(t) + Pr(s, A, u)V(u), giving
+U(A\s) 2.23. This is lower than U(B\s), so we select
+B as the best action for state s, record the fact that
+A*s
+( ) is B, and execute B. By observing the world,
+the agent now knows whether state v or w is the new
+state, and can build on its previous tree, expanding
+the appropriate branch to two levels and determining
+the best action for the new state. Notice that if (say)
+v results from action B, the tree rooted at state w can
+safely be ignored - the unrealized possibility can have
+no further impact on updated expected utility (unless
+w is revisited via some path).
+=
+
+=
+
+If the agent finds itself in a state visited earlier, it may
+
+Integrating Planning and Execution in Stochastic Domains
+
+Initial First
+FtrSt
+State Action State
+
+Second
+Action
+
+Second State Utility of 2nd act. Action and value
+State Value
+given lst state
+of first state
+• X p=0.9.V=2
+U•Z.l
+e yp=O.l.V=3 }
+-......__
+e p=0.7. V=O
+� ActAV(t)=2.39
+U .3
+e p=0.3. V=l } =0
+
+/'·�·
+�� £:
+�
+t (p=O
+
+(p=O.�
+--...
+
+e
+
+�.
+
+e
+
+v (p=0.5
+e
+
+B
+
+e
+
+w (p=O�
+---....
+
+p=0.7.V=O
+p=0.3. V=4 }
+
+U,.l.z -......__
+
+p=0.9. V=O
+p=O.l, V=2 }
+
+U=O.Z
+
+�
+
+�:�:��
+U=l.8
+}
+-....
+
+p=0.6, V=l
+�
+p=0.4, V=2 } U,.1.4
+
+e
+
+p=O.l, V=4
+
+e
+
+p=0.9, V=O }
+
+�.
+e
+
+U=0.4
+
+p=O.S, V=3
+p=O.S, V=2 }
+
+U=2.5
+
+Best action
+and value
+
+\
+
+/ \
+\
+I
+/
+U=2.23
+
+ActB V(s)=2.64
+
+•
+
+•
+
+Act.A V(u)=l.58
+
+165
+
+Act.A V(v)=2.62
+
+U=2.94
+
+-....._
+�
+
+Act.B V(w)=3.2 5
+
+R(t) = R(u) = 0.5, R(v) = R(w) = I, R(x) = 0, R(y) = I
+
+Figure 3: An example of a two-level search for the best action from state
+
+use the previously calculated and cached best action
+This avoids the recalculation of visited states,
+and considerably speeds planning if the same or related
+problems must be solved multiple times, or if actions
+naturally lead to "cycles" of states. Eventually, A* ( s )
+c ould contain a policy for every reachable state in S,
+removing the need for further computation.
+
+A"'(s).
+
+In Figure 3, the tree is expanded to depth two. The
+depth can obviously vary depending on the available
+time for computation.
+The deeper the tree is ex­
+panded, the more accurate the estimates of the util­
+ities of each action tend to be, and hence the more
+confidence we should have that the action selected ap­
+proaches optimality. Indeed, it is quite natural to view
+the search process as a d irected form of value iteration.
+The heuristic serves as the initial value vector, and a
+step of the search corresponds to a partial update of
+the vector. Convergence results for value iteration can
+be adapted to this setting.
+If there are m actions, and the number of states that
+
+could result from executing an action is on average b,
+then a tree of depth one will require 0( mb) steps, two
+
+levels will require O(m2b2), and so on. The poten­
+tially improved performance of a deeper search has to
+be weighed against the time required to perform the
+search (Russell and Wefald 1991). Rather than expand
+to a constant depth, the agent could instead keep ex­
+panding the tree until the pro ba bility of reaching the
+state being considered drops below a certain thresh­
+old. This approach may work well in domains where
+there are extreme probabilities or utilities.
+3.2
+
+Techniques for Limiting the Search
+
+As it stands, the search algorithm performs in a very
+similar way to minimax search. Determining the value
+
+s.
+
+of a state is analogous to the MAX step in minimax,
+while calculating the value of an action can be th ought
+of as an AVERAGE step, which replaces the MIN step
+(see also (Ballard 1983)). W hen the search tree is
+constructed, we can use techniques similar to those
+of Alpha-Beta search to prune the tree and reduce the
+number of states that must be expanded. There are
+two applicable pruning techniques. To make our de­
+scription clearer, we will treat a single ply of search as
+consisting of two steps, MAX in which all the possible
+actions from a state are comp ared, and AVERAGE,
+where the outcomes of a particular action are com­
+bined. Two sorts of cuts can be made in the search
+tree. If we know bounds on the maximum and/or
+the minimum values of the heuristic function, utility
+cuts (much like a and f3 cuts in minimax search) can
+be used. If the heuristic function is reasonable, the
+maximum and minimum values for any state can be
+bounded easily using knowledge of the underlying de­
+cision process. In particular, with maximum and min­
+imum immediate rewards of .R+ and R-, the maxi­
+mum and minimum expected values for any state are
+bounded by 1�,13 R+ and 1�,13 R-, respectively. If we
+•
+
+•
+
+have bounds on the error associated with the hellristic
+function, expectation cuts may be applied. These are
+illustrated with examples.
+
+Utility Pruning We can prune the search at an AV­
+
+ERAGE step if we know that no matter what the
+value of the remaining outcomes of this action, we
+can never exceed the utility of some other action
+at the preceding MAX step. For example, con­
+sider the search tree in Figure 4(a). We assume
+that the maximum value the heuristic function
+can take is 10. W hen evaluating action b, since
+we know that the value of the subtree rooted at T
+is 5, and the best that the subtrees below U and
+
+Dearden and Boutilier
+
+166
+
+s
+
+States
+MAX step
+· ated Val.=3
+Actions
+
+AVERAGE step
+Estimated Val.=4
+States
+(a)
+
+(b)
+
+F igure 4: Two kinds of pruning where V(s) :::; 10 and is accurate to ±1. In (a), utility pruning, the trees at U
+and V need not be searched, while in (b), expectation pruning, the trees below T and U are ignored, although
+the states themselves are evaluated.
+
+V
+
+could be is 0.1 x 10 + 0.2 x 10 = 3, the total
+cannot be larger than 3.5 + 1 + 2 = 6.5 so nei­
+ther the tree below U nor that below V is worth
+expanding. This type of pruning requires that we
+know in advance the maximum value of the heuris­
+tic function. The minimum value can be used in
+a more restricted fashion. It performs especially
+well when nodes are ordered for expansion accord­
+ing to their probability of actually occurring.
+
+Expectation Pruning For this type of pruning, we
+need to know the maximum error associated with
+the heuristic function (see (Boutilier and Dearden
+1994) for a way of estimating this value). If we
+are at a maximizing step and, even taking into
+account the error in the heuristic function, the
+action we are investigating cannot be as good as
+
+some other action, then we do not need to ex­
+pand this action further. For example, consider
+Figure 4(b), where we assume that V(S) is within
+±1 of its true optimal) value. We have deter­
+mined that U(aiS) = 7, therefore any potentially
+better action must have a value greater than 6.
+Since p(S, a, T)V(T) +p(S, a, U)V(U):::; 4, even if
+b is as good as possible (given these estimates) , it
+cannot achieve this threshold, so there is no need
+to search further below T and U.
+
+(
+
+Expectation pruning requires a modification of the
+search algorithm to check all outcomes of an action
+to see if the weighted average of their estimated values
+is sufficient to justify continued node expansion. This
+means that the heuristic value of sibling nodes must
+be checked before expanding a given node, and a tight
+bound on V must be found. However, the method of
+generating heuristic functions described in (Boutilier
+and Dearden 1994) (see the next section for a brief
+discussion) produces just such bounds. Expectation
+pruning is closely related to what Korf (1990) calls
+alpha-pruning. The difference is that while Korf relies
+on a property of the heuristic that it is always increas­
+ing, we rely on an estimate of the actual error in the
+heuristic.
+
+4
+
+Generating Heuristic Functions
+
+We have assumed the existence of a heuristic function
+above. We now briefly describe some possible meth­
+ods for generating these heuristics. The problem is to
+build a heuristic function which estimates the value of
+each state as accurately as possible with a minimum
+of computation. In some c ases such a heuristic may
+already be available. Here we will sketch an approach
+for domains with certain characteristics, and suggest
+ideas for other domains.
+
+4.1
+
+Abstraction by Ignoring Propositions
+
+In certain domains, actions might be represented as
+STRIPS-like rules as in Figure 1, and the reward func­
+tion specified in terms of certain propositions. If this is
+the case we can build an abstract representation of the
+state space by constructing a set n of relevant propo­
+sitions, and using it to construct abstract states each
+corresponding to all the states which agree on the val­
+ues of the propositions in R. A complete description of
+our approach, along with theoretical and experimental
+results, can be found in (Boutilier and Dearden 1994).
+However we will broadly describe the technique here.
+To construct 'R, we first construct a set of immediately
+relevant propositions IR. These are propositions that
+have significant effect on the reward function. For ex­
+ample, in Figure 2, both Has UserCoffee and Wet have
+an effect on the reward function; but to produce a
+small abstract state space, IR might include only Ha­
+sUserCoffee, since this is the proposition which has the
+greatest effect on the reward function.
+
+R will include all the propositions in IR, but also
+any propositions that appear in the discriminant of an
+action which allows us to change the truth value of
+some proposition in R. Formally, R is the smallest set
+such that: 1) IR � R; and 2) if P E R occurs in an
+effect list of some action, then all propositions in the
+corresponding discriminant are in n.
+
+Integrating Pl ann i ng and Execution in Stochastic Domains
+
+n induces a partition of the state space into sets of
+
+states, or clusters which agree on the truth values of
+propositions in 'R. Furthermore, the actions from the
+original 'concrete' state space apply directly to these
+clusters. This is due to the fact that each action either
+maps all the states in a cluster to the same new duster,
+or changes the state, but leaves the cluster unchanged.
+These two facts allow us to perform policy iteration on
+the abstract state space. The algorithm is:
+1. Construct the set of relevant propositions 'R. The
+actions are left unchanged, but effects on propo­
+sitions not in 'R are ignored.
+2. Use 'R to partition the state space into clusters.
+3. Use the policy iteration algorithm to generate an
+abstract policy for the abstract state space. For
+details of this algorithm see (Howard 1971; Dean
+et al. 1993b)
+.
+
+By altering the number of reward-changing proposi­
+tions in 'R, we can vary its size, and hence the gran­
+ularity and accuracy of the abstract policy. This al­
+lows us to investigate the tradeoff between time spent
+building the abstract policy and its degree of optimal­
+ity. The policy iteration algorithm also computes the
+value of each cluster in the abstract space. This value
+can be used as a heuristic estimate of the value of
+the cluster's constituent states. One advantage of this
+approach is that it allows us to accurately determine
+bounds on the difference between the heuristic value
+for any state, and its value according to an optimal
+policy- see (Boutilier and Dearden 1994) for details.
+As shown above, this fact is very useful for pruning
+the search tree. A second advantage of this method
+for generating heuristic values is that it provides de­
+fault reactions for each state.
+4.2
+
+Other Approaches
+
+The algorithm described above for building the heuris­
+tic function is certainly not appropriate in all domains.
+Certain domains are more naturally represented by
+other means (navigation is one example). In some
+cases abstractions of actions and states may already
+be available (Tenenberg 1991).
+For robot navigation tasks, an obvious method for
+clustering states is based on geographic features.
+Nearby locations can be clustered together into states
+that represent regions of the map, but providing ac­
+tions that operate on these regions is more complex.
+One approach is to assume some probability distribu­
+tion over locations in each region, and build abstract
+actions as weighted averages over all locations in the
+region of the corresponding concrete action. The diffi­
+culty with this approach is that it is computationally
+expensive, requiring that every action in every state be
+accounted for when constructing the abstract actions.
+If abstract actions (possibly macro-operators (Fikes
+and Nilsson 1971)) are already available, we need to
+find clusters to which the actions apply. In many cases
+this may be easy as the abstract actions may treat
+
+167
+
+many states in exactly the same way, hence generat­
+ing a clustering scheme. In other domains, a similar
+weighted average approach may be needed.
+
+5
+
+Theoretical and Experimental
+Results
+
+We are currently exploring, both theoretically and ex­
+perimentally, the tradeoffs involved in the interleaving
+of planning and execution in this framework. We can
+measure the complexity of the algorithm as presented.
+Let m = I .AI be the number of actions. We will assume
+that when constructing the search tree for a state, we
+explore to depth d, and that the branching factor for
+each action (the maximum number of outcomes for the
+action in any given state) is at most b.3
+The cost of calculating the best action for a single
+state is mdbd. The cost per state is slightly less than
+this since we can reuse our calculations, but the over­
+all complexity is O(md). The actual size of the state
+space has no effect on the algorithm; rather it is the
+number of states visited in the execution of the plan
+that affects the cost. This is clearly domain dependent,
+but in most domains should be considerably lower than
+the total number of states. Most importantly, the com­
+plexity of the algorithm is constant and execution time
+(per action) can be bounded for a fixed branching and
+search depth. By interleaving execution with search,
+the search space can be drastically reduced. W hen
+planning for a sequence of n actions the execution algo­
+rithm is linear inn (with respect to the factor mdbd); a
+straightforward search without execution for the same
+number of actions is O(bn).
+Experiments in a number of different domains provide
+an indication that this framework may be quite valu­
+able. To generate the results discussed in this sec­
+tion, we used a domain based on the one described in
+Figures 1 and 2 but with another item (snack) that
+the robot must deliver, and a robot that only carries
+one thing at a time. We constructed the heuristic
+function using the procedure described in Section 4,
+with Has UserCoffee as the only immediately relevant
+proposition, ignoring the proposition Has UserSnack;
+thus, 'R = {HasUserCoffee, Office, HasRobotCoffee,
+HasRobotSnack}.
+The domain contains 256 states and six actions. All
+timing results were produced on a Sun SPARCsta­
+tion 1. Computing an optimal policy by policy it­
+eration required 130.86 seconds, while computing a
+sixteen state abstract policy (again using policy itera­
+tion) for the heuristic function required 0.22 seconds.
+F igure 5a. shows the time required to search for the
+
+3We ignore preconditions for actions here, assuming
+that an action can be "attempted" in any circumstance.
+However, preconditions may play a useful role by captur­
+ing user.supplied heuristics that filter out actions in sit­
+uations in which they ought not (rather than cannot) be
+attempted. This will effectively reduce the branching fac­
+tor of the search tree.
+
+168
+
+Dearden and
+
+Boutilier
+
+Time Per Action and Expected
+Reward for Policy
+
+Ill
+
+Expected reward
+
+Number of States Searched as a
+Percentage of States Without Pruning.
+
+100 +.:-----
+
+--- �-�-�--- -..•....
+-
+
+N<> pruning
+
+Expectation
+-- U
+tility
+Both
+
+75
+
+Time to Search as a Percentage
+of Time Without Pruning.
+. . . . . • .• .
+
+150
+
+100 +----- Nopl"llllillg
+------ Utility
+50
+
+25
+
+a.
+
+Expectation
+Both
+
+50
+
+Search Depth
+
+.
+
+2
+
+2
+
+5
+3
+4
+Search Depth
+
+4
+3
+s
+Search Depth
+c.
+
+b.
+
+Figure 5: a.: Time to search for the best action and expected reward for one particular state. b., c.: Value of
+pruning search over standard search. Both as a function of search depth. The domain contains 256 states and
+six actions.
+best action in a single state, and the expected reward
+from the state (•HasRobotCoffee, •HasUserCoffee,
+•HasRobotSnack, •HasUserSnack, Rain, •Umbrella,
+Office, ...,Wet )4• Time to search grows exponentially
+with search depth, while the reward steadily improves
+until it reaches its maximum value. As the graph
+shows, a close to optimal policy for this particular start
+state was found with depth 4 search. As searching to
+depth 4 required less than 5 seconds per state, this
+is a considerable saving over policy iteration. As the
+domain grows in size, deeper search may be necessary
+to produce close to optimal behavior, but the time re­
+quired for policy iteration typically grows at a faster
+rate, so the cost of deeper search is justified.
+Figure 5b. and c. show the effects of pruning on the
+performance of the algorithm. 5b. shows the percent­
+age of states which are searched as search depth in­
+creases. Utility pruning performs better than expec­
+tation pruning, removing about 20 percent of states
+when searching to depth five. 5c. shows the time re­
+quired to search. Utility pruning again performs well,
+with a 15 to 20 percent saving in execution time.
+Although the complexity of performing expectation
+pruning results in a slower performance than no prun­
+ing at all, in deep search, it may well be worthwhile
+to perform expectation pruning close to the root of
+the tree where its effect will be the greatest. Value
+of computation calculations (1991) might be used to
+determine the point at which to stop expectation prun­
+ing.
+Figure 6 shows a variety of statistics about the pol­
+icy induced by various depths of search. There is a
+steady improvement in the quality of the policy as
+search depth increases, with an almost optimal policy
+being discovered at depth 5. Since the value of a state
+4This is the state that requires the longest sequence of
+actions to reach a state with maximal utility; i.e., the state
+requiring the "longest optimal plan."
+
+Search Depth
+No. of errors
+Total Error
+Max. Error
+Average Error
+
+1
+137
+714
+12.5
+2.8
+
+2
+
+3
+
+4
+
+137
+589
+9.4
+2.3
+
+132
+
+22
+
+549
+8.2
+
+35.7
+7.3
+0. 1
+
+2.1
+
+5
+8
+3.4
+0.5
+0.01
+
+Figure 6: A comparison of policy quality. The policies
+are compared with the optimal policy for the domain.
+Here errors are states where the policy constructed by
+searching and the optimal policy disagree on the value
+of the state.
+can range from -15 to 20 in this domain, the errors
+made in even relatively shallow search are quite small.
+The table also suggests that searching to depth n is at
+least as good as searching to depth n - 1 (although it
+may not always be better). In none of the domains we
+have tested has searching deeper produced a worse pol­
+icy, although this may not be the case in general (see
+(Pearl 1984) for a proof of this for minimax search).
+Figure 7 shows the time required for searching with
+and without execution, and with and without caching.
+The search-execution model we have investigated per­
+forms better than straight search, although, especially
+for deep search, the difference is fairly small. This is
+due to the small size of the domain and the effects
+of caching, which allow the search without execution
+algorithm to only search below each state once.
+6
+
+Conclusions
+
+We have proposed a framework for planning in stochas­
+tic domains. Further experimental work needs to be
+done to demonstrate the utility of this model. In par­
+ticular, further comparison to exact methods like pol­
+icy iteration and heuristic methods like the envelope
+approach of Dean et al. (1993b) would be useful. We
+
+Integrating Planning and Execution in Stochastic Domains
+
+Depth
+1
+2
+3
+4
+5
+6
+
+Search
+5.19
+5.41
+7.14
+15.4
+102
+272
+
+Searchexecution
+0.01
+0.04
+0.42
+4.48
+55.4
+219
+
+No
+cache
+0.02
+0.06
+0.51
+5.68
+56.9
+230
+
+Search,
+no cache
+26.7
+281
+2780
+
+-
+
+-
+
+Figure 7: T ime comparisons in seconds for search with­
+out execution, search with execution, search with exe­
+cution but no caching, and search without execution or
+caching. All searches were performed as if 10 actions
+were selected.
+
+intend to use the framework to explore a number of
+tradeoffs (e.g., as in (Russell and Wefald 1991) ) . In
+particular, we will look at the advantages of a deeper
+search tree, and balance this with the cost of building
+such a tree, and at the tradeoff between computation
+time and improved results when building the heuristic
+function. To illustrate these ideas we observe that if
+the depth of the search tree is 0, this corresponds to
+a reactive system where the best action for each state
+is obtained from the abstract polic y. If each cluster
+for the abstract policy contains a single state, we have
+optimal policy planning. The usefulness of these trade­
+oft's will vary when planning in different domains.
+Some of the characteristics of domains that will affect
+our choices are:
+•
+
+•
+
+Time: for time-critical domains it may be better
+to limit time spent deliberating (perhaps adopting
+a reactive strategy based on the heuristic func­
+tion). A more detailed heuristic function and a
+smaller search tree may be appropriate.
+Continuity: if actions have similar effects in large
+classes of states and most of the goal states are
+fairly similar, we can use a less detailed heuristic
+function (more abstract policy).
+
+•
+
+Fan-out: if there are relatively few actions, and
+each action has a small number of outcomes, we
+can afford to increase the depth of the search tree.
+
+•
+
+Plausible goals: if goal states are hard to reach, a
+deeper search tree and a more detailed heuristic
+function may be necessary.
+
+•
+
+Extreme probabilities: with extreme probabilities
+it may be worth only expanding the tree for the
+most probable outcomes of each action. This
+seems to bear some relationship to the envelope
+reconstruction phase of the recurrent deliberation
+model of Dean et al. (1993a).
+
+In the future we hope to continue our experimen­
+tal investigation of the algorithm to look at the ef­
+fectiveness of variable-depth search, and the possibil­
+ity of improving the heuristic function by recording
+newly computed values of states, rather than best ac­
+tions. We also hope to investigate the performance
+
+169
+
+of this approach in other types of domains, including
+high-level robot navigation, and scheduling problems,
+and to further investigate the theoretical properties of
+the algorithm, especially through analysis of the value
+of deeper searching in producing better plans (Pearl
+1984). Our model can be extended by relaxing some of
+the assumptions incorporated into the decision-model.
+Semi-markov processes as well as partially observable
+processes will require interesting modifications of our
+model. Finally, we must investigate the degree to
+which the restricted envelope approach may be meshed
+with our model.
+
+Acknowledgments
+Discussions with Moises Goldszmidt have considerably
+influenced our view and use of abstraction for MDPs.
+This research was supported by NSERC Research
+Grant OGP0121843 and a UBC University Graduate
+Fellowship.
+
+References
+Ballard, B. W. 1983. The *-minimax search procedure for
+trees containing chance nodes. Artificial Intelligence,
+21:327-350.
+Boutilier, C. and Dearden, R. 1994. Using abstractions
+for decision-theoretic planning with time constraints.
+In Proceedings of the Twelfth National Conference on
+Artificial Intelligence, Seattle. (to appear).
+Dean, T., Kaelbling, L. P., Kirman, J., and Nicholson, A.
+1993a. Deliberation scheduling for time-critical deci­
+sion making. In Proceedings of the Ninth Conference
+on Uncertainty in Artificial Intelligence, pages 309316, Washington, D.C.
+Dean, T., Kaelbling, L. P., Kirman, J., and Nicholson, A.
+1993b. Planning with deadlines in stochastic domains.
+In Proceedings of the Eleventh National Conference
+on Artificial Intelligence, pages 574-579, Washington,
+D.C.
+Fikes, R. E. and Nilsson, N. J. 1971. Strips: A new ap­
+proach to the application of theorem proving to prob­
+lem solving. Artificial Intelligence, 2:189-208.
+Howard, R. A. 1971. Dynamic Probabilistic Systems. Wi­
+ley, New York.
+Korf, R. E. 1990. Real-time heuristic search.
+Intelligence, 42:189-211.
+
+Artificial
+
+Kushmerick, N., Hanks, S., and Weld, D. 1993. An al­
+gorithm for probabilistic planning. Technical Report
+93-06-04, University of Washington, Seattle.
+Pearl, J. 1984. Heuristics: Intelligent Search Strategies for
+Computer Problem Solving. Addison-Wesley, Read­
+ing, Massachusetts.
+Russell, S. J. and Wefald, E. 1991. Do the Right Thing:
+Studies in Limited Rationality.
+MIT Press, Cam­
+bridge.
+Tenenberg, J. D. 1991. Abstraction in planning. In Allen,
+J.. F., Kautz, H. A., Pelavin, R. N., and Tenenberg,
+J. D., editors, Reasoning about Plans, pages 213-280.
+Morgan-Kaufmann, San Mateo.
+
+

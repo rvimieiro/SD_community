@@ -1,0 +1,1148 @@
+A Bayesian Approach to Learning Bayesian Networks with Local
+Structure
+
+David Maxwell Chickering
+dmax@microsoft.com
+
+David Heckerman
+heckerma@microsoft.com
+
+Christopher Meek
+meek@microsoft.com
+
+Microsoft Research
+Redmond WA, 98052-6399
+
+Abstract
+
+Recently several researchers have investigated techniques for using data to learn
+Bayesian networks containing compact representations for the conditional probability
+distributions (CPDs) stored at each node.
+The majority of this work has concentrated
+on using decision-tree representations for
+the CPDs. In addition, researchers typically apply non-Bayesian (or asymptotically
+Bayesian) scoring functions such as MDL to
+evaluate the goodness-of-fit of networks to
+the data.
+In this paper we investigate a Bayesian approach to learning Bayesian networks that
+contain the more general decision-graph representations of the CPDs. First, we describe
+how to evaluate the posterior probability—
+that is, the Bayesian score—of such a network, given a database of observed cases.
+Second, we describe various search spaces
+that can be used, in conjunction with a scoring function and a search procedure, to identify one or more high-scoring networks. Finally, we present an experimental evaluation
+of the search spaces, using a greedy algorithm
+and a Bayesian scoring function.
+
+1
+
+INTRODUCTION
+
+Given a set of observations in some domain, a common problem that a data analyst faces is to build one
+or more models of the process that generated the data.
+In the last few years, researchers in the UAI community have contributed an enormous body of work to
+this problem, using Bayesian networks as the model of
+choice. Recent works include Cooper and Herskovits
+
+(1992), Buntine (1991), Spiegelhalter et. al (1993),
+and Heckerman et al. (1995).
+A substantial amount of the early work on learning Bayesian networks has used observed data to infer global independence constraints that hold in the
+domain of interest. Global independences are precisely those that follow from the missing edges within
+a Bayesian-network structure. More recently, researchers (including Boutilier et al., 1995 and Friedman and Goldszmidt, 1996) have extended the “classical” definition of a Bayesian network to include efficient representations of local constraints that can hold
+among the parameters stored in the nodes of the network. Two notable features about the this recent work
+are (1) the majority of effort has concentrated on inferring decision trees, which are structures that can explicitly represent some parameter equality constraints
+and (2) researchers typically apply non-Bayesian (or
+asymptotically Bayesian) scoring functions such as
+MDL as to evaluate the goodness-of-fit of networks
+to the data.
+In this paper, we apply a Bayesian approach to learning Bayesian networks that contain decision-graphs—
+generalizations of decision trees that can encode arbitrary equality constraints—to represent the conditional probability distributions in the nodes.
+In Section 2, we introduce notation and previous relevant work. In Section 3 we describe how to evaluate
+the Bayesian score of a Bayesian network that contains
+decision graphs. In Section 4, we investigate how a
+search algorithm can be used, in conjunction with a
+scoring function, to identify these networks from data.
+In Section 5, we use data from various domains to
+evaluate the learning accuracy of a greedy search algorithm applied the search spaces defined in Section 4.
+Finally, in Section 6, we conclude with a discussion of
+future extensions to this work.
+
+2
+
+BACKGROUND
+
+In this section, we describe our notation and discuss
+previous relevant work. Throughout the remainder of
+this paper, we use lower-case letters to refer to variables, and upper-case letters to refer to sets of variables. We write xi = k when we observe that variable
+xi is in state k. When we observe the state of every variable in a set X, we call the set of observations
+a state of X. Although arguably an abuse of notation, we find it convenient to index the states of a
+set of variables with a single integer. For example, if
+X = {x1 , x2 } is a set containing two binary variables,
+we may write X = 2 to denote {x1 = 1, x2 = 0}.
+In Section 2.1, we define a Bayesian network. In Section 2.2 we describe decision trees and how they can be
+used to represent the probabilities within a Bayesian
+network. In Section 2.3, we describe decision graphs,
+which are generalizations of decision trees.
+2.1
+
+BAYESIAN NETWORKS
+
+Consider a domain U of n discrete variables x1 , . . . , xn ,
+where each xi has a finite number of states. A Bayesian
+network for U represents a joint probability distribution over U by encoding (1) assertions of conditional
+independence and (2) a collection of probability distributions. Specifically, a Bayesian network B is the pair
+(BS , Θ), where BS is the structure of the network, and
+Θ is a set of parameters that encode local probability
+distributions.
+The structure BS has two components: the global
+structure G and a set of local structures M . G is an
+acyclic, directed graph—dag for short—that contains
+a node for each variable xi ∈ U . The edges in G denote probabilistic dependences among the variables in
+U . We use P ar(xi ) to denote the set of parent nodes
+of xi in G. We use xi to refer to both the variable in
+U and the corresponding node in G. The set of local
+structures M = {M1 , . . . , Mn } is a set of n mappings,
+one for each variable xi , such that Mi maps each value
+of {xi , P ar(xi )} to a parameter in Θ.
+The assertions of conditional independence implied by
+the global structure G in a Bayesian network B impose
+the following decomposition of the joint probability
+distribution over U :
+Y
+p(xi |P ar(xi ), Θ, Mi , G)
+(1)
+p(U |B) =
+i
+
+The set of parameters Θ contains—for each node xi ,
+for each state k of xi , and for each parent state j—
+a single parameter1 Θ(i, j, k) that encodes the condiP
+1
+Because the sum
+
+k
+
+p(xi = k|P ar(xi ), Θ, Mi , G) must
+
+x
+
+y
+z
+
+Figure 1: Bayesian network for U = {x, y, z}
+tional probabilities given in Equation 1. That is,
+p(xi = k|P ar(xi ) = j, Θ, Mi , G) = Θ(i, j, k)
+
+(2)
+
+Note that the function Θ(i, j, k) depends on both Mi
+and G. For notational simplicity we leave this dependency implicit.
+Let ri denote the number of states of variable xi , and
+let qi denote the number of states of the set P ar(xi ).
+We use Θij to denote the set of parameters characterizing the distribution p(xi |P ar(xi ) = j, Θ, Mi , G):
+i
+Θij = ∪rk=1
+Θ(i, j, k)
+
+We use Θi to denote the set of parameters
+characterizing all of the conditional distributions
+p(xi |P ar(xi ), Θ, Mi , G):
+i
+Θij
+Θi = ∪qj=1
+
+In the “classical” implementation of a Bayesian network, each node xi stores (ri − 1) · qi distinct parameters in a large table. That is, Mi is simply a lookup
+into a table. Note that the size of this table grows
+exponentially with the number of parents qi .
+2.2
+
+DECISION TREES
+
+There are often equality constraints that hold among
+the parameters in Θi , and researchers have used mappings other than complete tables to more efficiently
+represent these parameters. For example, consider the
+global structure G depicted in Figure 1, and assume
+that all nodes are binary. Furthermore, assume that if
+x = 1, then the value of z does not depend on y. That
+is,
+p(z|x = 1, y = 0, Θ, Mz , G) = p(z|x = 1, y = 1, Θ, Mz , G)
+
+Using the decision tree shown in Figure 2 to implement the mapping Mz , we can represent p(z|x =
+1, y, Θ, MZ ) using a single distribution for both
+p(z|x = 1, y = 0, Θ, Mz , G) and p(z|x = 1, y =
+1, Θ, Mz , G).
+be one, Θ will actually only contain ri − 1 distinct parameters for this distribution. For simplicity, we leave this
+implicit for the remainder of the paper.
+
+ditional distributions. Furthermore, many researchers
+have developed methods for learning these local structures from data.
+
+x
+1
+
+0
+
+y
+0
+p(z|x=0, y=0)
+
+1
+
+p(z|x=1, y=0)
+=
+p(z|x=1, y=1)
+
+p(z|x=0, y=1)
+
+Figure 2: Decision tree for node z
+
+Decision trees, described in detail by Breiman (1984),
+can be used to represent sets of parameters in a
+Bayesian network. Each tree is a dag containing exactly one root node, and every node other than the
+root node has exactly one parent. Each leaf node contains a table of k − 1 distinct parameters that collectively define a conditional probability distribution
+p(xi |P ar(xi ), Θ, Mi , D). Each non-leaf node in the
+tree is annotated with the name of one of the parent
+variables π ∈ P ar(xi ). Out-going edges from a node π
+in the tree are annotated with mutually exclusive and
+collectively exhaustive sets of values for the variable
+π.
+When a node v in a decision tree is annotated with
+the name π, we say that v splits π. If the edge from v1
+to child v2 is annotated with the value k, we say that
+v2 is the child of v1 corresponding to k. Note that by
+definition of the edge annotations, the child of a node
+corresponding to any value is unique.
+We traverse the decision tree to find the parameter
+Θ(i, j, k) as follows. First, initialize v to be the root
+node in the decision tree. Then, as long as v is not a
+leaf, let π be the node in P ar(xi ) that v splits, and
+reset v to be the child of v corresponding to the value
+of π—determined by P ar(xi ) = j—and repeat. If v is
+a leaf, we we return the parameter in the table corresponding to state k of xi .
+Decision tree are more expressive mappings than complete tables, as we can represent all of the parameters
+from a complete table using a complete decision tree. A
+complete decision tree Ti for a node xi is a tree of depth
+|P ar(xi )|, such that every node vl at level l in Ti splits
+on the lth parent πl ∈ P ar(xi ) and has exactly rπl
+children, one for each value of π. It follows by this definition that if Ti is a complete tree, then Θ(i, j, k) will
+map to a distinct parameter for each distinct {i, j},
+which is precisely the behavior of a complete table.
+Researchers have found that decision trees are useful
+for eliciting probability distributions, as experts often have extensive knowledge about equality of con-
+
+2.3
+
+DECISION GRAPHS
+
+In this section we describe a generalization of the decision tree, known as a decision graph, that can represent a much richer set of equality constraints among
+the local parameters. A decision graph is identical to a
+decision tree except that, in a decision graph, the nonroot nodes can have more than one parent. Consider,
+for example, the decision graph depicted in Figure 3.
+This decision graph represents a conditional probability distribution p(z|x, y, Θ) for the node z in Figure
+1 that has different equality constraints than the tree
+shown in Figure 2. Specifically, the decision graph encodes the equality
+p(z|x = 0, y = 1, Θ) = p(z|x = 1, y = 0, Θ)
+
+x
+1
+
+0
+
+y
+0
+
+p(z|x=0, y=0)
+
+y
+1
+
+0
+
+p(z|x=0, y=1)
+=
+p(z|x=1, y=0)
+
+1
+p(z|x=1, y=1)
+
+Figure 3: Decision graph for node z
+We use Di to denote a decision graph for node xi .
+If the mapping in a node xi is implemented with Di ,
+we use Di instead of Mi to denote the mapping. A
+decision-graph Di can explicitly represent an arbitrary
+set of equality constraints of the form
+Θij = Θij 0
+
+(3)
+
+for j 6= j 0 . To demonstrate this, consider a complete
+tree Ti for node xi . We can transform Ti into a decision
+graph that represents all of the desired constraints by
+simply merging together any leaf nodes that contain
+sets that are equal.
+It is interesting to note that any equality constraint of
+the form given in Equation 3 can also be interpreted
+as the following independence constraint:
+xi ⊥⊥ P ar(xi ) | P ar(xi ) = j or P ar(xi ) = j 0
+If we allow nodes in a decision graph Di to split on
+node xi as well as the nodes in P ar(xi ), we can represent an arbitrary set of equality constraints among
+
+the parameters Θi . We return to this issue in Section
+6, and assume for now that nodes in Di do not split
+on xi .
+
+3
+
+LEARNING DECISION GRAPHS
+
+As we showed in Section 2, if the local structure for a
+node xi is a decision graph Di , then sets of parameters Θij and Θij 0 can be identical for j 6= j 0 . For the
+derivations to follow, we find it useful to enumerate the
+distinct parameter sets in Θi . Equivalently, we find it
+useful to enumerate the leaves in a decision graph.
+
+Many researchers have derived the Bayesian measureof-fit—herein called the Bayesian score—for a network,
+assuming that there are no equalities among the parameters. Friedman and Goldszmidt (1996) derive
+the Bayesian score for a structure containing decision trees. In this section, we show how to evaluate
+the Bayesian score for a structure containing decision
+graphs.
+
+For the remainder of this section, we adopt the following syntactic convention. When referring to a parameter set stored in the leaf of a decision graph, we
+use a to denote the node index, and b to denote the
+parent-state index. When referring to a parameter set
+in the context of a specific parent state of a node, we
+use i to denote the node index and j to denote the
+parent-state index.
+
+To derive the Bayesian score, we first need to make
+an assumption about the process that generated the
+database D. In particular, we assume that the
+database D is a random (exchangeable) sample from
+some unknown distribution ΘU , and that all of the
+constraints in ΘU can be represented using a network
+structure BS containing decision graphs.
+
+To enumerate the set of leaves in a decision graph D a ,
+we define a set of leaf-set indices La . The idea is that
+La contains exactly one parent-state index for each leaf
+in the graph. More precisely, let l denote the number
+of leaves in Da . Then La = {b1 , . . . , bl } is defined as a
+set with the following properties:
+
+As we saw in the previous section, the structure
+BS = {G, M } imposes a set of independence constraints that must hold in any distribution represented
+using a Bayesian network with that structure. We define BSh to be the hypothesis that (1) the independence
+constraints imposed by structure BS hold in the joint
+distribution ΘU from which the database D was generated, and (2) ΘU contains no other independence
+constraints. We refer the reader to Heckerman et al.
+(1994) for a more detailed discussion of structure hypotheses.
+The Bayesian score for a structure BS is the posterior
+probability of BSh , given the observed database D:
+p(BSh |D) = c · p(D|BSh )p(BSh )
+1
+. If we are only concerned with the relwhere c = p(D)
+ative scores of various structures, as is almost always
+the case, then the constant c can be ignored. Consequently, we extend our definition of the Bayesian score
+to be any function proportional to p(D|BSh )p(BSh ).
+
+For now, we assume that there is an efficient method
+for assessing p(BSh ) (assuming this distribution is uniform, for example), and concentrate on how to derive
+the marginal likelihood term p(D|BSh ). By integrating
+over all of the unknown parameters Θ we have:
+Z
+h
+p(Θ|BSh )p(D|Θ, BSh )
+(4)
+p(D|BS ) =
+Θ
+
+Researchers typically make a number of simplifying
+assumptions that collectively allow Equation 4 to be
+expressed in closed form. Before introducing these assumptions, we need the following notation.
+
+1. For all {b, b0 } ⊆ La , b 6= b0 ⇒ Θa,b 6= Θa,b0
+2. ∪b∈La Θa,b = Θa
+The first property ensures that each index in L corresponds to a different leaf, and the second property
+ensures that every leaf is included.
+One assumption used to derive Equation 4 in closed
+form is the parameter independence assumption. Simply stated, this assumption says that given the hypothesis BSh , knowledge about any distinct parameter set
+Θab does not give us any information about any other
+distinct parameter set.
+Assumption 1 (Parameter Independence)
+p(Θ|BSh ) =
+
+n Y
+Y
+
+p(Θab |BSh )
+
+a=1 b∈La
+
+Another assumption that researchers make is the
+Dirichlet assumption. This assumption restricts the
+prior distributions over the distinct parameter sets to
+be Dirichlet.
+Assumption 2 (Dirichlet)
+For all a and for all b ∈ La ,
+p(Θab |BSh ) ∝
+
+ra
+Y
+
+abc −1
+Θα
+abc
+
+c=1
+
+where αabc > 0 for 1 ≤ c ≤ ra
+Recall that ra denotes the number of states for node
+xa . The hyperparameters αabc characterize our prior
+
+knowledge about the parameters in Θ. Heckerman et
+al. (1995) describe how to derive these exponents from
+a prior Bayesian network. We return to this issue later.
+Using these assumptions, we can derive the Bayesian
+score for a structure that contains decision graphs by
+following a completely analogous method as Heckerman et al. (1995). Before showing the result, we must
+define the inverse function of Θ(i, j, k). Let θ denote
+an arbitrary parameter in Θ. The function Θ−1 (θ) denotes the set of index triples that Θ() maps into θ.
+That is,
+Θ−1 (θ) = {i, j, k|Θ(i, j, k) = θ}
+Let Dijk denote the number of cases in D for which
+xi = k and P ar(xi ) = j. We define Nabc as follows:
+X
+Dijk
+Nabc =
+ijk∈Θ−1 (θabc )
+
+Intuitively, Nabc is the number of cases in D that provide information
+about thePparameter θabc . Letting
+P
+Nab = c Nabc and αab = c αabc , we can write the
+Bayesian score as follows:
+p(D, BSh )
+
+= p(BSh )
+
+n Y
+Y
+
+a=1 b∈La
+
+Γ(αab )
+Γ(Nab + αab )
+
+Y Γ(Nabc + αabc )
+Γ(αabc )
+c=1
+|ra |
+
+·
+
+(5)
+
+We can determine all of the counts Nabc for each node
+xa as follows. First, initialize all the counts Nabc to
+zero. Then, for each case C in the database, let kC
+and jC denote the value for xi and P ar(xi ) in the
+case, respectively, and increment by one the count
+Nabc corresponding to the parameter θabc = p(xi =
+kC |P ar(xi ) = jC , Θ, Da ). Each such parameter can
+be found efficiently by traversing Da from the root.
+We say a scoring function is node decomposable if it
+can be factored into a product of functions that depend only a node and its parents. Node decomposability is useful for efficiently searching through the
+space of global-network structures. Note that Equation 5 is node decomposable as long as p(BSh ) is node
+decomposable.
+We now consider some node-decomposable distributions for p(BSh ). Perhaps the simplest distribution is
+to assume a uniform prior over network structures.
+That is, we set p(BSh ) to a constant in Equation 5.
+We use this simple prior for the experiments described
+in Section 5. Another approach is to (a-priori) favor
+networks with fewer parameters. For example, we can
+use
+n
+Y
+p(BSh ) ∝ κ|Θ| =
+κ|Θa |
+(6)
+a=1
+
+where 0 < κ <= 1. Note that κ = 1 corresponds to
+the uniform prior over all structure hypotheses.
+A simple prior for the parameters in Θ is to assume
+αabc = 1 for all a, b, c. This choice of values corresponds to a uniform prior over the parameters, and
+was explored by Cooper and Herskovits (1992) in the
+context of Bayesian networks containing complete tables. We call the Bayesian scoring function the uniform scoring function if all the hyperparameters are
+set to one. We have found that this prior works well
+in practice and is easy to implement.
+Using two additional assumptions, Heckerman et al.
+(1995) show that each αabc can be derived from a prior
+Bayesian network. The idea is that αabc is proportional to the prior probability, obtained from the prior
+network, of all states of {xi = k, P ar(xi ) = j} that
+map to the parameter θabc . Specifically, if B P is our
+prior Bayesian network, we set
+X
+αabc = α
+p(xi = k, P ar(xi ) = j|B P )
+ijk∈Θ−1 (θabc )
+
+where α is a single equivalent sample size used to asses
+all of the exponents, and P ar(xi ) denotes the parents
+of xi in G (as opposed to the parents in the prior network). α can be understood as a measure of confidence that we have for the parameters in B P . We call
+the Bayesian scoring function the PN scoring function
+(P rior N etwork scoring function) if the exponents are
+assessed this way. Heckerman et al. (1995) derive
+these constraints in the context of Bayesian networks
+with complete tables. In the full version of this paper,
+we show that these constraints follow when using decision graphs as well, with only slight modifications to
+the additional assumptions.
+Although we do not provide the details here, we can
+use the decision-graph structure to efficiently compute
+the exponents αabc from the prior network in much
+the same way we computed the Nabc values from the
+database.
+
+4
+
+SEARCH
+
+Given a scoring function that evaluates the merit of
+a Bayesian-network structure BS , learning Bayesian
+networks from data reduces to a search for one or more
+structures that have a high score. Chickering (1995)
+shows that finding the optimal structure containing
+complete tables for the mappings M is NP-hard when
+using a Bayesian scoring function. Given this result,
+it seems reasonable to assume that by allowing (the
+more general) decision-graph mappings, the problem
+remains hard, and consequently it is appropriate to
+apply heuristic search techniques.
+
+In Section 4.1, we define a search space over decisiongraph structures within a single node xi , assuming
+that the parent set P ar(xi ) is fixed. Once such a space
+is defined, we can apply to that space any number of
+well-known search algorithms. For the experiments
+described in Section 5, for example, we apply greedy
+search.
+
+0
+v1
+
+0
+
+There are three operators we define, and each operator is a modification to the current set of leaves in a
+decision graph.
+Definition (Complete Split)
+Let v be a leaf node in the decision graph, and let π ∈
+P ar(xi ) be a parent of xi . A complete split C(v, π)
+adds ri new leaf nodes as children to v, where each
+child of v corresponds to a distinct value of π.
+Definition (Binary Split)
+Let v be a leaf node in the decision graph, and let π ∈
+P ar(xi ) be a parent of xi . A binary split B(v, π, k)
+adds 2 new leaf nodes as children to v, where the first
+child corresponds to state k of π, and the other child
+corresponds to all other states of π.
+Definition (Merge)
+Let v1 and v2 be two distinct leaf nodes in the decision
+graph. A Merge M (v1 , v2 ) merges the v1 and v2 into
+a single node. That is, the resulting node inherits all
+parents from both v1 and v2 .
+In Figure 4, we show the result of each type of operator
+to a decision graph for a node z with parents x and y,
+where x and y both have three states.
+We add the pre-condition that the operator must
+change the parameter constraints implied by the decision graph. We would not allow, for example, a
+complete split C(v1 , y) in Figure 4a: two of v1 ’s new
+children would correspond to impossible states of y
+({y = 0 and y = 1} and {y = 0 and y = 2}), and
+the third child would correspond to the original constraints at v1 ({y = 0 and y = 0}).
+Note that starting from a decision graph containing a
+
+y
+1
+0
+
+DECISION-GRAPH SEARCH
+
+In this section, we assume that the states of our search
+space correspond to all of the possible decision graphs
+for some node xi . In order for a search algorithm to
+traverse this space, we must define a set of operators
+that transform one state into another.
+
+2
+
+v2
+
+v3
+
+(a)
+
+In Section 4.2 we describe a greedy algorithm that
+combines local-structure search over all the decision
+graphs in the nodes with a global-structure search over
+the edges in G.
+4.1
+
+y
+1
+
+(b)
+
+0
+
+2
+x
+1
+
+y
+1
+
+y
+
+2
+0
+
+x
+2
+
+0
+
+(c)
+
+1,2
+
+1,2
+
+(d)
+
+Figure 4: Example of the application of each type of
+operator: (a) the original decision graph, (b) the result of applying C(v3 , x), (c) the result of applying
+B(v3 , x, 0), and (d) the result of applying M (v2 , v3 )
+single node (both the root and a leaf node), we can
+generate a complete decision tree by repeatedly applying complete splits. As discussed in the previous
+section, we can represent any parameter-set equalities
+by merging the leaves of a complete decision tree. Consequently, starting from a graph containing one node
+there exists a series of operators that result in any set
+of possible parameter-set equalities. Note also that if
+we repeatedly merge the leaves of a decision graph until there is a single parameter set, the resulting graph
+is equivalent (in terms of parameter equalities) to the
+graph containing a single node. Therefore, our operators are sufficient for moving from any set of parameter constraints to any other set of parameter constraints. Although we do not discuss them here, there
+are methods that can simplify (in terms of the number
+of nodes) some decision graphs such that they represent the same set of parameter constraints.
+The complete-split operator is actually not needed to
+ensure that all parameter equalities can be reached:
+any complete split can be replaced by a series of binary
+splits such that the resulting parameter-set constraints
+are identical. We included the complete-split operator
+in the hopes that it would help lead the search algorithm to better structures. In Section 5, we compare
+greedy search performance in various search spaces defined by including only subsets of the above operators.
+4.2
+
+COMBINING GLOBAL AND LOCAL
+SEARCH
+
+In this section we describe a greedy algorithm that
+combines global-structure search over the edges in G
+
+with local-structure search over the decision graphs in
+all of the nodes of G.
+Suppose that in the decision-graph Di for node xi ,
+there is no non-leaf node annotated with some parent
+π ∈ P ar(xi ). In this case, xi is independent of π
+given its other parents, and we can remove π from
+P ar(xi ) without violating the decomposition given in
+Equation 1. Thus given a fixed structure, we can learn
+all the local decision graphs for all of the nodes, and
+then delete those parents that are independent. We
+can also consider adding edges as follows. For each
+node xi , add to P ar(xi ) all non-descendants of xi in
+G, learn a decision graph for xi , and then delete all
+parents that are not contained in the decision graph.
+Figure 5 shows a greedy algorithm that uses combines
+these two ideas. In our experiments, we started the
+algorithm with a structure for which G contains no
+edges, and each graph Di consists of a single root node.
+1.
+
+Score the current network structure BS
+
+2.
+
+For each node xi in G
+
+3.
+4.
+5.
+
+Add every non-descendant that is not a parent
+of xi to P ar(xi )
+For every possible operator O to the decision
+graph Di
+Apply O to BS
+
+6.
+
+Score the resulting structure
+
+7.
+
+Unapply O
+
+8.
+9.
+10.
+11.
+
+12.
+13.
+14.
+
+Remove any parent that was added to xi in
+step 3
+If the best score from step 6 is better than the
+current score
+Let O be the operator that resulted in the best
+score
+If O is a split operator (either complete or binary) on a node xj that is not in P ar(xi ), then
+add xj to P ar(xi )
+Apply O to BS
+Goto 1
+Otherwise, return BS
+
+Figure 5: Greedy algorithm that combines local and
+global structure search
+Note that as a result of a merge operator in a decision
+graph D i , xi may be rendered independent from one
+of its parents π ∈ P ar(xi ), even if D i contains a node
+annotated with π. For a simple example, we could
+repeatedly merge all leaves into a single leaf node,
+and the resulting graph implies that xi does not depend on any of its parents. We found experimentally
+that—when using the algorithm from Figure 5—this
+phenomenon is rare. Because testing for these parent
+deletions is expensive, we chose to not check for them
+
+in the experiments described in Section 5.
+Another greedy approach for learning structures containing decision trees has been explored by Friedman
+and Goldszmidt (1996). The idea is to score edge operations in G (adding, deleting, or reversing edges) by
+applying the operation and then greedily learning the
+local decision trees for any nodes who’s parents have
+changed as a result of the operation. In the full version
+of the paper, we compare our approach to theirs.
+
+5
+
+EXPERIMENTAL RESULTS
+
+In this section we investigate how varying the set of
+allowed operators affects the performance of greedy
+search. By disallowing the merge operator, the search
+algorithms will identify decision-tree local structures in
+the Bayesian network. Consequently, we can see how
+learning accuracy changes, in the context of greedy
+search, when we generalize the local structures from
+decision trees to decision graphs.
+In all of the experiments described in this section, we
+measure learning accuracy by the posterior probability
+of the identified structure hypotheses. Researchers often use other criteria, such as predictive accuracy on a
+holdout set or structural difference from some generative model. The reason that we do not use any of these
+criteria is that we are evaluating how well the search
+algorithm performs in various search spaces, and the
+goal of the search algorithm is to maximize the scoring
+function. We are not evaluating how well the Bayesian
+scoring functions approximate some other criteria.
+In our first experiment, we consider the Promoter
+Gene Sequences database from the UC Irvine collection, consisting of 106 cases. There are 58 variables
+in this domain. 57 of these variables, {x1 , . . . , x57 }
+represent the “base-pair” values in a DNA sequence,
+and each has four possible values. The other variable,
+promoter, is binary and indicates whether or not the
+sequence has promoter activity. The goal of learning in
+this domain is to build an accurate model of the distribution p(promoter|x1 , . . . , x57 ), and consequently it is
+reasonable to consider a static graphical structure for
+which P ar(promoter) = {x1 , . . . , x57 }, and search for
+a decision graph in node promoter.
+Table 1 shows the relative Bayesian scores for the best
+decision graph learned, using a greedy search with various parameter priors and search spaces. All searches
+started with a decision graph containing a single node,
+and the current best operator was applied at each step
+until no operator increased the score of the current
+state. Each column corresponds to a different restriction of the search space described in Section 4.1: the
+labels indicate what operators the greedy search was
+
+Table 1: Greedy search performance for various
+Bayesian scoring functions, using different sets of operators, in the P romoter domain.
+
+uniform
+U-PN 10
+U-PN 20
+U-PN 30
+U-PN 40
+U-PN 40
+
+C
+0
+0
+0
+0
+0
+0
+
+B
+13.62
+6.12
+5.09
+4.62
+3.14
+2.99
+
+CB
+6.07
+4.21
+3.34
+2.97
+1.27
+1.12
+
+CM
+22.13
+9.5
+14.11
+10.93
+16.3
+15.76
+
+BM
+26.11
+10.82
+12.11
+12.98
+13.54
+15.54
+
+CBM
+26.11
+12.93
+14.12
+16.65
+16.02
+17.54
+
+allowed to use, where C denotes complete splits, B
+denotes binary splits, and M denotes merges. The column labeled BM, for example, shows the results when
+a greedy search used binary splits and merges, but
+not complete splits. Each row corresponds to a different parameter-prior for the Bayesian scoring function.
+The U-PN scoring function is a special case of the PN
+scoring function for which the prior network imposes
+a uniform distribution over all variables. The number following the U-PN in the row labels indicates the
+equivalent-sample size α. All results use a uniform
+prior over structure hypotheses. A value of zero in a
+row of the table denotes the hypothesis with lowest
+probability out of all those identified using the given
+parameter prior. All other values denote the natural
+logarithm of how many times more likely the identified
+hypothesis is than the one with lowest probability.
+By comparing the relative values between searches
+that use merges and searches that don’t use merges,
+we see that without exception, adding the merge operator results in a significantly more probable structure
+hypothesis. We can therefore conclude that a greedy
+search over decision graphs results in better solutions
+than a greedy search over decision trees. An interesting observation is that complete-split operator actually
+reduces solution quality when we restrict the search to
+decision trees.
+We performed an identical experiment to another classification problem, but for simplicity we only present
+the results for the uniform scoring function. Recall
+from Section 3 that the uniform scoring function has
+all of the hyperparameters αabc set to one. This second
+experiment was run with the Splice-junction Gene Sequences database, again from the UC Irvine repository.
+This database also contains a DNA sequence, and the
+problem is to predict whether the position in the middle of the sequence is an “intron-exon” boundary, an
+“exon-intron” boundary, or neither. The results are
+given in Table 2. We used the same uniform prior for
+structure hypotheses.
+
+Table 2: Greedy search performance for the uniform
+scoring function, using different sets of operators, in
+the Splice domain.
+C
+0
+
+B
+383
+
+CB
+363
+
+CM
+464
+
+BM
+655
+
+CBM
+687
+
+Table 3: Greedy search performance for the uniform
+scoring function for each node in the ALARM network.
+Also included is the uniform score for the completetable model
+COMP
+C
+B
+CB CM BM CBM
+0
+134 186 165 257 270
+270
+
+Table 2 again supports the claim that we get a significant improvement by using decision graphs instead of
+decision trees.
+Our final set of experiments were done in the ALARM
+domain, a well-known benchmark for Bayesiannetwork learning algorithms. The ALARM network,
+described by Beinlich et al. (1989), is a handconstructed Bayesian network used for diagnosis in a
+medical domain. The parameters of this network are
+stored using complete tables.
+In the first experiment for the ALARM domain, we
+demonstrate that for a fixed global structure G, the
+hypothesis identified by searching for local decision
+graphs in all the nodes can be significantly better than
+the hypothesis corresponding to complete tables in the
+nodes. We first generated 1000 cases from the ALARM
+network, and then computed the uniform Bayesian
+score for the ALARM network, assuming that the parameter mappings M are complete tables. We expect
+the posterior of this model to be quite good, because
+we’re evaluating the generative model structure. Next,
+using the uniform scoring function, we applied the six
+greedy searches as in the previous experiments to identify good decision graphs for all of the nodes in the
+network. We kept the global structure G fixed to be
+identical to the global structure of the ALARM network. The results are shown in Table 3, and the values
+have the same semantics as in the previous two tables.
+The score given in the first column labeled COMP is
+the score for the complete-table model.
+Table 3 demonstrates that search performance using
+decision graphs can identify significantly better models than when just using decision trees. The fact that
+the complete-table model attains such a low score (the
+best hypothesis we found is e270 times more probable
+than the complete-table hypothesis!) is not surprising upon examination of the probability tables stored
+
+Table 4: Performance of greedy algorithm that combines local and global structure search, using different
+sets of operators, in the ALARM domain. Also included is the result of a greedy algorithm that searches
+for global structure assuming complete tables.
+COMP
+255
+
+C
+0
+
+B
+256
+
+CB
+241
+
+CM
+869
+
+BM
+977
+
+CBM
+1136
+
+in the ALARM network: most of the tables contain
+parameter-set equalities.
+In the next experiment, we used the ALARM domain
+to test the structure-learning algorithm given in Section 4.2. We again generated a database of 1000 cases,
+and used the uniform scoring function with a uniform
+prior over structure hypotheses. We ran six versions
+of our algorithm, corresponding to the six possible sets
+of local-structure operators as in the previous experiments. We also ran a greedy structure-search algorithm that assumes complete tables in the nodes. We
+initialized this search with a global network structure
+with no edges, and the operators were single-edge modifications to the graph: deletion, addition and reversal.
+In Table 4 we show the results. The column labeled
+COMP corresponds to the greedy search over structures with complete tables.
+Once again, we note that when we allow nodes to
+contain decision graphs, we get a significant improvement in solution quality. Note that the search
+over complete-table structures out-performed our algorithm when we restricted the algorithm to search
+for decision trees containing either (1) only complete
+splits or (2) complete splits and binary splits.
+In our final experiment, we repeated the previous experiment, except that we only allowed our algorithm
+to add parents that are not descendants in the generative model. That is, we restricted the global search
+over G to those dags that did not violate the partial ordering in the ALARM network. We also ran the same
+greedy structure-search algorithm that searches over
+structures with complete tables, except we initialized
+the search with the ALARM network. The results of
+this experiment are shown in Table 5. From the table,
+we see that the constrained searches exhibit the same
+relative behavior as the unconstrained searches.
+For each experiment in the ALARM domain (Tables
+3, 4, and 5) the values presented measure the performance of search relative to the worst performance in
+that experiment. In Table 6, we compare search performance across all experiments in the ALARM domain. That is, a value of zero in the table corresponds
+to the experiment and set of operators that led to the
+
+Table 5: Performance of a restricted version of our
+greedy algorithm, using different sets of operators, in
+the ALARM domain. Also included is the result of
+a greedy algorithm, initialized with the global structure of the ALARM network, that searches for global
+structure assuming complete tables.
+COMP
+0
+
+C
+179
+
+B
+334
+
+CB
+307
+
+CM
+553
+
+BM
+728
+
+CBM
+790
+
+Table 6: Comparison of Bayesian scores for all experiments in the ALARM domain
+
+S
+U
+C
+
+COMP
+278
+255
+336
+
+C
+412
+0
+515
+
+B
+464
+256
+670
+
+CB
+443
+241
+643
+
+CM
+534
+869
+889
+
+BM
+548
+976
+1064
+
+CBM
+548
+1136
+1126
+
+learned hypothesis with lowest posterior probability,
+out of all experiments and operator restrictions we
+considered in the ALARM domain. All other values
+given in the table are relative to this (lowest) posterior
+probability. The row labels correspond to the experiment: S denotes the first experiment that performed
+local searches in a static global structure, U denotes
+the second experiment that performed unconstrained
+structural searches, and C denotes the final experiment
+that performed constrained structural search.
+Rather surprising, each hypothesis learned using
+global-structure search with decision graphs had a
+higher posterior than every hypothesis learned using
+the generative static structures.
+
+6
+
+DISCUSSION
+
+In this paper we showed how to derive the Bayesian
+score of a network structure that contains parameter
+maps implemented as decision graphs. We defined a
+search space for learning individual decision graphs
+within a static global structure, and defined a greedy
+algorithm that searches for both global and local structure simultaneously. We demonstrated experimentally
+that greedy search over structures containing decision
+graphs significantly outperforms greedy search over
+both (1) structures containing complete tables and (2)
+structures containing decision trees.
+We now consider an extension to the decision graph
+that we mentioned in Section 2.3. Recall that in a decision graph, the parameter sets are stored in a table
+within the leaves. When decision graphs are implemented this way, any parameter θabc must belong to
+exactly one (distinct) parameter set. An important
+
+consequence of this property is that if the priors for
+the parameter sets are Dirichlet (Assumption 2), then
+the posterior distributions are Dirichlet as well. That
+is, the Dirichlet distribution is conjugate with respect
+to the likelihood of the observed data. As a result, it is
+easy to derive the Bayesian scoring function in closed
+form.
+If we allow nodes within a decision graph Di to split
+on node xi , we can represent an arbitrary set of parameter constraints of the form Θ(i, j, k) = Θ(i, j 0 , k 0 )
+for j 6= j 0 and k 6= k 0 . For example, consider a Baysian
+network for the two-variable domain {x, y}, where x is
+a parent of y. We can use a decision graph for y that
+splits on y to represent the constraint
+p(y = 1|x = 0, Θ, Dy , G) = p(y = 0|x = 1, Θ, Dy , G)
+Unfortunately, when we allow these types of constraints, the Dirichlet distribution is no longer conjugate with respect to the likelihood of the data, and the
+parameter independence assumption is violated. Consequently, the derivation described in Section 3 will
+not apply. Conjugate priors for a decision graph Di
+that splits on node xi do exist, however, and in the
+full version of this paper we use a weaker version of
+parameter independence to derive the Bayesian score
+for these graphs in closed form.
+We conclude by noting that it is easy to extend the definition of a network structure to represent constraints
+between the parameters of different nodes in the network, e.g. Θij = Θi0 j 0 for i 6= i0 . Both Buntine
+(1994) and Thiesson (1995) consider these types of
+constraints. The Bayesian score for such structures
+can be derived by simple modifications to the approach
+described in this paper.
+
+References
+[Beinlich et al., 1989] Beinlich, I., Suermondt, H.,
+Chavez, R., and Cooper, G. (1989). The ALARM
+monitoring system: A case study with two probabilistic inference techniques for belief networks. In
+Proceedings of the Second European Conference on
+Artificial Intelligence in Medicine, London, pages
+247–256. Springer Verlag, Berlin.
+[Boutlier et al., 1996] Boutlier, C., Friedman, N.,
+Goldszmidt, M., and Koller, D. (1996). Contextspecific independence in Bayesian networks. In Proceedings of Twelfth Conference on Uncertainty in
+Artificial Intelligence, Portland, OR, pages 115–123.
+Morgan Kaufmann.
+[Brieman et al., 1984] Brieman, L., Friedman, J., Olshen, R., and Stone, C. (1984). Classification and
+Regression Trees. Wadsworth.
+
+[Buntine, 1991] Buntine, W. (1991). Theory refinement on Bayesian networks. In Proceedings of Seventh Conference on Uncertainty in Artificial Intelligence, Los Angeles, CA, pages 52–60. Morgan Kaufmann.
+[Buntine, 1994] Buntine, W. L. (1994). Learning
+with graphical model. Technical Report FIA-94-02,
+NASA Ame.
+[Chickering, 1995] Chickering, D. M. (1995). Learning
+Bayesian networks is NP-Complete. Submitted to:
+Lecture Notes in Statistics.
+[Cooper and Herskovits, 1992] Cooper, G. and Herskovits, E. (1992). A Bayesian method for the induction of probabilistic networks from data. Machine
+Learning, 9:309–347.
+[Friedman, 1996] Friedman, J. (1996). On bias, variance, 0/1-loss, and the curse of dimensionality. Data
+Mining and Knowledge Discovery, 1.
+[Heckerman et al., 1994] Heckerman, D., Geiger, D.,
+and Chickering, D. (1994). Learning Bayesian networks: The combination of knowledge and statistical data. In Proceedings of Tenth Conference on
+Uncertainty in Artificial Intelligence, Seattle, WA,
+pages 293–301. Morgan Kaufman.
+[Heckerman et al., 1995] Heckerman, D., Geiger, D.,
+and Chickering, D. (1995). Learning Bayesian networks: The combination of knowledge and statistical data. Machine Learning, 20:197–243.
+[Spiegelhalter et al., 1993] Spiegelhalter, D., Dawid,
+A., Lauritzen, S., and Cowell, R. (1993). Bayesian
+analysis in expert systems. Statistical Science,
+8:219–282.
+[Thiesson, 1995] Thiesson, B. (1995). Score and information for recursive exponential models with incomplete data. Technical report, Institute of Electronic
+Systems, Aalborg University, Aalborg, Denmark.
+
+

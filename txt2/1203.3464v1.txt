@@ -1,0 +1,1150 @@
+
+grows. The class of first-order, open-universe probabilistic languages, including BLOG (Milch et al.,
+2005a) and Church (Goodman et al., 2008), handles cases in which the number of objects (in BUGS,
+the index set) is unknown and perhaps unbounded,
+and object identity is uncertain. It is still possible
+to write a complete inference algorithm for BLOG,
+based on MCMC over partial worlds; each such world
+is constructed from the minimal self-supporting set
+of variables relevant to the evidence and query variables. Generality has a price, however: BLOG’s
+default Metropolis–Hastings inference engine samples
+each variable conditioned only on its parents (Milch &
+Russell, 2006). This approach leads to unacceptably
+slow mixing rates for many standard models, in which
+evidence from child variables is highly informative.
+Our goal is to remedy this situation, primarily by extending the range of situations in which Gibbs sampling from the full, conditional posterior can be used
+within BLOG. Section 2 of this paper introduces the
+terminology of contingent Bayesian networks (CBNs),
+which we will use as the propositional “abstract machine” for open-universe stochastic languages. Section 3 surveys previous work related to general purpose sampling of CBNs and describes its limitations.
+Section 4 then describes our novel Gibbs sampling algorithm for CBNs which addresses these limitations;
+its implementation for BLOG is described in Section 5. Finally, we present experimental results on
+various models in Section 6, demonstrating substantial speedups over existing methods.
+
+2
+
+Contingent Bayesian Networks
+
+This section repeats, and in some cases generalizes,
+definitions proposed by Milch et al. (2005b). A contingent Bayesian network (CBN) consists of a set of
+random variables V, and for each variable X ∈ V, a domain dom(X) and decision tree TX . The decision tree
+is a directed binary tree, where each node is a predi-
+
+switching parents of X in σ. Intuitively, changes in
+the values of switching parents can switch the distribution of X, as well as its set of parents. A switching
+variable in σ is a switching parent for one or more
+variables in σ. For the CBN of Example 1, the instantiation [ WingType=Helicopter, RotorLength=6,
+BladeFlash=true ] makes WingType a switching parent of both RotorLength and BladeFlash.
+
+WingType
+
+RotorLength
+
+An instantiation σ is self-supporting if it supports all
+variables in σ. Assuming that the CBN is well-defined
+(Milch et al., 2005b), we can define the probability of
+a self-supporting instantiation as follows:
+
+WingType=Helicopter
+BladeFlash
+
+p(σ) =
+Figure 1: The CBN of Example 1, in which the BladeFlash sensor model differs for helicopters and planes.
+cate on some subset of V. Each leaf of TX encodes a
+probability distribution parameterized by a subset of
+V, and defined on dom(X).
+Example 1. An aircraft of unknown WingType – Helicopter or FixedWingPlane – is detected on a radar.
+Helicopters have an unknown RotorLength, and depending on this length they might produce a characteristic pattern called a BladeFlash (Tait, 2009) in the
+returned radar signal. A FixedWingPlane might also
+produce a BladeFlash. As summarized in Figure 1,
+TWingType = F1
+
+F2
+if WingType = Helicopter
+TRotorLength =
+null otherwise
+
+F3 (RL) if WingType = Helicopter
+TBladeFlash =
+F4
+otherwise
+where RL is an abbreviation for RotorLength.
+An instantiation σ is an assignment of values to a subset of V. We write vars(σ) for the set of variables to
+which σ assigns values, and σX for the value that σ
+assigns to a variable X. σ X=a is a modified instantiation which agrees with σ except for setting X to a.
+An instantiation σ is said to be finite if vars(σ) is finite. An instantiation σ supports X if all the variables
+needed to evaluate TX are present in σ. In Example 1, [WingType=FixedWing] supports BladeFlash,
+but [WingType=Helicopter] does not.
+We write σTX for the minimal subset of σ needed to
+evaluate TX , and pX (· | σTX ) for the resulting distribution of X. The parents of X in σ are vars(σTX ),
+while the children of X in σ are
+Λ(σ, X) = {Y | Y ∈ vars(σ), X ∈ vars(σTY )}.
+
+(1)
+
+The subset of vars(σTX ) which were used to evaluate
+internal nodes of TX (rather than the leaf) are the
+
+Y
+
+pX (σX | σTX )
+
+(2)
+
+X ∈ vars(σ)
+
+An instantiation σ is feasible if p(σ) > 0.
+
+3
+
+Related Work
+
+Milch and Russell (2006) have previously shown
+that the state space for Markov chain Monte Carlo
+(MCMC) inference in CBNs may consist of minimal partial instantiations that support the evidence,
+E, and query variables, Q. This idea has been exploited to build the current, default inference engine
+for BLOG. Standard sampling algorithms for nonparametric, Dirichlet process mixture models use a related
+representation: they instantiate parameters for those
+mixture components which support the evidence, as
+well as a few auxiliary components (Neal, 2000). Our
+new algorithm builds on both of these methods.
+3.1
+
+Parent-Conditional Sampling
+
+In the absence of a model-specific, user supplied
+proposal distribution, BLOG’s existing inference engine relies on a parent-conditional proposal. This
+algorithm picks a variable, X, at random from all
+non-evidence variables in the current instantiation σ,
+V (σ) = vars(σ) − E, and proposes a new instantiation
+σ 0 with the value of X drawn from pX (· | σTX ). If X
+was a switching variable in σ, we may then need to instantiate new variables, and uninstantiate unneeded
+ones, to make σ 0 minimal and self-supporting over
+Q ∪ E. All new variables are instantiated with values drawn from their parent-conditional distribution.
+We say that any σ 0 constructed by this procedure is
+X
+reachable from σ via X, or σ
+σ 0 . The following
+properties are easily seen to be true of reachability.
+Proposition 1. A minimal self-supporting feasible instantiation σ 0 is reachable from an instantiation σ via
+X if and only if X ∈ vars(σ) ∩ vars(σ 0 ), and σ and σ 0
+agree on all other variables in vars(σ) ∩ vars(σ 0 ).
+
+Proposition 2. If σ
+σ 0 , then there does not exist
+Y
+Y ∈ V (σ), Y 6= X, such that σ
+σ0 .
+
+1. Create an initial, minimal, self-supporting feasible
+instantiation σ consistent with the evidence E,
+and including the query variables Q.
+
+The nature of this proposal distribution q(σ → σ 0 )
+makes it quite simple to compute the acceptance ratio
+for the Metropolis–Hastings (MH) method (Andrieu
+et al., 2003), which takes the following form:
+
+2. Initialize statistics of the query variables to zero.
+
+X
+
+
+
+α(σ → σ 0 ) = min 1,
+
+p(σ 0 )q(σ 0 → σ)
+p(σ)q(σ → σ 0 )
+
+(3)
+
+0
+pX (σX
+
+| σTX )
+|V (σ)|
+
+Y
+
+Y
+
+pY (σ 0 Y | σT0 Y )
+
+(4)
+
+∈vars(σ 0 )−vars(σ)
+
+From Equations (2) and (4), the terms corresponding to vars(σ 0 ) − vars(σ) cancel in p(σ 0 )/q(σ → σ 0 ).
+Similarly, terms in vars(σ) − vars(σ 0 ) cancel in
+q(σ 0 → σ)/p(σ). Further, it is easy to see that for
+variables Y ∈ vars(σ) ∩ vars(σ 0 ) − Λ(σ, X) ∩ Λ(σ 0 , X),
+σTY = σT0 Y . Hence, pY (· | σTY ) = pY (· | σT0 Y ) and the
+terms for all such variables Y , including X, cancel out.
+Finally, the acceptance ratio α(σ → σ 0 ) reduces to:
+
+
+
+1,
+
+|V (σ)|
+|V (σ 0 )|
+
+(b) Randomly propose σ 0 such that σ
+σ 0 using
+the distribution of Equation (4).
+(c) Compute the acceptance ratio, α(σ → σ 0 ),
+via Equation (5).
+(d) With probability α(σ → σ 0 ), set σ ← σ 0 .
+Otherwise, leave σ unchanged.
+(e) Update query statistics using σ.
+4. Report query statistics.
+
+q(σ → σ 0 ) =
+
+min
+
+(a) Choose X ∈ V (σ) uniformly at random.
+X
+
+
+
+For any σ 0 reachable from σ via X, the unique way
+of proposing this transition is to select X from V (σ),
+0
+propose the value σX
+for it, and finally propose corresponding values for all new variables in σ 0 . Thus,
+
+
+
+
+3. Repeat for the desired number of iterations:
+
+Y
+Y ∈Λ(σ,X)∩Λ(σ 0 ,X)
+
+
+)
+
+pY (σY0 | σT0 Y
+(5)
+pY (σY | σTY ) 
+
+Note the dependence on those variables which are children of X in both σ and σ 0 . The overall algorithm is
+summarized in Figure 2.
+
+Figure 2: General purpose inference in CBNs using
+parent-conditional Metropolis–Hastings proposals, as
+in (Milch & Russell, 2006).
+Smith (1990). For discrete variables X, the Gibbs sampler computes a weight w(a) for each a ∈ dom(X):
+Y
+w(a) = pX (a | σTX )
+pY (σY | σTX=a
+) (6)
+Y
+Y ∈ Λ(σ,X)
+0
+σX
+
+A new value
+is then sampled from a normalized distribution with mass proportional to these non-negative
+weights. Viewed as a Metropolis-Hastings proposal,
+the acceptance probability for the Gibbs sampler always equals one; Gibbs moves are never rejected.
+
+Equation (5) summarizes the main problem with
+parent-conditional sampling: if the proposed value for
+the sampled variable X does not assign high probability to the children of X, the move will be rejected. To
+avoid undue assumptions, hierarchical Bayesian statistical models often use dispersed or “vague” priors, so
+that such parent-conditional proposals have extremely
+low acceptance probabilities.
+
+The Gibbs sampler can be consistently applied to variables with finite, countable, or even uncountable domains, so long as the full conditional posterior can be
+tractably normalized and sampled from. For models
+specified via languages like BUGS, Gibbs sampling has
+proven quite successful. However, most existing applications and analysis of the Gibbs sampler implicitly
+assume a closed universe model, and instantiate the
+full, finite set of variables at all iterations. If this algorithm were naively applied to a CBN, then for some
+switching variables X and configurations a ∈ dom(X),
+σ X=a might not support some children of X. For such
+inconsistent model configurations, the normal Gibbs
+weight w(a) cannot be evaluated.
+
+The Gibbs sampler addresses this issue by directly
+sampling X from its full conditional distribution,
+pX (· | σV−X ), rather than its parent-conditional prior
+pX (· | σTX ). This method was originally proposed
+by Geman and Geman (1984) for inference in undirected Markov random fields, and later popularized as
+a general Bayesian inference method by Gelfand and
+
+One possible solution, proposed in the context of
+Dirichlet process (DP) mixture models by Neal (2000),
+augments σ with auxiliary variables chosen so that
+σ X=a is self-supporting for all a ∈ dom(X). This augmented σ, which is now no longer minimal, is used to
+construct the Gibbs weights; following the move any
+remaining non-supported variables are discarded.
+
+3.2
+
+Gibbs Sampling
+
+dom(X) = {0, 1, 2}
+X ∼ Categorical(.1, .6, .3)
+
+X=0
+
+X=1
+
+X=2
+
+dom(Yi ) = {0, 1} for all i ∈ N
+
+1
+Bernoulli( 1+X
+)
+if (X + i) mod 2 ≡ 0
+Yi ∼
+1
+Bernoulli( 1+X+Y
+)
+otherwise
+i+1
+Evidence: Y1 = true. Query: X.
+
+Y2 = 1
+
+Y2 = 0
+
+Figure 3: A CBN which requires infinitely many auxiliary variables for standard Gibbs sampling approaches.
+Such auxiliary variables are always sampled conditioned on σ, given the current value of X. For example, if σX = a and if σ was augmented with a variable
+Z needed to support σ X=b for some b ∈ dom(X) − a,
+then we would sample Z from pZ (· | σTX=a
+). This can
+Z
+lead to poor mixing rates, or an inconsistent sampler
+if pZ (· | σTX=a
+) and pZ (· | σTX=b
+) have non-overlapping
+Z
+Z
+support. Note that this issue doesn’t arise with the
+DP mixture sampler, since TZ had no dependence on
+X, and pZ (· | σTX=a
+) = pZ (· | σTX=b
+) for any a, b.
+Z
+Z
+To further illustrate this issue, consider the model of
+Example 1 and a minimal instantiation, σ = [ WingType = FixedWingPlane, BladeFlash = True ]. If we
+were to apply a typical auxiliary variable method to
+do MCMC sampling in this model, we would first instantiate RotorLength given WingType = FixedWingPlane, and then construct Gibbs weights for WingType = FixedWingPlane and Helicopter. However,
+the only value of RotorLength that can be sampled
+given WingType = FixedWingPlane is null, and this
+value has probability 0 with WingType = Helicopter.
+The resulting chain will not mix to the true posterior.
+In fact, there are cases when the auxiliary variable
+method is not well defined, because we may need an
+unbounded number of auxiliary variables. Consider
+the rather artificial but instructive CBN in Figure 3,
+and an instantiation σ = [X = 0, Y1 = 1, Y2 = 1]. To
+augment σ such that it is self-supporting for all values
+of X, we certainly need to add Y3 , since Y2 depends on
+Y3 when X = 1. But Y3 depends on Y4 when X = 0,
+and so we need to add Y4 , and so on. Ultimately, we
+would need to instantiate Yi for all i ≥ 1.
+
+4
+
+Gibbs Sampling in Contingent
+Bayesian Networks
+
+We now develop a general-purpose extension of standard Gibbs samplers, which is applicable to arbitrary
+switching variables with finite domains. The proposal for a switching variable, X, will proceed in
+three steps. First, the instantiation, σ, is reduced
+to a subset of variables, core(σ, X), that is guaran-
+
+Y1 = 1
+
+Y1 = 1
+
+Y1 = 1
+
+σ0
+
+σ1
+
+σ2
+
+Figure 4: The three partial instantiations considered
+for Gibbs sampling of X given Y1 as evidence. Here, σ0
+is the current instantiation, and σ1 , σ2 are candidate
+new configurations.
+teed to exist in a minimal, self-supporting instantiation constructed from σ X=a , for any a ∈ dom(X). Second, we construct minimal self-supporting instantiations σi , i = 1, . . . , | dom(X)| − 1, for each value in
+dom(X) − {σX }. These instantiations agree with σ on
+core(σ, X), but assign different values to X. Any remaining variables in these σi configurations are sampled from their parent-conditional priors. For notational simplicity, we define σ0 = σ. Finally, we assign
+weights to these σi , i = 0, . . . , | dom(X)|−1, and make
+a transition proportional to these weights.
+It may seem counter-intuitive to first reduce the instantiation, and then extend it. After all, the pair of
+algorithms described in Section 3, parent-conditional
+sampling and auxiliary variable Gibbs sampling, first
+extended the current instantiation before reducing it.
+The motivation for our approach is simple: variables
+whose existence depends on the value of X should be
+sampled in a world with the appropriate value of X.
+Consider again, for example, the model in Figure 3,
+and three partial instantiations illustrated in Figure 4.
+Now, starting from σ0 (in which X = 0), we could have
+fixed the value of Y2 when constructing σ2 (in which
+X = 2). However, the distribution of Y2 given X = 2
+is quite different from that given X = 0, and fixing
+the value of Y2 could lead to low probability instantiations. The resampling of non-core variables like Y2
+also simplifies the detailed balance equations discussed
+later. In particular, our algorithm is designed so that
+the distribution of σ2 does not depend on whether we
+start from σ0 or σ1 . Thus, when demonstrating detailed balance between pairs of instantiations, we need
+
+not reason about other instantiations which might be
+involved in the transition. This last observation relies
+on the fact that core(σ0 , X) = core(σ1 , X). We will
+first prove this in general.
+Definition 1. For an instantiation σ and variables
+X, Y, Z ∈ vars(σ), if TZ refers to X and Y , and the
+first reference to X precedes the first reference to Y ,
+the edge linking Y to Z is said to be contingent on X.
+Definition 2. Let core(σ, X) denote the subset of
+variables in vars(σ) − {X} which have a path (possibly of length zero) consisting of parent-child edges,
+excluding edges contingent on X, to some variable in
+Q ∪ E.
+Note that we have left X out of core(σ, X) mainly for
+simplifying the subsequent text. However, it is not
+hard to see that there is a path from X to Q ∪ E not
+contingent upon X. For example, consider the shortest
+path from X to Q ∪ E and let this path start with the
+X → Y edge. Now, the edge X → Y is not contingent
+upon X (by definition) and if some other edge, W →
+Z, along this path is contingent upon X then we can
+find a shorter path starting with X → Z. It should
+be further noted that all the ancestors of X have a
+path to X not contingent upon X (otherwise, a cyclic
+instantiation would make the CBN not well-formed).
+Hence all the ancestors of X are in core(σ, X).
+Definition 3. For an instantiation σ and variable
+4
+X ∈ vars(σ), let Υ(σ, X) = Λ(σ, X) ∩ core(σ, X) denote the children of X also contained in core(σ, X).
+Proposition 3. For any
+supporting instantiations, σ
+common to them, if σ and σ 0
+core(σ, X) = core(σ 0 , X) and
+
+pair of minimal selfand σ 0 , and variable X
+agree on core(σ, X) then
+Υ(σ, X) = Υ(σ 0 , X).
+
+Proof. Let Y ∈ core(σ, X), then either Y ∈ Q ∪ E or
+there exists a path of edges not contingent on X from
+Y to Q∪E. Clearly, if Y ∈ Q∪E then Y ∈ core(σ 0 , X).
+Otherwise, let Z be the first child in such a path. Since
+X is not referenced before Y in TZ , X is also not referenced before any W referenced before Y in TZ . Such a
+variable W must also be in core(σ, X) since W has the
+same path to Q ∪ E via Z as Y . But σ and σ 0 agree on
+core(σ, X) and hence on W . Since σ and σ 0 agree on
+all the variables referred before Y in TZ it follows that
+the evaluation of TZ up to Y is identical in σ and σ 0 .
+Hence, the Y to Z edge is not contingent on X in σ 0 .
+By induction, the path from Y to Q ∪ E in σ 0 is not
+contingent on X, which implies that Y ∈ core(σ 0 , X).
+Now, suppose core(σ, X) ⊂ core(σ 0 , X). For any element in core(σ 0 , X) − core(σ, X) there must be a path
+of edges not contingent upon X in σ 0 to Q ∪ E via
+some variables in core(σ, X) ∪ {X} (trivially, since
+Q ∪ E ⊆ core(σ, X) ∪ {X}). Let Y and Z be one such
+parent-child pair in σ 0 s.t. Y ∈ core(σ 0 , X)−core(σ, X)
+
+and Z ∈ core(σ, X) ∪ {X}. Now, all the variables referred in TZ up to the first reference of X (if any)
+would also be in core(σ, X) since they have an edge to
+Z which is not contingent on X. Since σ and σ 0 agree
+on core(σ, X), the evaluation of TZ would follow an
+identical path in σ and σ 0 up to the first reference of
+X. Therefore, since Y is not referred to after X while
+evaluating TZ in σ 0 , it follows that Y ∈ core(σ, X).
+Let Y ∈ Υ(σ, X), i.e. Y is a child of X in σ and
+Y ∈ core(σ, X). From the above result Y ∈ core(σ 0 , X)
+and we will next show that Y is a child of X in σ 0 . Consider the evaluation path of TY in σ. All the variables
+that are referred before X are also in core(σ, X) by definition. Since these variables will have the same value
+in σ 0 , it follows that the evaluation of TY in σ 0 will lead
+to X being referred. In other words, X is a parent of
+Y in σ 0 which implies that Υ(σ, X) ⊆ Υ(σ 0 , X). By
+symmetry, Υ(σ 0 , X) ⊆ Υ(σ, X)
+Proposition 4. For any two minimal self-supporting
+instantiations, σ and σ 0 , there is at most one variable X common to them such that σ and σ 0 agree on
+core(σ, X), but differ on X.
+Proof. Assume to the contrary that there exist two
+such variables X and Y . Now, since σ and σ 0 agree
+on core(σ, X) but differ on Y , it follows that Y 6∈
+core(σ, X). Hence Y cannot be in Q ∪ E. But since
+σ is a minimal instantiation, Y must have a path to
+Q ∪ E. Now consider the shortest path of Y to Q ∪ E.
+Some edge, W → Z, in this path must be contingent
+on X. Hence we can construct a path from X to Q∪E
+via Z which can’t be contingent on Y (otherwise, Y
+would have a shorter path to Q ∪ E). This implies
+that X ∈ core(σ, Y ), but then σ and σ 0 agree on X, a
+contradiction.
+For each value in dom(X), the corresponding partial
+instantiation σi is assigned the following weight:
+w(σi ) =
+
+pX (σiX | σiTX )
+|V (σi )|
+
+Y
+
+pY (σiY | σiTY )
+
+Y ∈ Υ(σ,X)
+
+(7)
+Up to a multiplicative constant, this expression reduces to Equation 6 if X is not a switching variable. The complete pseudo-code is given in Figure 5. Note that if X is not a switching variable then
+core(σ, X) = vars(σ) − X and the algorithm reduces
+to regular Gibbs sampling.
+It only remains to show that detailed balance holds
+between any two minimal instantiations σ0 and σ1 .
+It follows from Propositions 3 and 4 that there is
+at most one shared variable X such that a transition is possible between σ0 and σ1 by sampling X.
+Thus, the only way for this transition to occur from
+
+1. Create an initial, minimal, self-supporting feasible
+instantiation σ consistent with the evidence E,
+and including the query variables Q.
+
+Substituting for w(σ1 ) and w(σ0 ):
+q(σ0 → σ1 )
+=
+q(σ1 → σ0 )
+
+2. Initialize statistics of the query variables to zero.
+
+X=v
+
+i
+σi
+ii. Construct σi : core(σ, X) ∪ {X}
+for i = 1, . . . , n − 1.
+iii. Compute w(σi ) from Equation (7) for i =
+0, . . . , n − 1.
+iv. Normalize w(·) and sample an index j
+from this distribution. Set σ ← σj .
+Else
+X
+i. Randomly propose σ 0 such that σ
+σ0
+using the distribution of Equation (4).
+ii. Compute the acceptance ratio, α(σ →
+σ 0 ), via Equation (5).
+iii. With probability α(σ → σ 0 ), set σ ← σ 0 .
+Otherwise, leave σ unchanged.
+(c) Update query statistics using σ.
+
+4. Report query statistics.
+Figure 5: General purpose Gibbs sampling in CBNs
+
+σ0 is to first select X for sampling with probability
+1
+|V (σ0 )| . Next, the new variables in σ1 , ψ(σ0 , X, σ1 ) =
+vars(σ1 ) − core(σ
+Q 0 , X) − {X}, must be sampled with
+probability Y ∈ ψ(σ0 ,X,σ1 ) pY (σ1Y |σ1TY ). Finally, we
+must select σ1 out of all the other random instantiw(σ1 )
+ations, with probability w(σ0 )+...+w(σ
+. Now, the
+n−1 )
+instantiations σ2 , . . . , σn−1 are random variables and
+hence the overall transition probability, q(σ0 → σ1 ),
+depends on the expected value of this last probability
+under the distribution of these random variables:
+"
+#
+Y
+1
+w(σ1 )
+pY (σ1Y | σ1TY )E Pn−1
+|V (σ0 )|
+i=0 w(σi )
+Y ∈ψ(σ0 ,X,σ1 )
+
+We can construct a similar expression for the reverse
+move probability, and note that the numerator in the
+expectation is a constant, and the rest of the expectation doesn’t depend on which of σ0 or σ1 we start out
+q(σ0 →σ1 )
+with. Thus, q(σ
+is:
+1 →σ0 )
+Q
+|V (σ1 )| w(σ1 ) Y
+Q
+|V (σ0 )| w(σ0 ) Y
+
+∈ ψ(σ0 ,X,σ1 )
+
+pY (σ1Y | σ1TY )
+
+∈ ψ(σ1 ,X,σ0 ) pY (σ0Y | σ0TY )
+
+Y ∈ Υ(σ,X)
+
+Q
+pX (σ1X | σ1TX )
+Y
+·Q
+pX (σ0X | σ0TX )
+Y
+
+3. Repeat for the desired number of iterations:
+(a) Choose X ∈ V (σ) uniformly at random.
+(b) If X has finite domain (say, dom(X) =
+{v0 , . . . , vn−1 } and σX = v0 ).
+i. Compute core(σ, X).
+
+Y
+
+pY (σ1Y | σ1TY )
+pY (σ0Y | σ0TY )
+
+∈ ψ(σ0 ,X,σ1 )
+
+pY (σ1Y | σ1TY )
+
+∈ ψ(σ1 ,X,σ0 ) pY (σ0Y | σ0TY )
+
+1)
+Observe that the only terms missing from p(σ
+p(σ0 ) above
+are those for variables in core(σ, X) − Υ(σ, X). However, if Y ∈ core(σ, X) then σY = σY0 and further if
+Y 6∈ Λ(σ, X) all the parents of Y are also in core(σ, X)
+and hence have the same values in σ and σ 0 . Thus
+these variables have identical values and distributions
+in σ0 and σ1 and their terms cancel out. Finally,
+
+p(σ1 )
+q(σ0 → σ1 )
+=
+q(σ1 → σ0 )
+p(σ0 )
+
+5
+
+BLOG Compiler
+
+We have implemented our algorithm in a new implementation of the BLOG language, which we will refer
+to as blogc1 . The broad outline of our implementation is similar to Milch’s public-domain MetropolisHastings version, except in two significant aspects.
+First, for variables with (possibly unknown) finite domain, we always use Gibbs sampling. By statically
+analyzing the structure of the model we can determine which variables are switching variables, which
+ones need to be resampled for each transition, etc.
+Based on the analysis, appropriate code is generated
+that does the actual sampling and reporting.
+Consider, as an example, the BLOG model in Figure 6.
+This model describes the prior distribution of two
+types of aircraft – fixed-wing planes and helicopters.
+These planes may produce an arbitrary number of
+blips on the radar (the fact that plane a produces a
+blip b is represented by setting Source(b) = a). Further, helicopters due to the interaction of their rotor
+with the radar beam can produce blade-flashes in the
+radar blip. In this model, the variable RotorLength(a)
+for all aircraft a can easily be Gibbs sampled. If
+WingType(a) =Helicopter then RotorLength(a) can
+be either Short or Long, otherwise it can only be null
+(as per BLOG semantics for a missing else clause).
+While compiling the model we can detect that the
+children variables of WingType(a) in any instantiation are all the BladeFlash(b) variables such that
+Source(b) = a. In order to speed up the computation of the Gibbs weights at runtime, we maintain a
+list, for each object a of type Aircraft, of all objects b
+of type Blip such that Source(b) = a.
+1
+blogc
+is
+available
+for
+http://code.google.com/p/blogc/
+
+download
+
+from:
+
+The variable WingType(a) is more interesting. It
+can only take two possible values, but since it is a
+switching variable, care has to be taken when sampling it. In particular, the variable RotorLength(a)
+has to be uninstantiated. This is because all the children edges from RotorLength(a) are contingent on the
+value of WingType(a). Note that Source(b) for all objects b of type Blip is also a switching variable. However, in this case the decision to uninstantiate a variable WingType(a) such that Source(b) = a depends
+on whether there exists another object b0 such that
+Source(b0 ) = a.
+The second major difference in our implementation is
+the handling of number variables. Instead of directly
+sampling the number variables, our implementation
+proposes birth and death moves. In the radar example,
+for each object w of type WingType, we generate an
+Aircraft object that has no blips assigned to it. The
+death move kills off such objects with no blips. In
+order to get faster mixing, we allow some extra flexibility in the birth and death move during an “initialization” phase. During this phase, birth and death
+moves ignore the probability of child variables. To understand the motivation, assume for a moment that
+the expected number of blips for a given aircraft was
+one million. Now, a birth move which proposes an aircraft with 0 blips would be almost certainly rejected.
+By allowing such birth moves during initialization, we
+give the inference engine an opportunity to later attach blips to the aircraft.
+
+6
+
+Experimental Results
+
+We have compared the convergence speed and accuracy of blogc against the existing generic MetropolisHastings inference engine provided with BLOG, which
+we will refer to as BLOG-MH. Since a Gibbs and a
+MH sampler perform different amount of work in each
+sample we felt that it was more appropriate to compare the two inference engines with respect to time.
+In order to control for the compiler optimizations in
+blogc we have implemented a version of BLOG-MH
+in blogc which we will refer to as blogc-MH. For some
+of the other experiments we have also implemented a
+version of Gibbs sampling that doesn’t uninstantiate
+and resample variables not in the core, which we shall
+refer to as blogc-noblock.
+In the following three models each inference engine is
+run for a varying number of samples, where a sample
+is as defined by that inference engine. For each number of samples, inference is repeated 20 times with a
+different random seed and the mean and variance of a
+query variable is plotted against the average elapsed
+time (in seconds).
+
+type
+type
+type
+type
+
+AircraftType;
+Length;
+Aircraft;
+Blip;
+
+origin
+random
+origin
+random
+
+AircraftType WingType(Aircraft);
+Length RotorLength(Aircraft);
+Aircraft Source(Blip);
+Boolean BladeFlash(Blip);
+
+guaranteed AircraftType Helicopter, FixedWingPlane;
+guaranteed Length Short, Long;
+#Aircraft(WingType = w)
+if w = Helicopter then
+~Poisson [1.0]
+else
+~Poisson [4.0];
+#Blip ~Poisson[2.0];
+#Blip(Source = a) ~ Poisson[1.0];
+RotorLength(a) {
+if WingType(a) = Helicopter then
+~TabularCPD [[0.4, 0.6]]
+};
+BladeFlash(b) {
+if Source(b) = null then
+~Bernoulli [.01]
+elseif WingType(Source(b)) = Helicopter then
+~TabularCPD[[.9,.1],[.6,.4]]
+(RotorLength(Source(b)))
+else
+~Bernoulli [.1]
+};
+obs {Blip b} = {b1, b2, b3, b4, b5, b6};
+obs
+obs
+obs
+obs
+obs
+obs
+
+BladeFlash(b1)
+BladeFlash(b2)
+BladeFlash(b3)
+BladeFlash(b4)
+BladeFlash(b5)
+BladeFlash(b6)
+
+query
+query
+query
+query
+query
+query
+
+=
+=
+=
+=
+=
+=
+
+true;
+false;
+false;
+false;
+false;
+false;
+
+WingType(Source(b1));
+WingType(Source(b2));
+WingType(Source(b3));
+WingType(Source(b4));
+WingType(Source(b5));
+WingType(Source(b6));
+
+Figure 6: Example of helicopters and fixed-wing planes
+being detected by a radar
+
+0.96
+
+blogc
+BLOG-MH
+blogc-MH
+
+0.95
+Average
+
+0.94
+0.93
+0.92
+0.91
+0.90
+0.89
+
+0
+
+10
+
+20
+
+30
+
+40
+
+50
+
+Variance
+
+10−2
+
+type Ball;
+type Draw;
+
+10−3
+
+random Real TrueWeight(Ball);
+random Ball BallDrawn(Draw);
+random Real ObsWeight(Draw);
+
+10−4
+
+10−5
+
+0
+
+10
+
+20
+
+Time (s)
+
+30
+
+40
+
+50
+
+guaranteed Draw Draw[10];
+#Ball ~ Poisson[6.0];
+
+Figure 7: Results on the Alarm Bayes Net
+TrueWeight(b) ~ UniformReal [0.0, 100.0];
+
+First, we evaluate on the Alarm network of (Beinlich
+et al., 1989) available from the Bayes Network Repository2 (Friedman et al., 1997). This is a Bayes Net
+with 37 discrete random variables of which we observe
+9. The results are summarized in Figure 7. The important thing to note is that the variance achieved by
+blogc in less than 2 seconds is much better than that
+achieved by blogc-MH in 15 seconds and by BLOGMH in 40 seconds. The compiler optimizations are
+clearly giving a big boost but the Gibbs sampling is
+helping considerably as well.
+Next, we consider the model in Figure 8 which is the
+urns-and-balls example of (Milch et al., 2005a) with a
+slight twist. Balls have a weight instead of a discrete
+color. Figure 9 shows that blogc converges significantly
+faster than BLOG-MH. However, all the improvement
+here is being driven by the compiler optimizations as
+evidenced by the fact that blogc-MH is keeping pace
+with blogc. This similarity is likely due to the fact
+that our current blogc implementation does not resample the TrueWeight variables from their full posterior.
+This shortcoming arises because blogc does not yet
+support Gibbs updates for continuous variables, and
+is not a limitation of the proposed Gibbs sampler for
+switching variables. Nevertheless, the example demonstrates the soundness of the blogc-MH implementation
+in addition to the compiler optimizations.
+Our final result is on the radar example of Figure 6.
+For this model we experimented running blogc without the logic which detects that RotorLen(a) must
+be uninstantiated when sampling W ingT ype(a). This
+mode is labeled as blogc-noblock in Figure 10. In
+this experiment we are querying the probability that
+2
+
+http://www.cs.huji.ac.il/site/labs/compbio/Repository/
+
+BallDrawn(d) ~ UniformChoice({Ball b});
+ObsWeight(d) {
+if BallDrawn(d) != null then
+~UnivarGaussian[1](TrueWeight(BallDrawn(d)))
+};
+obs
+obs
+obs
+obs
+obs
+obs
+obs
+obs
+obs
+obs
+
+ObsWeight(Draw1) = 61.8;
+ObsWeight(Draw2) = 64.4;
+ObsWeight(Draw3) = 17.7;
+ObsWeight(Draw4) = 81.8;
+ObsWeight(Draw5) = 40.9;
+ObsWeight(Draw6) = 81.9;
+ObsWeight(Draw7) = 82.3;
+ObsWeight(Draw8) = 82.9;
+ObsWeight(Draw9) = 82.6;
+ObsWeight(Draw10) = 60.8;
+
+query
+query
+query
+query
+query
+query
+query
+query
+query
+query
+
+TrueWeight(BallDrawn(Draw1));
+TrueWeight(BallDrawn(Draw2));
+TrueWeight(BallDrawn(Draw3));
+TrueWeight(BallDrawn(Draw4));
+TrueWeight(BallDrawn(Draw5));
+TrueWeight(BallDrawn(Draw6));
+TrueWeight(BallDrawn(Draw7));
+TrueWeight(BallDrawn(Draw8));
+TrueWeight(BallDrawn(Draw9));
+TrueWeight(BallDrawn(Draw10));
+
+Figure 8: Example of selecting balls with replacement
+from an urn and measuring their weight
+
+performance comparable to model-specific inference
+code for a number of widely used statistical models.
+
+82.5
+
+Average
+
+82.0
+
+7
+
+81.5
+
+blogc
+BLOG-MH
+blogc-MH
+
+81.0
+80.5
+
+Variance
+
+80.0
+100
+10−2
+10−4
+10−6
+10−8
+10−10
+10−12
+10−14
+10−16
+10−18
+10−20
+10−22
+10−24
+10−26
+10−28
+
+0
+
+5
+
+10
+
+15
+
+20
+
+25
+
+30
+
+Conclusions
+
+We have demonstrated a significant improvement in inference performance for models written in the BLOG
+language. Our Gibbs sampling algorithm for CBNs
+and our compiler techniques for generating efficient
+inference code are generally applicable to all openuniverse stochastic languages.
+Acknowledgements
+
+0
+
+5
+
+10
+
+15
+Time (s)
+
+20
+
+25
+
+30
+
+Figure 9: Balls with unknown weights
+
+0.7
+
+This work wouldn’t have been possible without the
+considerable assistance provided by Brian Milch to
+make the models presented here work in BLOG-MH.
+Matthew Can provided a translation of the Alarm
+Bayes Net to BLOG. Finally, the first author wishes
+to thank his family for their boundless patience and
+support during this work.
+
+Average
+
+0.6
+0.5
+
+blogc
+BLOG-MH
+blogc-noblock
+
+0.4
+0.3
+
+References
+
+0.2
+0.1
+
+0
+
+5
+
+10
+
+15
+
+20
+
+25
+
+30
+
+35
+
+10−1
+
+Andrieu, C., de Freitas, N., Doucet, A., & Jordan,
+M. I. (2003). An introduction to MCMC for machine
+learning. Machine Learning, 50, 5–43.
+
+Variance
+
+10−2
+10−3
+10−4
+10−5
+10−6
+10−7
+
+0
+
+5
+
+10
+
+15
+
+Time (s)
+
+20
+
+25
+
+30
+
+35
+
+Figure 10: Results on the radar model
+W ingT ype(Source(b1)) = Helicoper. Given that
+BladeF lash(b1) = true we expect this probability to
+be quite high. blogc converges to the true probability
+in less than a second. However, neither BLOG-MH
+nor blogc-noblock are able to come close to the true
+probability even after 30 seconds. This is explained by
+the fact that these two samplers are unable to directly
+sample the W ingT ype(a) variables. The fact that they
+are able to make any progress at all is due to the birth
+move which creates new aircraft for each WingType
+and samples their RotorLen variable. Later, the move
+which resamples Source(b) for each blip has the opportunity to select this new aircraft. These two moves
+thus compensate for the fact that the move which attempts to sample W ingT ype(a) is always rejected.
+In follow-on work, we plan to demonstrate inference
+
+Beinlich, I., Suermondt, G., Chavez, R., & Cooper,
+G. (1989). The alarm monitoring system: A case
+study with two probabilistic inference techniques for
+belief networks. Proc. 2’nd European Conf. on AI
+and Medicine. Springer-Verlag, Berlin.
+Friedman, N., Goldszmidt, M., Heckerman, D., & Russell, S. (1997). Challenge: Where is the impact of
+Bayesian networks in learning? IJCAI.
+Gelfand, A. E., & Smith, A. F. M. (1990). Samplingbased approaches to calculating marginal densities.
+JASA, 85, 398–409.
+Geman, S., & Geman, D. (1984). Stochastic relaxation, Gibbs distributions, and the Bayesian restoration of images. IEEE Trans. on Pattern Analysis
+and Machine Intelligence, 6, 721–741.
+Goodman, N., Mansinghka, V., Roy, D., Bonawitz,
+K., & Tenenbaum, J. (2008). Church: a language
+for generative models. UAI.
+Milch, B., Marthi, B., Russell, S. J., Sontag, D., Ong,
+D. L., & Kolobov, A. (2005a). BLOG: Probabilistic
+models with unknown objects. IJCAI (pp. 1352–
+1359).
+
+Milch, B., Marthi, B., Sontag, D., Russell, S., Ong,
+D. L., & Kolobov, A. (2005b). Approximate inference for infinite contingent Bayesian networks. In
+Proc. 10th AISTATS (pp. 238–245).
+Milch, B., & Russell, S. (2006). General-purpose
+MCMC inference over relational structures. Proceedings of the Proceedings of the Twenty-Second Conference Annual Conference on Uncertainty in Artificial Intelligence (UAI-06) (pp. 349–358). Arlington,
+Virginia: AUAI Press.
+Neal, R. M. (2000). Markov chain sampling methods for dirichlet process mixture models. Journal of
+Computational and Graphical Statistics, 9, 249–265.
+Spiegelhalter, D., Thomas, A., Best, N., & Gilks, W.
+(1996). BUGS: Bayesian inference using gibbs sampling, version 0.50 (Technical Report).
+Tait, P. (2009). Introduction to radar target recognition. The Institution of Engineering and Technology,
+United Kingdom.
+
+

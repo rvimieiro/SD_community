@@ -1,0 +1,1569 @@
+1997),
+
+where consecutive network structures may differ by
+more than one link. Increasing the number of links to
+lookahead, however, increases the complexity of learn­
+ing computation.
+In this work, we study parallel learning of belief net­
+
+to balance load among processors and to in­
+
+works. Parallel learning not only can be used to tackle
+
+crease the speed-up and efficiency. For learn­
+
+the increased complexity during multi-link lookahead
+
+ing from very large datasets, we present a re­
+
+search, but also can speed up learning computation
+
+grouping of the available processors such that
+
+during single-link lookahead search in a large domain.
+
+slow data access through file can be replaced
+
+Although parallel learning of rules have been studied
+
+by fast memory access. Our implementation
+in a parallel computer demonstrates the ef­
+fectiveness of the algorithm.
+
+(Cook & Holder 1990; Provost & Aronis 1996; Shaw
+& Sikora 1990), we do not realize other works on par­
+allel learning of belief networks.
+
+Our study focuses
+
+on learning decomposable Markov networks (DMNs),
+although our result can be generalized to learning
+
+1
+
+INTRODUCTION
+
+As the applicability of belief networks has been demon­
+
+Bayesian networks. We study the parallelism using a
+message passing MIMD (multiple instruction multiple
+data) parallel computer.
+
+strated in different domains, and many effective infer­
+
+We shall assume that readers are familiar with com­
+
+ence techniques have been developed, the acquisition
+
+monly used graph-theoretic terminologies such
+
+of such networks from domain experts through elicita­
+
+cle, connected graph, DAG, chordal graph, clique,
+
+tion becomes a bottleneck. As an alternative to man­
+
+junction tree (JT), sepset in a JT, I-map, etc. A junc­
+
+as
+
+cy­
+
+ual knowledge acquisition, many researchers have ac­
+
+tion forest (JF) F of chordal graph G is a set of JTs,
+
+tively investigated methods for learning such networks
+
+each of which is a JT of one component of G.
+
+from data (Cooper & Herskovits 1992; Beckerman et
+al. 1995; Herskovits & Cooper 1990; Lam & Bacchus
+
+1994;
+
+Spirtes et al. 1991; Xiang et al. 1997).
+
+The paper is organized
+
+as
+
+follows: In Section 2, we in­
+
+troduce PI models and multi-link lookahead search. In
+section
+
+3,
+
+we propose parallel algorithms for learning
+
+Since learning belief networks in general is NP-hard
+
+belief networks. We also analyze the problems of load
+
+(Chickering et al. 1995). it is justified to use heuristic
+
+balancing and local memory limitation, and present
+
+search in learning. Many algorithms developed use a
+
+our solutions. In section
+tal results.
+
+scoring metric combined with a search procedure. In
+
+4,
+
+we present our experimen­
+
+Exploring Parallelism in Learning Belief Networks
+
+B ACKGROUND
+
+2
+
+Xl
+
+,v
+!\ '�y,,�-l
+
+To make this paper self-contained, we give a brief
+introduction of PI models and multi-link lookahead
+search.
+2.1
+
+XI
+
+PSEUDO-INDEPENDENT MODELS
+
+(a) Structure define<! by
+given PI model
+
+It has been shown (Xiang et a!. 1997) that there exists
+a class of probability domain models where proper sub­
+sets of a set of collectively dependent variables display
+marginal independence. Examples of PI models are
+parity problems and Modulus addition problems (Xi­
+ang 1996). Several algorithms for learning belief net­
+works have been shown being unable to learn correctly
+when the underlying domain model is a PI model. A
+simple PI model with four variables is shown in Ta­
+ble 1. More examples can be found in (Xiang et a!.
+1996).
+Table 1: An example of PI models
+(X,, X2, Xa, X4)
+0,0,0,0
+0,0,0,1
+0,0,1,0
+0,0,1,1
+0,1,0,0
+0,1,0,1
+0,1,1,0
+0,1,1,1
+
+P(N)
+0.0225
+0.2025
+0.005
+0.02
+0.0175
+0.0075
+0.135
+0.09
+
+(X,,X2,X3,X4)
+1,0,0,0
+1,0,0,1
+1,0,1,0
+1,0,1,1
+1,1,0,0
+1,1,0,1
+1,1,1,0
+1,1,1,1
+
+P(N)
+0.02
+0.18
+0.01
+0.04
+0.035
+0.015
+0.12
+0.08
+
+It can be verified that X1 and X4 are condition­
+ally independent given X2 and X3. In the sub­
+set {X2, X3,X4}, each pair is marginally dependent,
+e.g., P(X2, X3) # P(X2)P(X3), and is still depen­
+dent given the third, e.g., P(X2IX3,X4) 'I P(X2IX4).
+However, a special dependence relationship exists
+in the subset {X1,X2,X3}. Although each pair is
+dependent given the third, e.g., P(XdX2, X3) 'f:.
+P(XtiX2), X1 and X2 are marginally independent,
+i.e., P(X�o X2) = P(Xl)P(X2), so are Xt and X3.
+{X1,X2,X3} are said to be pairwise independent but
+collectively dependent. They form an embedded PI
+submodel. The minimal I-map of this model is shown
+in Figure 1 (a).
+Suppose learning starts with an empty graph or struc­
+ture (with all nodes but without any link). A single
+link lookahead search will not connect X1 and X2 since
+the two variables are marginally independent. Nei­
+ther will X1 and X3 be connected. This results in the
+learned DMN structure in Figure 1 (b), which is incor­
+rect. On the other hand, if we perform a double link
+search after the single-link search, which can effectively
+test whether P(X1IX2,X3) = P(XtiX2) holds, then
+the answer will be negative and the two links (Xt, X2)
+
+(b) Structure learned by
+•ingle-link search
+
+91
+
+XI
+
+(c) Structure learned by
+double-link <earch
+
+Figure 1: Comparison of learning results.
+and ( X1 , X3) will be added. The learned DMN struc­
+ture is shown in Figure 1 (c).
+2.2
+
+A MULTI-LINK LOOKAHEAD
+SEARCH ALGORITHM
+
+As our parallel learning algorithm is developed based
+on a multi-link lookahead search algorithm (Xiang et
+al. 1997), the latter is briefly introduced below.
+Algorithm
+
+Input:
+
+(Sequential)
+
+A
+
+dataset D over a set N of variables, a maximum
+size '7 of clique, a maximum number K. ::; '7('7- 1 )/2
+of lookahead links, and a threshold 8h.
+
+begin
+initialize an empty graph G = ( N, E);
+G':=G;
+for i 1 to r;., do
+repeat
+initialize the entropy decrement dh' := 0;
+for each set L of i links ( Ln E = ¢), do
+if G" = (N, E u L) is chordal and Lis im­
+plied by a single clique of size ::; '7, then
+compute the entropy decrement dh*;
+if dh* > dh', then dh' := dh*, G' := G*;
+if dh' > 8h, then G := G', done := false;
+else done := true;
+until done true;
+return G;
+end
+=
+
+=
+
+The search is structured into levels and the number
+of lookahead links is identical in the same level. Each
+level consists of multiple passes. Each pass at the same
+level tries to add the same number i of links, that is, al­
+ternative structures that differ from the current struc­
+ture by i links are evaluated. For instance, level one
+search adds a single link in each pass, level two search
+adds two links, and so on. Search at each pass selects
+i links that decrease the cross entropy maximally after
+testing all distinct and legal combinations of i links.
+If the corresponding entropy decrement is significant
+enough, the i links will be adopted and search contin­
+ues at the same level. Otherwise, the next higher level
+of search starts.
+Note that each intermediate graph is chordal as indi­
+cated by the if statement in the inner-most loop. The
+
+Chu and Xiang
+
+92
+
+condition that L is implied by a single clique C means
+that all links in L are contained in the subgraph in­
+duced by C. This requirement helps to reduce the
+search space.
+PARALLEL LEARNING OF
+
+3
+
+BELIEF NETWORKS
+
+Learning a belief network using a single link lookahead
+search requires checking of O(N2) alternative struc­
+tures before a link is added. In an m link lookahead
+search, O(N2m) structures must be checked before m
+links can be added. We view parallel learning as an
+alternative to tackle the increased complexity in multi­
+link search, as well as to speed up the single link search
+when the domain is large.
+3.1
+
+alternative graphs based on the current graph. It then
+partitions these graphs into n sets and distributes one
+set to each explorer. Each explorer executes Algorithm
+(Explorer-1). It checks chordality for each graph re­
+ceived and computes the cross entropy decrement dh*
+for each valid chordal graph. It then chooses the best
+graph a• and reports dh* and a• to manager. Man­
+ager collects the reported graphs from all explorers, se­
+lects the best, and then starts the next pass of search.
+Algorithm
+
+begin
+receive D, Nand
+repeat
+receive G and
+
+PARALLEL LEARNING
+
+Algorithm
+
+(Manager-1)
+Input: A dataset D over a set N of variables, a maximum
+size rJ of clique, a maximum number� ::; rJ(TJ- 1)/2
+of lookahead links, the total number n of explorers,
+and a threshold oh for the cross entropy decrement.
+begin
+send D, N and '1 to each explorer;
+initialize an empty graph G = (N, E);
+G':=G;
+
+for i =
+
+1 to
+
+"'•
+
+do
+
+repeat
+
+end
+
+initialize the cross entropy decrement dh' := 0;
+partition all graphs that differ from G by i links
+into n sets;
+send one set of graphs and G to each explorer;
+for each explorer
+receive dh" and G";
+if dh" > dh' then dh' := dh", G' := G*;
+if dh' > oh, then G := G', done:= false;
+else done := true;
+until done = true;
+send a termination signal to each explorer;
+return G;
+
+As mentioned earlier, our study is performed in an
+environment where processors communicate through
+message passing only (vs. shared memory). We par­
+tition the processors as follows. One processor is des­
+ignated as the search manager and the others are net­
+work structure explorers. The manager executes Al­
+gorithm (Manager-1). It is responsible for generating
+
+end
+
+TJ
+
+from the manager;
+
+set of graphs from the manager;
+0 and G* :== G;
+for each received graph G' = (N, L U E), do
+if G' is chordal and L is implied by a single
+clique of size ::; r], then compute dh' locally;
+if dh' > dh*, then dh* := dh', G" :== G';
+send dh. and c· to the manager;
+until termination signal is received;
+initialize dh*
+
+ALGORITHMS
+
+We extend Algorithm (Sequential) to parallel learning
+based on the following observation: at each pass of
+search, the exploration of alternative structures are
+coupled only through the current structure, i.e., given
+the current structure, tests of alternative structures
+are independent of each other. Hence the tests can be
+performed in parallel.
+
+(Explorer-1)
+
+a
+
+:=
+
+Figure 2 illustrates the parallel learning process with
+two explorers and a dataset of four variables u, v, x
+and y. Only a single-link search is performed for sim­
+plicity. Manager starts with an empty current graph
+in (a). It sends six alternative graphs in (b) through
+(g) to explorer 1 and 2. Explorer 1 checks graphs in
+(b), (c) and (d), selects the one in (b), and reports
+to manager. Explorer 2 reports the one in (e) to man­
+ager. After collecting the two graphs, manager chooses
+the one in (b) as the new current graph. It then sends
+graphs in (i) through (m). Repeating the above pro­
+cess, manager finally gets the graph in (n) and sends
+graphs in (o) and (p) to all explorers. Since none of
+them decreases the cross entropy significantly, man­
+ager chooses the graph in (n) as the final result and
+terminates explorers.
+
+tomanager .2-J :
+
+fj)
+
+tomanage
+�
+
+(n)
+
+terminal signal�
+
+M
+�
+
+v
+
+�··· ··· · y
+(0)
+
+tennination
+
+(<)
+
+�
+
+to manager
+to manager
+
+(m)
+•
+
+-,
+
+I :!21: I
+(p)
+
+lenninalion
+
+Figure 2: An example of parallel learning of
+
+DMN.
+
+Exploring Parallelism in Learning Belief Networks
+
+3.2
+
+LOAD BALANCING
+
+3.2.1
+
+3.2.2
+
+The Need of Load Balancing
+
+Balancing load among processors is critical to the ef­
+ficiency of parallel learning. In Algorithm {Manager­
+l), alternative graphs are evenly allocated to explor­
+ers. However, the amount of computation in checking
+each graph tends to switch between two extremes. If a
+graph is non-chordal, it is ignored immediately with­
+out having to compute the cross entropy decrement.
+For example, suppose the current graph is shown in
+Figure 3 (a). There are six graphs that differ from it
+by only one link. If any of the dotted links in (b) is
+added to (a), the resultant graph is non-chordal. Since
+the complexity of checking chordality is O(INI +lEI),
+where N is the number of variables and E is the
+number of edges in the graph, the amount of com­
+putation is very small. On the other hand, if any of
+the dashed links in (c) is added to (a), the resultant
+graph is chordal. Since the complexity of comput­
+ing cross entropy decrement by local computation is
+0( n + 17 ( 7J log 7J + 2'�)) (Xiang et a!. 1997), where n is
+the number of cases the dataset and 17 is the maximum
+size of the cliques involved, the amount of computa­
+tion is much larger. As a result, even job allocation
+may require significantly different amount of computa­
+tion among explorers. As manager must collect reports
+from all explorers before a decision on the new current
+graph can be made, some explorers will be idle while
+other explorers are completing their jobs.
+u
+
+(J (;:] n\/
+..
+
+l
+
+· ···
+'::<:�
+·:::::·
+::�:.
+.............
+
+{a)
+
+y
+
+X
+
+--.:_:.-:·---- :.·::.:_--
+
+y
+
+w
+
+(c)
+
+(b)
+
+Figure 3: Two types of alternative structures.
+Figure 4 shows the time taken by each of the six ex­
+plorers in a particular search step. Explorer 1 takes
+much longer than others. This illustrates the needs
+for more sophisticated job allocation strategy in order
+to improve the efficiency of the parallel system.
+13
+
+t (s)
+
+12
+11
+10
+9
+8
+7
+6
+:s
+4
+3
+2
+
+N• -·
+1L_�L_--�--�--�L_�L_--�-g�-·----2
+
+3
+
+4
+
+5
+
+6
+
+Figure 4: The time needed for each explorer.
+
+93
+
+Two-stage Loading Method
+
+To improve load balancing, we modify Algorithms
+(Manager- I) and (Explorer- I) such that jobs are a1lo­
+cated in two stages. In the first stage, manager parti­
+tions alternative graphs evenly and distributes one set
+to each explorer. Each explorer checks the chordal­
+ity for each graph received and reports to manager
+valid candidates (chordal graphs). Since the amount
+of computation for checking chordality is small, this
+stage can be completed quickly and the computation
+among explorers tends to be even. In the second stage,
+manager partitions all received graphs evenly and dis­
+tributes one set to each explorer. Each explorer com­
+putes cross entropy decrement for each graph received.
+It then chooses the best graph c· and reports dh*
+and G* to manager. Manager collects the reported
+graphs, selects the best, and then starts the next pass
+of the search. Since all graphs are chordal in the sec­
+ond stage, the degree of load balance mainly depends
+on the variability of the sizes of the largest cliques.
+3.3
+
+MARGINAL SERVER
+
+During learning, each explorer needs to extract
+marginal probabilities (marginals) for cliques from the
+dataset. If each processor must extract marginals by
+file access each time, the file system will become a bot­
+tleneck. One alternative is to compress the dataset and
+download one copy at each processor's local memory.
+This allows us to handle a dataset up to about 500MB
+in our parallel computer. However, when the size of
+dataset further increases, more sophisticated methods
+are needed.
+According to the size of dataset, we partition the avail­
+able processors into one manager, n explorers and m
+marginal servers. Each server's task is to compute
+marginals from the data stored in its local memory
+based on the request of explorers. Servers are con­
+nected logically into a pipeline indexed from 1 to m.
+The dataset is partitioned into m + 1 sets. Each server
+stores one distinct set in its local memory. The last set
+is duplicated at each explorer's local memory. Algo­
+rithms (Manager-1) and (Explorer-1) are modified into
+Algorithms (Manager-2), (Explorer-2) and (Server).
+The manger executes Algorithm (Manager-2). It per­
+forms data distribution as mentioned above. It then
+initializes an empty graph and starts the search. It
+generates alternative graphs based on the current
+graph, partitions into m + n sets and distributes one
+set to each explorer and each server. It receives the
+valid candidates from explorers and servers, partitions
+them into n sets, and send one to each explorer. It
+then collects the reported graphs from explorers, se­
+lects the best, sends a signal to each server, and starts
+
+Chu and Xiang
+
+94
+
+the next pass of search.
+Algorithm
+
+(Manager-2)
+D over N variables,
+
+Input: A dataset
+
+a maximum size '1
+
+'7('7- 1)/2
+
+of clique, a maximum number"' ::;
+of
+lookahead links, the total num ber n of explorers,
+the total numb er m of servers and a threshold oh.
+
+begin
+partition D into m + 1 set s , send one distinct set to
+each server and broadcast the last set to explorers;
+initialize an empty graph G = (N, E);
+G':= G;
+fori= 1 to "'• do
+repeat
+initialize the cross entropy decrement dh' := 0;
+partition all graphs t hat differ from G by i links
+into m + n sets;
+send one set of graphs and G to each explorer
+and each server ;
+for each explorer and server, do
+receive a set of valid graphs;
+partition all received graphs into n sets;
+send one set of graphs to each explorer;
+for each explorer
+receive dh" and G";
+if dh" > dh' then dh' := dh", G' := G";
+if dh' > oh, then a:= G', done:= false;
+else done :::::: true;
+send a signal to each server;
+until done = true;
+send a signal to each explorer and server;
+return a;
+end
+
+Algorithm
+
+Each server executes Algorithm (Server). It does the
+same as an explorer for checking chordality. It then
+processes requests from explorers until a signal is re­
+ceived to start the next pass of search. After rec eiving
+a set of nodes (variables) from an explorer, it computes
+the sub-marginal using its local data, sums with the
+sub-marginal from its preceding server, and passes the
+sum to the next server or the requesting explorer.
+Algorithm ( Ser v er )
+begin
+
+receive a set of data over a set
+maximum size '7 of clique;
+
+receive a set of data over a set
+maximum size '7 of clique;
+
+N of variables
+
+receive G and a set of graphs from the manager;
+do
+for each received graph a'= (N, L U
+if G' is chordal and L is implied by a single
+clique of size $ t], then mark it valid;
+send th e all valid candidates to manager;
+repeat
+
+E),
+
+receive a set of nodes from an explorer;
+compute the sub-marginal of the nodes received;
+if the server is not server 1, then
+
+receive the sub-marginal from its predecessor;
+sum the su b- marginal;
+if the server is not server m, then
+
+send the sub-marginal to the next server;
+else send the marginal to the req ues t ed explorer ;
+until received signal;
+end
+
+Since each server has to serve n ex plorers , the pro­
+cessing of each server must be n times as fast as an
+explorer. This means nTm = Te, where Tm and Te are
+the computing time of each marginal server and each
+explorer, respectively. Let IDml (IDel) be the size of
+local data at a s erv er (explorer). Tm and Te can be
+expressed as Tm = kdiDm I and Te :::: kgN + kdiDel,
+where kd and kg are coefficients, N is the total number
+of variables in the domain, and k9N is the computa­
+tion time to get the subgraph for computing the cross
+entropy decrement. Therefore, we have
+
+receive a and a set of graphs from the manager;
+initialize dh" := 0 and G* := G;
+
+(N, L U E), do
+if G' is chordal and L is implied by a single
+clique of size $ !'], then mark it valid;
+send the valid candidates to manager;
+receive a set of graphs from manager;
+for each received graph a' = (N, L U E), do
+for each clique involved in computing dh',
+se nd the nodes of the clique to serve rs ;
+compute marginal based on its local data;
+receive marginal from the server m;
+sum the two marginals up;
+compute the entropy decrement dh' locally;
+if dh' > dh", then dh* := dh', a• := G';
+send dh" and a· t o manager;
+until received signal;
+for each r e ce iv ed graph a'=
+
+Al gorithm
+
+(Explorer-2).
+
+of variables and a
+
+until received signal;
+
+and a
+
+repeat
+
+Each explorer executes
+
+N
+
+repeat
+
+(Explorer-2)
+
+begin
+
+end
+
+based on its local data, receives a sub-marginal from
+the last server and sums them up. It then computes
+the cross entropy decrement dh. Finally, it reports the
+best graph c· to manager.
+
+( 1)
+Recall that
+
+we parti tion the dataset D into
+
+m+
+
+1 sets,
+(2)
+
+It
+
+checks chordality for each graph received and reports
+to manager the chordal candidates. Next, it receives
+a set of chordal gr aphs from manager. For each g r aph
+received, it sends the nodes of each clique involved in
+computing the cross entropy decrement dh to servers.
+After sending a request, it computes a sub-marginal
+
+Solving equation 1 and 2 and W' = m + n, where
+W = W' + 1 is the total number of processors available,
+we get
+W'(aN + IDel)
+n=
+aN+IDI
+W'(IDI-ID el)
+m=
+aN+IDI
+
+Exploring Parallelism in Learning Belief Networks
+
+N DI
+IDm I = o: + I
+W'
+'
+
+95
+
+the root of the tree) and an explorer is Tmaz =
+flog�2W+l)l 1. The maximum number of links be­
+tween an explorer and a server 2Tmax. In general,
+Tmax is smaller than Dma:r::· For example, if W = 25,
+then Dmax = 8 but Tmaz = 3. Therefore, the best
+topology is a ternary tree for our parallel learning al­
+gorithms. Figure 5 illustrates such a configuration.
+W hen there is no need for servers, all non-root proces­
+sors are explorers.
+-
+
+where a is a coefficient presented by a = kg/ kd,
+whose value is between 0.003 to 0.006 in our exper­
+imental environment. Furthermore, IDe I has to sat­
+isfy IDel ::::; Md, where Md is the maximum local
+memory available to store the data. For example,
+T. ::::: 0.024sec., Tm ::::: 0.005sec., and a ::::: 0.003 in
+learning the ALARM network with n = 4, m = 4,
+IDel = O.OBMB, and IDml::::: 0.04MB. If learning is
+performed on a large domain with a very large dataset,
+more marginal servers are needed. As an example,
+suppose IDI = lOOMB, N = 1000, W' = 30 and
+o: = 0.005.
+If we choose IDel ::::20MB, we obtain
+n = 7, m= 23, IDml::::: 3.48MB, where nand mare
+rounded to the nearest integers.
+
+Host
+Computer
+
+-------------
+
+Explorers
+
+EXPERIMENTAL RESULTS
+
+4
+
+Figure 5: A ternary tree configuration
+
+4.1
+
+CONFIGURATION
+
+T he previous algorithms are implemented on an
+ALEX AVX Series 2 parallel computer with a MIMD
+distributed-memory architecture. It has 64 40M Hz
+processors each with 32 MB local memory and can be
+directly linked to at most four others. Communication
+among processors are through message passing at 10
+Mbps for simplex and 20 Mbps for duplex communi­
+cation.
+Message passing time increases as the number of links
+between the communicating processors and the length
+of the message. Table 2 shows the relation of the mes­
+sage passing time with the message length and the
+number of links between the communicating proces­
+sors. It is important to link the processors such that
+the number oflinks involved in each message passing is
+minimized. Since each processor has up to four links
+and communication is to be performed among man­
+ager, explorers and servers, candidate topologies are a
+2D mesh and a ternary tree.
+
+4.2
+
+RESULTS AND PERFORMANCE
+ANALYSIS
+
+Our experiments are intended to check the correctness
+of the parallel algorithms and the speed up through
+parallelism.
+A network structure learned from a dataset generated
+from the Alarm network (Beinlich et a!. 1989) is shown
+in Figure 6. The result obtained using the parallel
+algorithms is identical with that obtained using the
+sequential algorithm.
+
+Table 2: Message passing time
+Length(bytes)
+
+256
+
+1link
+
+O.QlS
+
+2 links
+
+0.016
+0.017
+0.021
+0.030
+0.051
+
+3 links
+7links
+
+15 links
+31 links
+
+1024
+0.016
+0.020
+0.022
+0.032
+0.057
+0.105
+
+4096
+0.023
+0.035
+0.044
+0.081
+0.160
+0.328
+
+16384
+0.096
+0.129
+0.125
+0.165
+0.241
+0.409
+
+In a 2D mesh with W processors, the maximum num­
+ber of links between any two processors is Dmax =
+2( vW 1). In a ternary tree with W processors,
+the maximum number of links between manager (as
+-
+
+Figure 6: The learned Markov network: Alarm
+We generated four control PI models and tested us­
+ing the parallel algorithms with single-link and multi­
+link lookahead search. The model PIMl has 26 vari­
+ables and contains one PI sub-model of three variables.
+PIM2 and PIM3 have 30 and 35 variables, respec­
+tively. Each contains two PI sub-models each of which
+has three variables. PIM4 has 16 variables and con­
+tains a PI sub-model of four variables. The datasets
+
+Chu and Xiang
+
+96
+
+of cases are generated by sampling these models with
+20000, 25000, 30000 and 10000 cases, respectively.
+For each dataset, our parallel algorithms were able to
+learn an approximate I-map of the control model. The
+network learned from PIM3 is shown in Figure 7.
+The two subsets of variables involved in the two P I
+sub-models are { x6, XB, xg } and {x14, Xts, Xi6} , respec­
+tively. Using a single link lookahead search, the dashed
+links (corresponding to the two P I sub-models) are
+missing (hence not an I-map) in the learning outcome.
+Using a triple-link lookahead search, the structure is
+learned correctly.
+
+!)!_,
+0
+
+I
+
+4
+
+3
+
+16\ ,.-
+
+11
+1
+
+19
+20
+
+25
+
+26
+
+network in 12800 seconds. The parallel program took
+9260 seconds using 2 processors, 8512 seconds using 3
+processors, and 8706 seconds using 4 processors. The
+speed-up is very small as the number of processors
+increases and the efficiency is very low. The speed-up
+with four processors was even lower than with three
+processors. This appears to be due to the bottleneck in
+file access and the corresponding increase in overhead.
+The result suggests that the file access method should
+be avoided due to the extensive data access needed
+during learning.
+When the entire dataset can be loaded into the local
+memory (about 20 MB is available in our environ­
+ment) of each processor, loading the dataset to the
+memory is performed once for all and each marginal
+can be extracted directly from the memory. We refers
+to this as the memory access method. We conducted a
+comparison between even job allocation and two-stage
+job allocation using the memory access method.
+Table 3: Results on even and two-stage job allocation
+n
+1
+
+Figure 7: The structure learned from a P I model P IM3
+Next, we present the performance result. The perfor­
+mance of a parallel program are commonly measured
+by speed-up (S) and efficiency (E). Given a particular
+task, let T(l) be the execution time of a sequential
+program and T(W) be that of a parallel program with
+W processors. The two measurements are defined as
+S = T(l)/T(W) and E = SjW.
+In practice, the performance of a parallel program is
+affected by many factors. For our learning problem,
+the size of the input data is not trivial. Hence how
+the dataset is accessed by processors affects the per­
+formance significantly. Our experiments were intended
+to test the learning program using different data access
+methods. We also tested different job allocation meth­
+ods which also affect the performance significantly.
+For efficient I/0 and storage, the original dataset of
+cases are converted into a compressed frequency table
+where the value of each variable is represented by one
+byte. This file is used as the input to the learning
+program. In the parallel computer we used, file access
+by all processors must be performed through a special
+processor. The simplest way for a learning program
+to extract marginals from the data is to access the file
+directly for each marginal. This file access method was
+tested using a dataset of 10000 cases generated from
+the ALARM network.
+The sequential program (one processor) learned the
+
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+
+Even loading
+tJmels)
+::;
+3160
+1750
+1201
+957
+764
+712
+604
+558
+528
+486
+467
+454
+
+1
+1.81
+2.63
+3.30
+4.14
+4.44
+5.23
+5.66
+5.98
+6.50
+6.77
+6.96
+
+t;
+1
+
+0.903
+0.877
+0.825
+0.827
+0.740
+0.747
+0.708
+0.665
+0.650
+0.615
+0.580
+
+two-stage loading
+t;
+time ls)
+::;
+3160
+1614
+1090
+830
+686
+578
+525
+471
+448
+410
+381
+378
+
+1
+
+1.95
+2.86
+3.72
+4.50
+5.19
+5.92
+6.69
+7.31
+8.04
+8.43
+9.00
+
+1
+0.977
+0.952
+0.929
+0.900
+0.865
+0.845
+0.837
+0.813
+0.804
+0.766
+0.750
+
+The experiment used a dataset of 10000 cases gener­
+ated from the ALARM network. The result is shown
+in Table 3. Each row is the result obtained by using
+n explorers as indicated in the first column. Columns
+2 through 4 present the result obtained with even job
+allocation and columns 5 through 7 present the result
+obtained with two-stage job allocation.
+Columns 3 and 6 show that as the number of explor­
+ers increases, the speed-up increases as well with either
+job allocation method. It demonstrates that our paral­
+lel algorithm can effectively reduce the learning time.
+This provides positive evidence that parallelism is an
+alternative to tackle the computational complexity in
+learning large belief networks.
+Comparing column 3 with 6 and column 4 with 7,
+it can be seen that the two-stage allocation further
+speeds up the learning process and improves the effi­
+ciency compared with even job allocation. For exam­
+ple, when eight explorers are used, the speed-up is 5.66
+
+97
+
+Exploring Parallelism in Learning Belief Networks
+
+and efficiency is 0.708 for even allocation, and 6.69 and
+0.837 for two-stage allocation.
+
+creased computational complexity in learning PI mod­
+els.
+
+The result also shows a gradual decrease in efficiency
+as the number of explorers increases. This efficiency
+decrease is mainly due to the job allocation overhead.
+Manager must allocate job to each explorer sequen­
+tially at the beginning of each search step. Therefore,
+each explorer is idle after its report in the previous
+search step is submitted and before the next job is
+assigned to it.
+
+When the size of dataset is beyond the available lo­
+cal memory of each processor, we suggest the use of
+marginal servers. Comparison of using different num­
+ber of servers was performed in learning ALARM net­
+work. Figure 8 shows the speed-up comparison and
+Figure 9 shows the efficiency comparison. The verti­
+cal axis is labelled by S for speed-up or E for efficiency.
+The horizontal axis is labelled by W = m + n, where
+m is the number of marginal servers and n is the num­
+ber of explorers. De is the size of data stored in the
+local memory of each explorer, and Dm is that of each
+server. The speed up is calculated using sequential
+learning with file access as this is considered the alter­
+native when marginal server is not used.
+
+Table 4: Results on learning PI
+n
+1
+
+12
+
+T, S, E
+T(min.)
+T(min.)
+�
+
+t;
+
+24
+
+36
+
+PIMl
+262.4
+26.8
+9.8
+0.82
+
+T(min.)
+
+17.2
+
+T(min.)
+
+15.3
+0.64
+12.5
+21.0
+0.58
+
+s
+J::
+
+s
+E
+
+PIM2
+868.6
+89.3
+9.7
+0.81
+54.2
+16.0
+0.67
+37.7
+23.0
+0.64
+
+models
+
+PIM3
+3555.4
+352.2
+10.1
+0.84
+179.4
+19.8
+0.83
+124.5
+28.6
+0.79
+
+PIM4
+36584
+3382
+10.8
+0.90
+1735
+21.1
+0.88
+1197
+30.6
+0.85
+
+20
+
+s
+
+18
+
+•
+
+16
+
+m=4, De=2Dm
+
+The second row shows the computation time in sequen­
+tial learning. It increases from PIM 1 to PIM4. This
+is because the increased size of the domain for PIM 1
+through P IM 3 (26, 30, 3 5 variables) and the increased
+size of the dataset (20000, 25000, 30000). PIM4 used
+the most computation time because it has a PI sub­
+model of 4 variables, which requires six-link lookahead
+search.
+For all models, the speed-up increases as more explor­
+ers are employed. On the other hand, when more ex­
+plorers are used, PIM1 has the fastest decrease in ef­
+ficiency and PIM4 has the slowest decrease with the
+other two models in-between. This is highly correlated
+with the increase of computation time from PIM 1 to
+PIM4. This is because as the search space becomes
+larger, the number of alternative graphs to be explored
+in each job allocation becomes larger. The conse­
+quence is that the message passing overhead becomes
+less significant compared with the search time and
+hence the efficiency improves. This result shows that
+parallel learning are quite suited for tackling the in-
+
+�
+
+o m= 6, De = 2 Dm
+
+14
+
+•
+D
+
+12
+
+�
+
+10
+
+Table 4 lists the experimental result in learning the
+four PI models mentioned above. Triple-link locka­
+head search is used for learning PIM 1, PIM2 and
+P IM3, respectively. Six-link lookahead search is used
+for learning PIM4. The first column indicates the
+number of explorers used. Each row shows computa­
+tion time, speed up or efficiency as indicated by the
+second column. Each of the last four columns shows
+the result for learning one PI model.
+
+0
+
+D rn=4, De = Drn
+
+8
+
+�
+
+D
+
+9
+
+10
+
+0
+•
+
+•
+
+0
+
+D
+
+II
+
+12
+
+0
+
+•
+
+6
+
+0
+
+•
+
+4
+
+w
+5
+
+6
+
+7
+
+8
+
+Figure 8: Speed-up by using marginal servers
+
+2.0
+
+E
+
+1.8
+1.6
+
+�
+
+1.4
+
+�
+
+1.2
+1.0
+0.8
+
+D
+•
+
+•
+D
+
+�
+0
+
+0
+•
+D
+
+0
+
+0
+
+0.6
+
+�
+D
+
+m=4, De= Dm
+
+•
+
+m=4, De= 2 Dm
+
+0
+
+0.4
+
+0
+•
+D
+
+m=6,De=2 Dm
+w
+
+5
+
+6
+
+7
+
+8
+
+9
+
+10
+
+II
+
+12
+
+Figure 9: Efficiency by using marginal servers
+In the Figure 9, the maximum efficiency is 1.528 for
+m
+4, n = 3 and De = Dm, 1.574 form= 4, n = 4
+and De = 2Dm, and 1.623 for m = 6, n = 6 and
+De = 2Dm. The corresponding speed-up is 10.69,
+12.59 and 19.48, respectively. The speed up is more
+than the number of processors since marginal servers
+allow much faster memory access compared with the
+file access when a single processor is used.
+=
+
+98
+
+5
+
+Chu and Xiang
+
+REMARKS
+
+We have studied parallelism in learning to tackle the
+increased computational complexity in learning belief
+networks in difficult domains (PI models) as well as in
+learning from large domains. Parallel algorithms were
+proposed that decompose the learning task such that
+multiple processors can be used without incurring ad­
+ditional error. In order to improve the efficiency of the
+parallel system, we proposed a two-stage job allocation
+method to handle the variation in computation time
+in searching different candidate networks. In order to
+overcome the bottleneck by file access, we proposed
+the parallel learning algorithm using marginal servers.
+This allows fast memory access of data when the size
+of the dataset is much larger than the local memory of
+each processor.
+The parallel learning algorithms are implemented on
+an AVX Series 2 parallel computer with a MIMD
+distributed-memory architecture. Our experimental
+result showed that parallel learning can effectively
+speed up learning PI models as well as learning non-PI
+models in large domains.
+Acknowledgements
+
+This work is supported by grants OGP0155425,
+CRD193296 from the Natural Sciences and Engineer­
+ing Research Council of Canada, and by the Institute
+for Robotics and Intelligent Systems in the Networks
+of Centres of Excellence Program of Canada.
+References
+
+I.A. Beinlich, H.J. Suermondt, R.M. Chavez, G.F.
+Cooper (1989). The ALARM monitoring system: a
+case study with two probabilistic inference techniques
+for belief networks. Tech. Report I<SLBB-84, Knowl­
+edge Systems Lab., Medical Computer Science, Stan­
+ford Univ., Stanford, CA.
+Chickering, D. Geiger, D. Heckerman (1995).
+Learning Bayesian networks: search methods and ex­
+perimental results. In Proc. of 5th Conf. Artificwl
+Intelligence and Statistics, p112-128.
+
+D.
+
+D. Cook, L. Holder (1990). Accelerated learning on
+the connect machine. Proc. 2nd IEEE Symp. on par­
+allel and Distributed processing, p448-454.
+G.F. Cooper, E.H. Herskovits (1992). A Bayesian
+method for the induction of probabilistic networks
+from data. Machine Learning, 9, p309-347.
+D. Beckerman, D. Geiger, D.M. Chickering (1995).
+Learning Bayesian networks: the combination of
+knowledge and statistical data. Machine Learning, 20,
+p197-243.
+
+E.H. Herskovits, G.F. Cooper (1990). Kutato: an
+entropy-driven system for construction of probabilis­
+tic expert system from database. In Proc. 6th Conf.
+on Uncertainty in Artificial Intelligence, p54-62.
+W. Lam, F. Bacchus (1994). Learning Bayesian net­
+works: an approach based on the MDL principle.
+Computational Intelligence, 10(3), p269-293, 1994.
+F.J. Provost, J.M. Aronis (1996). Scaling up inductive
+learning with massive parallelism. Machine Learning,
+23, p33-46.
+M.J. Shaw, R. Sikora (1990). A distributed problem­
+solving approach to inductive learning. Tech. Report
+CMU-R/-TR-90-26, Robotics lnst., Carnegie Mellon
+Univ., PA.
+P. Spirtes, C. Glymour, R. Scheines (1991). An algo­
+rithm for fast recovery of sparse causal graphs. Social
+Science Computer Review, 9(1), p62-73.
+Y. Xiang {1996). Learning belief networks in pseudo­
+independent domains. Tech. Report CS-96-07.
+Y. Xiang, S.K.M. Wong, N. Cercone (1996). Critical
+
+remarks on single link search in learning belief net­
+works. Proc. 12th Conf. on Uncertainty in Artificial
+Intelligence, p564-771.
+Y. Xiang, S.K. Wong N. Cercone (1997). A 'micro­
+
+scopic' study of minimum entropy search in learning
+decomposable Markov networks. Machine Learning,
+26(1), p65-92.
+
+

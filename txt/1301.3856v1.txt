@@ -1,0 +1,2136 @@
+201
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS 2000
+
+Being Bayesian about Network Structure
+
+Nir Friedman
+
+Daphne Koller
+
+School of Computer Science & Engineering
+
+Computer Science Department
+
+Hebrew University
+
+Stanford University
+
+Jerusalem, 91904, Israel
+
+Stanford, CA 94305-9010
+
+nir@cs.huji.ac.il
+
+koller@cs.stanford.edu
+
+Abstract
+In many domains, we are interested in analyzing the
+structure of the underlying distribution, e.g., whether
+one variable is a direct parent of the other. Bayesian
+model-selection attempts to find the MAP model and
+use its structure to answer these questions. However,
+when the amount of available data is modest, there
+might be many models that have non-negligible pos­
+terior. Thus, we want compute the Bayesian poste­
+rior of a feature, i.e., the total posterior probability of
+all models that contain it. In this paper, we propose a
+new approach for this task. We first show how to ef­
+ficiently compute a sum over the exponential number
+of networks that are consistent with a fixed ordering
+over network variables. This allows us to compute,
+for a given ordering, both the marginal probability of
+the data and the posterior of a feature. We then use
+this result as the basis for an algorithm that approx­
+imates the Bayesian posterior of a feature. Our ap­
+proach uses an Markov Chain Monte Carlo (MCMC)
+method, but over orderings rather than over network
+structures. The space of orderings is much smaller and
+more regular than the space of structures, and has a
+smoother posterior "landscape". We present empiri­
+cal results on synthetic and real-life datasets that com­
+pare our approach to full model averaging (when pos­
+sible), to MCMC over network structures, and to a
+non-Bayesian bootstrap approach.
+
+1
+
+Introduction
+
+In the last decade there has been a great deal of research fo­
+cused on the problem of learning Bayesian networks (BNs)
+from data [3, 8]. An obvious motivation for this problem is
+to learn a model that we can then use for inference or de­
+cision making, as a substitute for a model constructed by a
+human expert. In certain cases, however, our goal is to learn
+a model of the system not for prediction, but for discover­
+ing the domain structure. For example, we might want to
+use Bayesian network learning to understand the mecha­
+nisms by which genes in a cell produce proteins, which in
+tum cause other genes to express themselves, or prevent
+them from doing so [6]. In this case, our main goal is to
+discover the causal and dependence relations between the
+expression levels of different genes [12].
+The common approach to discovering structure is to use
+learning with model selection to provide us with a single
+
+high-scoring model. We then use that model (or its equiv­
+alence class) as our model for the structure of the domain.
+Indeed, in small domains with a substantial amount of data,
+it has been shown that the highest scoring model is or­
+ders of magnitude more likely than any other [11]. In such
+cases, model selection is a good approximation. Unfortu­
+nately, there are many domains of interest where this situ­
+ation does not hold. In our gene expression example, it is
+now possible to measure of the expression levels of thou­
+sands of genes in one experiment [12] (where each gene
+is a random variable in our model [6]), but we typically
+have only a few hundred of experiments (each of which is
+a single data case). In cases, like this, where the amount
+of data is small relative to the size of the model, there are
+likely to be many models that explain the data reasonably
+well. Model selection makes an arbitrary choice between
+these models, and therefore we cannot be confident that the
+model is a true representation of the underlying process.
+Given that there are many qualitatively different struc­
+tures that are approximately equally good, we cannot learn
+a unique structure from the data. However, there might be
+certain features of the domain, e.g., the presence of certain
+edges, that we can extract reliably. As an extreme example,
+if two variables are very strongly correlated (e.g., deter­
+ministically related to each other), it is likely that an edge
+between them will appear in any high-scoring model. Our
+goal, therefore, is to compute how likely a feature such as
+an edge is to be present over all models, rather than a single
+model selected by the learning algorithm. In other words,
+we are interested in computing:
+
+P(f I D)=
+
+L P(G I D)f(G),
+
+(1)
+
+G
+
+G
+
+where f(G) is 1 if the feature holds in and 0 otherwise.
+The number of BN structures is super-exponential in the
+number of random variables in the domain; therefore, this
+summation can be computed in closed form only for very
+small domains, or those in which we have additional con­
+straints that restrict the space (as in [11]). Alternatively,
+this summation can be approximated by considering only a
+subset of possible structures. Several approximations have
+been proposed [13, 14]. One theoretically well-founded
+approach is to use Markov Chain Monte Carlo (MCMC)
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS 2000
+
+202
+
+methods: we define a Markov chain over structures whose
+stationary distribution is the posterior
+we then
+I
+generate samples from this chain, and use them to estimate
+Eq. (1).
+In this paper, we propose a new approach for evaluating
+the Bayesian posterior probability of certain structural net­
+work properties. Our approach is based on two main ideas.
+The first is an efficient closed form equation for summing
+over all networks with at most k parents per node (for some
+constant k) that are consistent with a fixed ordering over the
+nodes. This equation allows us both to compute the overall
+probability of the data for this set of networks, and to com­
+pute the posterior probability of certain structural features
+- edges and Markov blankets- over this set. The second
+idea is the use of an MCMC approach, but over orderings of
+the network variables rather than directly on BN structures.
+The space of orderings is much smaller than the space of
+network structures; it also appears to be much less peaked,
+allowing much faster mixing (i.e., convergence to the sta­
+tionary distribution of the Markov chain). We present em­
+pirical results illustrating this observation, showing that our
+approach has substantial advantages over direct MCMC
+over BN structures. The Markov chain over orderings
+mixes much faster and more reliably than the chain over
+network structures. Indeed, different runs of MCMC over
+networks typically lead to very different estimates in the
+posterior probabilities of structural features, illustrating
+poor convergence to the stationary distribution; by contrast,
+different runs of MCMC over orderings converge reliably
+to the same estimates. We also present results showing that
+our approach accurately captures dominant features even
+with sparse data, and that it outperforms both MCMC over
+structures and the non-Bayesian bootstrap of [5].
+
+P(G D),
+
+2
+
+Bayesian learning of Bayesian networks
+
+Consider the problem of analyzing the distribution over
+some set of random variables X1, . . . , Xn, based on a fully
+observed data set
+{x[l], ... , x[M]}, where each x[j]
+is a complete assignment to the variables X1, . . . , Xn.
+
+D
+
+2.1
+
+=
+
+The Bayesian learning framework
+
+G.
+(nk' 1)
+
+Note that the negative logarithm of this prior corresponds
+to the description length of specifying the parent sets, as­
+suming that the cardinality of these sets are known. Thus,
+we implicitly assume that cardinalities of parent sets are
+uniformly distributed.
+A key property of all these priors is that they satisfy:
+•
+
+P(B
+
+G
+
+Oa
+
+x, lu
+
+The prior
+
+P(G) can be written
+
+That is, the prior decomposes into a product, with a term
+for each family in
+In other words the choices of the
+families for the different nodes are independent a priori.
+Next we consider the prior over parameters,
+I
+Here, the form of the prior varies depending on the type
+of parametric families we consider. In discrete networks,
+for
+the standard assumption is a Dirichlet prior over (}
+each node Xi and each instantiation u to its parents [8). In
+Gaussian networks, we might use a Wishart prior [9]. For
+our purpose, we need only require that the prior satisfies
+two basic assumptions, as presented in [10]:
+
+G.
+
+P(Oa G).
+x, 1u
+
+Ox,IPaa(X;)
+
+Global parameter independence: Let
+be the parameters specifying the behavior of the vari­
+able xi given the various instantiations to its parents.
+Then we require that
+
+P(Oa I G)= JI P(Ox;�Pao(X;) I G)
+
+B
+
+G,
+x, lu
+
+Structure modularity
+
+in the form
+
+P(B)
+
+B.
+
+P(B),
+
+G,
+
+•
+
+The Bayesian learning paradigm tells us that we must de­
+fine a prior probability distribution
+over the space of
+possible Bayesian networks
+This prior is then updated
+using Bayesian conditioning to give a posterior distribution
+I D) over this space.
+For Bayesian networks, the description of a model has
+two components: the structure
+of the network, and the
+values of the numerical parameters Oa associated with it.
+For example, in a discrete Bayesian network of structure
+the parameters
+define a multinomial distribution (}
+for each variable Xi and each assignment of values u to
+Paa(Xi). If we consider Gaussian Bayesian networks over
+contains the coefficients
+continuous domains, then (}
+for a linear combination of u and a variance parameter.
+To define the prior
+we need to define a discrete
+
+G,
+
+probability distribution over graph structures
+and for
+each possible graph
+to define a continuous distribution
+over the set of parameters (}G .
+The prior over structures is usually considered the less
+important of the two components. Unlike other parts of
+the posterior, it does not grow as the number of data cases
+grows. Hence, relatively little attention has been paid to the
+choice of structure prior, and a simple prior is often chosen
+largely for pragmatic reasons. The simplest and therefore
+most common choice is a uniform prior over structures [8].
+An alternative prior, and the one we use in our experiments,
+considers the number of options in determining the fami­
+lies of
+If we decide that a node Xi has k parents, then
+there are
+possible parents sets. If we assume that we
+choose uniformly from these, we get a prior:
+
+•
+
+(2)
+
+Let G and G' be two graphs
+= Paa' (Xi) U then
+P(Ox;IV I G)= P(Ox;�v I G')
+(3)
+
+Parameter modularity:
+
+in which Paa (Xi)
+
+=
+
+Once we define the prior, we can examine the form of the
+posterior probability. Using Bayes rule, we have that
+
+P(G I D) P(D I G)P(G).
+ex
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS 2000
+
+The term P( D I G) is the marginal likelihood of the data
+given G, and is defined the integration over all possible pa­
+rameter values for G.
+
+P(D I G)=
+
+j P(D I G,Oa)P(Oa I G)dOa
+
+The term P( D I G,Oa) is simply the probability of the
+data given a specific Bayesian network. When the data is
+complete, this is simply a product of conditional probabili­
+ties.
+Using the above assumptions, one can show (see [10]):
+Theorem 2.1:
+
+If D is complete and P(G) satisfies param­
+
+eter independence and parameter modularity, then
+
+P(D I G) = II score(X;, Paa(X;) I D).
+i
+
+where score(X;, U I D) is
+
+jII P(x;[m]l u[m), Ox;�u)P(Ox;IU)dOx;�u
+m
+
+If the prior also satisfies structure modularity, we can also
+conclude that posterior probability decomposes:
+
+P(G I D)
+
+ex
+
+II p(X;, Paa(X;))score(X;,Paa(X;) I D).
+i
+
+2.2
+
+Bayesian model averaging
+
+Recall that our goal is to compute the posterior probability
+of some feature f(G) over all possible graphs G. This is
+equal to:
+
+L f(G)P(G I D)
+
+P(f I D)
+
+G
+
+The problem, of course, is that the number of possible BN
+structures is super-exponential: 2°(n2log n), where n is the
+number of variables.
+We can reduce this number by restricting attention to
+structures G where there is a bound k on the number of
+parents per node. This assumption, which we will make
+throughout this paper, is a fairly innocuous one. There are
+few applications in which very large families are called for,
+and there is rarely enough data to support robust parameter
+estimation for such families. From a more formal perspec­
+tive, networks with very large families tend to have low
+score. Let 9k be the set of all graphs with indegree bounded
+by k. Note that the number of structures in 9k is still super­
+exponential: at least 2kn log n.
+Thus, exhaustive enumeration over the set of possible BN
+structures is feasible only for tiny domains (4-5 nodes).
+One solution, proposed by several researchers [11, 13, 14],
+is to approximate this exhaustive enumeration by finding
+a set 9 of high scoring structures, and then estimating the
+relative mass of the structures in 9 that contains f:
+
+P(f I D)
+
+�
+
+l:aEQ P(G I D)f(G)
+.
+l:aEQ Pr(G I D)
+
+(4)
+
+203
+
+This approach leaves open the question of how we con­
+struct 9. The simplest approach is to use model selection
+to pick a single high-scoring structure, and then use that as
+our approximation. If the amount of data is large relative
+to the size of the model, then the posterior will be sharply
+peaked around a single model, and this approximation is a
+reasonable one. However, as we discussed in the introduc­
+tion, there are many interesting domains (e.g., our biologi­
+cal application) where the amount of data is small relative
+to the size of the model. In this case, there is usually a large
+number of high-scoring models, so using a single model as
+our set 9 is a very poor approximation.
+A simple approach to finding a larger set is to record all
+the structures examined during the search, and return the
+high scoring ones. However, the set of structures found
+in this manner is quite sensitive to the search procedure
+we use. For example, if we use greedy hill-climbing, then
+the set of structures we will collect will all be quite simi­
+lar. Such a restricted set of candidates also show up when
+we consider multiple restarts of greedy hill-climbing and
+beam-search. This is a serious problem since we run the
+risk of getting estimates of confidence that are based on a
+biased sample of structures.
+Madigan and Raftery [13] propose an alternative ap­
+proach called Occam's window, which rejects models
+whose posterior probability is very low, as well as com­
+plex models whose posterior probability is not substantially
+better than a simpler model (one that contains a subset of
+the edges). These two principles prune the space of mod­
+els considered, often to a number small enough to be ex­
+haustively enumerated. Madigan and Raftery also provide
+a search procedure for finding these models.
+An alternative approach, proposed by Madigan and
+York [14], is based on the use of Markov chain Monte Carlo
+(MCMC) simulation. In this case, we define a Markov
+Chain over the space of possible structures, whose station­
+ary distribution is the posterior distribution P(G I D). We
+then generate a set of possible structures by doing a random
+walk in this Markov chain. Assuming that we continue this
+process until the chain mixes, we can hope to get a set of
+structures that is representative of the posterior. However,
+it is not clear how rapidly this type of chain mixes for large
+domains. The space of structures is very large, and the
+probability distribution is often quite peaked, with neigh­
+boring structures having very different scores. Hence, the
+mixing rate of the Markov chain can be quite slow.
+
+3
+
+Closed form for known ordering
+
+In this section, we temporarily tum our attention to a some­
+what easier problem. Rather than perform model averag­
+ing over the space of all structures, we restrict attention to
+structures that are consistent with some known total order­
+ing -<. In other words, we restrict attention to structures
+G where if X; E Paa(Xj) then i -< j. This assumption
+was a standard one in the early work on learning Bayesian
+networks from data [4].
+
+204
+
+3.1
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS
+
+3.2
+
+Computing marginal likelihood
+
+L
+
+GE9k
+
+P(G I�)P( D I G)
+
+(5)
+
+Note that this summation, although restricted to networks
+with bounded indegree and consistent with�. is still expo­
+nentially large: the number of such structures is still at least
+2kn log n.
+
+P(f I�. D)=
+
+P(f, D H)=
+
+Proposition
+
+IIi L
+
+UEU;,-<
+
+(7)
+
+3.1: P(fx.--+X; H, D) =
+
+The same argument can be extended to ask more com­
+plex queries about the parents of X;. For example, we can
+compute the posterior probability of a particular choice of
+score(X;, Paa(X;) I D) parents, as
+
+p(X;, U)score(X;, U I D) .
+
+Intuitively, the equality states that we can sum over all net­
+works consistent with � by summing over the set of possi­
+ble families for each node, and then multiplying the results
+for the different nodes. This transformation allows us to
+compute P( D H) very efficiently. The expression on the
+right-hand side consists of a product with a term for each
+node X;, each of which is a summation over all possible
+families for X;. Given the bound k over the number of par­
+ents, the number of possible families for a node X; is at
+most
+:::; nk. Hence, the total cost of computing Eq. (6)
+k
+is at most n · n = nk+l.
+We note that the decomposition of Eq. (6) was first men­
+tioned by Buntine [2], but the ramifications for Bayesian
+model averaging were not pursued.
+The concept of
+Bayesian model averaging using a closed-form summation
+over an exponentially large set of structures was proposed
+(in a different setting) in [17].
+The computation of P(D H) is useful in and of itself;
+as we show in the next section, computing the probability
+P( D H) is a key step in our MCMC algorithm.
+
+G)
+
+f(G)P(G H)P( D I G)
+
+L{UEU;,--:, u3x;} p(X;, U)score(X;, U I D)
+LUEU•.-< p(X;, U) score(X;, U I D)
+
+where U � X; is defined to hold when all nodes in U
+precede X; in �. Given that, we have
+
+L II p(X;, Paa(X;)) II
+
+L
+
+GE9k
+
+The computation of this term depends on the specific type
+of feature f.
+The simplest situation is when we want to compute the
+posterior probability of the fx.--tX; that denotes an edge
+X; -t X1. In this case, we can apply the same closed form
+analysis to (7). The only difference is that we restrict Uj,-<
+to consist only of subsets that contain X;. Since the terms
+that sum over the parents of X k for k =f. j are not disturbed
+by this constraint, they cancel out from the equation.
+
+U;,-< = {U : U �X;, lUI:::; k}.
+
+ex
+
+P(f, D H)
+.
+P( D H)
+
+We have just shown how to compute the denominator. The
+numerator is a sum over all structures that contain the fea­
+ture and are consistent with the ordering:
+
+The key insight is that, when we restrict attention to struc­
+tures consistent with a given ordering�. the choice of fam­
+ily for one node places no additional constraints on the
+choice of family for another. Note that this property does
+not hold without the restriction on the ordering; for exam­
+ple, if we pick X; to be a parent of X1, then Xj cannot in
+turn be a parent of X;.
+Therefore, we can choose a structure G consistent with
+� by choosing, independently, a family U for each node
+X;. The parameter modularity assumption Eq. (3) states
+that the choice of parameters for the family of X; is inde­
+pendent of the choice of family for another family in the
+network. Hence, summing over possible graphs consistent
+with � is equivalent to summing over possible choices of
+family for each node, each with its parameter prior. Given
+our constraint on the size of the family, the possible parent
+sets for the node X; is
+
+P( D H)
+
+Probabilities of features
+
+For certain types of features f, we can use the same tech­
+nique to compute, in closed form, the probability P(f I�
+, D) that f holds in a structure given the ordering and the
+data.
+In general, if f(·) is a feature. We want to compute
+
+We first consider the problem of computing the probability
+of the data given the ordering:
+
+P( D H)=
+
+2000
+
+(6)
+
+P(Paa(X;)= u 1 D,�) =
+p(X;, U)score(X;, U I D)
+·
+LU'EU·•.-< p(X;, V')score(X;, U' I D)
+
+(8)
+
+A somewhat more subtle computation is required to compute the posterior of f M , the feature that denotes that
+
+x.�x;
+X; is in the Markov blanket of X1. Recall this is the case
+if G contains the edge X; -t X1, or the edge X1 -t X;, or
+there is a variable Xk such that both edges X; -t Xk and
+Xj -t Xk are in G.
+Assume, without loss of generality, that X; precedes X1
+in the ordering. In this case, X; can be in X1 's Markov
+blanket either if there is an edge from X; to X1, or if
+X; and X1 are both parents of some third node Xt. We
+have just shown how the first of these probabilities Pi =
+P(fx;--tX; I D,�), can be computed in closed form. We
+can also easily compute the probability Ql = P(X;, X1 E
+Paa(Xt) I D,�) that both Xi and X1 are parents of Xt:
+we simply restrict Ut,-< to families that contain both X; and
+Xj. The key is to note that as the choice of families of
+different nodes are independent, these are all independent
+events. Hence, Xi and X1 are not in the same Markov
+blanket only if all of these events fail to occur. Thus,
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS
+
+Proposition
+
+3.2:
+
+P(fx ':!x I D, -<)
+, ,
+
+=
+
+1 - ( 1 - Pi)·
+
+II
+
+( 1 - q1)
+
+Xt>-Xi
+
+Unfortunately, this approach cannot be used to compute
+the probability of arbitrary structural features. For exam­
+ple, we cannot compute the probability that there exists
+some directed path from X; to X1, as we would have to
+consider all possible ways in which this path could mani­
+fest through our exponentially many structures.
+We can overcome this difficulty using a simple sampling
+approach. Eq. (8) provides us with a closed form expres­
+sion for the exact posterior probability of the different pos­
+sible families of the node X;. We can therefore easily sam­
+ple entire networks from the posterior distribution given the
+ordering: we simply sample a family for each node, accord­
+ing to the distribution in Eq. (8). We can then use the sam­
+pled networks to evaluate any feature, such as the existence
+of a causal path from X; to X1.
+
+4
+
+MCMC methods
+
+In the previous section, we made the simplifying assump­
+tion that we were given a predetermined ordering. Al­
+though this assumption might be reasonable in certain
+cases, it is clearly too restrictive in domains where we have
+very little prior knowledge (e.g., our biology domain). We
+therefore want to consider structures consistent with all n!
+possible orderings over BN nodes. Here, unfortunately, we
+have no elegant tricks that allow a closed form solution.
+Therefore, we provide a solution which uses our closed
+form solution of Eq. (6) as a subroutine in a Markov Chain
+Monte Carlo algorithm [15].
+4.1
+
+The basic algorithm
+
+We introduce a uniform prior over orderings-<, and define
+P(G 1-<) to be of the same nature as the priors we used
+in the previous section. It is important to note that the re­
+sulting prior over structures has a different form than our
+original prior over structures. For example, if we define
+P(G 1-<) to be uniform, we have that P(G) is not uni­
+form: graphs that are consistent with more orderings are
+more likely; for example, a Naive Bayes graph is consis­
+tent with (n- 1)! orderings, whereas any chain-structured
+graph is consistent with only one. W hile this discrepancy
+in priors is unfortunate, it is important to see it in propor­
+tion. The standard priors over network structures are of­
+ten used not because they are particularly appropriate for a
+task, but rather because they are simple and easy to work
+with. In fact, the ubiquitous uniform prior over structures is
+far from uniform over PDAGs (Markov equivalence classes
+over network structures)- PDAGs consistent with more
+structures have a higher induced prior probability. One
+can argue that, for causal discovery, a uniform prior over
+PDAGs is more appropriate; nevertheless, a uniform prior
+over networks is most often used for practical reasons. Fi­
+nally, the prior induced over our networks does have some
+
+2000
+
+205
+
+justification: one can argue that a structure which is consis­
+tent with more orderings makes fewer assumptions about
+causal ordering, and is therefore more likely a priori.
+We now construct a Markov chain M with state space
+0, consisting of all n! orderings -<; our construction will
+guarantee that M has the stationary distribution P(-<I D).
+We can then simulate this Markov chain, obtaining a se­
+quence of samples -< 1, . . . ,-<T. We can now approximate
+the expected value of any function g(-<) as:
+T
+
+E[g I D]
+
+�
+
+1
+9(-<t)·
+T tL
+=l
+
+Specifically, we can let g(-<) be P(f 1-<, D) for some fea­
+ture (edge) f. We can then compute g(-<t) = P(f 1-<t. D),
+as described in the previous section.
+It remains only to discuss the construction of the Markov
+chain. We use a standard Metropolis algorithm [15]. We
+need to guarantee two things:
+•
+
+that the chain is reversible, i.e., the probability P(-<
+
+-+ -</)
+•
+
+=
+
+P(-<t-+ -<);
+
+that the stationary probability of the chain is the de­
+sired posterior P(-<I D).
+
+We accomplish this goal using a standard Metropolis sam­
+pling. For each ordering -<, we define a proposal proba­
+bility q(-<1 1-<), which defines the probability that the algo­
+rithm will "propose" a move from -< to -(1• The algorithm
+then accepts this move with probability
+
+.
+
+mm
+
+[1 P(-<1 1 D)q(-<l-<1) ] .
+'P(-< 1 D)q(-<1 1-<)
+
+It is well known that the resulting chain is reversible and
+has the desired stationary distribution [7].
+We consider several specific constructions for the pro­
+posal distribution, based on different neighborhoods in the
+space of orderings. In one very simple construction, we
+consider only operators that flip two nodes in the ordering
+(leaving all others unchanged):
+
+Another operator is "cutting the deck" in the ordering:
+
+We note that these two types of operators are qualitatively
+very different. The "flip" operator takes much smaller steps
+in the space, and is therefore likely to mix much more
+slowly. However, any single step is substantially more ef­
+ficient to compute (see below). In our implementation, we
+choose a flip operator with some probability p, and a cut
+operator with probability 1 - p. We then pick each of the
+possible instantiations uniformly (i.e., given that we have
+decided to cut, all n positions are equally likely).
+
+206
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS
+
+0.8
+
+0.8
+
+08
+.
+
+0.8
+
+0.6
+
+0.6
+
+.
+
+X
+
+�
+
+�
+
+0.4
+X
+
+0.4
+
+•
+
++
+
+X
+
+++
+X
+
+0.2
++
+
+��--�-J2=oo�•·�•�x�
+S01nst.
+
+0
+
+0.2
+
+0.4
+
+0.6
+
+0.6
+
+0.8
+
+Figure
+
+ing: orderings (x-axis) versus PDAGs (y-axis) for two UCI
+
+5samples
+
+20samples
+50 samples
+.
+04
+
+0.8
+
+Figure
+
+.....
+
+0.6
+
++
+X
+*
+
+0.8
+
+Edges
+
+2: Comparison of posterior probabilities using true
+
+posterior over orderings (x-axis) versus ordering-MCMC
+(y-axis). The figures show Markov features and Edge fea­
+tures in the Flare dataset with
+
+(5 variables each).
+
+100 samples.
+
+ij and ik. Now, consider the
+(6); those terms corresponding to nodes it in
+the ordering -< that precede iJ or succeed ik do not change,
+
+ordering obtained by flipping
+
+Computational tricks
+
+terms in Eq.
+
+Although the computation of the marginal likelihood is
+n,
+
+0.6
+
++
+X
+•
+
+Markov
+
+Vote
+
+1: Comparison of posterior probabilities for differ­
+
+polynomial in
+
+.....
+
+0.8
+
+ent Markov features between full Bayesian averaging us­
+datasets
+
+Ssamples
+zosamplea
+sosamplea
+
++
+X
+
+50inat.
+200iost.
+
+Flare
+
+4.2
+
+�
+
+�
+
+0.4
+
++
+
+02
+.
+
+0
+
++
+
+0.6
+
+0.6
+
+2000
+
+it can still be quite expensive, especially
+
+for large networks and reasonable size
+
+k.
+
+We utilize sev­
+
+as the set of potential parent sets Ui1 ,-< is the same. Further­
+more, the terms for
+
+i1 that are between ij and ik also have
+U that contain neither ij
+
+eral computational tricks for reducing the complexity of
+
+a lot in common -- all parent sets
+
+this computation.
+
+nor
+
+First, for each node Xi, we restrict attention to at most
+
+ik remain the same. Thus, we only need to subtract
+
+mp other nodes as possible parents (for some fixed mp ).
+
+step, as follows: for each potential parent X j , we compute
+
+the score of the single edge Xi -+
+
+Xi;
+
+we then select the
+
+L
+
+p(Xi, U)score(Xi, U I D)
+
+L
+
+p(Xi, U)score(Xi, U I D).
+
+{UEUi,-< : U3Xii}
+
+We select these mp nodes in advance, before any MCMC
+
+and add
+
+mp nodes Xi for which this score was highest.
+
+Second, for each node Xi, we precompute the score for
+
+{UEUi,-<' : U3Xik}
+
+some number mp of the highest-scoring families. Again,
+this procedure is executed once, at the very beginning of
+
+By contrast, the "cut" operator requires that we recompute
+
+the process. The list of highest-scoring families is sorted in
+
+the entire summation over families for each variable Xi.
+
+decreasing order; let
+
+fi
+
+be the score of the worst family in
+
+Xi's list. As we consider a particular ordering, we extract
+from the list all families consistent with that ordering. We
+know that all families not in the list score no better than
+
+5
+
+Experimental Results
+We first compared the exact posterior computed by sum­
+
+Thus, if the best family extracted from the list is some
+
+ming over all orderings to the posterior computed by sum­
+
+factor 'Y better than ei. we choose to restrict attention to the
+
+ming over all equivalence classes of Bayesian networks
+
+fi.
+
+families extracted from the list, under the assumption that
+
+(PDAGs).
+
+other families will have negligible effect relative to these
+
+network for each equivalence class.) The purpose of this
+
+(I.e., we counted only a single representative
+
+high-scoring families. If the best family extracted is not
+
+evaluation is to try and evaluate the effect of the somewhat
+different prior over structures. Of course, in order to do the
+
+that good, we do a full enumeration.
+Third, we prune the exhaustive enumeration of fami­
+
+exact Bayesian computation we need to do an exhaustive
+
+lies by ignoring families that augment low-scoring fami­
+
+enumeration of hypotheses. For orderings, this enumera­
+
+lies with low-scoring edges. Specifically, assume that for
+
+tion is possible for as many as
+
+some family
+
+U,
+
+we have that
+
+score(Xi, U I D)
+
+is sub­
+
+stantially lower than other families enumerated so far. In
+this case, families that extend
+
+U
+
+are likely to be even
+
+worse. More precisely, we define the
+of a parent
+
+incremental value
+
+y for xi to be its added value as a single par­
+
+ent: � ( Y; Xi) =
+
+score(Xi, Y ) - score(Xi).
+
+If we now
+
+U such that, for all other possible parents
+Y, score(Xi, U) + � ( Y; Xi) is lower than the best family
+found so far for xi. we prune all extensions of u.
+
+have a family
+
+Finally, we note that when we take a single MCMC step
+
+10 variables, but for struc­
+5-6 variables. We
+
+tures, we are limited to domains with
+
+took two data sets -- Vote and Flare-- from the UCI repos­
+itory
+
+[16] and selected five variables from each. We gen­
+50 and 200, and computed the full
+
+erated datasets of sizes
+
+Bayesian averaging posterior for these datasets using both
+methods. Figure
+
+1 compares the results for both datasets.
+
+We see that for small amounts of data, the two approaches
+are slightly different but in general quite well correlated.
+This illustrates that, at least for small data sets, the effect of
+our different prior does not dominate the posterior value.
+
+in the space, we can often preserve much of our computa­
+
+Next, we compared the estimates made by our MCMC
+
+tion. In particular, let -< be an ordering and let -<' be the
+
+sampling over orderings to estimates given by the full
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS
+
+2000
+
+207
+
+Structure
+·16500
+-17000
+
+.r-
+
+·�
+
+-17500
+
+·2450
+
+-18500
+
+..,_,=__J
+·2500 ��:::---:-c,------:.,-'c-:----,-c
+0
+20000
+40000
+60000
+80000 100000 120000
+
+1
+
+iteration
+
+00000
+
+200000
+
+300000
+iteration
+
+400000
+
+500000
+
+·19000
+
+600000
+
+0
+
+1 00000
+
+200000
+
+300000
+
+iteration
+
+400000
+
+g���==
+500000
+
+600000
+
+Order
+·8405
+
+-16225
+
+·8410
+
+-16230
+
+-8415
+
+g
+
+·8420
+
+�
+
+-8425
+·8430
+
+·16235
+-16240
+-16245
+
+·8435
+
+·16250
+
+-8440
+
+-16255
+
+-8445
+1
+
+iteration
+
+0000
+
+100 instances
+
+20000
+
+30000
+
+iteration
+
+40000
+
+50000
+
+60000
+
+500 instances
+
+1000 instances
+
+Figure 3: Plots of the progression of the MCMC runs. Each graph shows plots of 6 independent runs over Alann with either
+100, 500, and 1000 samples. The graph plot the score (log2 (P (D I G) P ( G)) or log2 ( P (D 1-<)P ( -< ))) of the "current"
+candidate (y-axis) for different iterations (x-axis) of the MCMC sampler. In each plot, three of the runs are seeded with the
+network found by greedy hill climbing search over network structures. The other three runs are seed either by the empty
+network in the case of the structure-MCMC or a random ordering in the case of ordering-MCMC.
+
+Bayesian averaging over networks. We experimented on
+
+Here, our primary goal was the comparison of structure­
+
+the nine-variable "flare" dataset. We ran the MCMC sam­
+
+MCMC and ordering-MCMC. For the structure MCMC,
+
+1,000 steps and then sampled
+100 steps; we experimented with collecting 5, 20,
+and 50 samples. (We note that these parameters are prob­
+ably excessive, but they ensure that we are sampling very
+
+100,000 iterations and then sampled
+25,000 iterations. For the order MCMC, we used a
+burn in of 10,000 iterations and then sampled every 2,500
+iterations. In both methods we collected a total of 50 sam­
+
+close the stationary probability of the process.) The results
+
+ples per run. One phenomenon that was quite clear was that
+
+pler with a burn-in period of
+
+every
+
+are shown in Figure 2. As we can see, the estimates are very
+robust. In fact, for Markov features even a sample of
+
+5 or­
+
+we used a burn in of
+
+every
+
+ordering-MCMC runs
+
+mixed
+
+much faster. That is, after a
+
+small number of iterations, these runs reached a "plateau"
+
+derings gives a surprisingly decent estimate. This is due to
+
+where successive samples had comparable scores.
+
+the fact that a single sample of an ordering contains infor­
+
+started in different places (including random ordering and
+
+Runs
+
+mation about exponentially many possible structures. For
+
+orderings seeded from the results of a greedy-search model
+
+edges we obviously need more samples, as edges that are
+
+selection) rapidly reached the same plateau. On the other
+
+not in the direction of the ordering necessarily have proba­
+
+hand, MCMC runs over network structures reached very
+
+0. With 20 and 50 samples we see a very close corre­
+
+different levels of scores, even though they were run for
+
+bility
+
+3 illustrates this
+100, 500, and
+
+lation between the MCMC estimate and the exact compu­
+
+much larger number of iterations. Figure
+
+tation for both types of features.
+
+phenomenon for examples of alann with
+
+We then considered larger datasets, where exhaustive
+enumeration is not an option.
+
+For this purpose we used
+
+synthetic data generated from the Alarm BN
+with
+
+[1], a network
+
+37 nodes. Here, our computational tricks are neces­
+
+sary. We used the following settings:
+
+k
+
+(max. number of
+
+parents in a family) = 3; mp (max. number of potential
+parents) =
+
+20;
+
+mp (number of families cached) =
+
+In the case of
+
+100 instances, both MCMC samplers
+
+seemed to mix. The structure based sampler mixes after
+
+20,000-30,000 iterations while the ordering based
+1,000-2,000 iterations. On the
+other hand, when we examine 500 samples, the ordering­
+about
+
+sampler mixes after about
+
+MCMC converges to a high-scoring plateau, which we be­
+
+We note that different
+
+By contrast, different runs of the structure-MCMC stayed
+
+10 corresponds to a difference of 210 in the pos­
+
+terior probability of the families.
+
+tween the two sets of graphs.
+
+4000;
+10. Note
+
+and 1 (difference in score required in pruning) =
+that 1 =
+
+1000 instances. Note the substantial difference in scale be­
+
+families have huge differences in score, so a difference of
+
+210 in the posterior probability is not uncommon.
+
+lieve is the stationary distribution, within
+
+10,000 iterations.
+
+in very different regions of the in the first
+
+500,000 itera­
+1,000 in-
+
+tions. The situation is even worse in the case of
+
+208
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS
+
+50 instances
+
+500 instances
+
+empty vs. empty
+
+empty vs. empty
+1
+
+..
+
+08
+.
+
+0.6
+
+2000
+
+greedy vs. greedy
+
+"
+
+1
+
+·· .
+
+0
+
+0.6
+
+0.8
+
+0.4
+
+.. .
+
+0.8
+
+0.8
+
+·.
+
+greedy vs. empty
+
+.
+
+0.8
+
+0.6
+
+:·
+-·
+
+0.4
+
+..
+
+r•
+
+...
+. .
+
+0.4
+
+..
+
+0.2
+
+. ..
+
+�
+
+F gure
+
+4: Scatter plots that compare poste�ior probability of Markov features on the Alarm dataset, as determined by
+
+different runs of structure-MCMC. Each pomt corresponds to a single Markov feature; its
+
+x
+
+and y coordinates denote the
+
+posterior estimated by the two compared runs. The position of points is slightly randomly perturbed to visualize clusters
+of points in the same position.
+
+50 instances
+
+stances. In this case the structure based MCMC sampler
+
+500 instances
+
+that starts from an empty network does not reach the level
+of score achieved by the runs starting from the structure
+found by greedy hill climbing search. Moreover, these lat­
+ter runs seem to fluctuate around the score of the initial
+seed. Note that runs show differences of 100- 500 bits.
+
+·.
+
+.
+
+0.8
+
+0.6
+
+0.6
+
+0.6
+
+04
+.
+
+0.4
+
+0.2
+
+0.2
+
+. ..
+
+Thus, the sub-optimal runs sample from networks that are
+at least
+
+2100 less probable!
+
+This phenomenon has two explanations. Either the seed
+structure is the global optimum and the sampler is sampling
+from the posterior distribution, which is "centered" around
+the optimum; or the sampler is stuck in a local "hill" in the
+space of structures from which it cannot escape. This lat­
+ter hypothesis is supported by the fact that runs starting at
+other structures (e.g., the empty network) take a very long
+time to reach similar level of scores, indicating that there
+is a very different part of the space on which stationary be­
+
+0.2
+
+0.4
+
+0.6
+
+0.2
+
+0.8
+
+0.4
+
+0.6
+
+0.8
+
+Figure 5: Scatter plots that compare posterior probability
+of Markov features on the Alarm domain as determined by
+different runs of ordering-MCMC. Each point corresponds
+to a single Markov feature; its
+
+x
+
+and y coordinates denote
+
+the posterior estimated by the greedy seeded run and a ran­
+dom seeded run respectively.
+
+havior is reached.
+We can provide further support for this second hypothe­
+sis by examining the posterior computed for different fea­
+tures in different runs.
+
+Figure
+
+4 compares the posterior
+
+probability of Markov features assigned by different runs
+of structure-MCMC. Although different runs give a similar
+probability estimate to most structural features, there are
+several features on which they differ radically. In particu­
+lar, there are features that are assigned probability close to
+1 by samples from one run and probability close to 0 by
+samples from the other. W hile this behavior is less com­
+mon in the runs seeded with the greedy structure, it occurs
+even there. This suggests that each of these runs (even runs
+that start at the same place) gets trapped in a different local
+neighborhood in the structure space.
+By contrast, comparison of the predictions of different
+runs of the order based MCMC sampler are tightly corre­
+lated. Figure 5 compares two runs, one starting from an
+ordering consistent with the greedy structure and the other
+from a random order. We can see that the predictions are
+very similar, both for the small dataset and the larger one.
+This observation reaffirms our claim that these different
+
+runs are indeed sampling from similar distributions. That
+is, they are sampling from the true posterior.
+We believe that the difference in mixing rate is due to the
+smoother posterior landscape of the space of orderings. In
+the space of networks, even a small perturbation to a net­
+work can lead to a huge difference in score. By contrast, the
+score of an ordering is a lot less sensitive to slight pertur­
+bations. For one, the score of each ordering is an aggregate
+of the scores of a very large space of structures; hence, dif­
+ferences in scores of individual networks can often cancel
+out. Furthermore, for most orderings, we are likely to find
+a consistent structure which is not too bad a fit to the data;
+hence, an ordering is unlikely to be uniformly horrible.
+The disparity in mixing rates is more pronounced for
+larger datasets. The reason is quite clear: as the amount
+of data grows, the posterior landscape becomes "sharper"
+since the effect of a single change on the score is ampli­
+fied across many samples. As we discussed above, if our
+dataset is large enough, model selection is often a good
+approximation to model averaging. (Although this is not
+quite the case for 1000-instance Alarm.) Conversely, if
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS
+
+500 instances
+
+50 instances
+
+we consider Alarm with only 100 samples, or the (fairly
+small) genetics data set, graphs such as Figure
+
+209
+
+2000
+
+3 indicate
+
+..
+
+...
+
+that structure-MCMC does eventually converge (although
+
+.
+
+08
+
+still more slowly than ordering-MCMC).
+
+0.8
+
+..
+
+.. .
+
+We note that, computationally, structure-MCMC is faster
+
+. .
+
+06
+
+0.6
+
+04
+
+.
+04
+
+02
+
+0.2
+
+..
+
+than ordering-MCMC. In our current implementation, gen­
+
+.
+
+erating a successor network is about an order of magnitude
+faster than generating a successor ordering. We therefore
+designed the runs in Figure
+
+3 to take roughly the same
+
+amount of computation time.
+
+Thus, even for the same
+
+amount of computation, ordering-MCMC mixes faster.
+When both ordering-MCMC and structure-MCMC mix,
+it is possible to compare their estimates. In Figure
+
+6 we see
+
+such comparisons for Alarm. We see that, in general, the
+estimates of the two methods are not too far apart, although
+the posterior estimate of the structure-MCMC is usually
+larger. This difference between the two approaches raises
+
+0.4
+
+Figure
+
+0.6
+
+0.8
+
+04
+.
+
+0.6
+
+0.8
+
+6: Scatter plots that compare posterior probability
+
+of Markov features on the Alarm domain as determined the
+two different MCMC samplers. Each point corresponds to
+a single Markov feature; its
+
+x
+
+and y coordinates denote the
+
+posterior estimated by the greedy seeded run of ordering­
+MCMC and structure-MCMC, respectively.
+
+the obvious question: which estimate is better? Clearly,
+we cannot compute the exact posterior for a domain of this
+size, so we cannot answer this question exactly. However,
+we can test whether the posteriors computed by the dif­
+ferent methods can reconstruct features of the generating
+model. To do so, we label Markov features in the Alarm
+domain as positive if they appear in the generating network
+and
+
+negative
+
+if they do not. We then use our posterior to
+
+try and distinguish "true" features from "false" ones: we
+pick a thresholdt, and predict that the feature f is "true"
+if
+
+P(f)
+
+> t. Clearly, as we vary the the value oft, we
+
+will get different sets of features. At each threshold value
+we can have two types of errors:
+
+false positives
+
+- pos­
+
+itive features that are misclassified as negative, and
+
+negatives
+
+non-parametric Bootstrap
+
+ap­
+
+mate "confidence" in features.
+Figure
+
+7 displays these tradeoff curves. As we can see,
+
+ordering-MCMC dominates in most of these cases except
+for one (Path features with 100 instances). In particular, for
+t larger than 0.4, ordering-MCMC makes no false positive
+errors for Markov features on the 1000-instance data set.
+We believe that features it misses are due to weak interac­
+tions in the network that cannot be reliably learned from
+such a small data set.
+
+false
+
+- negative features that are classified as posi­
+
+tive. Different values of t achieve different tradeoffs be­
+tween these two type of errors. Thus, for each method we
+can plot the tradeoffcurve between the two types of errors.
+Note that, in most applications of structure discovery, we
+care more about false positives than about false negatives.
+For example, in our biological application, false negatives
+are only to be expected - it is unrealistic to expect that
+we would detect all causal connections based on our lim­
+ited data. However, false positives correspond to hypothe­
+sizing important biological connections spuriously. Thus,
+our main concern is with the left-hand-side of the tradeoff
+curve, the part where we have a small number of false pos­
+itives. Within that region, we want to achieve the smallest
+possible number of false negatives.
+We computed such tradeoff curves for Alarm data set with
+100 and 1000 instances for two types of features: Markov
+features and Path features.
+
+to the tradeoff curve of the
+
+proach of [5], a non-Bayesian simulation approach to esti­
+
+The latter represent relations
+
+of the form "there is a directed path from X to Y" in
+the PDAG of the network structure. Directed paths in the
+PDAG are very meaningful: if we assume no hidden vari­
+ables, they correspond to a situation where X causes Y. As
+discussed in Section 3, we cannot provide a closed form ex­
+pression for the posterior of such a feature given an order­
+ing. However, we can sample networks from the ordering,
+and estimate the feature relative to those. In our case, (we
+sampled 10 networks from each order). We also compared
+
+6
+
+Discussion and future work
+
+In this section, we presented a new approach for estimat­
+ing the true Bayesian posterior probability of certain struc­
+tural network features. Our approach is based on the use
+of MCMC sampling, but over orderings of network vari­
+ables rather than directly over network structures. Given
+an ordering sampled from the Markov chain, we can com­
+pute the probability of edge and Markov-blanket structural
+features using an elegant closed form solution. For other
+features, we can easily sample networks from the order­
+ing, and estimate the probability of that feature from those
+samples. We have shown that the resulting Markov chain
+mixes substantially faster than MCMC over structures, and
+therefore gives robust high-quality estimates in the prob­
+ability of these features. By contrast, the results of stan­
+dard MCMC over structures are often unreliable, as they
+are highly dependent on the region of the space to which
+the Markov chain process happens to gravitate.
+We believe that this approach can be extended to deal
+with data sets where some of the data is missing, by ex­
+tending the MCMC over orderings with MCMC over miss­
+ing values, allowing us to average over both. If success­
+ful, we can use this combined MCMC algorithm for do­
+ing full Bayesian model averaging for prediction tasks as
+well. Finally, we plan to apply this algorithm in our biol­
+ogy domain, in order to try and understand the underlying
+
+210
+
+UNCERTAINTY IN ARTIFICIAL INTELLIGENCE PROCEEDINGS
+
+Markov features
+50 �--------------�.�=
+...=
+.
+. .�.=
+. .�
+.
+@
+���� =-:
+40 "·
+I;
+..:
+�30
+.... .-............ ..,.
+i
+20
+••
+
+Order­
+Structure - •
+
+�
+
+�
+
+�30
+
+z
+
+�......
+"
+
+50
+
+'"
+
+30
+
+20
+
+10
+
+20
+
+30
+
+50
+
+'"
+
+Bootstra p ....
+Order­
+Structure
+•
+
+-
+
+20
+
+30
+
+40
+
+50
+
+FalsePosiliYes
+
+=::
+,""
+,.
+, , =...
+200 .----------------;;:c
+
+�
+••:::-�
+••
+
+Order­
+Structure - •
+
+200
+
+.-----------------�------,
+••••
+Bootstrap
+Order­
+Structure - •
+
+150
+
+FalsePositives
+
+False Positives
+
+FalsePosihves
+
+I 00 instances
+
+I
+I
+I
+
+10
+
+False Positives
+
+Path features
+
+Order­
+Structure - •
+
+I
+I
+I
+
+"
+
+FalsePositives
+
+Figure
+
+"
+
+i
+20
+�
+
+..... _••••••••••••••••
+
+z
+
+.
+somr--------------�.�
+�
+••
+�,.,=�,�-=
+••
+
+sorr---------------�.�
+••�.
+, =
+,.
+,,�.=
+.•
+�
+.
+
+Sir
+
+2000
+
+I 000 instances
+
+500 instances
+
+7: Classification tradeoff curves for different methods. The x-axis and the y-axis denote false positive and false
+
+negative errors, respectively. The curve is achieved by different threshold values in the range [0, 1].
+
+Each curve corresponds
+
+to the prediction based on MCMC simulation with 50 samples collected every 200 and I 000 iterations in order and structure
+MCMC, respectively.
+
+structure of gene expression.
+
+Acknowledgments
+
+The authors thank Yoram Singer for
+
+useful discussions. This work was supported by ARO grant
+DAAH04-96-l-0341 under the MURI program "Integrated
+Approach to Intelligent Systems", and by DARPA's
+
+mation Assurance
+
+Infor­
+
+[8] D. Heckerman. A tutorial on learning with Bayesian net­
+works. In M. I. Jordan, editor, Learning in Graphical Mod­
+els, 1998.
+[9] D. Heckerman and D. Geiger. Learning Bayesian networks:
+a unification for discrete and Gaussian domains. In UA/,
+pp. 274-284, 1995.
+[10] D. Heckerman, D. Geiger, and D. M. Chickering.
+
+program under subcontract to SRI Inter­
+
+national. Nir Friedman was supported through the generos­
+
+[11]
+
+ity of the Michael Sacher Trust and Sherman Senior Lec­
+tureship. The experiments reported here were performed
+on computers funded by an ISF basic equipment grant.
+
+[12]
+[13]
+
+References
+
+[14]
+
+[1] I. Bein1ich, G. Suermondt, R. Chavez, and G. Cooper.
+The ALARM monitoring system: A case study with two
+probabilistic inference techniques for belief networks. In
+
+[2]
+[3]
+
+[4]
+
+[5]
+
+Proc. 2'nd European Conf on AI and Medicine. Springer­
+Verlag, Berlin, 1989.
+W. Buntine. Theory refinement on Bayesian networks. In
+UAI, pp. 52-60, 1991.
+W. L. Buntine. A guide to the literature on learning prob­
+abilistic networks from data. IEEE Trans. Knowledge and
+Data Engineering, 8:195-210, 1996.
+G. F. Cooper and E. Herskovits. A Bayesian method for
+the induction of probabilistic networks from data. Machine
+Learning, 9:309-347, 1992.
+N. Friedman, M. Goldszmidt, and A. Wyner. Data analysis
+with Bayesian networks: A bootstrap approach. In UAI,
+
+pp. 206-215, 1999.
+[6] N. Friedman, M. Linial, I. Nachman, and D. Pe'er. Using
+Bayesian networks to analyze expression data. In RECOMB,
+pp. 127-135, 2000.
+[7] W.R. Gilks, S. Richardson, and D.J. Spiegelhalter. Markov
+Chain Monte Carlo Methods in Practice. CRC Press, 1996.
+
+[15]
+
+Learn­
+
+ing Bayesian networks: The combination of knowledge and
+statistical data. Machine Learning, 20:197-243, 1995.
+D. Heckerman, C. Meek, and G. Cooper. A Bayesian ap­
+proach to causal discovery. MSR-TR-97-05, Microsoft Re­
+search, 1997.
+E. Lander. Array of hope. Nature Gen., 21, 1999.
+D. Madigan and E.E. Raftery. Model selection and account­
+ing for model uncertainty in graphical models using Oc­
+cam's window. J. Am. Stat. Assoc., 89:1535-1546, 1994.
+D. Madigan and J. York. Bayesian graphical models for
+discrete data. Inter. Stat. Rev., 63:215-232, 1995.
+N. Metropolis, A.W. Rosenbluth, M.N. Rosenbluth, A.H.
+Teller, and E. Teller. Equation of state calculation by fast
+computing machines. J. Chemical Physics, 21:1087-1092,
+
+1953.
+[16] P. M. Murphy and D. W. Aha. UCI repository of machine
+databases.
+learning
+
+http://www.ics.uci.edu/ mlearn/MLRepository.html,
+
+1995.
+[17] F.C. Pereira and Y. Singer. An efficient extension to mix­
+ture techniques for prediction and decision trees. Machine
+Learning, 36(3):183-199, 1999.
+
+

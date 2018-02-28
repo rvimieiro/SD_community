@@ -1,0 +1,1594 @@
+238
+
+Perception, Attention, and Resources: A Decision-Theoretic
+Approach to Graphics Rendering
+
+Eric Horvitz and Jed Lengyel
+
+Microsoft Research
+Redmond, Washington 98052
+
+{horvitz, jedl }@microsoft.com
+Abstract
+We describe work to control graphics ren­
+dering under limited computational resources
+by taking a decision-theoretic perspective on
+perceptual costs and computational savings
+of approximations. The work extends earlier
+work on the control of rendering by introduc­
+ing methods and models for computing the
+expected cost associated with degradations of
+scene components. The expected cost is com­
+puted by considering the perceptual cost of
+degradations and a probability distribution
+over the attentional focus of viewers. We re­
+view the critical literature describing findings
+on visual search and attention, discuss the
+implications of the findings, and introduce
+models of expected perceptual cost. Finally,
+we discuss policies that harness information
+about the expected cost of scene components.
+
+1
+
+Introduction
+
+The rendering of h igh- quality 3D graphics is compu­
+tationally intensive. We describe the use of decision­
+theoretic models and methods to control rendering
+approximations under limited or varying computa­
+tional resources. After discussing several dimensions
+of degradation associated with rendering approxima­
+tion strategies, we review key results on visual search
+and attention elucidated by cognitive psychologists.
+The results provide context and guidance for building
+models of visual attention and of the expected cost
+of gr aph ics approximations. Following a discussion of
+the implications of the psychological results, we sum­
+marize our ongoing perceptual studies of image qual­
+ity , and present a set of models that show promise for
+guiding the control of rendering approximation. Fi­
+n ally, we discuss how the models can be used to gen­
+erate policies for rendering scenes. We describe appli­
+cation of the methods within the Talisman graphics
+architecture. The Talisman project at Microsoft [32]
+
+has focused on the definition of a flexible multime­
+dia architecture with the ability to deliver high-quality
+graphics, audio, and video on personal computers.
+In an earlier paper, we surveyed key problems and op­
+portunities with the decision-theoretic control of mul­
+tiple dimensions of rendering in systems b ased on a lay­
+ered graphics pipeline [13]. In this paper, we present
+additional details on building and using perceptual
+models for regulating rendering under scarce resources.
+Our overall concerns and goals with tradeoffs in graph­
+ics are related to the work of Funkhouser and Sequin
+[9], who have explored adaptive strategies for selec­
+tively controlling the level of detail of objects in the
+interactive visualization of architectural models. In
+distinction to prior work, we decompose the task of
+modeling the expected cost of scenes into (1) the con­
+struction of models of perceptual loss for image com­
+ponents, (2) the development of probabilistic models
+of attention that transform costs to expected costs,
+and the (3) assembly of costs associated with different
+components into a cost for an entire image or segment
+of images. We describe how measures of the expected
+cost of image components can be used in regulation
+systems that seek to minimize the expected percep­
+tual loss of images given limited or varying resource
+constraints.
+2
+
+Dimensions of Rendering
+Approximation
+
+There has been growing interest in the development of
+approximation strategies and architectures for render­
+ing complex scenes. In several recent approaches, im­
+ages are decomposed into sets of scene elements which
+are manipulated separately. We can decompose an
+image in a variety of ways, and can employ different
+approximation strategies to degrade the fidelity with
+which the individual components of scenes are ren­
+dered. In the Talisman test bed, images are decom­
+posed into a set of sprites which can be s ubjected to
+individual approximations. Sprites are shaped image
+layers with an associated two-dimensional transforma-
+
+Decision-Theoretic Approach to Rendering
+
+239
+
+Poor
+
+Accuracy
+Ediu
+
+Figure 1: Strategies for reducing the complexity of
+models. Algorithms for reducing incrementally the
+number of vertices used to describe a geometric model
+can be used to generate a spectrum of models from
+an ideal model to progressively si mp ler models. The
+fully detailed model (left) is described by 6 , 795 ver­
+tices. The simpler model (right) is described by 97
+vertices.
+
+tion. Each pixel in the sprite image has, in addition to
+the color chann els an alpha channel which allows for
+non-rectangular image shapes and smoothly blended
+boundaries. Sprites are selected based on the stability
+in the structure and common trajectories of objects in
+an image. We shall use sprites broadly in our discus­
+sion to refer to a set of elements comprisin g an image
+and the underlying geometric models, textures, mate­
+rials, etc., needed to render each element's image.
+,
+
+Let us explore several graphics approximations strate­
+gies . We will focus in particular on flexible strategies,
+
+methods which can provide for the smooth degradation
+in the fidelity of sprites, along one or more dimensions
+
+of degradation, in return for diminishing computa­
+tional requirements. Flexible rendering strategies in­
+clude approximations that allow for the graceful re­
+duction of model complexity, spatial resolution, shad­
+ing complexity, and for the rate at which sprites are
+updated. Typically, we can generate, for each of the
+degradation dimensions, a corresponding measure of
+error, or fiducial, which estimates the distance from a
+gold-standard rendering along that dimension of qual­
+ity.
+The dynamic selection of simpler models from a spec­
+trum of models to enhance rendering performance (re­
+ferred to as detail elision) has been employed in a num­
+ber of graphics systems. Model-simplification methods
+include the storage of multiple models, the dynamic
+simplification of the mesh of polygons that specify a.
+model, and the choice of sampli n g for surfaces speci­
+fied by parametric models. As the geometry used to
+describe a model is simplified, details of its structure
+are lost and artifacts appear in the form of errors in
+the overall shape or surface characteristics of objects.
+An example of a flexible model-simplification strategy
+is the pmgressive mesh developed by Hoppe [12]. With
+this approach, edges of p olygons composing a mesh are
+
+Figure 2: Tradeoff between size and accuracy for the
+progressive mesh method. The graph displays the rela­
+tionship between a measure of model accuracy based
+on an ene rgy quantity (Edist), that summarizes the
+differences between an ideal model and simpler mod­
+els produced by the progressive mesh approximation
+procedure.
+selected for collapse into single vertices so as to min­
+imize a measure of energy defined in terms of multi­
+ple factors including the total number of vertices and
+the squared distance of points in the simplified mod­
+els from an ideal mesh. T he edge-collapse operation
+is reversible with tractable vertex-splitting operations,
+allowing for rapid t raversal of a sp ectrum of meshes.
+Figure 1 displays a fully de tailed model and a point on
+the spectrum of increasingly simplified models devel­
+oped by the progressive mesh method. Figure 2 shows
+the relationship between the number of polygons in­
+cluded in a model and a measure of model accuracy
+based on a summary energy measure.
+Spatial resolution methods center on the control of the
+number of samples dedicated to a sprite and by the im­
+age compression factor. We can selectively reduce the
+number of pixels devoted to a sprite. As the resolu­
+tion is diminished, objects lose detail and ultimately
+become granular and fuzzy. In Talisman, the sprite
+transformation allows the sprite to be rendered with
+a low number of pixels and interpolated to the higher
+screen resolution. The quality of the resulting blur
+depends on the quality of the image filtering.
+The shading complexity is determined by the type of
+texture filtering, texture level-of-detail, the -number of
+lights used to illuminate a scene, and the use of shad­
+ing effects such as reflections or shadows. Diminish­
+ing shading complexity introduces granularity and ar­
+tifacts in the subtleties of lighting and reflection. For
+example, a reduction in the texture level-of-detail blurs
+the texture applied to the object. The magnitude of
+error can be captured by photometric estimates.
+Temporal resolution methods center on the control of
+the rate at which scenes or components of scenes are
+updated. Temporal resolution methods include the
+simple approach· of reducing the frame rate to allow
+
+240
+
+Horvitz and Lengyel
+
+��-----�
+Degradation dimension
+Figure 3: Minimizing computation through reuse of
+sprites. Talisman takes advantage of spatial and tem­
+poral coherence by attempting to transform previously
+rendered sprites rather than re-rendering the sprites.
+Rectangles composed of dotted lines bound sprites
+warped to fit a new frame; rectangles of solid lines
+bound re-rendered sprites.
+enough computation to render scenes. This common
+approach leads to problems with flicker and is espe­
+cially costly in interactive applications. A more so­
+phisticated temporal-resolution strategy i s to maintain
+frame refresh rate, but to render objects within frames
+at different frequencies depending on the configuration
+and dynamics of objects.
+The manipulation of temporal resolution of individ­
+ual sprites is central in Talisman. In Talisman, com­
+putationally inexpensive transformations are applied
+to update sprites generated from previous frames so
+as to approximate the general motion of an object or
+change of viewpoint in three dimensions-instead of
+undertaking more expensive re-rendering of the sprites
+from 3D models. Talisman attempts to minimize the
+computational requirements of rendering by employ­
+ing inexpensive 2D transformations on previously ren­
+dered sprites rather than re-rendering sprites where
+possible. Where possible, computationally inexpen­
+sive 2D affine transformations are employed to update
+sprites generated for previous frames so as to approx­
+imate the general motion of an object or change of
+viewpoint in three dimensions-instead of undertak­
+ing more expensive re-rendering of the sprites from
+3D models. Thus, Talisman attempts to adapt previ­
+ously rendered sprites , bypassing the more expensive
+task of re-rendering the sprites, but potentially induc­
+ing spatial and temporal artifacts. Several groups have
+explored the similar use of inexpensive warping trans­
+formations on subcomponents of images to reduce real­
+time computation [25, 27, 3, 20].
+In Talisman, sprites rendered in an earlier frame will
+continue to be transformed and reused in new frames
+until an estimate of error exceeds a tolerated error
+level. A small number of positions in the image , called
+characteristic points, are used to monitor and estimate
+the error as a function of the distances between the
+reused sprite and the actual sprite in the new frame.
+As the level of tolerated error is increased , the number
+
+Figure 4: Considering perceptual costs and computa­
+tional savings. The schematized graphs highlight
+our pursuit of an understanding of relationships be­
+tween measures of simplification, and perceptual and
+computational costs as image elements are degraded.
+of sprites that need to be re-rendered in each frame
+typically drops. However, as the error threshold is
+increased , geometric and temporal artifacts become
+more salient as sprites that have been warped for sev­
+eral frames are replaced with are-rendered sprite after
+the larger error thresholds have been exceeded. By in­
+creasing the tolerated error, we save on resources by
+minimizing re-rendering, but may introduce noticeable
+artifacts in object distortion, problems with visibility
+of overlapping sprites, and discontinuities.
+Figure 3 highlights the savings that can be achieved
+with sprite reuse. The left panel of the figure displays
+a frame drawn from a sequence of frames produced
+by a Talisman simulation that depicts two spacecraft
+traveling over mountainous terrain. The right panel
+shows a set of boxes that bound the individual sprites
+in the scene. The sprites that have been re-rendered
+for this frame are highlighted with solid lines, while the
+larger number of sprites that have been reused through
+inexpensive transformations are bounded with rectan­
+gles composed of broken lines.
+3
+
+Perception and Computation
+
+Optimization of graphics rendering under varying re­
+source constraints poses challenges at the interface be­
+tween computation and cognition. We seek to model
+how degradations along different dimensions of render­
+ing approximation can influence the perception of the
+quality of a scene. In addition, we wish to understand
+how a user's attention to different components of an
+image can change impressions of quality.
+We may have access to information of the form por­
+trayed in Figure 2, detailing the relationships between
+simple summaries of errors and alternate simplifica­
+tions generated by flexible strategies. However, to
+understand the actual perceptual costs and benefits,
+we need to make the additional link to computational
+resources and perceptual accuracy, and to extend our
+
+Decision-Theoretic Approach to Rendering
+
+unders ta n ding to multipl e combinations of degrada­
+tion. This goal is captured by Figure 4, which high­
+lights the missing li nk s between measures of accu­
+racy and estimates of computational load, and between
+measures of accuracy and the p ercei ved quali ty of im­
+ages.
+
+The overall aim of capturing the influence of multiple
+factors on the perceptual quality of images is the de­
+velopment of a rich, multiattribute perceptual utility
+model that represents the perceptual cost associated
+with the degradation of i mages from a gold-standard
+image or set of images . Attempts to map dimensions
+of image deg radati on to perception of quality brings us
+into the realm of the psychology of visual perception.
+4
+
+Findings in Visual Perception
+
+The cognitive psychology of vision is an active area of
+research fraught with c omp eting and comp le ment ar y
+theories ' numerous studies, and an array of interesting
+results. Several areas of investigation in visual p er­
+cepti on have relevance to our pursuit of links between
+perceptual quality of images and rendering decisions.
+As highlighted by the schematized functions displayed
+in Figure 5, we wish to move beyond information dis­
+played in F ig u re 2 to map the links between p�r­
+ceptual quality and the metrics us_ed to ch�racte_nze
+the degradation of graphics along different dimensiOns
+(e.g., total squared distance deviation of mesh, tol­
+erance of warp error-estimate, diminished resolution).
+We also need to characterize how various combinations
+of degradations, can i nfluen ce subjective impressions
+of the quality of a scene-and to understand how at­
+tention to different aspects of a scene influences the
+cost of degradations. After all, our goal is to provide
+content that is visually satisfying to people. Simple
+scientific goals focused on maximizing precision across
+the board are likely to be naive from the p oi nt of view
+of genuinel y optimizing the final visual result.
+4.1
+
+Visual Search and Attention
+
+The paradi gm in psychology for measuring the abil­
+human subjects to identify various features in
+scenes centers on a visual-search methodology. Studies
+
+i ty of
+
+of visual search have attempted to measure the abil­
+
+ities of human subjects to no tice various components
+of scen es . A large set of studies have uncovered two
+interrelated classes of visual processing, referred to as
+preattentive and attentive vision, respectively. Preat­
+tentive vision is thought to continually scan large areas
+at a time in parallel, efficiently n oti ng features repre­
+sen t i n g basic ch anges in pattern or motion . Atten­
+tive visual processes refer to the more serial, resource­
+limited processes found to be re q uired to recogniz e de­
+tai ls about objects and relatio nships in scenes.
+
+241
+
+Neisser noted that features efficiently detec ted by the
+preatt ent ive visual processes include the overall color,
+size, lumin ance , motion, temporal onset of patterns,
+and simple aspects of shape like orientation, curva­
+ture (but not closure, gaps or terminators) [21]. Julesz
+defined a class of features efficiently discriminated by
+preattentive vi sion, referred to as textons [17]. Tex­
+tons include elongated shapes such as ellipses, rect­
+angles, and line segments that have specific colors,
+widths, l engths , orientations, depths, v elocities , and
+flicker. Textons also include the ends of line segments,
+referred to as terminator s, and the crossing of lines.
+Preattenti ve processing has been shown to be limited
+in its abi lity to detect the absence of features in a tar­
+get amidst a sea of similar targets that contain the fea­
+ture (e.g., fi nding a ci rcle without a slash among circles
+with a slash). More generally, the parallel, preatten­
+tive processes cannot efficiently identify cases where
+distinct features are conjoined into higher-level pat­
+terns or objects; identifying conjunctions of features
+requires the m or e focused, resource-strapped attentive
+vision processes.
+Several studies have furt h er elucidated the links be­
+tween preattent.ive and atten ti ve processes. For exam­
+ple, researchers have foun d that objects may be recog­
+nized rapidly through efficient i nteract ions of preatten­
+tive and attentive processes and search can be made
+more efficient through tr ain ing . An example of effi­
+cient reco gn ition of objects is the "pop out" effect,
+where objects seem to jump out of background pat­
+terns. Wolfe, et al. p erfo rmed studies suggesting that
+serial search for conjunctions can be guided and m ad e
+more efficient taking advantage of parallel processes
+[34]. The group proposed that pre attentive processes
+can filter out distracters from candidates, and, thus,
+reduce the size of the serial search. This effect appears
+to depend on the quality of the gui d ance provided by
+the parallel processes, and enhanced when elements
+are distinguished by luminance and color contrast, or
+w hen there are discontinuities in spatial or t emporal
+patterning of the first-order properties giving rise to
+motion or texture differences [2]. Treisman and Gelade
+have studied the ability of people to r ecogniz e conjunc­
+tions of features. The team proposed and found evi­
+dence for the feature-integration theory of attention,
+where features are detected early on but are only re­
+lated to one another to form recog niz able objects with
+focused at t en tion [33]. They also showed that recogn i­
+tion tasks were diminished by distraction and diverti ng
+of attention.
+
+Investigation of visual attention has also explored the
+realm between preattentive and attentive processes by
+seeking out context-dependent changes in p ercep tual
+abilities. Under some conditions, visual resources ap­
+pear to be distributed evenly over a display, with ap­
+parent parallel processing of display items [18, 29]. In
+o ther situations, a focused, serial scann i ng of ite m s in
+
+242
+
+Horvitz and Lengyel
+
+a display occurs [7, 24]. One study showed that it is
+difficult for viewers to split their detailed visual atten­
+tion to two separate spatial regions [23]. Eriksen and
+Hoffman have found the tight focus to have a diam­
+eter of approximately 1 degree of visual angle. More
+generally, response time and accuracy in search tasks
+have been found to be influenced by the spatial rela­
+tionships between a target object, the position and
+number of related objects, and the location on the
+screen that subjects have been cued to focus on via
+verbal commands or visual stimuli [4, 31]. Reaction
+times in search tasks have been found to be fastest if
+attention is focused on the location of the target (23],
+and to increase as the visual angle between a current
+focus and target increases, as well as with the dimin­
+ishing distance between a target and distractor objects
+[8, 11' 22, 30].
+Capacity models for attention have been developed
+that attempt to describe the spatial characteristics
+of visual attention. Several different classes of model
+have been proposed including those where attentional
+resources are considered as being allocated simulta­
+neously in different amounts to different locations in
+the visual field [28], models where resources are tog­
+gled between a distributed and a focused, "spotlight"
+state [16], and a "zoom-lens" model where there is a
+tradeoff between the breadth and degree of attention,
+and where resources are distributed evenly within the
+purview of the lens, from large views at low accuracies
+or power, to tighter focuses that are used to serially
+explore small areas with high-resolution [8, 7, 6, 15].
+Several experiments have provided some evidence for
+the spotlight model [16] and for the zoom-lens model
+[8, 5, 1]. Nevertheless, there is still uncertainty about
+which models best describe visual attention, and to
+the extent that preattentive and attentive processes
+are distinct or can be explained by a larger model of
+attention.
+4.2
+
+Implications of the Findings
+
+We wish to harness knowledge about the human visual
+system to model how viewers perceive degradations
+produced by rendering approximation. The basic find­
+ings in visual search provide intuitions that are useful
+for constructing parameterized models of perceptual
+loss. Such models can be refined by performing stud­
+ies with subjects viewing a range of approximations
+produced by a graphics system.
+In particular, results about the difficulty of viewers
+recognizing objects and missing details in objects in
+time-pressured search have implications in models of
+perceptual cost and of attention. The finding that ob­
+ject recognition is largely a function of attentive pro­
+cedures and that attentive vision is a serial, resource­
+constrained process suggests that the perceptual cost
+of selective degradations is likely to be sensitive to
+
+the details of a viewer's attention, and that percep­
+tual losses are minimized when the viewer is attending
+to portions of an image that are not significantly de­
+graded.
+The findings also characterize spatial and temporal
+features that guide a viewer's attentive processes to
+recognize objects and patterns more efficiently. Such
+results suggest that rendering artifacts may be espe­
+cially prominent if they lead to discontinuities in such
+attributes as color, texture, or motion may lead to
+a "popping-out" of artifacts. The studies of attention
+can provide us with insights for developing models that
+relate the ease with which a viewer may notice objects
+as a function of their spatial relationships with an ob­
+ject at the center of attention.
+To further extend our understanding of the links be­
+tween the results from visual search research and the
+perceptual quality of images rendered by different reg­
+ulation policies, we have been collaborating with cog­
+nitive psychologists on sets of perceptual studies aimed
+at directly exploring the influence of various rendering
+policies on the overall perception of image quality. We
+are investigating the perception of loss of quality as
+a function of dimensions of degradation provided in
+the Talisman system, including diminishment of spa­
+tial and temporal resolution individually and in com­
+bination. [14]. We have also been performing studies
+with gaze-tracking equipment to gain an understand­
+ing of attention as a function of content and to char­
+acterize perception of image quality as a function of
+attention.
+5
+
+Modeling the Cost of Rendering
+Approximation
+
+The serial nature of attentive vision highlights oppor­
+tunities for building models of degradation as a func­
+tion of focus of attention, and for dynamically allocat­
+ing resources based on attention. We shall now de­
+scribe our work to build models for controlling graph­
+ics rendering inspired by the results on human visual
+perception and attention.
+We decompose the modeling task for attention-based
+rendering into the tasks of ( 1) building a model of
+cost of perceptual degradation capturing the per­
+ceived losses as sprites are displayed with diminishing
+resources, (2) developing a model of attention, which
+provides probabilities that objects in a scene will be
+at the focus of a viewer's attention, and (3) providing
+a model that combines the costs of degradation assoc­
+iated with multiple sprites into the comprehensive cost
+of an entire frame or sequence of frames. Such mod­
+els provide a foundation for refinement with empirical
+studies of cost and attention.
+We shall consider first deterministic measures of per­
+ceptual cost. Then, we will develop a measure of
+
+Decision- Theoretic Approach to Rendering
+
+243
+
+tails about the use of characteristic points to develop
+
+a fiducial that reports a quality of app r oximation are
+
+Increasing attention to sprite
+
+described by Lengyel and Snyder in
+
+Ideo!
+
+[19].
+
+We now need to extend the cost for individual sprites
+into models of cost for multiple sprites.
+
+Perceptual
+quality
+
+A simple
+
+model for combining the cost assigned to multiple
+
+sprites into a total perceptual cost CP is the sum of
+all of the costs associated with each sp rite ,
+
+0
+
+(1)
+
+Accuracy estimate
+
+F igure 5: Attention and perception. These schema­
+
+tized graphs highlight our goal to better u nderstand re­
+lation ships between error metrics and perceptual cost,
+
+as well as the influence of attention on the pe rception
+
+where Rk is instantiated to the rende ring action taken
+for each sprite.
+The combination of the cost of sprites need not be ad­
+ditive as described in Equation
+
+1.
+
+For example, the
+
+of the quality of image elements.
+
+perceived losses in the quality of an image may be a
+
+expected perceptual cost based on a consideration of a
+
+sprites, dependent on the relationships among sprites
+
+more complex function of the degrada t ion of multiple
+
+probability distribution over foci of attention. In Sec­
+
+and the way sprites comprise objects.
+
+tion 6, we will discuss the authoring or generation of
+
+phenomena could arise fro m perceptual dependencies
+
+models of attention for providing the likelihoods that
+viewers will focus on particu lar aspects of a scene.
+5.1
+
+nomena stemming from degradations of se ts of sprites
+perceived to comprise the same object versus sprites
+scattered among different objects.
+
+Let us first focus on the development of a perceptual
+
+cost function for individual sprites. A perce ptual cost
+
+5;),
+
+provides us with a measure of
+
+cost associated with each sprite S; as a function of
+the rendering action R performed on that sprite. This
+function captures the contribu tion of each sprite to the
+overall perceived quality of an image as a function of
+
+a meas ure of error between a gold standard rendering
+and an approximation induced by the rendering ac­
+tion. We s hall assume that the perceptual loss assoc­
+
+iated with a perfect rendering of components is 0 and
+has a maximal cost that is a monotonically increasing
+function of
+
+(1)
+
+a measure of re ndering error and
+
+(2)
+
+a
+
+measure of the visual salience of the image component.
+Visual salience may be associated with such variables
+as
+
+among degradations of multiple sprites, including am­
+plification and pop-out effects, and perceptual phe­
+
+Capturing Perceptual Cost
+
+function, CP ( Rk,
+
+A number of
+
+the total screen area occupied by a sprite. The de­
+
+tails of the error measure and the visual salience of the
+component can be refined by specific visual perception
+
+For example, we
+
+can employ more complex functions for combining the
+costs of the degradations of multiple sprites within sin­
+gle objects.
+5.2
+
+Visual Attention and Expected C ost
+
+Findi ngs in visual perception make us keenly inter­
+ested in the influence of a viewer's focus of attention
+and of the overall scene complexity on a viewer's per­
+
+ception of the degrad ati ons associated with rendering
+approximations. As highlighted by the set of schema­
+
+tized curves in Figure 5, we seek to understand the in­
+fluence of attention on the functions linking perceptual
+
+quality to various approximations of rendering sprites
+or larger objects. After describing models of attention,
+we shall mesh the models of attention and models of
+cost described above to generate a model of expected
+cost of image degradation.
+
+studies.
+
+As we re v iewed in Sec t ion
+
+For the general case, R for each component repre­
+
+are unresolved in the psychological literature. Never­
+theless, we can build expressive models with the ability
+
+sents a vector of decisions about the approximation
+of component rendering along the different dimensions
+
+of degradation. In Talisman, key dimensions of degra­
+
+dation include temporal approximation via re-use of
+
+3,
+
+key issues about attention
+
+to capture the expectation that the cost of rendering
+approximatio ns will diminish with diminishing atten­
+tion to sprites.
+
+the percept ual cost function by taking as
+
+sprites with an affine transformation. We have con­
+structed cost models that employ a cost function com­
+
+an additional input a variable A captu ri n g the atten­
+
+puted as the product of the portion of the area of the
+projection surface occupied by the sprite and a mea­
+
+tional focus on a sprite, CP(Rk, si' A). The attentional
+focus can be considered to be a scalar measure of the
+
+sure of rendering error that is computed as the sum
+of squared distance between a set of reference points
+in the warped and a perfectly rendered sprite. De-
+
+tions of a screen, or, alternatively, as a discrete, binary
+
+Let us exten d
+
+degree to which visual resources are allocated to por­
+
+variable that models a viewer as either attending or as
+
+244
+
+Horvitz and Lengyel
+
+not attending to specific elements of an image. We seek
+to compute an expected cost of a rendered scene by ap­
+proximating the probability, p(A5•IE), that a user is
+selectively focusing on sprite S; given some evidence,
+E. Evidence can include information about the struc­
+ture of a scene, and, where relevant, about the goals
+associated with an interactive task such as a computer
+game.
+In a continuous attentional model, we assume a scalar
+measure of attention as a random variable that varies
+between representing a minimal amount of attention
+at zero and a maximal amount of attention at one.
+With this model, the expected perceptual cost is,
+
+We can simplify this model by factoring the attention
+variable out of the cost function. In such a model, we
+revert to the attention-independent form of cost func­
+tion which represents the quality of a rendered sprite
+when attention is fully focused on that sprite. We
+diminish the cost by a multiplicative attention factor,
+a(x), which ranges between zero and one, as a viewer's
+attention varies between no attention and full atten­
+tion to a sprite,
+£CP
+
+=
+
+L
+;
+
+1�0 p(A5'
+-
+
+=
+
+x!E)a(x)CP(Rk, S;)dx (3)
+
+We can simplify Equation 3 to the binary attentional
+model case where we consider the likelihood that a
+user either selectively attends to an object or does not
+attend to the object, and that the viewer perceives
+the full cost of a degradation when attending and a
+diminishment of the cost when not attending,
+[CP
+
+where
+
+a
+
+=
+
+LP(A5' IE)CP(Rk, S;)
+i
+
+is a constant factor.
+
+We can further simplify the binary model by assum­
+ing that a is zero, implying that sprites that are not
+receiving attention do not contribute to the cost of
+scene,
+
+5.3
+
+Conditioning on Contiguous Objects
+
+Although we can cast all of our equations for atten­
+tion and expected cost in terms of individual sprites,
+it can be useful to jump to a model of attention based
+on the natural tendency for viewers to attend to con­
+tiguous objects. That is, we consider the probability,
+
+p(A5•i lA 0i, E), of attending to an image element con­
+
+ditioned on the viewer selectively attending to a set of
+interrelated elements that are perceived as contiguous
+object, OJ. For example, if we substitute into the dis­
+crete attention model (Equation 4) the probabilities of
+attending to objects and the conditional probabilities
+of attending to sprites given the focus on the specific
+objects, the expected cost is
+
+j
++[1- p(A5'1 IA01, E)p(A01 IE)]aCP(Rk, S;j)
+
+(6)
+
+where p(A O; IE) is the probability of a user attend­
+ing to an object, and p(A5•.i IA0i, E) is the probabil­
+ity that a user will attend to elements ij of object j,
+given that the viewer's attention is drawn to that ob­
+ject, and C(Rk, S;j) is the perceptual cost of applying
+degradation strategy Rk to render element S;j. For
+the simpler binary model, the expected cost is just,
+£.CP
+
+=
+
+L LP(A5'1IA0i, E)p(A01jE)CP(Rk, S;j)
+
+(7)
+The models of expected cost of rendered scenes pro­
+vide a framework for studying the perception of image
+quality as a function attention and of multiple degra­
+dations. They also provide an outline for constructing
+and using models of cost and attention to control ren­
+dering.
+We can build upon these basic models to develop
+the means for representing such potential attentional
+mechanisms as the tradeoff between the radial breadth
+of attention and the degree of attention (the zoom­
+lens model), by introducing additional structure such
+as parameters that describe the probability distribu­
+tion over the degree of attention as a function of the
+radial distance from objects at the center of attention.
+6
+
+Models of Attention
+
+In the context of our models, the more we know about
+the selective attention of viewers to particular aspects
+of a scene, and the smaller that a is, the more we
+can enhance the perceived quality of images under
+computational resource constraints by selectively de­
+grading sprites that have minimal expected cost. We
+seek to characterize the time-dependent probability
+distribution over a viewer's attention as a function of
+distinctions in images being viewed, the task at hand,
+and context. Probabilistic models of a viewer's at­
+tention can range from coarse hand-authored approx­
+imations based on heuristics about attention to more
+complex models learned from data about the gaze of
+viewers, conditioned on content and task.
+Some computer applications provide a set of task­
+oriented contexts that can provide rich inputs to prob-
+
+Decision-Theoretic Approach to Rendering
+
+abilistic models of attention. For example, the time­
+varying goals and point systems that are defined in
+computer games can be used to generate probabil­
+ity distributions over the attention being directed at
+graphical objects. In, gaze-tracking studies of user's
+playing computer arcade games at the Microsoft us­
+ability labs , we have found that game contexts are in­
+duce proto typ ic al patterns of gaze in r elat i on to ren­
+dered objects.
+
+The probabilities that a viewer will attend to a spe­
+cific sprite com p r ising an object , p(A5•; I A0i , E ) , can
+be generated as a f unctio n of such factors as whether
+the sprite defines an edge of an object, the portion of
+the surface area of the total obj e c t occupied by spr i t es
+and the degree to which the approximately rendered
+sprite does not naturally fit into the object. The latter
+can be captured as a function of the perceptual cost
+described earl ier. That is, we condition the attention
+p artly on the cost, p(A5'i I A0i , E, CP) . Here the per­
+ceptual cost provides input to the probability that the
+u ser will att end to the sprite-in addition to serving
+as the cost component of the expected cost model .
+,
+
+we have been work­
+ing to characterize attention as a function of distinc­
+tions that characterize grap h ics content . Some ev­
+idence about objects can be gleaned directly from
+Beyond the task-oriented models ,
+
+graph i cs content . For example, graphics systems have
+access
+
+to
+
+such
+
+as well as the
+
+245
+
+information as the number of objec ts
+size and relat ionships among obj e c ts in
+,
+
+a sce ne. Information about the vi sual angle subtended
+by objects and the virtual distance from objects to the
+viewers can serve as inputs to mod el s of attention .
+
+Beyond automated approaches, we can rely on t h e ex­
+pert judgments of the authors of graphics content . We
+are working to provide a language and associated au­
+thoring tools that allow authors to specify informa­
+tion about the likely pattern of a viewer's attention
+for scenes in rendered movies. The goal is to ease
+the burden on authors by providing stereotypical mod­
+els of attention that take as inputs an author 's high­
+level descriptions about the viewer's attention. Rather
+than require authors to provide inputs about the de­
+tailed priorities of multiple sprites, we allow authors
+to specify primary foci or to classify objects in scenes
+as elements of one of several key groups of objects
+such as primary ac tors, secondary actors, critical en­
+vironment, and background environme nt. Such foci or
+groups serve as arg u m e nt s to models of attention that
+generate the likelihoods that other objects in a scene
+will be noticed by a viewer given these foci and ad­
+ditional evidence abo ut the scene . Evidence includes
+features from the scene that capture significant spatial
+and temporal relationships w i t h objects at the focus
+of attention such as the class of object, size of obj ect,
+and optical d ist anc e of the object from the viewer. We
+can employ spotlight or zoom lens model and make the
+size of the scope ·of attention a constant or a function
+of properties of the objects in an image.
+At run-time, the likelihoods that a user will attend
+objects in each class of obj ect , p( G) is assigned
+and the probabilities of the n objects in each of the
+groups is assigned a probability modulated by key de­
+tails about the configuration of the obj ects. Once
+obj ects h ave been as s ign ed probabilities, conditional
+probabilities of attending to the sprites comprising t he
+objects are assigned. We t ake as inputs the key foci
+of attention , A0" , and employ functions of features in
+the sce ne to approximate the conditional p rob abi lit ies
+p(A0· I A0' , E) . These conditional probabilities can be
+substituted for p(A0• I E) in the expected cost models.
+
+There is opp o r t u n ity for learning probability distribu­
+tions over attention , conditioned on information about
+a scene, including an author's input. Such models
+would allow fo r Bayesian inference to diagnose atten­
+tion. Inference in real-time would be restricted to
+the solution of tractable inference models (e.g., naive
+Bayesian diagnosis) . However, more com plex inferen­
+tial models may be of value in the offline assignment
+of attention for use in real-time rendering .
+6.1
+
+Consideration o f Cost over Multiple
+Frames
+
+Although we have focused on cost associated with ren­
+dering sprites for single frames, it can be important to
+consider t h e cost over a set of recent frames. Such
+richer cost functions must consider the contributions
+of the visual persistence of an artifact across frames.
+Consideration of t h e expected cost over the last n
+frames, CP (t - n) , requires modeling the cost and at­
+tention as a function of the persistence and dynamics
+over multiple frames. A viewer is more likely to no­
+ti ce an artifact in an object that persists over t ime.
+Thus , we m ust consider in parallel the influence of the
+persistence of artifacts on the probabilities that a user
+will attend to sprites, conditioned on the recent his­
+tory of error, p(AS;; I A0i , E, CP(t - n) ) . P ro ce dur al ly
+for each sprite , we must maintain a list of recent error
+associated w it h that sprite in individual adj acent or
+recent frames and combine this list into an overall cost
+to evaluate the current probabilities and costs.
+,
+
+7
+
+Rendering Regulation Policies
+
+to
+
+,
+
+Models of the expected utility of scenes or sequences
+of scenes p rov ide critical metrics for guiding search
+within a large space of rendering policies. Our goal
+is to create images of t he high est quality by minimiz­
+ing the expected perceptual cost of frames , subject to
+the constraints on available r eso u rces . For grap h ics
+architectures like Talisman that commit to a constant
+frame rat e , the time for completely rendering a scene
+may be less than the time available. In systems that
+allow for the variation of frame rate , we must con-
+
+246
+
+Horvitz and Lengyel
+
+sider the cost of diminishing the frame rate along with
+the other kinds of degradations that can be performed.
+Clearly, a general search involving the consideration of
+all feasible degradation actions for each component of a
+scene is intractable. However, we can employ approx­
+imations that take advantage of measures of expected
+utility and that consider in order key classes of approx­
+imation .
+
+whole image by reusing each sprite through a two­
+dimensional warp (i. e. , rendering action Rw ) is,
+
+t:.CP (Rr , Rw , S; )
+
+=
+
+11 p(A5' :::: x JE)o:(x)CP ( Rw , S; )dx
+( 9)
+
+The maximization of image quality for d imension of
+temporal resolution under the deadline defined by the
+
+Let us focus on the control of regulation in the Tal­
+isman architecture .
+
+The two key dimensions of ren­
+
+dering approximation in the Talisman architecture are
+temporal and spatial resolutio n .
+Decisions can be
+made about the spatial resolution of sprites and about
+the error tolerated in the reuse of individual sprites
+through inexpensive warping procedures before they
+are re-rendered with costly procedures.
+
+We seek to
+
+render images of the highest quality by choosing to
+render a set of sprites and applying inexpensive two­
+dimensional transformations to the remaining sprites
+such that the expected perceptual cost of a frame or
+a set of frames is minimized subject to the constraint
+that the total time is less than or equal to the time
+available for generating the frame, given the target
+
+Talisman frame rate maps to the k napsack problem
+
+[10] ;
+
+we seek to maximize the expected value of items
+
+within a "knapsack" sized by computational resources
+allowed by the system 's frame rate.
+Although the
+k napsack problem is NP-Complete, we can use infor­
+mation about the marginal costs and benefits of ren­
+dering sprites in a useful approximation .
+Rerendering each sprite reduces the overall percep­
+tual cost by this incremental amount in return for
+the marginal computation required for rendering the
+sprite.
+
+The ratio of the incremental gain in quality
+
+and the computational cost, gives us a measure the
+expected
+<I> ( S;) ,
+
+perceptual refinement rate with computation,
+( 10)
+
+frame rate.
+The cost of postponing the re-rendering of a sprite
+and using instead a two-dimensional transformation
+of a sprite that was rendered earlier is the degrada­
+tion of the overall
+that sprite .
+
+perceived quality
+
+of frames due to
+
+The benefits are the computational sav­
+
+ings incurred by putting off the rendering and relying
+instead on a two-dimensional transformation of an ear­
+lier sprite. Warping can impose geometric and tempo­
+ral artifacts that become more salient as sprites that
+h ave been warped for several frames are replaced with
+a re-rendered sprite. By increasing the tolerated error,
+we save on resources by minimizing re-rendering, but
+m ay introduce noticeable artifacts in object distortion ,
+problems with visibility o f overlapping sprites, and dis­
+continuities.
+We have built regulation policies for Talisman that
+consider in sequence policies for re-rendering versus
+warping sprites followed by spatial degradation. The
+methods center on a consideration of the marginal
+costs and benefits of the degradations.
+The
+
+marginal computational cost, 6.C0 ( Rr , Rw , Si)
+
+of
+
+re-rendering versus warping a sprite is the difference
+in computational resources required by these two ren­
+dering actions,
+
+tage of the <I> (S; ) associated with sprites.
+
+We order
+
+sprites for re-rendering by <I> ( S; ) until reaching the
+computational deadline and compare the perceptual
+cost of this policy with the policy of rendering only
+the sprite with the highest marginal value. Choosing
+the policy of these two with the minimal perceptual
+cost can be shown to be of value within a factor of two
+of the minimal cost policy [ 1 0] .
+
+For some additional
+
+control cost, we can employ a knapsack approxima­
+tion procedure involving limited search among subsets
+of sprites to bring the perceptual cost even closer to
+the optimal value [26] .
+7.1
+
+Greedy Optimization for Multiple
+Dimensions of Approximation
+
+Moving beyond decisions within the realm of temporal
+resolutio n , we can consider other dimensions of degra­
+dation by taking advantage of the knapsack approxi­
+mation for a means of efficiently comparing policies.
+Although general search through the space of changes
+for other dimensions , such as spatial degradation of
+sprites, is intractable , we can quickly compare poli­
+
+t:.Cc ( Rr , Rw , S; )
+
+=
+
+cc ( R. , S;) - cc ( Rw , S; )
+
+(8 )
+
+where cc ( Rk , S;) is the computational cost of taking
+rendering action
+
+We can employ a greedy algorithm to minimize the
+expected cost of a rendered scene by taking advan­
+
+Rk
+
+cies after making greedy interventions along other di­
+mensions of perceptual loss. After modification of the
+<I> (S; ) associated with sprites following consideration of
+
+for sprite S; . The perceptual mod­
+
+additional degradations, we re-evaluate the expected
+
+els gives the system access to the marginal computa­
+
+cost of the rendering plan generated by the knapsack
+
+tional benefit and cost for each sprite.
+
+approximation.
+
+From Equation 3, we see that the perceptual cost con­
+
+In one myopic approach , we explore in order of prede­
+fined priority, diminishing the texture level-of-detail,
+
+tributed to the overall expected perceptual cost of the
+
+247
+
+Decision-Theoretic Approach to Rendering
+
+then the geometric level-of-detail, then spatial sam­
+pling, and finally shading complexity. For each class
+of degradation, we consider the effects of making a
+predefined amount of degradation in return for the
+gain associated with the ability to re-render additional
+sprites with resources made available by the degrada­
+tion. We can prune the consideration of sprites by ex­
+amining the best increase in overall image quality that
+is possible with the rendering of one additional sprite­
+the sprite that is the first pruned from the render­
+ing list because of the deadline . If no myopic changes
+at one dimension will reduce the expected cost of the
+scene, we move onto the next dimension. After all di­
+mensions of degradation are considered we execute the
+policy.
+
+FUture Work and Summary
+
+8
+
+We have described key issues with the regulation
+of graphics approximation procedures based on an
+expected-cost approach . We reviewed central findings
+on visual search and attention from the Cognitive Psy­
+chology literature and presented expected-cost mod­
+els that can take advantage of information about the
+perceptual costs associated with rendering approxima­
+tions. We described our use of the models to generate
+rendering regulation policies . The approach has been
+validated with sample rendering sequences.
+
+We have
+
+found value in assessing and manipulating separately
+the key components of attention and perceptual cost
+to maximize the perceptual quality of images under
+limited resources.
+We are studying several approaches to the control of
+
+7.2
+
+rendering that build upon the basic control strategies
+Invest igation of Regulation Policies
+
+we have described.
+
+We also seek to understand the
+
+benefits of moving beyond additive models of the cost
+We have experimented with the use of expected cost
+modeling and regulation with a simulation of Talisman
+and have generated scenes demonstrating the value of
+the control policies . For our studies, we explored sev­
+eral perceptual cost models . In one set of studies, we
+used as the perceptual cost the product of the screen
+
+of multiple degradations to consider i nterdependen­
+cies associated with rendering error in related sprites.
+For example, we are interested in the perceptual costs
+associated with heterogeneities in the quality at which
+interrelated sprites or objects are rendered over time
+and space.
+
+area occupied by a sprite multiplied by a linear combi­
+
+We are continuing our research on assessing and re­
+
+nation of our fiducial measure of geometric distortion
+
+fining models of the expected computational and per­
+
+and degradation of resolution of that sprite, informed
+
+ceptual costs of rendering approximations. Enhancing
+
+by the results of perceptual studies.
+
+We tuned con­
+
+the fidelity of these models will strengthen the ability
+
+stants to weight the contribution of the two dimen­
+
+of graphics systems to selectively degrade components
+
+sions to the overall perceptual cost of a sprite.
+
+of rendered images in a manner that directs artifacts
+
+The
+
+Talisman architecture provides us with an estimate of
+
+of approximation into the more tolerant "blind spots"
+
+the cost of rendering each sprite as a function of the
+
+of the human visual system.
+
+rendering actions.
+To construct a model of attention , we tagged objects
+by hand within individual scenes as being in the group
+of
+
+primary actors, secondary actors, critical environ­
+ment, and background environment. The expected cost
+model described in Equation 4 was employed for sev­
+
+eral values of
+
+n,
+
+capturing the degree to which the
+
+degradation of sprites of objects that are not at the
+center of attention are noticed and, thus , add to the
+overall perceptual cost. As
+
+n
+
+is moved to zero, the sys­
+
+tem assumes that rendering approximations that are
+not being attended to can be better tolerated and se­
+lectively degrades the sprites composing those objects.
+We are continuing our perception studies to ascertain
+details about the relationships among a variety of ap­
+proximations available in Talisman and perceptions of
+image quality. We are also continuing studies on de­
+
+Acknowledgments
+We thank Mary Czerwinksi and Kevin Larson for pro­
+viding insights and pointers on psychological studies of
+visual search and for assistance with experiments on
+visual perception and attention , Jim Kajiya for shar­
+ing his insights about tradeoffs in graphics rendering,
+John Snyder for input on regulation and layered archi­
+tectures, Hugues Hoppe for input on model simplifica­
+tion strategies , Bobby Bodenheimer and Larry Ockene
+for their input on the details of the Talisman architec­
+ture, and Mike Jones for ongoing discussion on links
+to work on resource-aware operating systems .
+
+References
+
+[1]
+
+tails of the influence of attention on the perception
+
+The effects of concen­
+
+acuity.
+
+Perception and Psychophysics, 14:225230 , 1973.
+
+of quality. Results of the perceptual and attentional
+studies with human subjects will be valuable to further
+refine the models for computing the expected cost of
+
+J. Beck and B. Ambler.
+
+trated and distributed attention on peripheral
+
+[2]
+
+P. Cavanagh , M. Arguin, and A. Triesman. Ef­
+
+images and for maximizing the quality of rendered im­
+
+fects of surface medium on visual search for orien­
+
+ages.
+
+tation and size features.
+
+Journal of Experimental
+
+248
+
+Horvitz and Lengyel
+
+Psychology: Human perception and Performance,
+16:479-491 , 1990 .
+[3] S.E. Chen and L . Williams. View interpolation for
+image synthesis. In Proceedings of SIGGRAPH
+93, pages 279-288 . SIGG RAPH, August 1993.
+
+[4] R. Colegate, J .E. Hoffman, and C.W. Eriksen.
+Selective encoding from multielement visual dis­
+plays. Perception and Psychophysics, 14:21 7-224,
+1973.
+[5] H . Egeth. Attention and preattention. In G .H.
+Bower, editor, The Psychology of Learning and
+Motivation, volume 11, pages 277-320. 1 977.
+[6] C.W. Eriksen and J.D. St. James. Visual atten­
+tion within and around the field of focal atten­
+tion: A zoom lens model. Perception and Psy­
+chophysics, 40:225-240, 1986.
+[7] C.W. Eriksen and Y. Yeh . Allocation of atten­
+tion in the visual field . Journal of Experimental
+Psychology: Human Perception and Performance,
+1 1 : 583-597, 1985.
+[8] C.W.W. Eriksen and J .E. Hoffman. Temporal and
+spatial characteristics of selective encoding from
+visual displays. Perception and Psychophysics,
+12:201-204 , 1972.
+[9] T.A. Funkhouser and C.H. Sequin. Adaptive dis­
+play algorithm for interactive frame rates during
+visualization of complex virtual environments. In
+Proceedings of SIGGRAPH 93, pages 247-254.
+SIGGRAPH, August 1993.
+[10} M . R. Garey and D.S. Johnson. Computers and
+Intractability: A Guide to the Theory of NP­
+Completeness. W.H. Freeman and Company, New
+York, 1 979.
+[ 1 1] P. Goolkasian. Retinal location and its effect on
+the processing of target and distractor informa­
+tion. Journal of Experimental Psychology: Hu­
+man Perception and Performance, 7 : 1 247-1257 ,
+198 1 .
+[12}
+
+Hoppe. Progressive meshes. I n Proceedings of
+SIGGRAPH 96, pages 99-108. SIGGRAPH, Au­
+gust 1996.
+
+H.
+
+[13] E . Horvitz and J. Lengyel . Flexible rendering
+of 3D graphics under varying resources. In Fall
+Symposium on Flexible Computation, Cambridge
+MA, Report FS-96-06, pages 8 1-88 . AAAI: Menlo
+Park, CA, November 1 996. Also available as Mi­
+crosoft Research Technical Report MSR-TR-961 8 , Winter 1996.
+
+[14] E. Horvitz, J. Lengyel, K. Larson, and M. Czer­
+winski. Harnessing perception of image quality to
+guide graphics rendering. Technical Report Mi­
+crosoft Research Technical Report MSR-TR-9712, Microsoft Research, Spring 1997.
+[15] G .W. Humphreys. On varying the span of visual
+attention: Evidence for two modes of spatial at­
+tention. Quarterly Journal of Experimental Psy­
+chology, 33A : 1 7-3 1 , 198 1 .
+[16] J . Jonides. Further toward a model of the mind's
+eye's movement. Bulletin of the Psychonomic So­
+ciety, 2 1 :247-250, 1983.
+[17]
+
+B . Julesz . A theory of preattentive texture dis­
+crimination based on first order statistics of tex­
+tons. Biological Cybernetics, 4 1 : 1 3 1-138, 1975.
+
+(18] RA. Kinchla. Detecting target elements in mul­
+tielement arrays: A confusability model. Percep­
+tion and Psychophysics, 1 5 : 149-158, 1974.
+[19] J. Lengyel and J. Snyder . Rendering in a lay­
+ered graphics architecture. In Proceedmgs of SIC­
+GRAPH 97. SIGGRAPH, August 1 997.
+[20] L. McMillan and G . Bishop. Plenoptic modeling:
+an image-based rendering system. In Proceedings
+of SIGGRAPH 95, pages 39-46 . SIGGRAPH, Au­
+gust 1995.
+[2 1] U . Neisser. Decision time without reaction time:
+Experiments in visual scanning. A merican Jour­
+nal of Psychology, 76 :376-383, 1980.
+[22] P. Podgorny and R. Shepard. Distribution of vi­
+sual attention over space. Journal of Experimen­
+tal Psychology: Human Perception and Perfor­
+mance, 9 :380-394, 1983.
+[23]
+
+Posner .
+Orienting of attention.
+Quarterly Journal of Experimental Psychology, 32:327, 1980.
+M.
+
+[24] W. Prinzmetal and W.P. Banks. Perceptual ca­
+pacity limits in visual detection and search . B ul­
+letin of the Psychonomic Society, 2 1 :263-266 ,
+1983.
+[25] M. Regan and R. Pose. Priority rendering with a
+virtual reality address recalculation pipeline. In
+Proceedings of SIGGRAPH 94, pages 155-162.
+SIGGRAPH, August 1994.
+[26] S . Sahni . Approximate algorithms for the 0/1
+knapsack problme. J. A CM, pages 1 15-124, 1975.
+[27] J . Shade, D. Lischinski, D. H. Salesin , T. DeRose,
+and J. Snyder. Hierarchical image caching for ac­
+celerated walkthroughs of complex environments.
+In Proceedings of SIGGRAPH 96, pages 75-82.
+SIGGRAPH, August 1996.
+
+Decision-Theoretic Approach t o Rendering
+
+[28] M . L .
+
+Shaw. A capacity allocation model for re­
+
+Journal of Experimental Psychology:
+Human Perception and Performance, 4:586-598,
+1978.
+action time .
+
+[29]
+
+R. M . Shiffrin and G .T. Gardner. Visual process­
+
+Journal of
+Experimental Psychology, 93:72-82, 1972.
+
+ing capacity and attentional control .
+
+[30]
+
+G . L . Shulman, J . Wilson , and
+
+J.B.
+
+Sheehy. Spa­
+
+tial determinants of the distribution of atten­
+tion . Perception and Psychophysics, 37(16) :596 5 , 1985.
+
+[3 1] G .
+
+Sperling and M . J. Melchner. The attention
+
+operating characteristic :
+search .
+
+Examples from visual
+
+Science, 202:315-3 1 8 , 1 978.
+
+[32] J.
+
+Torborg and J. Kajiya. Talisman: Commodity
+realtime 3D graphics for the pc. In Proceedings
+
+of SIGGRAPH 96,
+August 1996.
+[33)
+
+A.M
+
+.
+
+pages
+
+Triesman and
+
+G.
+
+353-363.
+Gelade.
+
+integration theory of attention .
+
+SIGGRAPH,
+
+A feature-
+
+Cognitive Psy­
+
+chology, 12:97-136, 1980.
+[34] J . M .
+
+Wolfe, K .R. Cave, and S . L . Franzel. Guided
+
+search: An alternative to the feature integration
+model for visual search . Journal of Experimental
+Psychology, 15(3):4 1 9-433, 1989.
+
+249
+
+

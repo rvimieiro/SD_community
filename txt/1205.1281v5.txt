@@ -1,0 +1,2506 @@
+LP-rounding Algorithms for the Fault-Tolerant
+Facility Placement ProblemI
+Li Yan and Marek Chrobak1,∗
+
+arXiv:1205.1281v5 [cs.DS] 15 Apr 2013
+
+Department of Computer Science
+University of California at Riverside
+Riverside, CA 92521, USA
+
+Abstract
+The Fault-Tolerant Facility Placement problem (FTFP) is a generalization of the classic
+Uncapacitated Facility Location Problem (UFL). In FTFP we are given a set of facility sites
+and a set of clients. Opening a facility at site i costs fi and connecting client j to a facility
+at site i costs dij . We assume that the connection costs (distances) dij satisfy the triangle
+inequality. Multiple facilities can be opened at any site. Each client j has a demand rj ,
+which means that it needs to be connected to rj different facilities (some of which could
+be located on the same site). The goal is to minimize the sum of facility opening cost and
+connection cost.
+The main result of this paper is a 1.575-approximation algorithm for FTFP, based on
+LP-rounding. The algorithm first reduces the demands to values polynomial in the number
+of sites. Then it uses a technique that we call adaptive partitioning, which partitions the
+instance by splitting clients into unit demands and creating a number of (not yet opened)
+facilities at each site. It also partitions the optimal fractional solution to produce a fractional solution for this new instance. The partitioned fractional solution satisfies a number
+of properties that allow us to exploit existing LP-rounding methods for UFL to round our
+partitioned solution to an integral solution, preserving the approximation ratio. In particular, our 1.575-approximation algorithm is based on the ideas from the 1.575-approximation
+algorithm for UFL by Byrka et al., with changes necessary to satisfy the fault-tolerance
+requirement.
+Keywords: Facility Location, Approximation Algorithms
+
+I
+
+A preliminary version of this article appeared in Proc. CIAC 2013.
+Corresponding author
+Email address: {lyan,marek}@cs.ucr.edu (Li Yan and Marek Chrobak)
+1
+Work supported by NSF grants CCF-0729071 and CCF-1217314.
+
+∗
+
+Preprint submitted to Journal of Discrete Algorithms
+
+April 16, 2013
+
+1. Introduction
+In the Fault-Tolerant Facility Placement problem (FTFP), we are given a set F of sites
+at which facilities can be built, and a set C of clients with some demands that need to be
+satisfied by different facilities. A client j ∈ C has demand rj . Building one facility at a site
+i ∈ F incurs a cost fi , and connecting one unit of demand from client j to a facility at site i
+costs dij . Throughout the paper we assume that the connection costs (distances) dij form a
+metric, that is, they are symmetric and satisfy the triangle inequality. In a feasible solution,
+some number of facilities, possibly zero, are opened at each site i, and demands from each
+client are connected to those open facilities, with the constraint that demands from the same
+client have to be connected to different facilities. Note that any two facilities at the same
+site are considered different.
+It is easy to see that if all rj = 1 then FTFP reduces to the classic Uncapacitated Facility
+Location problem (UFL). If we add a constraint that each site can have at most one facility
+built on it, then the problem becomes equivalent to the Fault-Tolerant Facility Location
+problem (FTFL). One implication of the one-facility-per-site restriction in FTFL is that
+maxj∈C rj ≤ |F|, while in FTFP the values of rj ’s can be much bigger than |F|.
+The UFL problem has a long history; in particular, great progress has been achieved in
+the past two decades in developing techniques for designing constant-ratio approximation
+algorithms for UFL. Shmoys, Tardos and Aardal [16] proposed an approach based on LProunding, that they used to achieve a ratio of 3.16. This was then improved by Chudak [5] to
+1.736, and later by Sviridenko [17] to 1.582. The best known “pure” LP-rounding algorithm
+is due to Byrka et al. [3] with ratio 1.575. Byrka and Aardal [2] gave a hybrid algorithm that
+combines LP-rounding and dual-fitting (based on [10]), achieving a ratio of 1.5. Recently,
+Li [13] showed that, with a more refined analysis and randomizing the scaling parameter
+used in [2], the ratio can be improved to 1.488. This is the best known approximation
+result for UFL. Other techniques include the primal-dual algorithm with ratio 3 by Jain and
+Vazirani [11], the dual fitting method by Jain et al. [10] that gives ratio 1.61, and a local
+search heuristic by Arya et al. [1] with approximation ratio 3. On the hardness side, UFL is
+easily shown to be NP-hard, and it is known that it is not possible to approximate UFL in
+polynomial time with ratio less than 1.463, provided that NP 6⊆ DTIME(nO(log log n) ) [6]. An
+observation by Sviridenko strengthened the underlying assumption to P 6= NP (see [19]).
+FTFL was first introduced by Jain and Vazirani [12] and they adapted their primal-dual
+algorithm for UFL to obtain a ratio of 3 ln(maxj∈C rj ). All subsequently discovered constantratio approximation algorithms use variations of LP-rounding. The first such algorithm, by
+Guha et al. [7], adapted the approach for UFL from [16]. Swamy and Shmoys [18] improved
+the ratio to 2.076 using the idea of pipage rounding introduced in [17]. Most recently, Byrka et
+al. [4] improved the ratio to 1.7245 using dependent rounding and laminar clustering.
+FTFP is a natural generalization of UFL. It was first studied by Xu and Shen [20], who
+extended the dual-fitting algorithm from [10] to give an approximation algorithm with a ratio
+claimed to be 1.861. However their algorithm runs in polynomial time only if maxj∈C rj is
+
+2
+
+polynomial in O(|F|·|C|) and the analysis of the performance guarantee in [20] is flawed2 . To
+date, the best approximation ratio for FTFP in the literature is 3.16, established by Yan and
+Chrobak [21], while the only known lower bound is the 1.463 lower bound for UFL from [6],
+as UFL is a special case of FTFP. If all demand values rj are equal, the problem can be
+solved by simple scaling and applying LP-rounding algorithms for UFL. This does not affect
+the approximation ratio, thus achieving ratio 1.575 for this special case (see also [14]).
+The main result of this paper is an LP-rounding algorithm for FTFP with approximation
+ratio 1.575, matching the best ratio for UFL achieved via the LP-rounding method [3] and
+significantly improving our earlier bound in [21]. In Section 3 we prove that, for the purpose of
+LP-based approximations, the general FTFP problem can be reduced to the restricted version
+where all demand values are polynomial in the number of sites. This demand reduction trick
+itself gives us a ratio of 1.7245, since we can then treat an instance of FTFP as an instance
+of FTFL by creating a sufficient (but polynomial) number of facilities at each site, and then
+using the algorithm from [4] to solve the FTFL instance.
+The reduction to polynomial demands suggests an approach where clients’ demands are
+split into unit demands. These unit demands can be thought of as “unit-demand clients”,
+and a natural approach would be to adapt LP-rounding methods from [8, 5, 3] to this
+new set of unit-demand clients. Roughly, these algorithms iteratively pick a client that
+minimizes a certain cost function (that varies for different algorithms) and open one facility
+in the neighborhood of this client. The remaining clients are then connected to these open
+facilities. In order for this to work, we also need to convert the optimal fractional solution
+(x∗ , y ∗ ) of the original instance into a solution (x̄, ȳ) of the modified instance which then can
+be used in the LP-rounding process. This can be thought of as partitioning the fractional
+solution, as each connection value x∗ij must be divided between the rj unit demands of client
+j in some way. In Section 4 we formulate a set of properties required for this partitioning
+to work. For example, one property guarantees that we can connect demands to facilities
+so that two demands from the same client are connected to different facilities. Then we
+present our adaptive partitioning technique that computes a partitioning with all the desired
+properties. Using adaptive partitioning we were able to extend the algorithms for UFL from
+[8, 5, 3] to FTFP. We illustrate the fundamental ideas of our approach in Section 5, showing
+how they can be used to design an LP-rounding algorithm with ratio 3. In Section 6 we
+refine the algorithm to improve the approximation ratio to 1 + 2/e ≈ 1.736. Finally, in
+Section 7, we improve it even further to 1.575 – the main result of this paper.
+Summarizing, our contributions are two-fold: One, we show that the existing LP-rounding
+algorithms for UFL can be extended to a much more general problem FTFP, retaining
+the approximation ratio. We believe that, should even better LP-rounding algorithms be
+developed for UFL in the future, using our demand reduction and adaptive partitioning
+methods, it should be possible to extend them to FTFP. In fact, some improvement of the
+ratio should be achieved by randomizing the scaling parameter γ used in our algorithm,
+as Li showed in [13] for UFL. (Since the ratio 1.488 for UFL in [13] uses also dual-fitting
+2
+
+Confirmed through private communication with the authors.
+
+3
+
+algorithms [15], we would not obtain the same ratio for FTFP yet using only LP-rounding.)
+Two, our ratio of 1.575 is significantly better than the best currently known ratio of 1.7245
+for the closely-related FTFL problem. This suggests that in the fault-tolerant scenario the
+capability of creating additional copies of facilities on the existing sites makes the problem
+easier from the point of view of approximation.
+2. The LP Formulation
+The FTFP problem has a natural Integer Programming (IP) formulation. Let yi represent
+the number of facilities built at site i and let xij represent the number of connections from
+client j to facilities at site i. If we relax the integrality constraints, we obtain the following
+LP:
+
+minimize cost(x, y) =
+
+P
+
+i∈F
+
+subject to yi − xij ≥ 0
+P
+i∈F xij ≥ rj
+xij ≥ 0, yi ≥ 0
+
+fi y i +
+
+P
+
+i∈F,j∈C
+
+dij xij
+
+(1)
+
+∀i ∈ F, j ∈ C
+∀j ∈ C
+∀i ∈ F, j ∈ C
+
+The dual program is:
+
+maximize
+subject to
+
+P
+
+j∈C rj αj
+
+P
+
+j∈C
+
+(2)
+
+βij ≤ fi
+
+αj − βij ≤ dij
+αj ≥ 0, βij ≥ 0
+
+∀i ∈ F
+∀i ∈ F, j ∈ C
+∀i ∈ F, j ∈ C
+
+In each of our algorithms we will fix some optimal solutions of the LPs (1) and (2) that
+we will denote by (x∗ , y ∗ ) and (α∗ , β ∗ ), respectively.
+P
+∗
+∗
+With (x∗ , y ∗ ) fixed, we can define
+the
+optimal
+facility
+cost
+as
+F
+=
+i∈F fi yi and the
+P
+∗
+∗
+∗
+∗
+∗
+∗
+optimal connection cost as C = i∈F,j∈C dij xij . Then LP = cost(x , y ) = F + C ∗ is the
+joint optimal value of P
+(1) and (2). We can also associate
+with each client j its fractional
+P
+∗
+∗
+∗
+∗
+connection cost Cj = i∈F dij xij . Clearly, C = j∈C Cj . Throughout the paper we will
+use notation OPT for the optimal integral solution of (1). OPT is the value we wish to
+approximate, but, since OPT ≥ LP∗ , we can instead use LP∗ to estimate the approximation
+ratio of our algorithms.
+Completeness and facility splitting. Define (x∗ , y ∗ ) to be complete if x∗ij > 0 implies
+that x∗ij = yi∗ for all i, j. In other words, each connection either uses a site fully or not at
+all. As shown by Chudak and Shmoys [5], we can modify the given instance by adding at
+4
+
+most |C| sites to obtain an equivalent instance that has a complete optimal solution, where
+“equivalent” means that the values of F ∗ , C ∗ and LP∗ , as well as OPT, are not affected.
+Roughly, the argument is this: We notice that, without loss of generality, for each client k
+there exists at most one site i such that 0 < x∗ik < yi∗ . We can then perform the following
+facility splitting operation on i: introduce a new site i0 , let yi∗0 = yi∗ − x∗ik , redefine yi∗ to be
+x∗ik , and then for each client j redistribute x∗ij so that i retains as much connection value as
+possible and i0 receives the rest. Specifically, we set
+yi∗0 ← yi∗ − x∗ik , yi∗ ← x∗ik , and
+x∗i0 j ← max(x∗ij − x∗ik , 0), x∗ij ← min(x∗ij , x∗ik ) for all j 6= k.
+This operation eliminates the partial connection between k and i and does not create any
+new partial connections. Each client can split at most one site and hence we shall have at
+most |C| more sites.
+By the above paragraph, without loss of generality we can assume that the optimal
+fractional solution (x∗ , y ∗ ) is complete. This assumption will in fact greatly simplify some
+of the arguments in the paper. Additionally, we will frequently use the facility splitting
+operation described above in our algorithms to obtain fractional solutions with desirable
+properties.
+3. Reduction to Polynomial Demands
+This section presents a demand reduction trick that reduces the problem for arbitrary
+demands to a special case where demands are bounded by |F|, the number of sites. (The
+formal statement is a little more technical – see Theorem 2.) Our algorithms in the sections
+that follow process individual demands of each client one by one, and thus they critically
+rely on the demands being bounded polynomially in terms of |F| and |C| to keep the overall
+running time polynomial.
+The reduction is based on an optimal fractionalPsolution (x∗ , y ∗ ) of LP (1). From the
+optimality of this solution, we can also assume that i∈F x∗ij = rj for all j ∈ C. As explained
+in Section 2, we can assume that (x∗ , y ∗ ) is complete, that is x∗ij > 0 implies x∗ij = yi∗ for all
+i, j. We split this solution into two parts, namely (x∗ , y ∗ ) = (x̂, ŷ) + (ẋ, ẏ), where
+ŷi ← byi∗ c,
+
+x̂ij ← bx∗ij c and
+
+ẏi ← yi∗ − byi∗ c,
+
+ẋij ← x∗ij − bx∗ij c
+
+for all i, j. Now we construct two FTFP instances Î and İ with the
+P same parameters as the
+original instance, except that the demand of each client j is r̂j = i∈F x̂ij in instance Î and
+P
+ṙj = i∈F ẋij = rj − r̂j in instance İ. It is obvious that if we have integral solutions to both
+Î and İ then, when added together, they form an integral solution to the original instance.
+Moreover, we have the following lemma.
+Lemma 1. (i) (x̂, ŷ) is a feasible integral solution to instance Î.
+(ii) (ẋ, ẏ) is a feasible fractional solution to instance İ.
+(iii) ṙj ≤ |F| for every client j.
+5
+
+Proof. (i) For feasibility, we need to verifyPthat the constraints of LP (1) are satisfied.
+Directly from the definition, we have r̂j = i∈F x̂ij . For any i and j, by the feasibility of
+(x∗ , y ∗ ) we have x̂ij = bx∗ij c ≤ byi∗ c = ŷi . P
+(ii) From the definition, we have ṙj = i∈F ẋij . It remains to show that ẏi ≥ ẋij for all
+i, j. If x∗ij = 0, then ẋij = 0 and we are done. Otherwise, by completeness, we have x∗ij = yi∗ .
+Then ẏi = yi∗ − byi∗ c = x∗ij − bx∗ij c = ẋij .
+(iii) From the definition of ẋij we have ẋij < 1. Then the bound follows from the definition
+of ṙj .
+Notice that our construction relies on the completeness assumption; in fact, it is easy
+to give an example where (ẋ, ẏ) would not be feasible if we used a non-complete optimal
+solution (x∗ , y ∗ ). Note also that the solutions (x̂, ŷ) and (ẋ, ẏ) are in fact optimal for their
+corresponding instances, for if a better solution to Î or İ existed, it could give us a solution
+to I with a smaller objective value.
+Theorem 2. Suppose that there is a polynomial-time algorithm A that, for any instance
+of FTFP with maximum demand bounded by |F|, computes an integral solution that approximates the fractional optimum of this instance within factor ρ ≥ 1. Then there is a
+ρ-approximation algorithm A0 for FTFP.
+Proof. Given an FTFP instance with arbitrary demands, Algorithm A0 works as follows: it
+solves the LP (1) to obtain a fractional optimal solution (x∗ , y ∗ ), then it constructs instances
+Î and İ described above, applies algorithm A to İ, and finally combines (by adding the
+values) the integral solution (x̂, ŷ) of Î and the integral solution of İ produced by A. This
+clearly produces a feasible integral solution for the original instance I. The solution produced
+by A has cost at most ρ · cost(ẋ, ẏ), because (ẋ, ẏ) is feasible for İ. Thus the cost of A0 is
+at most
+cost(x̂, ŷ) + ρ · cost(ẋ, ẏ) ≤ ρ(cost(x̂, ŷ) + cost(ẋ, ẏ)) = ρ · LP∗ ≤ ρ · OPT,
+where the first inequality follows from ρ ≥ 1. This completes the proof.
+4. Adaptive Partitioning
+In this section we develop our second technique, which we call adaptive partitioning.
+Given an FTFP instance and an optimal fractional solution (x∗ , y ∗ ) to LP (1), we split each
+client j into rj individual unit demand points (or just demands), and we split each site i into
+no more than |F| + 2R|C|2 facility points (or facilities), where R = maxj∈C rj . We denote
+the demand set by C and the facility set by F, respectively. We will also partition (x∗ , y ∗ )
+into a fractional solution (x̄, ȳ) for the split instance. We will typically use symbols ν and
+µ to index demands and facilities respectively,
+ that is x̄ = (x̄µν ) and ȳ = (ȳµ ). As before,
+the neighborhood of a demand ν is N (ν) = µ ∈ F : x̄µν > 0 . We will use notation ν ∈ j
+to mean that ν is a demand of client j; similarly, µ ∈ i means that facility µ is on site i.
+Different demands of the same client (that is, ν, ν 0 ∈ j) are called siblings. Further, we use
+6
+
+the convention that fµ = fi for
+µ ∈ i, αν∗ = αj∗Pfor ν ∈ j and dµν = dµj = dij for µ ∈ i
+P
+and ν ∈ j. We define Cνavg = µ∈N (ν) dµν x̄µν = µ∈F dµν x̄µν . One can think of Cνavg as the
+average connection cost of demand ν, if we chose a connection to facility P
+µ with probability
+x̄µν . In our partitioned fractional solution we guarantee for every ν that µ∈F x̄µν = 1.
+Some demands in C will be designated as primary demands and the set of primary
+demands will be denoted by P . By definition we have P ⊆ C. In addition, we will use
+the overlap structure between demand neighborhoods to define a mapping that assigns each
+demand ν ∈ C to some primary demand κ ∈ P . As shown in the rounding algorithms
+in later sections, for each primary demand we guarantee exactly one open facility in its
+neighborhood, while for a non-primary demand, there is constant probability that none of
+its neighbors open. In this case we estimate its connection cost by the distance to the facility
+opened in its assigned primary demand’s neighborhood. For this reason the connection cost
+of a primary demand must be “small” compared to the non-primary demands assigned to
+it. We also need sibling demands assigned to different primary demands to satisfy the faulttolerance requirement. Specifically, this partitioning will be constructed to satisfy a number
+of properties that are detailed below.
+(PS) Partitioned solution. Vector (x̄, ȳ) is a partition of (x∗ , y ∗ ), with unit-value demands,
+that is:
+1.
+
+P
+
+2.
+
+P
+
+3.
+
+P
+
+µ∈F
+
+x̄µν = 1 for each demand ν ∈ C.
+
+µ∈i,ν∈j
+µ∈i
+
+x̄µν = x∗ij for each site i ∈ F and client j ∈ C.
+
+ȳµ = yi∗ for each site i ∈ F.
+
+(CO) Completeness. Solution (x̄, ȳ) is complete, that is x̄µν 6= 0 implies x̄µν = ȳµ , for all
+µ ∈ F, ν ∈ C.
+(PD) Primary demands. Primary demands satisfy the following conditions:
+1. For any two different primary demands κ, κ0 ∈ P we have N (κ) ∩ N (κ0 ) = ∅.
+P P
+2. For each site i ∈ F, µ∈i κ∈P x̄µκ ≤ yi∗ .
+3. Each demand ν ∈ C is assigned to one primary demand κ ∈ P such that
+(a) N (ν) ∩ N (κ) 6= ∅, and
+(b) Cνavg + αν∗ ≥ Cκavg + ακ∗ .
+(SI) Siblings. For any pair ν, ν 0 of different siblings we have
+1. N (ν) ∩ N (ν 0 ) = ∅.
+2. If ν is assigned to a primary demand κ then N (ν 0 ) ∩ N (κ) = ∅. In particular,
+by Property (PD.3(a)), this implies that different sibling demands are assigned
+to different primary demands.
+7
+
+As we shall demonstrate in later sections, these properties allow us to extend known UFL
+rounding algorithms to obtain an integral solution to our FTFP problem with a matching
+approximation ratio. Our partitioning is “adaptive” in the sense that it is constructed one
+demand at a time, and the connection values for the demands of a client depend on the choice
+of earlier demands, of this or other clients, and their connection values. We would like to point
+out that the adaptive partitioning process for the 1.575-approximation algorithm (Section 7)
+is more subtle than that for the 3-apprximation (Section 5) and the 1.736-approximation
+algorithms (Section 6), due to the introduction of close and far neighborhood.
+Implementation of Adaptive Partitioning. We now describe an algorithm for partitioning the instance and the fractional solution so that the properties (PS), (CO), (PD), and
+(SI) are satisfied. Recall that F and C, respectively, denote the sets of facilities and demands
+that will be created in this stage, and (x̄, ȳ) is the partitioned solution to be computed.
+The adaptive partitioning algorithm consists of two phases: Phase 1 is called the partitioning phase and Phase 2 is called the augmenting phase. Phase 1 is done in iterations,
+where in each iteration we find the “best” client j and create a new demand ν out of it. This
+demand either becomes a primary demand itself, or it is assigned to some existing primary
+demand. We call a client j exhausted when all its rj demands have been created and assigned
+to some primary demands. Phase 1 completes when all clients are exhausted. In Phase 2
+we ensure that every demand has a total connection values x̄µν equal to 1, that is condition
+(PS.1).
+For each site i we will initially create one “big” facility µ with initial value ȳµ = yi∗ . While
+we partition the instance, creating new demands and connections, this facility may end up
+being split into more facilities to preserve completeness of the fractional solution. Also,
+we will gradually decrease the fractional connection vector for each client j, to account for
+the demands already created for j and their connection values. These decreased connection
+e . The intuition is that x
+e represents the part of
+values will be stored in an auxiliary vector x
+∗
+e for
+x that still has not been allocated to existing demands and future demands can use x
+e will be indexed by facilities (rather than sites)
+their connections. For technical reasons, x
+e = (e
+and clients, that is x
+xµj ). At the beginning, we set x
+eµj ← x∗ij for each j ∈ C, where
+µ ∈ i is the single facility created initially at site i. At each step, whenever we create a new
+demand ν for a client j, we will define its values x̄µν and appropriately reduce the values
+e and
+x
+eµj , for all facilities µ. We will deal with two types of neighborhoods, with respect to x
+e
+eµj > 0} for j ∈ C and N (ν) = {µ ∈ F : x̄µν > 0} for ν ∈ C.
+x̄, that is N (j) = {µ ∈ F : x
+e and x̄.
+During this process we preserve the completeness (CO) of the fractional solutions x
+More precisely, the following properties will hold for every facility µ after every iteration:
+(c1) For each demand ν either x̄µν = 0 or x̄µν = ȳµ . This is the same condition as condition
+(CO), yet we repeat it here as (c1) needs to hold after every iteration, while condition
+(CO) only applies to the final partitioned fractional solution (x̄, ȳ).
+(c2) For each client j, either x
+eµj = 0 or x
+eµj = ȳµ .
+A full description of the algorithm is given in Pseudocode 1. Initially, the set U of nonexhausted clients contains all clients, the set C of demands is empty, the set F of facilities
+8
+
+consists of one facility µ on each site i with ȳµ = yi∗ , and the set P of primary demands
+is empty (Lines 1–4). In one iteration of the while loop (Lines 5–8), for each client j we
+compute a quantity called tcc(j) (tentative connection cost), that represents the average
+e1 (j) of the nearest facilities µ whose total connection value to j
+distance from j to the set N
+(the sum of x
+eµj ’s) equals 1. This set is computed by Procedure NearestUnitChunk() (see
+e1 (j) in order of nondecreasing distance,
+Pseudocode 2, Lines 1–9), which adds facilities to N
+until the total connection value is exactly 1. (The procedure actually uses the ȳµ values,
+which are equal to the connection values, by the completeness condition (c2).) This may
+require splitting the last added facility and adjusting the connection values so that conditions
+(c1) and (c2) are preserved.
+Pseudocode 1 Algorithm: Adaptive Partitioning
+Input: F, C, (x∗ , y ∗ )
+Output: F, C, (x̄, ȳ)
+. Unspecified x̄µν ’s and x
+eµj ’s are assumed to be 0
+e ← r, U ← C, F ← ∅, C ← ∅, P ← ∅
+. Phase 1
+1: r
+2: for each site i ∈ F do
+3:
+create a facility µ at i and add µ to F
+4:
+ȳµ ← yi∗ and x
+eµj ← x∗ij for each j ∈ C
+5:
+6:
+7:
+8:
+9:
+10:
+11:
+12:
+13:
+14:
+15:
+16:
+17:
+18:
+19:
+20:
+21:
+
+while U 6= ∅ do
+for each j ∈ U do
+e1 (j) ← NearestUnitChunk(j, F, x
+e , x̄, ȳ)
+N
+P
+tcc(j) ← µ∈Ne1 (j) dµj · x
+eµj
+
+. see Pseudocode 2
+
+p ← arg minj∈U {tcc(j) + αj∗ }
+create a new demand ν for client p
+e1 (p) ∩ N (κ) 6= ∅ for some primary demand κ ∈ P then
+if N
+assign ν to κ
+e (p) ∩ N (κ)
+x̄µν ← x
+eµp and x
+eµp ← 0 for each µ ∈ N
+else
+make ν primary, P ← P ∪ {ν}, assign ν to itself
+e1 (p)
+set x̄µν ← x
+eµp and x
+eµp ← 0 for each µ ∈ N
+C ← C ∪ {ν}, rep ← rep − 1
+if rep = 0 then U ← U \ {p}
+for each client j ∈ C do
+. Phase 2
+for each
+. each client j has rj demands
+P demand ν ∈ j do
+e , x̄, ȳ) . see Pseudocode 2
+if µ∈N (ν) x̄µν < 1 then AugmentToUnit(ν, j, F, x
+
+The next step is to pick a client p with minimum tcc(p) + αp∗ and create a demand ν for p
+e1 (p) overlaps the neighborhood of some existing primary demand κ (if there
+(Lines 9–10). If N
+are multiple such κ’s, pick any of them), we assign ν to κ, and ν acquires all the connection
+e (p) ∩ N (κ) (Lines 11–13). Note that although
+values x
+eµp between client p and facility µ in N
+e1 (p), we then move all facilities in the intersection with N
+e (p), a
+we check for overlap with N
+9
+
+Pseudocode 2 Helper functions used in Pseudocode 1
+1:
+2:
+3:
+4:
+5:
+6:
+7:
+8:
+9:
+10:
+11:
+12:
+13:
+14:
+15:
+16:
+17:
+18:
+19:
+20:
+21:
+
+P
+e , x̄, ȳ)
+function NearestUnitChunk(j, F, x
+. upon return, µ∈Ne1 (j) x
+eµj = 1
+e (j) = {µ1 , ..., µq } where dµ1 j ≤ dµ2 j ≤ . . . ≤ dµ
+Let N
+qj
+P
+P
+Let l be such that lk=1 ȳµk ≥ 1 and l−1
+ȳ
+<
+1
+µ
+k
+k=1
+. split µl
+Create a new
+facility
+σ
+at
+the
+same
+site
+as
+µ
+and add it to F
+l
+P
+Set ȳσ ← lk=1 ȳµk − 1 and ȳµl ← ȳµl − ȳσ
+For each ν ∈ C with x̄µl ν > 0 set x̄µl ν ← ȳµl and x̄σν ← ȳσ
+For each j 0 ∈ C with x
+eµl j 0 > 0 (including j) set x
+eµl j 0 ← ȳµl and x
+eσj 0 ← ȳσ
+(All other new connection values are set to 0)
+e1 (j) = {µ1 , . . . , µl−1 , µl }
+return N
+e , x̄, ȳ)
+. ν is a demand
+of client j
+function AugmentToUnit(ν,
+j, F, x
+P
+P
+. upon return, µ∈N (ν) x̄µν = 1
+while µ∈F x̄µν < 1 do
+Let η be
+any
+facility
+such
+that
+x
+e
+>
+0
+ηj
+P
+if 1 − µ∈F x̄µν ≥ x
+eηj then
+x̄ην ← x
+eηj , x
+eηj ← 0
+else
+. split η
+Create a new P
+facility σ at the same site as η and add it to F
+Let ȳσ ← 1 − µ∈F x̄µν , ȳη ← ȳη − ȳσ
+Set x̄σν ← ȳσ , x̄ην ← 0, x
+eηj ← ȳη , x
+eσj ← 0
+0
+For each ν 6= ν with x̄ην 0 > 0, set x̄ην 0 ← ȳη , x̄σν 0 ← ȳσ
+For each j 0 6= j with x
+eηj 0 > 0, set x
+eηj 0 ← ȳη , x
+eσj 0 ← ȳσ
+(All other new connection values are set to 0)
+
+e1 (p) is disjoint from the neighborhoods of all
+bigger set, into N (ν). The other case is when N
+existing primary demands. Then, in Lines 15–16, ν becomes itself a primary demand and
+e1 (p) from p
+we assign ν to itself. It also inherits the connection values to all facilities µ ∈ N
+(recall that x
+eµp = ȳµ ), with all other x̄µν values set to 0.
+At this point all primary demands satisfy Property (PS.1), but this may not be true
+for non-primary demands. For those demands we still may need to adjust the x̄µν values
+def P
+so that the total connection value for ν, that is conn(ν) =
+µ∈F x̄µν , is equal 1. This is
+accomplished by Procedure AugmentToUnit() (definition in Pseudocode 2, Lines 10–21)
+that allocates to ν ∈ j some of the remaining connection values x
+eµj of client j (Lines 19–21).
+AugmentToUnit() will repeatedly pick any facility η with x
+eηj > 0. If x
+eηj ≤ 1 − conn(ν),
+then the connection value x
+eηj is reassigned to ν. Otherwise, x
+eηj > 1 − conn(ν), in which case
+we split η so that connecting ν to one of the created copies of η will make conn(ν) equal 1,
+and we’ll be done.
+Notice that we start with |F| facilities and in each iteration of the while loop in Line 5
+(Pseudocode 1) each client causes at most one split. We have a total of no more than R|C|
+iterations as in each iteration we create one demand. (Recall that R = maxj rj .) In Phase 2
+we do an augment step for each demand ν and this creates no more than R|C| new facilities.
+
+10
+
+So the total number of facilities we created will be at most |F| + R|C|2 + R|C| ≤ |F| + 2R|C|2 ,
+which is polynomial in |F| + |C| due to our earlier bound on R.
+Example. We now illustrate our partitioning algorithm with an example, where the FTFP
+instance has four sites and four clients. The demands are r1 = 1 and r2 = r3 = r4 = 2. The
+facility costs are fi = 1 for all i. The distances are defined as follows: dii = 3 for i = 1, 2, 3, 4
+and dij = 1 for all i 6= j. Solving the LP(1), we obtain the fractional solution given in
+Table 1a.
+x∗ij
+
+1
+
+2
+
+3
+
+4
+
+1
+
+0
+
+4
+3
+
+2
+
+1
+3
+1
+3
+1
+3
+
+0
+
+4
+3
+1
+3
+
+0
+
+4
+3
+1
+3
+1
+3
+
+1
+3
+
+0
+
+3
+4
+
+1
+3
+1
+3
+
+yi∗
+4
+3
+1
+3
+1
+3
+1
+3
+
+x̄µν
+
+10
+
+20
+
+200
+
+30
+
+300
+
+40
+
+400
+
+ȳµ
+
+1̇
+
+0
+
+1
+
+0
+
+1
+
+0
+
+1
+
+0
+
+1
+
+1̈
+
+0
+
+0
+
+1
+3
+
+0
+
+0
+
+2̇
+
+1
+3
+1
+3
+1
+3
+
+0
+
+0
+
+0
+
+1
+3
+1
+3
+
+0
+
+1
+3
+1
+3
+
+0
+
+0
+
+0
+
+1
+3
+1
+3
+1
+3
+
+0
+
+1
+3
+
+0
+
+0
+
+1
+3
+1
+3
+1
+3
+1
+3
+
+3̇
+4̇
+
+(a)
+
+0
+
+0
+
+(b)
+
+Table 1: An example of an execution of the partitioning algorithm. (a) An optimal fractional
+solution x∗ , y ∗ . (b) The partitioned solution. j 0 and j 00 denote the first and second demand
+of a client j, and ı̇ and ı̈ denote the first and second facility at site i.
+It is easily seen that the fractional solution in Table 1a is optimal and complete (x∗ij > 0
+implies x∗ij = yi∗ ). The dual optimal solution has all αj∗ = 4/3 for j = 1, 2, 3, 4.
+Now we perform Phase 1, the adaptive partitioning, following the description in Pseudocode 1. To streamline the presentation, we assume that all ties are broken in favor of
+lower-numbered clients, demands or facilities. First we create one facility at each of the four
+sites, denoted as 1̇, 2̇, 3̇ and 4̇ (Line 2–4, Pseudocode 1). We then execute the “while” loop
+in Line 5 Pseudocode 1. This loop will have seven iterations. Consider the first iteration.
+e1 (2),
+In Line 7–8 we compute tcc(j) for each client j = 1, 2, 3, 4 in U . When computing N
+facility 1̇ will get split into 1̇ and 1̈ with ȳ1̇ = 1 and ȳ1̈ = 1/3. (This will happen in Line 4–7
+of Pseudocode 2.) Then, in Line 9 we will pick client p = 1 and create a demand denoted as
+10 (see Table 1b). Since there are no primary demands yet, we make 10 a primary demand
+e1 (1) = {2̇, 3̇, 4̇}. Notice that client 1 is exhausted after this iteration and U
+with N (10 ) = N
+becomes {2, 3, 4}.
+In the second iteration we compute tcc(j) for j = 2, 3, 4 and pick client p = 2, from which
+e1 (2) = {1̇}, which is disjoint from N (10 ). So we create
+we create a new demand 20 . We have N
+a demand 20 and make it primary, and set N (20 ) = {1̇}. In the third iteration we compute
+e1 (2) = {1̈, 3̇, 4̇} overlaps with
+tcc(j) for j = 2, 3, 4 and again we pick client p = 2. Since N
+e (2) = {3̇, 4̇}.
+N (10 ), we create a demand 200 and assign it to 10 . We also set N (200 ) = N (10 ) ∩ N
+After this iteration client 2 is exhausted and we have U = {3, 4}.
+In the fourth iteration we compute tcc(j) for client j = 3, 4. We pick p = 3 and create
+e1 (3) = {1̇} overlaps N (20 ), we assign 30 to 20 and set N (30 ) = {1̇}. In
+demand 30 . Since N
+11
+
+the fifth iteration we compute tcc(j) for client j = 3, 4 and pick p = 3 again. At this time
+e1 (3) = {1̈, 2̇, 4̇}, which overlaps with N (10 ). So we create a demand 300 and assign it to 10 ,
+N
+as well as set N (300 ) = {2̇, 4̇}.
+In the last two iterations we will pick client p = 4 twice and create demands 40 and 400 .
+e1 (4) = {1̇} so we assign 40 to 20 and set N (40 ) = {1̇}. For 400 we have
+For 40 we have N
+e1 (4) = {1̈, 2̇, 3̇} and we assign it to 10 , as well as set N (400 ) = {2̇, 3̇}.
+N
+Now that all clients are exhausted we perform Phase 2, the augmenting phase, to construct a fractional solution in which all demands have total connection value equal to 1. We
+iterate through each of the seven demands created, that is 10 , 20 , 200 , 30 , 300 , 40 , 400 . 10 and 20
+already have neighborhoods with total connection value of 1, so nothing will change in the
+first two iterations. 200 has 3̇, 4̇ in its neighborhood, with total connection value of 2/3, and
+e (2) = {1̈} at this time, so we add 1̈ into N (200 ) to make N (200 ) = {1̈, 3̇, 4̇} and now 200 has
+N
+total connection value of 1. Similarly, 300 and 400 each get 1̈ added to their neighborhood and
+end up with total connection value of 1. The other two demands, namely 30 and 40 , each
+have 1̇ in its neighborhood so each of them has already its total connection value equal 1.
+This completes Phase 2.
+The final partitioned fractional solution is given in Table 1b. We have created a total of
+five facilities 1̇, 1̈, 2̇, 3̇, 4̇, and seven demands, 10 , 20 , 200 , 30 , 300 , 40 , 400 . It can be verified that all
+the stated properties are satisfied.
+Correctness. We now show that all the required properties (PS), (CO), (PD) and (SI) are
+satisfied by the above construction.
+Properties (PS) and (CO) follow directly from the algorithm. (CO) is implied by the completeness condition (c1) that the algorithm maintains after each iteration. Condition (PS.1)
+is a result of calling Procedure AugmentToUnit() in Line 21. To see that (PS.2) holds,
+note thatP
+at each
+maintains the invariant that, for every i ∈ F and j ∈ C,
+P step the algorithm
+P
+we have µ∈i ν∈j x̄µν + µ∈i x
+eµj = x∗ij . In the end, we will P
+createP
+rj demands for each
+client j, with each demand ν ∈ j satisfying (PS.1), and thus ν∈j µ∈F x̄µν = rj . This
+implies that x
+eµj = 0 for every facility µ ∈ F, and (PS.2) follows. (PS.3) holds because every
+time we split a facility µ into µ0 and µ00 , the sum of ȳµ0 and ȳµ00 is equal to the old value of
+ȳµ .
+Now we deal with properties in group (PD). First, (PD.1) follows directly from the
+algorithm, Pseudocode 1 (Lines 14–16), since every primary demand has its neighborhood
+fixed when created, and that neighborhood is disjoint from those of the existing primary
+demands.
+Property (PD.2) follows from (PD.1), (CO) and (PS.3). In more detail, it can be justified
+as follows. By (PD.1), for each µ ∈ i there is at most one κ ∈ P with x̄µκ > 0 and we have
+x̄µκ = ȳµ due do (CO). Let K ⊆ i be the set of those µ’s for which such P
+κ ∈ PPexists, and
+denote
+this κ P
+by κµ . Then,
+(CO) and (PS.3), we have µ∈i κ∈P x̄µκ =
+P
+P using conditions
+∗
+x̄
+=
+ȳ
+≤
+ȳ
+=
+y
+.
+i
+µ∈K µκµ
+µ∈K µ
+µ∈i µ
+Property (PD.3(a)) follows from the way the algorithm assigns primary demands. When
+demand ν of client p is assigned to a primary demand κ in Lines 11–13 of Pseudocode 1, we
+12
+
+e (p) ∩ N (κ) (the intersection is nonempty) into N (ν), and we never
+move all facilities in N
+remove a facility from N (ν). We postpone the proof for (PD.3(b)) to Lemma 5.
+Finally we argue that the properties in group (SI) hold. (SI.1) is easy, since for any client
+j, each facility µ is added to the neighborhood of at most one demand ν ∈ j, by setting x̄µν to
+ȳµ , while other siblings ν 0 of ν have x̄µν 0 = 0. Note that right after a demand ν ∈ p is created,
+e (p) = ∅, by Lines 11–
+its neighborhood is disjoint from the neighborhood of p, that is N (ν)∩ N
+13 of the algorithm. Thus all demands of p created later will have neighborhoods disjoint from
+the set N (ν) before the augmenting phase 2. Furthermore, Procedure AugmentToUnit()
+preserves this property, because when it adds a facility to N (ν) then it removes it from
+e (p).
+e (p), and in case of splitting, one resulting facility is added to N (ν) and the other to N
+N
+Property (SI.2) is shown below in Lemma 3.
+It remains to show Properties (PD.3(b)) and (SI.2). We show them in the lemmas below,
+thus completing the description of our adaptive partition process.
+Lemma 3. Property (SI.2) holds after the Adaptive Partitioning stage.
+Proof. Let ν1 , . . . , νrj be the demands of a client j ∈ C, listed in the order of creation, and,
+for each q = 1, 2, . . . , rj , denote by κq the primary demand that νq is assigned to. After the
+completion of Phase 1 of Pseudocode 1 (Lines 5–18), we have N (νs ) ⊆ N (κs ) for s = 1, . . . , rj .
+Since any two primary demands have disjoint neighborhoods, we have N (νs ) ∩ N (κq ) = ∅
+for any s 6= q, that is Property (SI.2) holds right after Phase 1.
+After Phase 1 all neighborhoods N (κs ), s = 1, . . . , rj have already been fixed and they do
+e (j) appear in any of N (κs ) for s = 1, . . . , rj ,
+not change in Phase 2. None of the facilities in N
+by the way we allocate facilities in Lines 13 and 16. Therefore during the augmentation
+e (j) to N (ν), for some ν ∈ j (Line 19–21
+process in Phase 2, when we add facilities from N
+of Pseudocode 1), all the required disjointness conditions will be preserved.
+We need one more lemma before proving our last property (PD.3(b)). For a client j and
+a demand ν, we use notation tccν (j) for the value of tcc(j) at the time when ν was created.
+(It is not necessary that ν ∈ j but we assume that j is not exhausted at that time.)
+Lemma 4. Let η and ν be two demands, with η created no later than ν, and let j ∈ C be a
+client that is not exhausted when ν is created. Then we have
+(a) tccη (j) ≤ tccν (j), and
+(b) if ν ∈ j then tccη (j) ≤ Cνavg .
+Proof. We focus first on the time when demand η is about to be created, right after the
+e (j) = {µ1 , ..., µq } with all
+call to NearestUnitChunk() in Pseudocode 1, Line 7. Let N
+facilities µs ordered according to nondecreasing distance from j. Consider the following
+linear program:
+X
+minimize
+dµs j zs
+Xs
+subject to
+zs ≥ 1
+s
+
+13
+
+0 ≤ zs ≤ x
+eµs j
+
+for all s
+
+This is a fractional minimum knapsack covering problem (with knapsack size equal 1) and
+its optimal fractional solution is the greedy solution, whose value is exactly tccη (j).
+On the other hand, we claim that tccν (j) can be thought of as the value of some feasible
+solution to this linear program, and that the same is true for Cνavg if ν ∈ j. Indeed, each of
+these quantities involves some later values x
+eµj , where µ could be one of the facilities µs or
+a new facility obtained from splitting. For each s, however, the sum of all values x
+eµj , over
+the facilities µ that were split from µs , cannot exceed the value x
+eµs j at the time when η was
+created, because splitting facilities preserves this sum and creating new demands for j can
+only decrease it. Therefore both quantities tccν (j) and Cνavg (for ν ∈ j) correspond to some
+choice of the zs variables (adding up to 1), and the lemma follows.
+Lemma 5. Property (PD.3(b)) holds after the Adaptive Partitioning stage.
+Proof. Suppose that demand ν ∈ j is assigned to some primary demand κ ∈ p. Then
+Cκavg + ακ∗ = tccκ (p) + αp∗ ≤ tccκ (j) + αj∗ ≤ Cνavg + αν∗ .
+We now justify this derivation. By definition we have ακ∗ = αp∗ . Further, by the algorithm, if
+κ is a primary demand of client p, then Cκavg is equal to tcc(p) computed when κ is created,
+which is exactly tccκ (p). Thus the first equation is true. The first inequality follows from
+the choice of p in Line 9 in Pseudocode 1. The last inequality holds because αj∗ = αν∗ (due
+to ν ∈ j), and because tccκ (j) ≤ Cνavg , which follows from Lemma 4.
+We have thus proved that all properties (PS), (CO), (PD) and (SI) hold for our partitioned
+fractional solution (x̄, ȳ). In the following sections we show how to use these properties to
+round the fractional solution to an approximate integral solution. For the 3-approximation
+algorithm (Section 5) and the 1.736-approximation algorithm (Section 6), the first phase of
+the algorithm is exactly the same partition process as described above. However, the 1.575approximation algorithm (Section 7) demands a more sophisticated partitioning process as
+the interplay between close and far neighborhood of sibling demands result in more delicate
+properties that our partitioned fractional solution must satisfy.
+5. Algorithm EGUP with Ratio 3
+With the partitioned FTFP instance and its associated fractional solution in place, we
+now begin to introduce our rounding algorithms. The algorithm we describe in this section
+achieves ratio 3. Although this is still quite far from our best ratio 1.575 that we derive
+later, we include this algorithm in the paper to illustrate, in a relatively simple setting, how
+the properties of our partitioned fractional solution are used in rounding it to an integral
+solution with cost not too far away from an optimal solution. The rounding approach we
+use here is an extension of the corresponding method for UFL described in [8].
+
+14
+
+Algorithm EGUP. At a high level, we would open exactly one facility for each primary
+demand κ, and each non-primary demand is connected to the facility opened for the primary
+demand it was assigned to.
+More precisely, we apply a rounding process, guided by the fractional values (ȳµ ) and
+(x̄µν ), that produces an integral solution. This integral solution is obtained by choosing a
+subset of facilities in F to open, and for each demand in C, specifying an open facility that
+this demand will be connected to. For each primary demand κ ∈ P , we want to open one
+facility φ(κ) ∈ N (κ). To this end, we use randomization: for each µ ∈ N (κ), we choose
+φ(κ) = µ with probability x̄µκ , ensuring that exactly one µ ∈ N (κ) is chosen. Note that
+P
+µ∈N (κ) x̄µκ = 1, so this distribution is well-defined. We open this facility φ(κ) and connect
+to φ(κ) all demands that are assigned to κ.
+In our description above, the algorithm is presented as a randomized algorithm. It can
+be de-randomized using the method of conditional expectations, which is commonly used in
+approximation algorithms for facility location problems and standard enough that presenting
+it here would be redundant. Readers less familiar with this field are recommended to consult
+[5], where the method of conditional expectations is applied in a context very similar to ours.
+Analysis. We now bound the expected facility cost and connection cost by establishing the
+two lemmas below.
+Lemma 6. The expectation of facility cost FEGUP of our solution is at most F ∗ .
+Proof. By Property (PD.1), the neighborhoods of primary demands are disjoint. Also, for
+any primary demand κ ∈ P , the probability that a facility µ ∈ N (κ) is chosen as the open
+facility φ(κ) is x̄µκ . Hence the expected total facility cost is
+P
+P
+E[FEGUP ] = κ∈P µ∈N (κ) fµ x̄µκ
+P
+P
+= κ∈P µ∈F fµ x̄µκ
+P P
+P
+= i∈F fi µ∈i κ∈P x̄µκ
+P
+≤ i∈F fi yi∗ = F ∗ ,
+where the inequality follows from Property (PD.2).
+Lemma 7. The expectation of connection cost CEGUP of our solution is at most C ∗ + 2 · LP∗ .
+Proof. For a primary demand κ, its expected connection cost is Cκavg because we choose
+facility µ with probability x̄µκ .
+Consider a non-primary demand ν assigned to a primary demand κ ∈ P . Let µ be any
+facility in N (ν) ∩ N (κ). Since µ is in both N (ν) and N (κ), we have dµν ≤ αν∗ and dµκ ≤ ακ∗
+∗
+(This follows from the complementary slackness conditions since αν∗ = βµν
++ dµν for each
+µ ∈ N (ν).). Thus, applying the triangle inequality, for any fixed choice of facility φ(κ) we
+have
+dφ(κ)ν ≤ dφ(κ)κ + dµκ + dµν ≤ dφ(κ)κ + ακ∗ + αν∗ .
+
+15
+
+Therefore the expected distance from ν to its facility φ(κ) is
+E[dφ(κ)ν ] ≤ Cκavg + ακ∗ + αν∗
+≤ Cνavg + αν∗ + αν∗ = Cνavg + 2αν∗ ,
+where the second inequality follows from Property (PD.3(b)). From the definition of Cνavg
+and Property (PS.2), for any j ∈ C we have
+X
+X X
+Cνavg =
+dµν x̄µν
+ν∈j
+ν∈j
+µ∈F
+X
+X X
+=
+dij
+x̄µν
+i∈F
+ν∈j
+µ∈i
+X
+=
+dij x∗ij = Cj∗ .
+i∈F
+
+Thus, summing over all demands, the expected total connection cost is
+P P
+E[CEGUP ] ≤ j∈C ν∈j (Cνavg + 2αν∗ )
+P
+= j∈C (Cj∗ + 2rj αj∗ ) = C ∗ + 2 · LP∗ ,
+completing the proof of the lemma.
+Theorem 8. Algorithm EGUP is a 3-approximation algorithm.
+Proof. By Property (SI.2), different demands from the same client are assigned to different
+primary demands, and by (PD.1) each primary demand opens a different facility. This
+ensures that our solution is feasible, namely each client j is connected to rj different facilities
+(some possibly located on the same site). As for the total cost, Lemma 6 and Lemma 7 imply
+that the total cost is at most F ∗ + C ∗ + 2 · LP∗ = 3 · LP∗ ≤ 3 · OPT.
+6. Algorithm ECHS with Ratio 1.736
+In this section we improve the approximation ratio to 1 + 2/e ≈ 1.736. The improvement
+comes from a slightly modified rounding process and refined analysis. Note that the facility
+opening cost of Algorithm EGUP does not exceed that of the fractional optimum solution,
+while the connection cost could be far from the optimum, since we connect a non-primary
+demand to a facility in the neighborhood of its assigned primary demand and then estimate
+the distance using the triangle inequality. The basic idea to improve the estimate of the
+connection cost, following the approach of Chudak and Shmoys [5], is to connect each nonprimary demand to its nearest neighbor when one is available, and to only use the facility
+opened by its assigned primary demand when none of its neighbors is open.
+Algorithm ECHS. As before, the algorithm starts by solving the linear program and
+applying the adaptive partitioning algorithm described in Section 4 to obtain a partitioned
+solution (x̄, ȳ). Then we apply the rounding process to compute an integral solution (see
+Pseudocode 3).
+16
+
+We start, as before, by opening exactly one facility φ(κ) in the neighborhood of each
+primary demand κ (Line 2). For any non-primary demand ν assigned to κ, we refer to
+φ(κ) as the target facility of ν. In Algorithm EGUP, ν was connected to φ(κ), but in
+Algorithm ECHS we may be able to find an open facility in ν’s neighborhood and connect
+ν to this facility. Specifically, the two changes in the algorithm are as follows:
+(1) Each facility µ that is not in the neighborhood of any primary demand is opened,
+independently, with probability ȳµ (Lines 4–5). Notice that if ȳµ > 0 then, due to
+completeness of the partitioned fractional solution, we have ȳµ = x̄µν for some demand
+ν. This implies that ȳµ ≤ 1, because x̄µν ≤ 1, by (PS.1).
+(2) When connecting demands to facilities, a primary demand κ is connected to the only
+facility φ(κ) opened in its neighborhood, as before (Line 3). For a non-primary demand
+ν, if its neighborhood N (ν) has an open facility, we connect ν to the closest open facility
+in N (ν) (Line 8). Otherwise, we connect ν to its target facility (Line 10).
+Pseudocode 3 Algorithm ECHS: Constructing Integral Solution
+1: for each κ ∈ P do
+2:
+choose one φ(κ) ∈ N (κ), with each µ ∈ N (κ) chosen as φ(κ) with probability ȳµ
+3:
+open φ(κ) and connect κ to φ(κ)
+S
+4: for each µ ∈ F − κ∈P N (κ) do
+5:
+open µ with probability ȳµ (independently)
+6: for each non-primary demand ν ∈ C do
+7:
+if any facility in N (ν) is open then
+8:
+connect ν to the nearest open facility in N (ν)
+9:
+else
+10:
+connect ν to φ(κ) where κ is ν’s assigned primary demand
+Analysis. We shall first argue that the integral solution thus constructed is feasible, and
+then we bound the total cost of the solution. Regarding feasibility, the only constraint that
+is not explicitly enforced by the algorithm is the fault-tolerance requirement; namely that
+each client j is connected to rj different facilities. Let ν and ν 0 be two different sibling
+demands of client j and let their assigned primary demands be κ and κ0 respectively. Due
+to (SI.2) we know κ 6= κ0 . From (SI.1) we have N (ν) ∩ N (ν 0 ) = ∅. From (SI.2), we have
+N (ν) ∩ N (κ0 ) = ∅ and N (ν 0 ) ∩ N (κ) = ∅. From (PD.1) we have N (κ) ∩ N (κ0 ) = ∅. It follows
+that (N (ν) ∪ N (κ)) ∩ (N (ν 0 ) ∪ N (κ0 )) = ∅. Since the algorithm connects ν to some facility in
+N (ν) ∪ N (κ) and ν 0 to some facility in N (ν 0 ) ∪ N (κ0 ), ν and ν 0 will be connected to different
+facilities.
+We now show that the expected cost of the computed solution is bounded by (1+2/e)·LP∗ .
+By (PD.1), every facility may appear in at most one primary demand’s neighborhood, and
+the facilities open in Line 4–5 of Pseudocode 3 do not appear in any primary demand’s
+17
+
+neighborhood. Therefore, by linearity of expectation, the expected facility cost of Algorithm ECHS is
+X
+X
+X
+X
+E[FECHS ] =
+fµ ȳµ =
+fi
+ȳµ =
+fi yi∗ = F ∗ ,
+µ∈F
+
+i∈F
+
+µ∈i
+
+i∈F
+
+where the third equality follows from (PS.3).
+To bound the connection cost, we adapt an argument of Chudak and Shmoys [5]. Consider
+a demand ν and denote by Cν the random variable representing the connection cost for ν.
+Our goal now is to estimate E[Cν ], the expected value of Cν . Demand ν can either get
+connected directly to some facility in N (ν) or indirectly to its target facility φ(κ) ∈ N (κ),
+where κ is the primary demand to which ν is assigned. We will analyze these two cases
+separately.
+In our analysis, in this section and the next one, we will use notation
+X
+X
+D(A, σ)=
+dµσ ȳµ /
+ȳµ
+µ∈A
+
+µ∈A
+
+for the average distance between a demand σ and a set A of facilities. Note that, in particular,
+we have Cνavg = D(N (ν), ν).
+We first estimate the expected cost dφ(κ)ν of the indirect connection. Let Λν denote the
+event that some facility in N (ν) is opened. Then
+E[Cν | ¬Λν ] = E[dφ(κ)ν | ¬Λν ] = D(N (κ) \ N (ν), ν).
+
+(3)
+
+Note that ¬Λν implies that N (κ) \ N (ν) 6= ∅, since N (κ) contains exactly one open facility,
+namely φ(κ).
+Lemma 9. Let ν be a demand assigned to a primary demand κ, and assume that N (κ) \
+N (ν) 6= ∅. Then
+E[Cν | ¬Λν ] ≤ Cνavg + 2αν∗ .
+Proof. By (3), we need to show that D(N (κ) \ N (ν), ν) ≤ Cνavg + 2αν∗ . There are two cases
+to consider.
+Case 1: There exists some µ0 ∈ N (κ) ∩ N (ν) such that dµ0 κ ≤ Cκavg . In this case, for every
+µ ∈ N (κ) \ N (ν), we have
+dµν ≤ dµκ + dµ0 κ + dµ0 ν ≤ ακ∗ + Cκavg + αν∗ ≤ Cνavg + 2αν∗ ,
+using the triangle inequality, complementary slackness, and (PD.3(b)). By summing
+over all µ ∈ N (κ) \ N (ν), it follows that D(N (κ) \ N (ν), ν) ≤ Cνavg + 2αν∗ .
+Case 2: Every µ0 ∈ N (κ) ∩ N (ν) has dµ0 κ > Cκavg . Since Cκavg = D(N (κ), κ), this implies
+that D(N (κ) \ N (ν), κ) ≤ Cκavg . Therefore, choosing an arbitrary µ0 ∈ N (κ) ∩ N (ν),
+we obtain
+D(N (κ) \ N (ν), ν) ≤ D(N (κ) \ N (ν), κ) + dµ0 κ + dµ0 ν ≤ Cκavg + ακ∗ + αν∗ ≤ Cνavg + 2αν∗ ,
+where we again use the triangle inequality, complementary slackness, and (PD.3(b)).
+18
+
+Since the lemma holds in both cases, the proof is now complete.
+We now continue our estimation of the connection cost. The next step of our analysis is
+to show that
+2
+(4)
+E[Cν ] ≤ Cνavg + αν∗ .
+e
+The argument is divided into three cases. The first, easy case is when ν is a primary demand
+κ. According to the algorithm (see Pseudocode 3, Line 2), we have Cκ = dµκ with probability
+ȳµ , for µ ∈ N (κ). Therefore E[Cκ ] = Cκavg , so (4) holds.
+Next, we consider a non-primary demand ν. Let κ be the primary demand that ν is
+assigned to. We first deal with the sub-case when N (κ) \ N (ν) = ∅, which is the same
+as N (κ) P
+⊆ N (ν). Property
+P (CO) implies that x̄µν = ȳµ = x̄µκ for every µ ∈ N (κ), so
+x̄
+=
+we have
+µ∈N (κ) x̄µκ = 1, due to (PS.1). On the other hand, we have
+µ∈N (κ) µν
+P
+µ∈N (ν) x̄µν = 1, and x̄µν > 0 for all µ ∈ N (ν). Therefore N (κ) = N (ν) and Cν has
+exactly the same distribution as Cκ . So this case reduces to the first case, namely we have
+E[Cν ] = Cνavg , and (4) holds.
+The last, and only non-trivial case is when N (κ) \ N (ν) 6= ∅. We handle this case in the
+following lemma.
+Lemma 10. Assume that N (κ) \ N (ν) 6= ∅. Then the expected connection cost of ν, conditioned on the event that at least one of its neighbor opens, satisfies
+E[Cν | Λν ] ≤ Cνavg .
+Proof. The proof is similar to an analogous result in [5, 2]. For the sake of completeness we
+sketch here a simplified argument, adapted to our terminology and notation. The idea is to
+consider a different random process that is easier to analyze and whose expected connection
+cost is not better than that in the algorithm.
+We partition N (ν) into groups G1 , ..., Gk , where two different facilities µ and µ0 are put
+in the same Gs , where s ∈ {1, . . . , k}, if they both belong to the same set N (κ) for some
+primary demand κ. If some µ is not a neighbor of any primary demand, then it constitutes a
+singleton group. For each s, let d¯s = D(Gs , ν) be the average distance from ν to Gs . Assume
+that G1 , ..., Gk are ordered by nondecreasing average distance to ν, that isPd¯1 ≤ d¯2 ≤ ... ≤ d¯k .
+For each group Gs , we select it, independently, with probability gs = µ∈Gs ȳµ . For each
+selected group G
+Ps , we open exactly one facility in Gs , where each µ ∈ Gs is opened with
+probability ȳµ / η∈Gs ȳη .
+So far, this process is the same as that in the algorithm (if restricted to N (ν)). However,
+we connect ν in a slightly different way, by choosing the smallest s for which Gs was selected
+and connecting ν to the open facility in Gs . This can only increase our expected connection
+cost, assuming that at least one facility in N (ν) opens, so
+1
+P[Λν ]
+1
+≤
+P[Λν ]
+
+E[Cν | Λν ] ≤
+
+d¯1 g1 + d¯2 g2 (1 − g1 ) + . . . + d¯k gk (1 − g1 )(1 − g2 ) . . . (1 − gk )
+Xk
+
+Xk
+Yt−1
+¯
+·
+ds gs ·
+gt
+(1 − gz )
+s=1
+
+t=1
+
+19
+
+z=1
+
+
+(5)
+
+=
+=
+
+Xk
+s=1
+avg
+Cν .
+
+d¯s gs
+
+(6)
+(7)
+Pk
+
+The proof for inequality (5) is given in Appendix B (note that s=1 gs = 1), equality (6)
+Q
+P
+Q
+follows from P[Λν ] = 1 − kt=1 (1 − gt ) = kt=1 gt t−1
+z=1 (1 − gz ), and (7) follows from the
+¯
+definition of the distances ds , probabilities gs , and simple algebra.
+Next, we show an estimate on the probability that none of ν’s neighbors is opened by
+the algorithm.
+Lemma 11. The probability that none of ν’s neighbors is opened satisfies P[¬Λν ] ≤ 1/e.
+Proof. We use the same partition of N (ν) into groups G1 , ..., Gk as in the proof of Lemma 10.
+Denoting by gs the probability that a group Gs is selected (and thus that it has an open
+facility), we have
+P
+Yk
+Pk
+1
+(1 − gs ) ≤ e− s=1 gs = e− µ∈N (ν) ȳµ = .
+P[¬Λν ] =
+s=1
+e
+−x
+In this
+P we first use that 1 − x ≤ e holds for all x,
+Pthe second equality follows
+Pderivation,
+k
+from s=1 gs = µ∈N (ν) ȳµ and the last equality follows from µ∈N (ν) ȳµ = 1.
+We are now ready to estimate the unconditional expected connection cost of ν (in the
+case when N (κ) \ N (ν) 6= ∅) as follows:
+E[Cν ] = E[Cν | Λν ] · P[Λν ] + E[Cν | ¬Λν ] · P[¬Λν ]
+≤ Cνavg · P[Λν ] + (Cνavg + 2αν∗ ) · P[¬Λν ]
+(8)
+avg
+∗
+ν
+= Cν + 2αν · P[¬Λ ]
+2
+(9)
+≤ Cνavg + · αν∗ .
+e
+In the above derivation, inequality (8) follows from Lemmas 9 and 10, and inequality (9)
+follows from Lemma 11.
+We have thus shown that the bound (4) holds in all three cases. Summing over all
+demands ν of a client j, we can now bound the expected connection cost of client j:
+P
+P
+E[Cj ] = ν∈j E[Cν ] ≤ ν∈j (Cνavg + 2e · αν∗ ) = Cj∗ + 2e · rj αj∗ .
+Finally, summing over all clients j, we obtain our bound on the expected connection cost,
+2
+E[CECHS ] ≤ C ∗ + · LP∗ .
+e
+Therefore we have established that our algorithm constructs a feasible integral solution with
+an overall expected cost
+2
+E[FECHS + CECHS ] ≤ F ∗ + C ∗ + · LP∗ = (1 + 2/e) · LP∗ ≤ (1 + 2/e) · OPT.
+e
+Summarizing, we obtain the main result of this section.
+Theorem 12. Algorithm ECHS is a (1 + 2/e)-approximation algorithm for FTFP.
+20
+
+7. Algorithm EBGS with Ratio 1.575
+In this section we give our main result, a 1.575-approximation
+algorithm for FTFP, where
+γ
+γ 1/e+1/e
+1.575 is the value of minγ≥1 max{γ, 1 + 2/e , 1−1/γ }, rounded to three decimal digits. This
+matches the ratio of the best known LP-rounding algorithm for UFL by Byrka et al. [3].
+Recall that in Section 6 we showed how to compute an integral solution with facility cost
+bounded by F ∗ and connection cost bounded by C ∗ + 2/e · LP∗ . Thus, while our facility cost
+does not exceed the optimal fractional facility cost, our connection cost is significantly larger
+than the connection cost in the optimal fractional solution. A natural idea is to balance
+these two ratios by reducing the connection cost at the expense of the facility cost. One
+way to do this would be to increase the probability of opening facilities, from ȳµ (used in
+Algorithm ECHS) to, say, γ ȳµ , for some γ > 1. This increases the expected facility cost by
+a factor of γ but, as it turns out, it also reduces the probability that an indirect connection
+occurs for a non-primary demand to 1/eγ (from the previous value 1/e in ECHS). As a
+consequence, for each primary demand κ, the new algorithm will select a facility to open
+from the nearest facilities µ in N (κ) such that the connection values x̄µν sum up to 1/γ,
+instead of 1 as in Algorithm ECHS. It is easily seen that this will improve the estimate
+on connection cost for primary demands. These two changes, along with a more refined
+analysis, are the essence of the approach in [3], expressed in our terminology.
+Our approach can be thought of as a combination of the above ideas with the techniques
+of demand reduction and adaptive partitioning that we introduced earlier. However, our
+adaptive partitioning technique needs to be carefully modified, because now we will be using
+a more intricate neighborhood structure, with the neighborhood of each demand divided into
+two disjoint parts, and with restrictions on how parts from different demands can overlap.
+We begin by describing properties that our partitioned fractional solution (x̄, ȳ) needs
+to satisfy. Assume that γ is some constant such that 1 < γ < 2. As mentioned earlier, the
+neighborhood N (ν) of each demand ν will be divided into two disjoint parts. The first part,
+the facilities in N (ν) nearest to
+called the close neighborhood and denoted N cls (ν), contains
+P
+ν with the total connection value equal 1/γ, that is µ∈N (ν) x̄µν = 1/γ. The second part,
+cls
+called
+the
+far
+neighborhood
+and
+denoted
+N
+(ν),
+contains
+the remaining facilities in N (ν)
+far
+P
+(so µ∈N (ν) x̄µν = 1 − 1/γ). We restate these definitions formally below in Property (NB).
+far
+Recall that for any set A of facilities and a demand ν, by D(A,
+the average
+P ν) we denote
+P
+distance between ν and the facilities in A, that is D(A, ν) = µ∈A dµν ȳµ / µ∈A ȳµ . We will
+avg
+avg
+use notations Ccls
+(ν) = D(N cls (ν), ν) and Cfar
+(ν) = D(N far (ν), ν) for the average distances
+from ν to its close and far neighborhoods, respectively. By the definition of these sets and
+the completeness property (CO), these distances can be expressed as
+X
+γ X
+avg
+avg
+Ccls
+(ν) = γ
+(ν) =
+dµν x̄µν and Cfar
+dµν x̄µν .
+µ∈N cls (ν)
+µ∈N far (ν)
+γ−1
+max
+We will also use notation Ccls
+(ν) = maxµ∈N cls (ν) dµν for the maximum distance from ν to
+its close neighborhood. The average distance from a demand ν to its overall neighborhood
+
+21
+
+N (ν) is denoted as C avg (ν) = D(N (ν), ν) =
+C avg (ν) =
+
+P
+
+µ∈N (ν)
+
+dµν x̄µν . It is easy to see that
+
+γ − 1 avg
+1 avg
+Ccls (ν) +
+Cfar (ν).
+γ
+γ
+
+(10)
+
+Our partitioned solution (x̄, ȳ) must satisfy the same partitioning and completeness
+properties as before, namely properties (PS) and (CO) in Section 4. In addition, it must
+satisfy a new neighborhood property (NB) and modified properties (PD’) and (SI’), listed
+below.
+(NB) Neighborhoods. For each demand ν ∈ C, its neighborhood is divided into close and
+far neighborhood, that is N (ν) = N cls (ν) ∪ N far (ν), where
+• N cls (ν) ∩ N far (ν) = ∅,
+P
+•
+µ∈N (ν) x̄µν = 1/γ, and
+cls
+
+• if µ ∈ N cls (ν) and µ0 ∈ N far (ν) then dµν ≤ dµ0 ν .
+P
+Note that the first two conditions, together with (PS.1), imply that µ∈N (ν) x̄µν =
+far
+1 − 1/γ. When defining N cls (ν), in case of ties, which can occur when some facilities
+in N (ν) are at the same distance from ν, we use a tie-breaking rule that is explained
+in the proof of Lemma 13 (the only place where the rule is needed).
+(PD’) Primary demands. Primary demands satisfy the following conditions:
+1. For any two different primary demands κ, κ0 ∈ P we have N cls (κ) ∩ N cls (κ0 ) = ∅.
+P
+P
+2. For each site i ∈ F, κ∈P µ∈i∩N (κ) x̄µκ ≤ yi∗ . In the summation, as before, we
+cls
+overload notation i to stand for the set of facilities created on site i.
+3. Each demand ν ∈ C is assigned to one primary demand κ ∈ P such that
+(a) N cls (ν) ∩ N cls (κ) 6= ∅, and
+avg
+avg
+max
+max
+(b) Ccls
+(ν) + Ccls
+(ν) ≥ Ccls
+(κ) + Ccls
+(κ).
+(SI’) Siblings. For any pair ν, ν 0 ∈ C of different siblings we have
+1. N (ν) ∩ N (ν 0 ) = ∅.
+2. If ν is assigned to a primary demand κ then N (ν 0 ) ∩ N cls (κ) = ∅. In particular,
+by Property (PD’.3(a)), this implies that different sibling demands are assigned
+to different primary demands, since N cls (ν 0 ) is a subset of N (ν 0 ).
+Modified adaptive partitioning. To obtain a fractional solution with the above properties, we employ a modified adaptive partitioning algorithm. As in Section 4, we have two
+phases. In Phase 1 we split clients into demands and create facilities on sites, while in Phase 2
+we augment each demand’s connection values x̄µν so that the total connection value of each
+22
+
+demand ν is 1. As the partitioning algorithm proceeds, for any demand ν, N (ν) denotes
+the set of facilities with x̄µν > 0; hence the notation N (ν) actually represents a dynamic
+set which gets fixed once the partitioning algorithm concludes both Phase 2. On the other
+hand, N cls (ν) and N far (ν) refer to the close and far neighborhoods at the time when N (ν)
+is fixed.
+Similar to the algorithm in Section 4, Phase 1 runs in iterations. Fix some iteration
+e (j) is the neighborhood of j with respect to the yet
+and consider any client j. As before, N
+unpartitioned solution, namely the set of facilities µ such that x
+eµj > 0. Order the facilities
+e
+in this set as N (j) = {µ1 , ..., µq } with non-decreasing distance from j, that is dµ1 j ≤ dµ2 j ≤
+P
+. . . ≤ dµq j . Without loss of generality, there is an index l for which ls=1 x
+eµs j = 1/γ, since
+e
+we can always split one facility to achieve this. Then we define Ncls (j) = {µ1 , ..., µl }. (Unlike
+ecls (j) can vary over time.) We also use notation
+close neighborhoods of demands, N
+X
+ecls (j), j) = γ
+tcccls (j) = D(N
+dµj x
+eµj and dmaxcls (j) = max dµj .
+e
+µ∈Ncls (j)
+
+e (j)
+µ∈N
+cls
+
+When the iteration starts, we first find a not-yet-exhausted client p that minimizes the
+value of tcccls (p) + dmaxcls (p) and create a new demand ν for p. Now we have two cases:
+ecls (p) ∩ N (κ) 6= ∅ for some existing primary demand κ ∈ P . In this case we
+Case 1: N
+assign ν to κ. As before, if there are multiple such κ, we pick any of them. We also
+e (p) ∩ N (κ). Note that although we check for
+fix x̄µν ← x
+eµp and x
+eµp ← 0 for each µ ∈ N
+ecls (p) and N (κ), the facilities we actually move into N (ν) include all
+overlap between N
+e (p), a bigger set, with N (κ).
+facilities in the intersection of N
+At
+P this time, the total connection value between ν and µ ∈ N (ν) is at most 1/γ, since
+µ∈N (κ) ȳµ = 1/γ (this follows from the definition of neighborhoods for new primary
+demands in Case 2 below) and we have N (ν) ⊆ N (κ) at this point. Later in Phase 2
+e (p) to N (ν) to make ν’s total connection value
+we will add additional facilities from N
+equal to 1.
+ecls (p) ∩ N (κ) = ∅ for all existing primary demands κ ∈ P . In this case we make
+Case 2: N
+ν a primary demand (that is, add it to P ) and assign it to itself. We then move the
+ecls (p) to N (ν), that is for µ ∈ N
+ecls (p) we set x̄µν ← x
+facilities from N
+eµp and x
+eµp ← 0.
+It is easy to see that the total connection value of ν to N (ν) is now exactly 1/γ, that
+P
+e (p) are all farther away from
+is µ∈N (ν) ȳµ = 1/γ. Moreover, facilities remaining in N
+e (p) to N (ν) in Phase 2, the
+ν than those in N (ν). As we add only facilities from N
+final N cls (ν) contains the same set of facilities as the current set N (ν). (More precisely,
+N cls (ν) consists of the facilities that either are currently in N (ν) or were obtained from
+splitting the facilities currently in N (ν).)
+Once all clients are exhausted, that is, each client j has rj demands created, Phase 1 concludes. We then run Phase 2, the augmenting phase, following the same steps as in Section 4.
+23
+
+For each P
+client j and each demand ν ∈ j with total connection value to N (ν) less than 1
+(that is, µ∈N (ν) x̄µν < 1), we use our AugmentToUnit() procedure to add additional
+e (j) to N (ν) to make the total connection value
+facilities (possibly split, if necessary) from N
+between ν and N (ν) equal 1.
+This completes the description of the partitioning algorithm. Summarizing, for each
+client j ∈ C we created rj demands on the same point as j, and we created a number of
+facilities at each site i ∈ F. Thus computed sets of demands and facilities are denoted C and
+F, respectively. For each facility µ ∈ i we defined its fractional opening value ȳµ , 0 ≤ ȳµ ≤ 1,
+and for each demand ν ∈ j we defined its fractional connection value x̄µν ∈ {0, ȳµ }. The
+connections with x̄µν > 0 define the neighborhood N (ν). The facilities in N (ν) that are
+closest to ν and have total connection value from ν equal 1/γ form the close neighborhood
+N cls (ν), while the remaining facilities in N (ν) form the far neighborhood N far (ν). It remains
+to show that this partitioning satisfies all the desired properties.
+Correctness of partitioning. We now argue that our partitioned fractional solution (x̄, ȳ)
+satisfies all the stated properties. Properties (PS), (CO) and (NB) are directly enforced by
+the algorithm.
+ecls (p) at
+(PD’.1) holds because for each primary demand κ ∈ p, N cls (κ) is the same set as N
+ecls (p) is removed from N
+e (p) right after this step. Further,
+the time when κ was created, and N
+ecls (p) is disjoint from the set
+the partitioning algorithm makes κ a primary demand only if N
+0
+0
+N (κ ) of all existing primary demands κ at that iteration, but these neighborhoods are the
+same as the final close neighborhoods N cls (κ0 ).
+The justification of (PD’.2) is similar to that for (PD.2) from Section 4. All close neighborhoods of primary demands are disjoint, due to (PD’.1), so each facility µ ∈ i can appear in
+at most one N cls (κ), for some κ ∈ P . Condition (CO) implies that ȳP
+µ = x̄µκ for µ ∈ N cls (κ).
+As a result, the summation on the left-hand side is not larger than µ∈i ȳµ = yi∗ .
+Regarding (PD’.3(a)), at first glance this property seems to follow directly from the
+algorithm, as we only assign a demand ν to a primary demand κ when N (ν) at that iteration
+overlaps with N (κ) (which is equal to the final value of N cls (κ)). However, it is a little more
+subtle, as the final N cls (ν) may contain facilities added to N (ν) in Phase 2. Those facilities
+e (j) (not N
+ecls (j)) that we
+may turn out to be closer to ν than some facilities in N (κ) ∩ N
+added to N (ν) in Phase 1. If the final N cls (ν) consists only of facilities added in Phase 2, we
+no longer have the desired overlap of N cls (κ) and N cls (ν). Luckily this bad scenario never
+occurs. We postpone the proof of this property to Lemma 13. The proof of (PD’.3(b)) is
+similar to that of Lemma 5, and we defer it to Lemma 14.
+(SI’.1) follows directly from the algorithm because for each demand ν ∈ j, all facilities
+e (j) and each facility is added to N (ν) of
+added to N (ν) are immediately removed from N
+exactly one demand ν ∈ j. Splitting facilities obviously preserves (SI’.1).
+The proof of (SI’.2) is similar to that of Lemma 3. If κ = ν then (SI’.2) follows from
+(SI’.1), so we can assume that κ 6= ν. Suppose that ν 0 ∈ j is assigned to κ0 ∈ P and consider
+the situation after Phase 1. By the way we reassign facilities in Case 1, at this time we have
+N (ν) ⊆ N (κ) = N cls (κ) and N (ν 0 ) ⊆ N (κ0 ) = N cls (κ0 ), so N (ν 0 ) ∩ N cls (κ) = ∅, by (PD’.1).
+24
+
+e (j) ∩ N cls (κ) = ∅ after this iteration, because any facilities that were
+Moreover, we have N
+e (j) when ν was created. In Phase 2, augmentation does
+also in N cls (κ) were removed from N
+e (j) at the end of Phase
+not change N cls (κ) and all facilities added to N (ν 0 ) are from the set N
+e
+e
+1, which is a subset of the set N (j) after this iteration, since N (j) can only shrink. So the
+condition (SI’.2) will remain true.
+Lemma 13. Property (PD’.3(a)) holds.
+Proof. Let j be the client for which ν ∈ j. We consider an iteration when we create ν from
+ecls (j) and N
+e (j) will refer to the value
+j and assign it to κ, and within this proof, notation N
+e (j) ∩ N (κ). Recall
+of the sets at this particular time. At this time, N (ν) is initialized to N
+that N (κ) is now equal to the final N cls (κ) (taking into account facility splitting). We would
+ecls (j) ∩ N cls (κ) (which is not empty) will be included in N cls (ν) at
+like to show that the set N
+the end. Technically speaking, this will not be true due to facility splitting, so we need to
+rephrase this claim and the proof in terms of the set of facilities obtained after the algorithm
+completes.
+1/γ
+
+N(ν)
+A
+
+B
+
+E-
+
+E+
+
+Figure 1: Illustration of the sets N (ν), A, B, E − and E + in the proof of Lemma 13. Let
+X b Y mean that the facility sets X is obtained from Y by splitting facilities. We then have
+ecls (j) − N cls (κ), E + b N
+e (j) − N
+ecls (j).
+e (j), B b N
+ecls (j) ∩ N cls (κ), E − b N
+AbN
+We define the sets A, B, E − and E + as the subsets of F (the final set of facilities) that
+e (j), N
+ecls (j) ∩ N cls (κ), N
+ecls (j) − N cls (κ)
+were obtained from splitting facilities in the sets N
+e (j) − N
+ecls (j), respectively. (See Figure 1.) We claim that at the end B ⊆ N cls (ν), with
+and N
+the caveat that the ties in the definition of N cls (ν) are broken in favor of the facilities in B.
+(This is the tie-breaking rule that we mentioned in the definition of N cls (ν).) This will be
+sufficient to prove the lemma because B 6= ∅, by the algorithm.
+We now prove this claim. In this paragraph N (ν) denotes the final set N (ν) after both
+phases are completed. Thus the total connection value of N (ν) to ν is 1. Note first that
+B ⊆ N (ν) ⊆ A, because we never remove facilities from N (ν) and we only add facilities from
+e (j). Also, B ∪ E − represents the facilities obtained from N
+ecls (j), so P
+N
+µ∈B∪E − ȳµ = 1/γ.
+This and B ⊆ N (ν) implies that the total connection value of B ∪ (N (ν) ∩ E − ) to ν is at
+most 1/γ. But all facilities in B ∪ (N (ν) ∩ E − ) are closer to ν (taking into account our tie
+25
+
+breaking in property (NB)) than those in E + ∩N (ν). It follows that B ⊆ N cls (ν), completing
+the proof.
+Lemma 14. Property (PD’.3(b)) holds.
+Proof. This proof is similar to that for Lemma 5. For a client j and demand η, we will write
+tccηcls (j) and dmaxηcls (j) to denote the values of tcccls (j) and dmaxcls (j) at the time when η
+was created. (Here η may or may not be a demand of client j).
+Suppose ν ∈ j is assigned to a primary demand κ ∈ p. By the way primary demands
+ecls (p) becomes N (κ), which is equal to the
+are constructed in the partitioning algorithm, N
+avg
+max
+(κ) = dmaxκcls (p). Further,
+final value of N cls (κ). So we have Ccls (κ) = tccκcls (p) and Ccls
+since we choose p to minimize tcccls (p) + dmaxcls (p), we have that tccκcls (p) + dmaxκcls (p) ≤
+tccκcls (j) + dmaxκcls (j).
+Using an argument analogous to that in the proof of Lemma 4, our modified partitioning
+avg
+(ν) and dmaxκcls (j) ≤ dmaxνcls (j) ≤
+algorithm guarantees that tccκcls (j) ≤ tccνcls (j) ≤ Ccls
+max
+Ccls
+(ν) since ν was created later. Therefore, we have
+avg
+max
+Ccls
+(κ) + Ccls
+(κ) = tccκcls (p) + dmaxκcls (p)
+avg
+max
+≤ tccκcls (j) + dmaxκcls (j) ≤ tccνcls (j) + dmaxνcls (j) ≤ Ccls
+(ν) + Ccls
+(ν),
+
+completing the proof.
+Now we have completed the proof that the computed partitioning satisfies all the required
+properties.
+Algorithm EBGS. The complete algorithm starts with solving the LP(1) and computing
+the partitioning described earlier in this section. Given the partitioned fractional solution
+(x̄, ȳ) with the desired properties, we start the process of opening facilities and making
+connections to obtain an integral solution. To this end, for each primary demand κ ∈ P ,
+we open exactly one facility φ(κ) in N cls (κ),
+S where each µ ∈ N cls (κ) is chosen as φ(κ) with
+probability γ ȳµ . For all facilities µ ∈ F − κ∈P N cls (κ), we open them independently, each
+with probability γ ȳµ .
+We claim that all probabilities are well-defined, that is γ ȳµ ≤ 1 for all µ. Indeed, if
+ȳµ > 0 then ȳµ = x̄µν for some ν, by Property (CO). If µ ∈ N cls (ν) then the definition of
+close neighborhoods implies that x̄µν ≤ 1/γ. If µ ∈ N far (ν) then x̄µν ≤ 1 − 1/γ ≤ 1/γ,
+because γ < 2. Thus γ ȳµ ≤ 1, as claimed.
+Next, we connect demands to facilities. Each primary demand κ ∈ P will connect to the
+only open facility φ(κ) in N cls (κ). For each non-primary demand ν ∈ C − P , if there is an
+open facility in N cls (ν) then we connect ν to the nearest such facility. Otherwise, we connect
+ν to the nearest far facility in N far (ν) if one is open. Otherwise, we connect ν to its target
+facility φ(κ), where κ is the primary demand that ν is assigned to.
+Analysis. By the algorithm, for each client j, all its rj demands are connected to open
+facilities. If two different siblings ν, ν 0 ∈ j are assigned, respectively, to primary demands κ,
+κ0 then, by Properties (SI’.1), (SI’.2), and (PD’.1) we have
+(N (ν) ∪ N cls (κ)) ∩ (N (ν 0 ) ∪ N cls (κ0 )) = ∅.
+26
+
+This condition guarantees that ν and ν 0 are assigned to different facilities, regardless whether
+they are connected to a neighbor facility or to its target facility. Therefore the computed
+solution is feasible.
+We now estimate the cost of the solution computed by Algorithm EBGS. The lemma
+below bounds the expected facility cost.
+Lemma 15. The expectation of facility cost FEBGS of Algorithm EBGS is at most γF ∗ .
+Proof. By the algorithm, each facility µ ∈ F is opened with probability γ ȳµ , independently
+of whether it belongs to the close neighborhood of a primary demand or not. Therefore, by
+linearity of expectation, we have that the expected facility cost is
+X
+X
+X
+X
+fµ γ ȳµ = γ
+E[FEBGS ] =
+fi
+ȳµ = γ
+fi yi∗ = γF ∗ ,
+µ∈F
+
+i∈F
+
+µ∈i
+
+i∈F
+
+where the third equality follows from (PS.3).
+In the remainder of this section we focus on the connection cost. Let Cν be the random
+variable representing the connection cost of a demand ν. Our objective is to show that the
+expectation of ν satisfies
+
+
+2
+1/e + 1/eγ
+avg
+,1 + γ .
+(11)
+E[Cν ] ≤ C (ν) · max
+1 − 1/γ
+e
+avg
+If ν is a primary demand then, due to the algorithm, we have E[Cν ] = Ccls
+(ν) ≤ C avg (ν),
+so (11) is easily satisfied.
+Thus for the rest of the argument we will focus on the case when ν is a non-primary
+demand. Recall that the algorithm connects ν to the nearest open facility in N cls (ν) if at
+least one facility in N cls (ν) is open. Otherwise the algorithm connects ν to the nearest open
+facility in N far (ν), if any. In the event that no facility in N (ν) opens, the algorithm will
+connect ν to its target facility φ(κ), where κ is the primary demand that ν was assigned
+to, and φ(κ) is the only facility open in N cls (κ). Let Λν denote the event that at least one
+facility in N (ν) is open and Λνcls be the event that at least one facility in N cls (ν) is open.
+¬Λν denotes the complement event of Λν , that is, the event that none of ν’s neighbors opens.
+We want to estimate the following three conditional expectations:
+
+E[Cν | Λνcls ],
+
+E[Cν | Λν ∧ ¬Λνcls ],
+
+and E[Cν | ¬Λν ],
+
+and their associated probabilities.
+We start with a lemma dealing with the third expectation, E[Cν | ¬Λν ] = E[dφ(κ)ν |
+ν
+Λ ]. The proof of this lemma relies on Properties (PD’.3(a)) and (PD’.3(b)) of modified
+partitioning and follows the reasoning in the proof of a similar lemma in [3, 2]. For the sake
+of completeness, we include a proof in Appendix A.
+Lemma 16. Assuming that no facility in N (ν) opens, the expected connection cost of ν is
+avg
+avg
+E[Cν | ¬Λν ] ≤ Ccls
+(ν) + 2Cfar
+(ν).
+
+27
+
+(12)
+
+Proof. See Appendix A.
+Next, we derive some estimates for the expected cost of direct connections. The next
+technical lemma is a generalization of Lemma 10. In Lemma 10 we bound the expected
+distance to the closest open facility in N (ν), conditioned on at least one facility in N (ν)
+being open. The lemma below provides a similar estimate for an arbitrary set A of facilities
+on that at least one facility in set A is open. Recall that D(A, ν) =
+in
+P N (ν), conditioned
+P
+d
+ȳ
+/
+ȳ
+µ∈A µν µ
+µ∈A µ is the average distance from ν to a facility in A.
+Lemma 17. For any non-empty set A ⊆ N (ν), let ΛνA be the event that at least one facility
+in A is opened by Algorithm EBGS, and denote by Cν (A) the random variable representing
+the distance from ν to the closest open facility in A. Then the expected distance from ν to
+the nearest open facility in A, conditioned on at least one facility in A being opened, is
+E[Cν (A) | ΛνA ] ≤ D(A, ν).
+Proof. The proof follows the same reasoning as the proof of Lemma 10, so we only sketch
+it here. We start with a similar grouping of facilities in A: for each primary demand κ, if
+N cls (κ)∩A 6= ∅ then N cls (κ)∩A forms a group. Facilities in A that are not in a neighborhood
+of any primary demand form singleton groups. We denote these groups G1 , ..., Gk . It is clear
+that the groups are disjoint because of (PD’.1). Denoting by d¯s = D(Gs , ν) the average
+distance from ν to a group Gs , we can assume that these groups are ordered so that d¯1 ≤
+... ≤ d¯k .
+Each group can have at most one facility open and the events representing opening of
+any two facilities that belong to different groups are independent. To estimate the distance
+from ν to the nearest open facility in A, we use an alternative random process to make
+connections, that is easier to analyze. Instead of connecting ν to the nearest open facility
+in A, we will choose the smallest s for which Gs has an open facility and connect ν to this
+facility. (Thus we selected an open facility with respect to the minimum d¯s , not the actual
+distance from νPto this facility.) This can only increase the expected connection cost, thus
+denoting gs = µ∈Gs γ ȳµ for all s = 1, . . . , k, and letting P[ΛνA ] be the probability that A
+has at least one facility open, we have
+1
+(d¯1 g1 + d¯2 g2 (1 − g1 ) + . . . + d¯k gk (1 − g1 ) . . . (1 − gk−1 ))
+P[ΛνA ]
+Pk ¯
+Yk
+1
+s=1 ds gs
+≤
+(1
+−
+(1 − gs ))
+P
+k
+s=1
+P[ΛνA ]
+s=1 gs
+P
+Pk ¯
+d
+g
+s
+s
+µ∈A dµν γ ȳµ
+P
+=
+= Ps=1
+k
+µ∈A γ ȳµ
+s=1 gs
+Pk
+s=1 dµν ȳµ
+= P
+= D(A, ν).
+µ∈A ȳµ
+
+E[Cν (A) | ΛνA ] ≤
+
+28
+
+(13)
+(14)
+
+Inequality (14) follows from
+The rest of the derivation
+Qk inequality (B.1) in Appendix B.
+ν
+¯
+follows from P[ΛA ] = 1 − s=1 (1 − gs ), and the definition of ds , gs and D(A, ν).
+A consequence of Lemma 17 is the following corollary which bounds the other two expectations of Cν , when at least one facility is opened in N cls (ν), and when no facility in N cls (ν)
+opens but a facility in N far (ν) is opened.
+avg
+avg
+(ν).
+(ν), and (b) E[Cν | Λν ∧ ¬Λνcls ] ≤ Cfar
+Corollary 18. (a) E[Cν | Λνcls ] ≤ Ccls
+
+Proof. When there is an open facility in N cls (ν), the algorithm connect ν to the nearest open
+facility in N cls (ν). When no facility in N cls (ν) opens but some facility in N far (ν) opens, the
+algorithm connects ν to the nearest open facility in N far (ν). The rest of the proof follows
+from Lemma 17. By setting the set A in Lemma 17 to N cls (ν), we have
+avg
+(ν),
+E[Cν | Λνcls ] ≤ D(N cls (ν), ν), = Ccls
+
+proving part (a), and by setting the set A to N far (ν), we have
+avg
+E[Cν | Λν ∧ ¬Λνcls ] ≤ D(N far (ν), ν) = Cfar
+(ν),
+
+which proves part (b).
+Given the estimate on the three expected distances when ν connects to its close facility
+in N cls (ν) in (7), or its far facility in N far (ν) in (7), or its target facility φ(κ) in (12), the
+only missing pieces are estimates on the corresponding probabilities of each event, which we
+do in the next lemma. Once done, we shall put all pieces together and proving the desired
+inequality on E[Cν ], that is (11).
+The next Lemma bounds the probabilities for events that no facilities in N cls (ν) and
+N (ν) are opened by the algorithm.
+Lemma 19. (a) P[¬Λνcls ] ≤ 1/e, and (b) P[¬Λν ] ≤ 1/eγ .
+Proof. (a) To estimate P[¬Λνcls ], we again consider a grouping of facilities in N cls (ν), as in the
+proof of Lemma 17, according to the primary demand’s close neighborhood that they fall in,
+with facilities not belonging to such neighborhoods forming their
+Pown singleton
+P groups. As
+before, the groups are denoted G1 , . . . , Gk . It is easy to see that ks=1 gs = µ∈N (ν) γ ȳµ =
+P cls
+1. For any group Gs , the probability that a facility in this group opens is µ∈Gs γ ȳµ = gs
+because in the algorithm at most one facility in a group can be chosenQ
+and each is chosen
+with probability γ ȳµ . Therefore the probability that no facility opens is ks=1 (1 − gs ), which
+Pk
+is at most e− s=1 gs = 1/e. Therefore we have P[¬ΛνA ] ≤ 1/e.
+P
+ν
+− ks=1 gs
+(b) This proof is similar to
+the
+proof
+of
+(a).
+The
+probability
+P[¬Λ
+]
+is
+at
+most
+e
+=
+P
+P
+1/eγ , because we now have ks=1 gs = γ µ∈N (ν) ȳµ = γ · 1 = γ.
+We are now ready to bound the overall connection cost of Algorithm EBGS, namely
+inequality (11).
+29
+
+Lemma 20. The expected connection of ν is
+E[Cν ] ≤ C avg (ν) · max
+
+n 1/e + 1/eγ
+1 − 1/γ
+
+,1 +
+
+2o
+.
+eγ
+
+Proof. Recall that, to connect ν, the algorithm uses the closest facility in N cls (ν) if one is
+opened; otherwise it will try to connect ν to the closest facility in N far (ν). Failing that, it
+will connect ν to φ(κ), the sole facility open in the neighborhood of κ, the primary demand
+ν was assigned to. Given that, we estimate E[Cν ] as follows:
+E[Cν ] = E[Cν | Λνcls ] · P[Λνcls ] + E[Cν | Λν ∧ ¬Λνcls ] · P[Λν ∧ ¬Λνcls ]
++ E[Cν | ¬Λν ] · P[¬Λν ]
+avg
+avg
+(ν) · P[Λν ∧ ¬Λνcls ]
+(15)
+(ν) · P[Λνcls ] + Cfar
+≤ Ccls
+avg
+avg
+ν
++ [ Ccls (ν) + 2Cfar (ν) ] · P[¬Λ ]
+avg
+avg
+avg
+avg
+avg
+= [ Ccls (ν) + Cfar
+(ν) ] · P[¬Λν ] + [ Cfar
+(ν) − Ccls
+(ν) ] · P[¬Λνcls ] + Ccls
+(ν)
+1
+1
+avg
+avg
+avg
+avg
+avg
+(ν) − Ccls
+(ν)
+(16)
+(ν) ] · + Ccls
+≤ [ Ccls
+(ν) + Cfar
+(ν) ] · γ + [ Cfar
+e
+e
+
+
+
+
+1
+1
+1
+1
+avg
+avg
++ γ · Cfar
+= 1 − + γ · Ccls
+(ν) +
+(ν).
+e e
+e e
+Inequality (15) follows from Corollary 18 and Lemma 16. Inequality (16) follows from
+avg
+avg
+Lemma 19 and Cfar
+(ν) − Ccls
+(ν) ≥ 0.
+avg
+avg
+Now define ρ = Ccls (ν)/C (ν). It is easy to see that ρ is between 0 and 1. Continuing
+the above derivation, applying (10), we get
+
+
+2
+1/e + 1/eγ
+avg
++ ρ(1 + γ )
+E[Cν ] ≤ C (ν) · (1 − ρ)
+1 − 1/γ
+e
+
+
+γ
+1/e + 1/e
+2
+≤ C avg (ν) · max
+,1 + γ ,
+1 − 1/γ
+e
+and the proof is now complete.
+With Lemma 20 proven, we are now ready to bound our total connection cost. For any
+client j we have
+X
+X X
+C avg (ν) =
+dµν x̄µν
+ν∈j
+ν∈j
+µ∈F
+X
+X X
+X
+=
+dij
+x̄µν =
+dij x∗ij = Cj∗ .
+i∈F
+
+µ∈i
+
+ν∈j
+
+i∈F
+
+Summing over all clients j we obtain that the total expected connection cost is
+
+
+1/e + 1/eγ
+2
+∗
+E[CEBGS ] ≤ C max
+,1 + γ .
+1 − 1/γ
+e
+Recall that the expected facility cost is bounded
+by γF ∗ , as argued earlier. Hence the total
+γ
+expected cost is bounded by max{γ, 1/e+1/e
+, 1 + e2γ } · LP∗ . Picking γ = 1.575 we obtain the
+1−1/γ
+desired ratio.
+Theorem 21. Algorithm EBGS is a 1.575-approximation algorithm for FTFP.
+30
+
+8. Final Comments
+In this paper we show a sequence of LP-rounding approximation algorithms for FTFP,
+with the best algorithm achieving ratio 1.575. As we mentioned earlier, we believe that
+our techniques of demand reduction and adaptive partitioning are very flexible and should
+be useful in extending other LP-rounding methods for UFL to obtain matching bounds for
+FTFP.
+One of the main open problems in this area is whether FTFL can be approximated with
+the same ratio as UFL, and our work was partly motivated by this question. The techniques
+we introduced are not directly applicable to FTFL, mainly because our partitioning approach
+involves facility splitting that could result in several sibling demands being served by facilities
+on the same site. Nonetheless, we hope that further refinements of our construction might
+get around this issue and lead to new algorithms for FTFL with improved ratios.
+
+31
+
+References
+[1] Vijay Arya, Naveen Garg, Rohit Khandekar, Adam Meyerson, Kamesh Munagala, and
+Vinayaka Pandit. Local search heuristics for k-median and facility location problems.
+SIAM J. Comput., 33(3):544–562, 2004.
+[2] Jaroslaw Byrka and Karen Aardal. An optimal bifactor approximation algorithm for
+the metric uncapacitated facility location problem. SIAM J. Comput., 39(6):2212–2231,
+2010.
+[3] Jaroslaw Byrka, MohammadReza Ghodsi, and Aravind Srinivasan. LP-rounding algorithms for facility-location problems. CoRR, abs/1007.3611, 2010.
+[4] Jaroslaw Byrka, Aravind Srinivasan, and Chaitanya Swamy. Fault-tolerant facility location, a randomized dependent LP-rounding algorithm. In Proceedings of the 14th
+Integer Programming and Combinatorial Optimization, IPCO ’10, pages 244–257, 2010.
+[5] Fabián Chudak and David Shmoys. Improved approximation algorithms for the uncapacitated facility location problem. SIAM J. Comput., 33(1):1–25, 2004.
+[6] Sudipto Guha and Samir Khuller. Greedy strikes back: improved facility location algorithms. In Proceedings of the 9th ACM-SIAM Symposium on Discrete Algorithms,
+SODA ’98, pages 649–657, 1998.
+[7] Sudipto Guha, Adam Meyerson, and Kamesh Munagala. Improved algorithms for fault
+tolerant facility location. In Proceedings of the 12th ACM-SIAM Symposium on Discrete
+Algorithms, SODA ’01, pages 636–641, 2001.
+[8] Anupam Gupta. Lecture notes: CMU 15-854b, spring 2008, 2008.
+[9] Godfrey Harold Hardy, John Edensor Littlewood, and George Pólya. Inequalities. Cambridge University Press, 1988.
+[10] Kamal Jain, Mohammad Mahdian, Evangelos Markakis, Amin Saberi, and Vijay Vazirani. Greedy facility location algorithms analyzed using dual fitting with factor-revealing
+LP. J. ACM, 50(6):795–824, 2003.
+[11] Kamal Jain and Vijay Vazirani. Approximation algorithms for metric facility location
+and k-median problems using the primal-dual schema and lagrangian relaxation. J.
+ACM, 48(2):274–296, 2001.
+[12] Kamal Jain and Vijay V. Vazirani. An approximation algorithm for the fault tolerant
+metric facility location problem. Algorithmica, 38(3):433–439, 2003.
+[13] Shi Li. A 1.488 approximation algorithm for the uncapacitated facility location problem. In Proceedings of the 38th International Conference on Automata, Languages and
+Programming, ICALP ’11, volume 6756, pages 77–88, 2011.
+32
+
+[14] Kewen Liao and Hong Shen. Unconstrained and constrained fault-tolerant resource
+allocation. In Proceedings of the 17th Annual International Conference on Computing
+and Combinatorics, COCOON’11, pages 555–566, 2011.
+[15] Mohammad Mahdian, Yinyu Ye, and Jiawei Zhang. Approximation algorithms for
+metric facility location problems. SIAM J. Comput., 36(2):411–432, 2006.
+[16] David Shmoys, Éva Tardos, and Karen Aardal. Approximation algorithms for facility location problems (extended abstract). In Proceedings of the 29th Annual ACM
+Symposium on Theory of Computing, STOC ’97, pages 265–274, 1997.
+[17] Maxim Sviridenko. An improved approximation algorithm for the metric uncapacitated
+facility location problem. In Proceedings of the 9th International IPCO Conference on
+Integer Programming and Combinatorial Optimization, IPCO ’02, pages 240–257, 2002.
+[18] Chaitanya Swamy and David Shmoys. Fault-tolerant facility location. ACM Trans.
+Algorithms, 4(4):1–27, 2008.
+[19] Jens Vygen. Approximation Algorithms for Facility Location Problems. Forschungsinst.
+für Diskrete Mathematik, 2005.
+[20] Shihong Xu and Hong Shen. The fault-tolerant facility allocation problem. In Proceedings of the 20th International Symposium on Algorithms and Computation, ISAAC ’09,
+pages 689–698, 2009.
+[21] Li Yan and Marek Chrobak. Approximation algorithms for the fault-tolerant facility
+placement problem. Inf. Process. Lett., 111(11):545–549, 2011.
+
+33
+
+Appendix A. Proof of Lemma 16
+Lemma 16 provides a bound on the expected connection cost of a demand ν when Algorithm EBGS does not open any facilities in N (ν), namely
+avg
+avg
+(ν),
+(ν) + 2Cfar
+E[Cν | ¬Λν ] ≤ Ccls
+
+(A.1)
+
+We show a stronger inequality that
+avg
+avg
+max
+(ν),
+(ν) + Ccls
+(ν) + Cfar
+E[Cν | ¬Λν ] ≤ Ccls
+
+(A.2)
+
+avg
+max
+which then implies (A.1) because Ccls
+(ν) ≤ Cfar
+(ν). The proof of (A.2) is similar to that
+in [2]. For the sake of completeness, we provide it here, formulated in our terminology and
+notation.
+Assume that the event ¬Λν is true, that is Algorithm EBGS does not open any facility
+in N (ν). Let κ be the primary demand that ν was assigned to. Also let
+
+K = N cls (κ) \ N (ν),
+
+Vcls = N cls (κ) ∩ N cls (ν) and Vfar = N cls (κ) ∩ N far (ν).
+
+Then K, Vcls , Vfar form a partition of N cls (κ), that is, they are disjoint and their union is
+N cls (κ). Moreover, we have that K is not empty, because Algorithm EBGS opens some
+facility in N cls (κ) and this facility cannot be in Vcls ∪ Vfar , by our assumption. We also have
+that Vcls is not empty due P
+to (PD’.3(a)).P
+Recall that D(A, η) = µ∈A dµη ȳµ / µ∈A ȳµ is the average distance between a demand
+η and the facilities in a set A. We shall show that
+avg
+avg
+max
+D(K, ν) ≤ Ccls
+(κ) + Ccls
+(κ) + Cfar
+(ν).
+
+(A.3)
+
+This is sufficient, because, by the algorithm, D(K, ν) is exactly the expected connection cost
+for demand ν conditioned on the event that none of ν’s neighbors opens, that is the left-hand
+avg
+avg
+max
+max
+side of (A.2). Further, (PD’.3(b)) states that Ccls
+(κ) + Ccls
+(κ) ≤ Ccls
+(ν) + Ccls
+(ν), and
+thus (A.3) implies (A.2).
+The proof of (A.3) is by analysis of several cases.
+avg
+(κ). For any facility µ ∈ Vcls (recall that Vcls 6= ∅), we have dµκ ≤
+Case 1: D(K, κ) ≤ Ccls
+avg
+max
+max
+Ccls (κ) and dµν ≤ Ccls (ν) ≤ Cfar
+(ν). Therefore, using the case assumption, we get
+avg
+avg
+max
+D(K, ν) ≤ D(K, κ) + dµκ + dµν ≤ Ccls
+(κ) + Ccls
+(κ) + Cfar
+(ν).
+avg
+Case 2: There exists a facility µ ∈ Vcls such that dµκ ≤ Ccls
+(κ). Since µ ∈ Vcls , we infer
+avg
+max
+max
+that dµν ≤ Ccls (ν) ≤ Cfar (ν). Using Ccls (κ) to bound D(K, κ), we have D(K, ν) ≤
+avg
+avg
+max
+D(K, κ) + dµκ + dµν ≤ Ccls
+(κ) + Ccls
+(κ) + Cfar
+(ν).
+
+Case 3: In this case we assume that neither of Cases 1 and 2 applies, that is D(K, κ) >
+avg
+avg
+Ccls
+(κ) and every µ ∈ Vcls satisfies dµκ > Ccls
+(κ). This implies that D(K ∪ Vcls , κ) >
+avg
+Ccls (κ) = D(N cls (κ), κ). Since sets K, Vcls and Vfar form a partition of N cls (κ), we obtain
+avg
+avg
+that in this case Vfar is not empty and D(Vfar , κ) < Ccls
+(κ). Let δ = Ccls
+(κ)−D(Vfar , κ) > 0.
+We now have two sub-cases:
+34
+
+avg
+(ν)+δ. Substituting δ, this implies that D(Vfar , ν)+D(Vfar , κ) ≤
+Case 3.1: D(Vfar , ν) ≤ Cfar
+avg
+avg
+Ccls (κ)+Cfar (ν). From the definition of the average distance D(Vfar , κ) and D(Vfar , ν),
+avg
+avg
+we obtain that there exists some µ ∈ Vfar such that dµκ + dµν ≤ Ccls
+(κ) + Cfar
+(ν).
+avg
+avg
+max
+(κ) + Ccls
+(κ) + Cfar
+(ν).
+Thus D(K, ν) ≤ D(K, κ) + dµκ + dµν ≤ Ccls
+avg
+Case 3.2: D(Vfar , ν) > Cfar
+(ν) + δ. The case assumption
+Pimplies that Vfar is a proper subset
+avg
+of N far (ν), that is N far (ν) \ Vfar 6= ∅. Let ŷ = γ µ∈Vfar ȳµ . We can express Cfar
+(ν)
+using ŷ as follows
+avg
+Cfar
+(ν) = D(Vfar , ν)
+
+ŷ
+γ − 1 − ŷ
++ D(N far (ν) \ Vfar , ν)
+.
+γ−1
+γ−1
+
+Then, using the case condition and simple algebra, we have
+max
+Ccls
+(ν) ≤ D(N far (ν) \ Vfar , ν)
+ŷδ
+ŷδ
+avg
+avg
+≤ Cfar
+,
+(ν) −
+≤ Cfar
+(ν) −
+γ − 1 − ŷ
+1 − ŷ
+
+(A.4)
+
+where the last step follows from 1 < γ < 2.
+avg
+On the other hand, since K, Vcls , and Vfar form a partition of N cls (κ), we have Ccls
+(κ) =
+(1 − ŷ)D(K ∪ Vcls , κ) + ŷD(Vfar , κ). Then using the definition of δ we obtain
+avg
+D(K ∪ Vcls , κ) = Ccls
+(κ) +
+
+ŷδ
+.
+1 − ŷ
+
+(A.5)
+
+avg
+Now we are essentially done. If there exists some µ ∈ Vcls such that dµκ ≤ Ccls
+(κ) +
+ŷδ/(1 − ŷ), then we have
+
+D(K, ν) ≤ D(K, κ) + dµκ + dµν
+ŷδ
+max
++ Ccls
+(ν)
+1 − ŷ
+avg
+avg
+max
+≤ Ccls
+(κ) + Ccls
+(κ) + Cfar
+(ν),
+avg
+max
+≤ Ccls
+(κ) + Ccls
+(κ) +
+
+where we used (A.4) in the last step. Otherwise, from (A.5), we must have D(K, κ) ≤
+avg
+Ccls
+(κ) + ŷδ/(1 − ŷ). Choosing any µ ∈ Vcls , it follows that
+D(K, ν) ≤ D(K, κ) + dµκ + dµν
+ŷδ
+avg
+max
+max
+(κ) + Ccls
+(ν)
++ Ccls
+≤ Ccls
+(κ) +
+1 − ŷ
+avg
+avg
+max
+(κ) + Ccls
+(κ) + Cfar
+(ν),
+≤ Ccls
+again using (A.4) in the last step.
+This concludes the proof of (A.1). As explained earlier, Lemma 16 follows.
+35
+
+Appendix B. Proof of Inequality (5)
+In Sections 6 and 7 we use the following inequality
+d¯1 g1 + d¯2 g2 (1 − g1 ) + . . . + d¯k gk (1 − g1 )(1 − g2 ) . . . (1 − gk )
+P
+
+
+1
+k
+¯s gs Pk gt Qt−1 (1 − gz ) .
+≤ Pk
+d
+s=1
+t=1
+z=1
+s=1 gs
+
+(B.1)
+
+for 0 < d¯1 ≤ d¯2 ≤ . . . ≤ d¯k , and 0 < g1 , ..., gs ≤ 1.
+We give here a new proof of this inequality, much simpler than the existing proof in [5],
+and also simpler than the argument by Sviridenko [17]. We derive this inequality from the
+following generalized version of the Chebyshev Sum Inequality:
+P P
+P
+P
+(B.2)
+i pi
+j p j aj b j ≤
+i p i ai
+j p j bj ,
+where each summation runs from 1 to l and the sequences (ai ), (bi ) and (pi ) satisfy the
+following conditions: pi ≥ 0, ai ≥ 0, bi ≥ 0 for all i, a1 ≤ a2 ≤ . . . ≤ al , and b1 ≥ b2 ≥ . . . ≥ bl .
+Given inequality (B.2), we can obtain our inequality (B.1) by simple substitution
+i−1
+pi ← gi , ai ← d¯i , bi ← Πs=1
+(1 − gs ),
+
+for i = 1, ..., k.
+
+36
+
+

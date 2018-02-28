@@ -1,0 +1,994 @@
+eral.
+A crucial problem faced by schema selection is that
+of searching the schema library for the right schema;
+typically a single piece of local evidence is multiply
+ambiguous as to the schema which it could indicate.
+For example, an act of getting a rope might fit into
+many schemas.
+One of the few concrete suggestions here has been
+marker passing (Alterman [1985]; Charniak [1983];
+
+Charniak [1986]; Collins & Quillian (1969]; Hendler
+[1988]; Norvig [1987a]).
+Marker-passing uses a
+breadth-first search to find paths between concepts in
+an associative network made up of concepts and their
+part-subpart relations. In our case, the concepts will
+be schemas, i.e. plans and/or actions. The idea is that
+a path between two schemas suggests which schema(s)
+to consider for recognition. For example, a knob in­
+stance and a hinge instance might suggest a door (in­
+stance); since there are links between the schemas door
+and knob and between door and hinge in the associa­
+tive network (they are part-subpart relations), there is
+therefore a path from knob to door to hinge. Unfortu­
+nately, most marker-passer systems have found many
+more bad paths, suggesting incorrect schemas, than
+good ones (Charniak (1986]; Norvig [1987b]). We will
+show in this paper that the good/bad path ratio can
+be raised quite high by exploiting probability informa­
+tion; we realize this benefit by (cheaply) controlling the
+marker-passer's search, both extending it in promising
+directions and terminating it in unpromising ones.
+In this paper we will give a probabilistic account of
+marker passing. This account will have two goals
+- first it should shed further light on when marker­
+passing is an appropriate technique, and second it
+should show how to improve the performance of
+marker-passing algorithms by increasing the likelihood
+that the paths generated will, in fact, suggest the cor­
+rect schema. In section 2 we will consider schema eval­
+uation within a probabilistic framework. That is, given
+we have a potential schema, how do we evaluate the
+probability that it is the correct explanation of the in­
+put. In particular, we will be adopting a Bayesian net­
+work (or belief network) formulation of the problem,
+so the probability distributions correspond to DAGs
+with probabilities associated with each node. Sec­
+tion 3 will then be concerned with schema selection,
+i.e., how our marker passing system works, and how
+the schema suggestions (paths) from the marker-passer
+map to Bayesian networks. In Section 4 we will show
+how to use probability information from the knowledge
+base to intelligently limit the marker-passing search.
+Specifically, we will describe how to calculate on the fly
+
+70
+
+Carroll and Charniak
+
+a measure which is an upper bound on the joint proba­
+bility of the schemas which a candidate path suggests.
+Thanks to properties of the marker-passer paths and
+our probabilistic model, we can avoid constructing and
+evaluating a Bayesian network to evaluate each path,
+an NP-hard problem (Cooper [1987]), so our evalua­
+tion need not be expensive. This section has the bulk
+of the new work in the paper. We summarize and ex­
+plain results in section 5.
+The opening sections of this paper alternate some­
+what irregularly between the marker-passer and the
+Bayesian network; while it might appear to be sim­
+pler to fully describe first one and then the other, this
+would leave much of what we have to say completely
+unmotivated and very likely obscure. Once we reach
+section 4, we treat the two systems together, showing
+how paths map to Bayesian networks, and how path
+calculations yield an upper bound on the joint proba­
+bility of the nodes in the Bayesian network.
+2
+
+Probabilistic Schema Evaluation
+
+We adopt a standard first-order theory of schema in
+which a schema is a set and asserting that an entity
+is an instance of that schema is asserting that it is an
+element of the set. We use the predicate inst for this
+purpose.
+(inst
+
+instance schema).
+
+Sc�emas are related in the usual isa-hierarchy (subset)
+as 1n
+(isa
+
+specific-schema general-schema).
+
+In this paper we assume that isa relations form a tree,
+not a lattice, and thus all the immediate isa subsets of
+a given parent are disjoint.
+Slots or roles in schemas are represented using func­
+tions from a schema instance to the slot-filler schema
+instance. Equality is used to assert that a partic­
+ular entity fills that role. For example, to assert
+that a particular store store-25 fills the store-of role
+in supermarket-shopping-3 we assert
+(==
+
+(store-of supermarket-shopping-3) store-25)
+
+Facts about the relations between the parts of a
+schema are then universally quantified facts about the
+corresponding functions. For example, to say that
+every store-of a supermarket-shopping must be filled
+with an instance of a supermarket (another schema)
+we would say
+(inst
+
+?x supermarket-shopping)
+
+-+
+
+(inst (store-of
+
+?x)
+
+supermarket)
+
+To abbreviate this we will write: (role supermarket­
+shopping store-of supermarket). More generally,
+(role
+
+schema1 slot schema2)
+
+states that anything which fills slot in schema1 must
+be an instance of schema2• Note that role is not
+a predicate of our plan recognition language, but is
+rather an abbreviation for formulas of the above form.
+In our probabilistic version we will determine the prob­
+ability of a plan by embedding inst and == state­
+ments in a Bayesian network. We will not attempt to
+summarize Bayesian networks but rather will assume
+the reader has a working knowledge of them. (See
+(Pearl [1988]) for a good introduction.) Equality (== )
+statements will become random variables with possi­
+ble values 1 and 0 (true and false). inst statements
+become random variables which can take any maxi­
+mally specific schema type as their value1. Thus the
+probability of the statement (inst sms1 supermarket­
+shopping) would become the probability that the in­
+stance sms1 takes on the value supermarket-shopping.
+However, often we will talk as if the statement (inst
+sms1 supermarket-shopping) appears in the network
+(with values 1 and 0). Most of the time the two rep­
+resentations are interchangeable.
+We intend our prior and conditional probabilities to
+come from a sample space of explanations for some
+large corpus of stories. For example, the prior prob­
+ability of a supermarket-shopping plan would be the
+number of supermarket-shopping plans that appear in
+our set of explanatory plans, divided by the total num­
+ber of explanatory plans. See (Goldman [1991]) for a
+detailed description of the probability model.
+3
+3.1
+
+Probabilistic Schema Selection
+Marker-Passing
+
+Marker-passing searches for paths between schemas in
+a graph whose nodes are schemas and whose arcs are
+isa and role statements. Marker-passing works as fol­
+lows: the marker-passer is given some schema, derived
+from a new inst statement, e.g., (inst supermarketl su­
+permarket). It places a mark on that schema, and
+then proceeds in breadth-first order to place marks
+on all the neighbors in the graph, their neighbors'
+neighbors, and so on. For example, our supermar­
+ket schema has two neighbors, supermarket-shopping,
+which is connected by the statement (r ol e supermarket­
+shopping store-of supermarket) and store-, which is con­
+nected by the statement (isa supermarket store-). Both
+of these would be marked after supermarket, and then
+their neighbors would be marked. Each mark has a
+numeric value, which generally diminishes according
+to its distance from the original mark (c.f., "zorch"
+in (Charniak [1986])). This value is used to cut off
+marker-passing, since otherwise we would continue un­
+til the entire graph was covered. For our value, we
+1Thus, the sum over all possible values is 1.0, which
+would not be true if they could take on non-maximally
+specific types.
+
+A Probabilistic Analysis of Marker-Passing Techniques for Plan-Recognition
+
+use an upper bound on the schemas and relations
+suggested by the path; we will be precise in section
+4. After marking a node, the marker-passer checks
+for marks from some other origin on the same node.
+If such a mark is found, both it and the new mark
+are back-traced to their respective origins, and the re­
+sulting lists of statements are glued together to form
+a path. For example, suppose we found a mark on
+supermarket-shopping which had originated at go. We
+would have as a path:
+(inst supermarket2 supermarket)
+(role supermarket-shopping store-of
+supermarket)
+(isa shopping supermarket-shopping)
+(role shopping go-step go)
+(inst go1 go)
+
+We include the original inst statements, even though
+the marker-passer does not, strictly speaking, pass
+marks over these links. It will be convenient for us
+to refer to them as part of the path, and they serve to
+disambiguate this path from other paths which may
+have the same links but different origins.
+The marker-passer returns a list of all the paths which
+it found once the marking has terminated. For more
+detail on how marker-passing works, see (Hendler
+[1988]).
+3.2
+
+Valid
+
+Paths
+
+Intuitively, we wish to interpret a path as a claim
+about how its ends are related to each other. In or­
+der to do this, we need to translate the path through
+the semantic network (a list of inst, isa, and role state­
+ments) into a set of Bayesian network nodes (inst and
+equality statements) and arcs. Before we describe this
+mapping, we must confess that our marker-passing
+system is not precisely the very simpie one described
+above. We employ a DFA at each node in our net­
+work to control the marker-passing, allowing us to re­
+strict the form of paths which we generate and report.
+This allows us to skip paths which are malformed in
+the sense that either they cannot be translated into a
+consistent set of statements in our schema theory, or
+they embody demonstrably bad schema suggestions.
+A valid path is one which is not malformed in the
+above sense.
+By isa- we mean
+guments reversed. So,
+(isa
+
+isa
+
+with the order of ar­
+
+specific-frame general-frame) iff
+general-frame specific-frame)
+
+(isa­
+
+Similarly for role and role-:
+(role
+
+DEFINITION 3.1.
+
+{lnst
+{lnst
+
+A valid path from it to i2 has the form
+
+it St) (predt St s2) . . (predn Sn Sn+t)
+i2 Sn+t)
+.
+
+where
+•
+•
+•
+
+•
+
+pred; may be one of isa, isa-, role and role-,
+at least one role appears among the predi .
+no sequence (isa ...)(isa- . ..) appears among the
+pred;
+if pred; is a role-, then no predk where k > i can
+be a role
+
+Our last two restrictions prohibit isa-plateaus, where
+an isa is followed by an isa-, and slot-filler valleys,
+where a role- is followed by a role, possibly with isa's
+between them. We have calculated, off-line, the joint
+probability of the statements associated with paths
+which violate the above restrictions; in all cases the
+joint probability falls below our threshold for being
+worth computing2•
+We will now define the statements associated with a
+path P, written S(P).
+NoTATION.
+
+path P.
+
+By P[n] we mean the nth statement of a
+
+The relevant instance at P[n] (written I(P[n])) is de­
+fined as follows:
+
+and Interpretations
+
+NoTATION.
+
+between the predicates and their "-" versions.
+
+filler-frame filled-frame slot) iff (role- filled-frame
+filler-frame slot)
+
+In future discussions we will often fail to distinguish
+
+DEFINITION 3.2.
+
+1.
+
+If ( inst i s) = P[n], then I(P[n]) = i.
+If {isa St s2) = P[n] and I(P[n- 1]) = i , then
+I(P[n]) = i . Similarly for isa-.
+3. If{role St slot s2) = P[n] then I(P[n]) = i', where
+i' is a new constant term.
+
+2.
+
+S(P) is defined as follows:
+DEFINITION 3.3.
+
+If {inst i t) = P[n], then {inst i t) E S(P).
+If (isa St s2) = P[n] and ( inst i t) E S(P), then
+{inst i s2) E S(P). Similarly for isa-.
+3. If ( role St slot s2} = P[n], then {{inst in s2)
+( =={slot in) i))} C S(P), where i,.. = I(P[n]).
+Similarly for role-.
+
+1.
+
+2.
+
+Intuitively we wish to interpret a path P as a claim
+about how its ends are related to each other. "Every
+s E S(P) is true" is intended to be the formalization of
+2
+To summarize: for isa-plateaus, the left and right side
+of the Bayesian net in which we embed the statements are
+independent, so they cannot support one another. For the
+slot-filler valleys, there is no evidence to support the ob­
+ject which must appear in two schemas. See (Charniak &
+Carroll [1991]) for details.
+
+71
+
+72
+
+Carroll and Charniak
+
+(inst supermarket2 supermarket)
+(role supermarket-shopping store-of
+supermarket)
+(isa- shopping supermarket-shopping)
+(role go shopping go-step) \nopagebreak
+(inst go1 go)
+FIG. 3.1.
+
+An
+
+Example Marker-passer Path.
+
+(inst supermarket2 supermarket)
+( == (store-of shopping3) supermarket2)
+(inst shopping3 supermarket-shopping)
+(inst shopping3 shopping)
+( == (go-step shopping3) go1)
+(inst go1 go)
+FIG. 3.2.
+
+S(P)
+
+For Example Path.
+
+an RS(P)- is, and we can do this without detailed
+comparisons with its competitors.
+3.3
+
+Vertebrate Bayesian Networks
+
+With each path P we will associate a Bayesian network
+with a particular structure which will prove important
+to our calculations. We call such networks ver tebr ate
+Bayesian networks, because they have spines.
+DEFINITION 3.7. A Bayesian network is a "ver tebr ate"
+Bayesian network iff it consists of two parts, to be de­
+fined below, called the spine, and the interior.
+
+Intuitively, a spine is the geometrical backbone of its
+Bayesian network.
+
+this claim. For example, the path in Figure 3.1 would
+have as its S(P) the statements shown in Figure 3.2.
+We actually need only a subset ofS(P), namely the rel­
+evant statements associated with P, (written RS(P))
+which we will define below. First we give two more
+definitions necessary for defining RS(P).
+We define isa* as
+V t, t'(is a* t t') iff((is a t t') or 3 t"({isa
+t t") and (is a* t" t')]).
+
+FIG. 3.3. The basic spine.
+
+DEFINITION 3 .4.
+
+We define the relevant type of an inst (written R T( i))
+to be the most specific schema type of the node; more
+formally,
+R T( i) = t such that (inst i t) E S(P)
+and V t'((inst i t'} E S(P) -> (is a* t t') or t = t') .
+
+DEFINITION 3.5.
+
+We define the relevant statements associated with P
+as
+DEFINITION 3.6.
+1.
+
+2.
+
+If(inst i t) E S(P) and R T( i) = t then (inst i t) E
+RS(P).
+If(== (slo t i) j) E S(P), then(== ( slo t i) j) E
+RS(P).
+
+In effect, we remove superfluous instance statements
+from S(P), whose statements are stll implied by those
+retained in RS(P).
+Our formal measure of a path P is defined by embed­
+ding the members of RS(P) in a Bayesian network,
+and then evaluating the probability that each node is
+true, given the evidence. In general there may be sev­
+eral paths for the same entities, indicating alternative
+possible plans. In what follows we will be looking at
+Bayesian networks in which there is only one RS(P).
+The idea is that we are interested in getting a prelimi­
+nary guess as to how likely a particular interpretation-
+
+NoTATION.
+
+We use ij to name inst nodes.
+
+Recall that equality nodes represent slot-filler relation­
+ships for us.
+NoTATION. We use =j to name equality nodes, indi­
+cating in this case that the parent node i; is the slot
+filler.
+
+There are other types of nodes which act as evidence
+for our equality and inst nodes. For example, the ap­
+pearance of a word in text provides evidence for the
+existence of a particular inst. Although these nodes
+come in several flavors, we can treat them generically
+for our purposes, so we will name all of them simply
+"evidence" nodes.
+NOTATION.
+
+We use ej to name evidence nodes.
+
+Our definition describes a structure topologically;
+thus, we imply that a node subscripted by j is not
+equal to any node subscripted by k, where k f= j.
+Legal spines are recursively defined as follows:
+DEFINITION 3.8.
+
+Any Bayesian network whose node set
+is {i1, i2, =1, e1, e2 } and whose edge set is
+{i1 -+ e�, i2 -+ e2, i1 -+ ==1, i2 -t =1}
+is a s pine. See Figure 3.3.
+Recursion: If S is a spine with the nodes i1 and e1
+and the edge i1 -> e1, then S' is a spine, where
+N(S') = N(S) u { i', =i' }
+(1)
+Base step:
+
+A Probabilistic Analysis of Marker-Passing Techniques for Plan-Recognition
+
+and
+
+3.4
+
+E(S')
+
+==
+
+{E(S)- {it --+ e1 }} U
+{it -+ i', i' --+ e1,
+it --+ =i1 1 i' ---+ :=i1}
+
+(2)
+
+See Figure 3.-f.
+
+Relating Paths to Networks
+
+We will now show that each path corresponds to a
+unique vertebrate Bayesian network, and that the joint
+probability of S(P) in the network can be calculated
+from each step of the path.
+If P is a valid path, then there exists
+a unique vertebrate Bayesian network V such that the
+statements in RS(P) have formulas in one-to-one cor­
+respondence with the non-evidence nodes of V.
+
+THEOREM 3.1.
+
+ti;·�:
+
+.... ..�... .
+
+·,....
+
+:.;:�1)
+
+e1
+before
+
+Proof. The proof is by induction on the length of the
+path.
+
+�/
+after
+
+FIG. 3.4. Before and after nodes are added to a
+spine.
+
+As for the "interior" of a vertebrate Bayesian network,
+intuitively it is the evidence supporting the equality
+nodes of the vertebrate Bayesian network. We may
+assume, without loss of generality that there is only
+once such evidence node E1• More formally:
+DEFINITION 3.9. If V is a vertebrate Bayesian network
+with spine S, and S has the non-evidence nodes N
+and the evidence node& E, then the interior of V is an
+evidence node E1 disjoint from E and a set of edges
+D from every equality node in N to E1 .
+
+The assumption that there will be supporting evi­
+dence, some E1 node, is the crucial one for marker­
+passing. When there is no evidence, the posterior
+probabilities of the abductive hypotheses generated
+from our paths turn out to be abysmally low; plainly
+put, they are bad guesses. In general, we believe that
+A domain is suitable for search by means of
+marker-passing only if there will usually be supporting
+evidence for paths returned by the marker-pas ser.
+
+CLAIM 3.1.
+
+We will support our claim by showing that, in our do­
+main, which meets the evidence condition, we can in­
+crease the ratio of good to bad paths returned from the
+marker-passer to better than 90%. Our claim should
+not be interpreted as saying that the marker-passer
+has no responsibility for the quality of paths it returns;
+quite the opposite is true. Most of the remainder of
+this paper will focus on the calculations which allow
+us to determine whether or not a path is worthwhile,
+as suming that there is evidence for it. If we could not
+make these calculations, then doubtless many of the
+paths which would be returned would in fact fail to
+have associated evidence. We can safely throw them
+out because they are bad paths regardless of whether
+they have evidence.
+
+The basis follows from the definition of the simplest
+spine, and RS( P) for the shortest valid path. The
+spine and RS(P) have one == node (statement, re­
+spectively) and two inst nodes (statements, respec­
+tively). For the induction step, suppose we have
+proved there is a unique network for P. Let P' have
+the same structure as P, with an extra isa statement
+inserted in some location which does not violate our
+constraints for path validity. We first note that isa
+statements do not add statements to RS(P), they
+only change the schemas named in statements already
+there. Hence, if we have a vertebrate Bayesian network
+for P, we can use the same structure (with different
+relevant types for some nodes) for P'.
+If P' is P with an extra role statement (again, inserted
+in some location which respects path validity), this
+corresponds to applying clause 2, the recursion step,
+of the definition of a spine. The role statement adds
+an === statement and an inst statement to RS(P),
+and applying clause 2 adds the corresponding nodes
+to the network. Since each step determines a unique
+transformation and each transformation results in a
+unique vertebrate Bayesian network, P corresponds to
+a unique vertebrate Bayesian network, which we call
+V(P), or, where unambiguous, just V. D
+From the above, it should be obvious that we can
+construct a vertebrate Bayesian network by sequen­
+tially processing a path from left to right, adding new
+nodes and arcs for each role statement we come across,
+and changing the relevant type of our last added node
+when we encounter an isa-. We will use this fact,
+together with some distribution properties of verte­
+brate Bayesian networks to calculate our measure of
+path utility without vertebrate Bayesian network cor­
+responding to the path.
+4
+4.1
+
+Path Calculations
+The Spinal Contribution
+
+Our calculations will not compute the exact joint prob­
+ability of the network which we construct. Instead we
+will compute an upper bound on the joint probability,
+
+73
+
+74
+
+Carroll and Charniak
+
+The left-hand group of terms we call the spinal con­
+tribution of our joint probability; more generally, any
+terms not included in the bounded group, will be part
+of the spinal contribution, and calculating it will be
+the focus of the rest of this section. Since those terms
+not in the spinal contribution have an upper bound of
+1.0, the spinal contribution is an upper bound on the
+joint probability of the network.
+FIG. 4.1. The basic vertebrate Bayesian network.
+
+4.2
+
+under assumptions to be detailed below, which we call
+the spinal contribution. We will define the spinal con­
+tribution momentarily, in terms of the joint probability
+of the network. To begin with, the exact joint proba­
+bility of the simplest vertebrate Bayesian network (the
+basic spine with an added interior evidence node, E1,
+pictured in Figure 4.1) is
+
+THEOREM 4.1. As a pathP is traversed, our measure of
+the spinal contribution of the corresponding vertebrate
+Bayesian network fragment, SC( V), can be computed
+recursively in the following manner:
+
+1.
+
+2.
+
+p(e1li1)p(E1I =1)p(eali2)p(il)p(i2)P(=1 li1, i2)
+p(e11 E1,ea)
+
+(3)
+
+We use conditional probability and independence to
+transform the denominator into
+
+.
+
+(5)
+
+We write p(==) for the prior probability
+of any two things being equal.
+
+NOTATION.
+
+This allows us to rewrite the last term in our formula
+as follows:
+(6)
+Applying the substitutions in equations 4, 5, and 6 to
+3, and then cancelling and regrouping yields
+
+(
+
+p(i1le1)p(i2lea)
+p{i1)
+
+)(
+
+p(==)p( E11 =1)
+p(E1Ie1, ea)
+
+)
+
+(7)
+
+The right-hand group of terms will appear in the ex­
+act calculations for every vertebrate Bayesian network,
+with the difference that E1 may be conditioned on
+more nodes, if they are present. By our earlier as­
+sumptions about the distributions for E1, this group
+has an upper bound of 1.0.
+
+.
+
+Link
+,C role 81 slot 82{
+( role- s1 slot s2)
+(isa 81 82 )
+(isa- 81 s2 )
+(inst i1 s1 )
+
+For the numerator, we note that
+and similarly for p(eali2).
+The slot-filler term, p(=1 li1, i2), requires some discus­
+sion. Recall that role statements specify a particular
+type for each slot that a schema has. The probability
+that i1 fills this particular slot in h is the probability
+that any two things of the specified type are equal.
+This, in turn, is equal to the prior probability of ·any
+two things being equal, divided by the prior probabil­
+ity of a thing being the specified type.
+
+The initial value, corresponding to the (inst i1 s 1)
+node/statement 3 is p(i1 lel), our current belief in
+the node.
+As each subs equent statement is traversed, we
+compute the new value by multiplying the current
+value by the number given in table 4.1.
+TABLE 4 1 Spinal Contribution Multipliers
+
+(4)
+p(e1lil) = p(ide1)p(el)jp(il)
+
+Calculations
+
+Multiplier
+p(sl)j�( s2)
+1.0
+1.0
+
+p(s2)jp(s!)
+p(i1 le1)/p( s 1)
+
+Proof. Omitted due to space limitations. See (Char­
+niak & Carroll [1991]) . 0
+4.3
+
+Internal Calculations
+
+Marker-passing produces whole paths as output; in­
+ternally, however, it builds these from two half-paths
+which resulted from passing marks from two differing
+origins (at different times). We would like to use our
+measure of spinal contribution to cut off the depth of
+marker-passing, which requires that we compute it as
+the half-path is built, before the two halves are put
+together. We now show that this is possible, and that
+the calculations for an entire path, above, comprise the
+bulk of the work for computing half-paths. Our lemma
+concerns the spine, not the entire vertebrate Bayesian
+network, since the interior evidence node is not part
+of our spinal contribution.
+DEFINITION 4.1. By cleaving a vertebrate Bayesian
+
+work graph at some inst node
+•
+
+the cleaved node
+
+n
+
+n,
+
+net­
+
+we mean that
+
+appears in both halves
+
+'This is a node in the Bayesian network, and a state­
+ment in the path. Since we will be discussing probabilities
+from now on, we will generally call them nodes.
+
+A Probabilistic Analysis of Marker-Passing Techniques for P lan-Recognition
+
+•
+
+•
+
+the left half include& the evidence node e1, all inst
+node& i1 through i,. and all arcs between them, and
+similarly for the right half
+equality node& with both parents among inst node&
+i1 through i,. and all arc& incident to them are in
+the left half, and similarly for the right
+
+See Figure
+
+corpus
+debug
+test
+
+paths
+asserted
+115
+109
+
+paths
+evaluated
+83
+68
+
+paths
+approved
+78
+64
+
+4.2.
+
+&pine can be cleaved into two halve& H1
+and H2 at any inst node, &uch that the &pinal contri­
+bution of the whole graph i& given by
+
+LEMMA 4.2. A
+
+SC( V ) = SC(H1) x SC(H2)jp(n)
+
+(8)
+
+where n is the node at which the graph is cleaved.
+Proof. Omitted due to space limitations. See (Char­
+niak & Carroll [1991]) . 0
+Lemma 4.2 means that we can track the spinal contri­
+bution incrementally as we extend a half-path. When
+the measure drops below a threshold, T, we can cut
+safely cut off marker-passing; that is, we will miss no
+complete paths whose measure would be above T2•
+Currently we have T set at 30. We have arrived at
+this value through experimentation with a set of paths
+generated from a set of stories which we use for de­
+bugging and tuning our system. Generally, there is a
+large gap, a factor of 10 or more, between the spinal
+contribution of those paths which have the right ex­
+planations and those which do not. While our system
+does rely on the prior probabilities for our schema, this
+gap suggests that we can get by with priors that are
+only approximately correct.
+5
+
+TABLE 5 .1. Results Summary
+
+paths
+reported
+985
+747
+
+Results
+
+We have employed our marker-passer in the Wimp3
+story understanding system (Goldman [1991]) to find
+explanatory plans. The results quoted in table 5.1
+are those obtained both on Wimp3's debugging cor­
+pus of 25 1-to-4 line "stories" and on its evaluation
+corpus4 of 25 stories. We counted paths at four points
+in the flow of control. First, we counted paths which
+left the marker passer. As described above, we in­
+tegrated the probability valuation of paths into the
+marker-passing mechanism itself, using it to control
+the spread of marks. This makes it impossible to es­
+timate how many paths were eliminated due to low
+probability values. Likewise, we cannot say how many
+paths were eliminated by employing DFA's to prohibit
+generation of invalid paths. We can only give the to­
+tal number of paths returned, with the invalid and
+low probability paths already weeded out. Second,
+we counted paths which were "asserted", i.e., used for
+'The debugging corpus is used for testing and tuning of
+para'?'eters. The evaluation corpus is for evaluation only,
+and 1s therefore a cleaner test, in some sense.
+
+forward-chaining and Bayesian network construction.
+These are paths which passed various secondary filters
+reported in (Carroll & Charniak [1989]). Third, we
+counted paths whose resulting statements were actu­
+ally evaluated using our Bayesian network evaluation
+mechanism. Some paths could be eliminated without
+evaluation, as we will describe shortly. Finally, we
+counted those paths which we approved after evalua­
+tion; for a path to be approved the posterior probabil­
+ity of the suggested plans given the evidence had to be
+1,000 times higher than the prior probability for the
+plans. The ratio of approved paths to asserted paths
+was 68% for the debugging corpus, and 59% for the test
+corpus, a significant improvement on the 10% good to
+bad path ratio reported earlier, (Charniak Neat 1986
+Norvig 1987 Berkeley ]) and strong support for our
+claim that the key to the viability of marker-passing
+is the supporting evidence, our E1.
+Our analysis suggested one more improvement which
+could be made. As we commented earlier, the marker
+passer's probability calculations are an upper bound,
+based on the assumption that there is evidence in fa­
+vor of the path (other than the nodes at either end).
+That is, after the marker passer produces an accept­
+able path P, Wimp3 constructs a Bayesian network
+which includes RS(P). Among the paths which were
+not approved, we found that there was often no ev­
+idence supporting some of the statements in RS( P).
+While we cannot determine whether evidence is miss­
+ing before network construction, we can do so before
+network evaluation. While the former takes time lin­
+ear in the size of the network (making reasonable as­
+sumptions about the process), the latter, in general,
+takes exponential time (and is NP-hard). Indeed,
+network evaluation accounts for approximately 90%
+of Wimp3's running time, and thus the only really
+bad paths are those which cannot be removed before
+network evaluation and are not approved afterwards.
+Weeding out paths with no evidence accounts for the
+difference between paths which were asserted-used for
+network construction-and paths which were evaluated.
+A combined total of 151 paths had to be evaluated by
+Wimp3, and, of these, all but 9 were good, for a per­
+centage of about 94%. This leads us to extend our
+claim to say that: A domain is suitable for search by
+mean& of marker-passing only if there will usually be
+supporting evidence for paths returned by the marker­
+pa&ser, or paths without evidence can be cheaply iden­
+tified.
+
+75
+
+76
+
+Carroll and Charniak
+
+cleaving
+
+before
+
+after
+FIG. 4. 2. Cleaving a vertebrate Bayesian network.
+
+Acknowledgements
+
+This work has been supported by the National Science
+Foundation under grant IRI-8911122 and by the Office
+of Naval Research, under contract N00014-88-K-0589.
+References
+
+Alterman, Richard. [1985], "A dictionary based on
+concept coherence," Artificial Intelligence 25,
+153-186.
+Carroll, Glenn & Charniak, Eugene [1989], "Finding
+plans with a marker-passer," Proceedings of
+the Plan-recognition Workshop, 1989.
+
+Charniak, Eugene [1983], "Passing markers: A theory
+of contextual influence in language compre­
+hension," Cognitive Science 7.
+Charniak, Eugene [1986], "A Single-Semantic-Process
+Theory of Parsing," Department of Computer
+Science, Brown University, Technical Report.
+Charniak, Eugene & Carroll, Glenn [1991], "A Proba­
+bilistic Analysis of Marker-Passing Techniques
+for Plan-Recognition," Department of Com­
+puter Science, Brown University, Technical
+Report.
+Collins, Alan & Quillian, M. Ross [1969], "Retrieval
+time from semantic memory," Journal of Ver­
+bal Learning and Verbal Behavior 8, 240-248.
+Cooper, Gregory F. [1987], "Probabilistic Inference Us­
+ing Belief Networks is NP-hard," Stanford
+University, Technical Report KSL-87-27 Med­
+ical Computer Science Group.
+
+Goldman, Robert [1991], "A Probabilis tic Approach
+to Language Understanding," Department of
+Computer Science, Brown University, Techni­
+cal Report.
+Hendler, James A. [1988], Integrated Marker-Passing
+and Problem-Solving, Lawrence Erlbaum As­
+
+sociates, Hillsdale New Jersey.
+
+Norvig, Peter [1987a], "Inference in text understand­
+ing," Proceedings of the Seventh National
+Conference on Artificial Intelligence.
+
+Norvig, Peter [1987b], "Unified Theory of Inference for
+Text Understanding," Computer Science Divi­
+sion, University of California Berkeley, Report
+No. 87/339.
+Pearl, Judea [1988], Pro babilistic Reasoning in Intelli­
+gentSystems : Networks of Plausible Inference,
+Morgan Kaufmann, Los Altos, Calf..
+
+

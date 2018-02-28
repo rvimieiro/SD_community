@@ -1,0 +1,1130 @@
+this selection problem as well as new heuristic policies
+for controlling Monte Carlo simulations. As described
+below, these policies outperform previously published
+methods for “flat” selection and game-playing in Go.
+The basic ideas behind our approach are best explained in a familiar context such as game playing.
+A typical game-playing algorithm chooses a move by
+first exploring a tree or graph of move sequences and
+then selecting the most promising move based on this
+exploration. Classical algorithms typically explore in a
+fixed order, imposing a limit on exploration depth and
+using pruning methods to avoid irrelevant subtrees;
+they may also reuse some previous computations (see
+Section 6.2). Exploring unpromising or highly predictable paths to great depth is often wasteful; for a
+given amount of exploration, decision quality can be
+improved by directing exploration towards those actions sequences whose outcomes are helpful in selecting
+a good move. Thus, the metalevel decision problem is
+to choose what future action sequences to explore (or,
+more generally, what deliberative computations to do),
+while the object-level decision problem is to choose an
+action to execute in the real world.
+That the metalevel decision problem can itself be formulated and solved decision-theoretically was noted
+by Matheson (1968), borrowing from the related concept of information value theory (Howard, 1966). In
+essence, computations can be selected according to
+the expected improvement in decision quality resulting
+from their execution. I. J. Good (1968) independently
+proposed using this idea to control search in chess, and
+later defined “Type II rationality” to refer to agents
+that optimally solve the metalevel decision problem
+before acting. As interest in probabilistic and decision-
+
+theoretic approaches in AI grew during the 1980s, several authors explored these ideas further (Dean and
+Boddy, 1988; Doyle, 1988; Fehling and Breese, 1988;
+Horvitz, 1987). Work by Russell and Wefald (1988,
+1991a,b) formulated the metalevel sequential decision
+problem, employing an explicit model of the results of
+computational actions, and applied this to the control
+of game-playing search in Othello with encouraging results.
+An independent thread of research on metalevel control began with work by Kocsis and Szepesvári (2006)
+on the UCT algorithm, which operates in the context
+of Monte Carlo tree search (MCTS) algorithms. In
+MCTS, each computation takes the form of a simulation of a randomized sequence of actions leading from
+a leaf of the current tree to a terminal state. UCT
+is primarily a method for selecting a leaf from which
+to conduct the next simulation, and forms the core of
+the successful MoGo algorithm for Go playing (Gelly
+and Silver, 2011). The UCT algorithm is based on
+the the theory of bandit problems (Berry and Fristedt, 1985) and the asymptotically near-optimal UCB1
+bandit algorithm (Auer et al., 2002). UCT applies
+UCB1 recursively to select actions to perform within
+simulations.
+It is natural to consider whether the two independent threads are consistent; for example, are bandit
+algorithms such as UCB1 approximate solutions to
+some particular case of the metalevel decision problem defined by Russell and Wefald? The answer, perhaps surprisingly, is no. The essential difference is
+that, in bandit problems, every trial involves executing a real object-level action with real costs, whereas
+in the metareasoning problem the trials are simulations whose cost is usually independent of the utility of the action being simulated. Hence, as Audibert
+et al. (2010) and Bubeck et al. (2011) have also noted,
+UCT applies bandit algorithms to problems that are
+not bandit problems.
+
+hofer, 1954; Swisher et al., 2003). Despite some recent
+work (Frazier and Powell, 2010; Tolpin and Shimony,
+2012b), the theory of selection problems is less well
+understood than that of bandit problems. Most work
+has focused on the probability of selection error rather
+than optimal policies in the Bayesian setting (Bubeck
+et al., 2011). Accordingly, we present in Sections 2
+and 3 a number of results concerning optimal policies
+for the general case as well as specific finite bounds on
+the number of samples collected by optimal policies
+for Bernoulli arms with beta priors. We also provide a
+simple counterexample to the intuitive conjecture that
+an optimal policy should not spend more on deciding
+than the decision is worth; in fact, it is possible for an
+optimal policy to compute forever. We also show by
+counterexample that optimal index policies (Gittins,
+1989) may not exist for selection problems.
+Motivated by this theoretical analysis, we propose in
+Sections 4 and 5 two families of heuristic approximations, one for the Bayesian case and one for the
+distribution-free setting. We show empirically that
+these rules give better performance than UCB1 on
+a wide range of standard (non-sequential) selection
+problems. Section 6 shows similar results for the case
+of guiding Monte Carlo tree search in the game of Go.
+
+2
+
+On optimal policies for selection
+
+In a selection problem the decision maker is faced with
+a choice among alternative arms1 . To make this choice,
+they may gather evidence about the utility of each of
+these alternatives, at some cost. The objective is to
+maximize the net utility, i.e., the expected utility of
+the final arm selected, less the cost of gathering the
+evidence. In the classical case (Bechhofer, 1954), evidence might consist of physical samples from a product
+batch; in a metalevel problem with Monte Carlo simulations, the evidence consists of outcomes of sampling
+computations:
+
+One consequence of the mismatch is that bandit policies are inappropriately biased away from exploring actions whose current utility estimates are low. Another
+consequence is the absence of any notion of “stopping”
+in bandit algorithms, which are designed for infinite sequences of trials. A metalevel policy needs to decide
+when to stop deliberating and execute a real action.
+
+Definition 1. A metalevel probability model is
+a tuple (U1 , . . . , Uk , E) consisting of jointly distributed
+random variables:
+
+Analyzing the metalevel problem within an appropriate theoretical framework ought to lead to more effective algorithms than those obtained within the bandit
+framework. For Monte Carlo computations, in which
+samples are gathered to estimate the utilities of actions, the metalevel decision problem is an instance
+of the selection problem studied in statistics (Bech-
+
+• A countable set E of random variables, each variable E ∈ E being a computation that can be performed and whose value is the result of that computation, where e ∈ E will denote that e is a potential value of the computation E.
+
+• Real random variables U1 , . . . , Uk , where Ui is the
+utility of arm i, and
+
+1
+Alternative actions are known as arms in the bandit
+setting; we borrow this terminology for uniformity.
+
+For simplicity, in the below we’ll assume the utilities
+Ui are bounded, without loss of generality in [0, 1].
+Example 1 (Bernoulli sampling). In the Bernoulli
+metalevel probability model, each arm will either
+succeed or not Ui ∈ {0, 1}, with an unknown latent
+frequency of success Θi , and a set of stochastic simulations of possible consequences E = {Eij |1 ≤ i ≤
+k, j ∈ N} that can be performed:
+iid
+
+Θi ∼ Uniform[0, 1]
+
+for i ∈ {1, . . . , k}
+
+Ui | Θi ∼ Bernoulli(Θi )
+
+for i ∈ {1, . . . , k}
+
+iid
+
+Eij | Θi ∼ Bernoulli(Θi )
+
+for i ∈ {1, . . . , k}, j ∈ N
+
+The one-armed Bernoulli metalevel probability
+model has k = 2, Θ1 = λ ∈ [0, 1] a constant, and
+Θ2 ∼ Uniform[0, 1].
+A metalevel probability model, when combined with a
+cost of computation c > 0,2 defines a metalevel decision problem: what is the optimal strategy with which
+to choose a sequence of computations E ∈ E in order
+to maximize the agent’s net utility? Intuitively, this
+strategy should choose the computations that give the
+most evidence relevant to deciding which arm to use,
+stopping when the cost of computation outweighs the
+benefit gained. We formalize the selection problem as a
+Markov Decision Process (see, e.g., Puterman (1994)):
+Definition 2. A (countable state, undiscounted)
+Markov Decision Process (MDP) is a tuple M =
+(S, s0 , As , T, R) where: S is a countable set of states,
+s0 ∈ S is the fixed initial state, As is a countable set
+of actions available in state s ∈ S, T (s, a, s0 ) is the
+transition probability from s ∈ S to s0 ∈ S after performing action a ∈ As , and R(s, a, s0 ) is the expected
+reward received on such a transition.
+To formulate the metalevel decision problem as an
+MDP, we define the states as sequences of computation outcomes and allow for a terminal state when the
+agent chooses to stop computing and act:
+Definition 3. Given a metalevel probability model3
+(U1 , . . . , Uk , E) and a cost of computation c > 0, a
+corresponding metalevel decision problem is any
+2
+The assumption of a fixed cost of computation is a
+simplification; precise conditions for its validity are given
+by Harada (1997).
+3
+Definition 1 made no assumption about the computational result variables Ei ∈ E, but for simplicity in the
+following we’ll assume that each Ei takes one of a countable set of values. Without loss of generality, we’ll further
+assume the domains of the computational variables E ∈ E
+are disjoint.
+
+MDP M = (S, s0 , As , T, R) such that
+S = {⊥} ∪ {he1 . . . , en i : ei ∈ Ei for all i,
+for finite n ≥ 0 and distinct Ei ∈ E}
+s0 = hi
+As = {⊥} ∪ Es
+where ⊥ ∈ S is the unique terminal state, where Es ⊆ E
+is a state-dependent subset of allowed computations,
+and when given any s = he1 , . . . , en i ∈ S, computational action E ∈ E, and s0 = he1 , . . . , en , ei ∈ S where
+e ∈ E, we have:
+T (s, E, s0 ) = P (E = e | E1 = e1 , . . . , En = en )
+T (s, ⊥, ⊥) = 1
+R(s, E, s0 ) = −c
+R(s, ⊥, ⊥) = max µi (s)
+i
+
+where µi (s) = E[Ui | E1 = e1 , . . . , En = en ].
+Note that when stopping in state s, the expected utility of action i is by definition µi (s), so the optimal action to take is i∗ ∈ argmaxi µi (s) which has expected
+utility µi∗ (s) = maxi µi (s).
+One can optionally add an external constraint on the
+number of computational actions, or their total cost,
+in the form of a deadline or budget. This bridges with
+the related area of budgeted learning (Madani et al.,
+2004). Although this feature is not formalized in the
+MDP, it can be added by including either time or past
+total cost as part of the state.
+Example 2 (Bernoulli sampling). In the Bernoulli
+metalevel probability model (Example 1), note that:
+Θi | Ei1 , . . . , Eini ∼ Beta(si + 1, fi + 1)
+
+
+si + 1
+Ei(ni +1) | Ei1 , . . . , Eini ∼ Bernoulli
+ni + 2
+E[Ui | Ei1 , . . . , Eini ] = (si + 1)/(ni + 2)
+
+(1)
+(2)
+(3)
+
+by standard
+properties of these distributions, where
+Pni
+si = j=1
+Eini is the number of simulated successes of
+arm i, and fi = ni − si the failures. By Equation (1),
+the state space is the set of all k pairs (si , fi ); Equations (2) and (3) suffice to give the transition probabilities and terminal rewards, respectively. The onearmed Bernoulli case is similar, requiring as state just
+(s, f ) defining the posterior over Θ2 .
+Given a metalevel decision problem M
+=
+(S, s0 , As , T, R) one defines policies and value
+functions as in any MDP. A (deterministic, stationary) metalevel policy π is a function mapping states
+s ∈ S to actions to take in that state π(s) ∈ As .
+
+The value function for a policy π gives the expected
+total reward received under that policy starting from a
+given state s ∈ S, and the Q-function does the same
+when starting in a state s ∈ S and taking a given
+action a ∈ As :
+"N
+#
+X
+π
+VM
+(s) = EπM
+R(Si , π(Si ), Si+1 ) | S0 = s
+(4)
+i=0
+
+where N ∈ [0, ∞] is the random time the MDP is
+terminated, i.e., the unique time where π(SN ) = ⊥,
+and similarly for the Q-function QπM (s, a).
+As usual, an optimal policy π ∗ , when it exists, is one
+that maximizes the value from every state s ∈ S, i.e.,
+if we define for each s ∈ S
+∗
+π
+VM
+(s) = sup VM
+(s),
+π
+
+π∗
+(s)
+VM
+
+∗
+
+∗
+(s)
+VM
+
+for
+=
+then an optimal policy π satisfies
+all s ∈ S, where we break ties in favor of stopping.
+The optimal policy must balance the cost of computations with the improved decision quality that results.
+This tradeoff is made clear in the value function:
+Theorem 4. The value function of a metalevel decision process M = (S, s0 , As , T, R) is of the form
+π
+VM
+(s) = EπM [−c N + max µi (SN ) | S0 = s]
+i
+
+where N denotes the (random) total number of computations performed; similarly for QπM (s, a).
+In many problems, including the Bernoulli sampling
+model of Example 2, the state space is infinite. Does
+this preclude solving for the optimal policy? Can infinitely many computations be performed?
+There is in full generality an upper bound on the expected number of computations a policy performs:
+Theorem 5. The optimal policy’s expected number of
+computations is bounded by the value of perfect information (Howard, 1966) times the inverse cost 1/c:
+∗
+
+Eπ [N | S0 = s] ≤
+
+
+1
+E[max Ui | S0 = s] − max µi (s) .
+i
+i
+c
+
+Further, any policy π with infinite expected number of
+computations has negative infinite value, hence the optimal policy stops with probability one.
+Although the expected number of computations is always bounded, there are important cases in which the
+actual number is not, such as the following inspired by
+the sequential probability ratio test (Wald, 1945):
+Example 3. Consider the Bernoulli sampling model
+for two arms but with a different prior: Θ1 = 1/2,
+
+and Θ2 is 1/3 or 2/3 with equal probability. Simulating arm 1 gains nothing, and after (s, f ) simulated
+successes and failures of arm 2 the posterior odds ratio
+is
+(2/3)s (1/3)f
+P (Θ2 = 2/3 | s, f )
+= 2s−f .
+=
+P (Θ2 = 1/3 | s, f )
+(1/3)s (2/3)f
+Note that this ratio completely specifies the posterior
+distribution of Θ2 , and hence the distribution of the
+utilities and all future computations. Thus, whether it
+is optimal to continue is a function only of this ratio,
+and thus of s−f . For sufficiently low cost, the optimal
+policy samples when s − f equals −1, 0, or 1. But
+with probability 1/3, a state with s − f = 0 transitions
+to another state s − f = 0 after two samples, giving
+finite, although exponentially decreasing, probability to
+arbitrarily long sequences of computations.
+However, in a number of settings, including the original Bernoulli model of Example 1, we can prove an
+upper bound on the number of computations. For
+reasons of space, and for its later use in Section 4,
+we prove here the bound for the one-armed Bernoulli
+model.
+Before we can do this, we need to get an analytical
+handle on the optimal policy. The key is through a
+natural approximate policy:
+Definition 6. Given a metalevel decision problem
+M = (S, s0 , As , T, R), the myopic policy π m (s) is defined to equal argmaxa∈As Qm (s, a) where Qm (s, ⊥) =
+maxi µi (s) and
+Qm (s, E) = EM [−c + max µi (S1 ) | S0 = s, A0 = E].
+i
+
+The myopic policy (known as the metalevel greedy approximation with single-step assumption in (Russell
+and Wefald, 1991a)) takes the best action, to either
+stop or perform a computation, under the assumption that at most one further computation can be performed. It has a tendency to stop too early, because
+changing one’s mind about which real action to take
+often takes more than one computation. In fact, we
+have:
+Theorem 7. Given a metalevel decision problem M =
+(S, s0 , As , T, R) if the myopic policy performs some
+computation in state s ∈ S, then the optimal policy
+does too, i.e., if π m (s) 6= ⊥ then π ∗ (s) 6= ⊥.
+Despite this property, the stopping behavior of the myopic policy does have a close connection to that of the
+optimal policy:
+Definition 8. Given a metalevel decision problem
+M = (S, s0 , As , T, R), a subset S 0 ⊆ S of states
+is closed under transitions if whenever s0 ∈ S 0 ,
+a ∈ As0 , s00 ∈ S, and T (s0 , a, s00 ) > 0, we have s00 ∈ S 0 .
+
+Using these results connecting the behavior of the optimal and myopic policies, we can prove our bound:
+Theorem 10. The one-armed Bernoulli decision process with constant arm λ ∈ [0, 1] performs at most
+λ(1 − λ)/c − 3 ≤ 1/4c − 3 computations.
+Proof. Using Definition 6 and Example 2, we determine which states the myopic policy stops in by bounding Qm (s, E). For a state (s, f ), let µ = (s+ 1)/(n+ 2)
+be the mean utility for arm 2, where n = s + f . Fixing
+n and maximizing over µ, we get sufficient condition
+for stopping Since the set of states satisfying Equation (5) is closed under
+c≥
+
+λ(1 − λ)
+(n + 3)
+
+n≥
+
+λ(1 − λ)
+−3
+c
+
+(5)
+
+Since the set of states satisfying Equation (5) is closed
+under transitions (n only increases), by Theorem 7.
+Finally, note maxλ∈[0,1] λ(1 − λ) = 1/4.
+A key implication is that the optimal policy can be
+computed in time O(1/c2 ), i.e., quadratic in the inverse cost. This is particularly appropriate when the
+cost of computation is relatively high, such as in simulation experiments (Swisher et al., 2003), or when the
+decision to be made is critical.
+
+3
+
+the known value λ. As the context λ varies the optimal action inverts from observing 1 to observing 2.
+Inversions like this are impossible for index policies.
+0.3
+Utility relative to stopping
+
+Theorem 9. Given a metalevel decision problem M =
+(S, s0 , As , T, R) and a subset S 0 ⊆ S of states closed
+under transitions, if the myopic policy stops in all
+states s0 ∈ S 0 then the optimal policy does too.
+
+The analogous result does not hold for metalevel decision problems, even when the action’s values are independent (this formalized later in Definition 13):
+Example 4 (Non-indexability). Consider a metalevel
+probability model with three actions. U1 is equally
+likely to be −1.5 or 1.5 (low mean, high variance), U2
+is equally likely to be 0.25 or 1.75 (high mean, low variance), and U3 = λ has a known value (the context).
+The two computations are to observe exactly U1 and
+U2 , respectively, each with cost 0.2. The corresponding
+metalevel MDP has 9 states and can be solved exactly.
+Figure 1 plots Q∗λ (s0 , Ui ) − Q∗λ (s0 , ⊥) as a function of
+
+stop
+observe 1
+observe 2
+
+0.1
+0
+-0.1
+-0.2
+-0.3
+-2 -1.5 -1 -0.5
+
+0
+
+0.5
+
+1
+
+1.5
+
+2
+
+Utility of fixed alternative (λ)
+
+Figure 1: Optimal Q-values of computing relative to
+stopping as a function of the utility of the fixed alternative. Note the inversion where for low λ observing
+action 1 is strictly optimal, while for medium λ observing action 2 is strictly optimal.
+There is, however, a restriction on what kind of influence the context can have:
+Definition 11. Given a metalevel decision problem
+M = (S, s0 , As , T, R), and a constant λ ∈ R, define
+Mλ = (S, s0 , As , T, Rλ ) to be M with an additional
+action of known value λ, defined by:
+Rλ (s, E, s0 ) = R(s, E, s0 )
+Rλ (s, ⊥, ⊥) = max{λ, R(s, ⊥, ⊥)}
+
+Context effects and non-indexability
+
+The Gittins index theorem (Gittins, 1979) is a famous
+structural result for bandit problems. It states that in
+bandit problems with independent reward distribution
+for each arm and geometric discounting, the optimal
+policy is an index policy: each arm is assigned a
+real-valued index based on its state only, such that it
+is optimal to sample the arm with greatest index.
+
+0.2
+
+Note this is equivalent to adding an extra arm with
+constant value Uk+1 = λ.
+Theorem 12. Given a metalevel decision problem
+M = (S, s0 , As , T, R), there exists a real interval I(s)
+for every state s ∈ S such that it is optimal to stop in
+state s in Mµ iff µ ∈
+/ I(s). Furthermore, I(s) contains
+maxi µi (s) whenever it is nonempty.
+
+4
+
+The blinkered policy
+
+The myopic policy is an extreme approximation, often
+stopping far too early. A better approximation can be
+obtained, at least for the case where each computation
+can only affect the value of one action. The technical
+definition (closely related to subtree independence in
+Russell and Wefald’s work) is as follows:
+Definition 13. A metalevel probability model
+(U1 , . . . , Uk , E) has independent actions if the computational variables can be partitioned E = E1 ∪· · ·∪Ek
+
+such that such that the sets {Ui } ∪ Ei are independent
+of each other for different i.
+With independent actions, we can talk about metalevel
+policies that focus on computations affecting a single action. These policies are not myopic—they can
+consider arbitrarily many computations—but they are
+blinkered because they can look in only a single direction at a time:
+Definition 14. Given a metalevel decision problem M = (S, s0 , As , T, R) with independent actions,
+the blinkered policy π b is defined by π b (s) =
+argmaxa∈As Qb (s, a) where Qb (s, ⊥) = ⊥ and for Ei ∈
+Ei
+(6)
+Qb (s, Ei ) = sup Qπ (s, Ei )
+π∈Πbi
+
+where Πbi is the set of policies π where π(s) ∈ Ei for
+all s ∈ S.
+
+for which we compute Q∗M 1 (s).4 This will be worth
+i,m
+the cost in the same situations as mentioned at the
+end of Section 2.
+Figure 2 compares the blinkered policy to several other
+policies from the literature, using a Bernoulli sampling
+problem with k = 25 and a wide range of values for
+the step cost c. Performance is measured by expected
+regret, where the regret includes the cost of sampling:
+R = (maxi Ui )−Uj +c n where n is the number of computations and j is the action actually selected. The
+blinkered policy significantly outperforms all others.
+The myopic policy plateaus as it quickly reaches a position where no single computation can change the final
+action choice. ESPb performs quite well given that is
+making a normal approximation to the Beta posterior.
+The curves for UCB1-B and UCB1-b show that even
+given a good stopping rule, UCB1’s choice of actions
+to sample is not ideal.
+
+Clearly, blinkered policies are better than myopic:
+Qm (s, a) ≤ Qb (s, a) ≤ Q∗ (s, a). Moreover, the blinkered policy can be computed in time proportional to
+the number of arms, by breaking the decision problem
+into separate subproblems:
+
+Note that given a state s of a metalevel decision problem, we can form a state si by taking only the results
+of computations in Ei (see Definition 3). By action
+independence, µi (s) is a function only of si .
+Theorem 16. Given a metalevel decision problem
+M = (S, s0 , As , T, R) with independent actions, let
+1
+Mi,λ
+be the ith one-action metalevel decision probi
+lem for i = 1, . . . , k. Then for any s ∈ S, whenever
+Ei ∈ As ∩ Ei we have:
+QbM (s, Ei ) = Q∗M 1
+
+i,µ∗
+−i
+
+(si , Ei )
+
+Regret
+
+Definition 15. Given a metalevel decision problem
+M = (S, s0 , As , T, R) with independent actions, a
+one-action metalevel decision problem for i =
+1
+1, . . . , k is the metalevel decision problem Mi,λ
+=
+(Si , s0 , As0 , Ti , Ri ) defined by the metalevel probability
+model (U0 , Ui , Ei ) with U0 = λ.
+
+1
+
+Blinkered
+Myopic
+ESPb
+UCB1-B
+UCB1-b
+
+0.1
+
+0.1
+
+0.01
+
+0.001
+
+Cost
+
+Figure 2: Average regret of various policies as a function of the cost in a 25-action Bernoulli sampling problem, over 1000 trials. Error bars omitted as they are
+negligible (the relative error is at most 0.03).
+
+5
+
+Upper bounds on Value of
+Information
+
+where µ∗−i = maxj6=i µj (s).
+Theorem 16 shows that to compute the blinkered policy we need only compute the optimal policies for k
+separate one-action problems.
+For the Bernoulli problem with k actions, the oneaction metalevel decision problems are all one-action
+Bernoulli problems (Example 1). By Theorem 10 these
+policies perform at most 1/4c − 3 computations. As
+a result, the blinkered policy can be numerically computed in time O(D/c2 ) independent of k by backwards
+induction, where D is the number of points λ ∈ [0, 1]
+
+In many practical applications of the selection problem, such as search in the game of Go, prior distributions are unavailable.5 In such cases, one can still
+bound the value of information of myopic policies using concentration inequalities to derive distributionindependent bounds on the VOI. We obtain such
+bounds under the following assumptions:
+4
+
+In our experiments below, D = 129 points are equally
+spaced, using linear interpolation between points.
+5
+The analysis is also applicable to some Bayesian settings, using “fake” samples to simulate prior distributions.
+
+1. Samples are iid given the value of the arms
+(variables), as in the Bayesian schemes such as
+Bernoulli sampling.
+2. The expectation of a selection in a belief state is
+equal to the sample mean (and therefore, after
+sampling terminates, the arm with the greatest
+sample mean will be selected).
+
+ity (Maurer and Pontil, 2009), or through a more careful application of the Hoeffding inequality, resulting in:
+√
+
+ n
+i
+N π h 
+ni √
+ni √
+α
+Λbi ≤ √
+erf (1−X i ) ni −erf (X α − X i ) ni
+ni ni
+√
+ n
+i
+N π h  nα √ 
+nβ √
+α
+Λbα ≤
+erf X α nα − erf (X α − X β ) nα
+√
+nα nα
+(10)
+Selection problems usually separate out the decision
+of whether to sample or to stop (called the stopping
+policy), and what to sample. We’ll examine the first
+issue here, along with the empirical evaluation of the
+above approximate algorithms, and the second in the
+following section.
+
+Our bounds below are applicable to any bounded distribution (without loss of generality bounded in [0, 1]).
+Similar bounds can be derived for certain unbounded
+distributions, such as the normally distributed prior
+value with normally distributed sampling. We derive
+a VOI bound for testing an arm a fixed N times, where
+N can be the remaining budget of available samples or
+any other integer quantity. Denote by Λbi the intrinsic
+VOI of testing the ith arm N times, and the number
+of samples already taken from the ith arm by ni .
+
+Assuming that the sample costs are constant, a semimyopic policy will decide to test the arm that has the
+best current VOI estimate. When the distributions
+are unknown, it makes sense to use the upper bounds
+established in Theorem 17, as we do in the following.
+This evaluation assumes a fixed budget of samples,
+which is completely used up by each of the candidate
+schemes, making a stopping criterion irrelevant.
+
+≤
+
+is bounded from above as
+
+nβ
+N Xβ
+
+nα +N
+Pr(X α
+
+1+n/N
+
+√
+
+1+
+
+n/N
+
+)2
+
+
+
+√
+= 8( 2 − 1)2 > 1.37.
+
+Corollary 19. An upper bound on the VOI estimate
+Λbi is obtained by substituting Equation (8) into (7).
+nβ
+
+
+2N X β
+nα
+nβ
+≤
+=
+exp −ϕ(X α − X β )2 nα
+(9)
+nα
+nα
+
+
+2N (1 − X α )
+nα
+ni
+Λbi|i6=α ≤ Λ̂bi =
+exp −ϕ(X α − X i )2 ni
+ni
+
+Λbα
+
+Λ̂bα
+
+More refined bounds can be obtained through tighter
+estimates on the probabilities in Equation (7), for
+example, based on the empirical Bernstein inequal-
+
+●
+●
+
+●
+
+0.002
+
+≤
+nα
+nα
+N (1 − X α )
+ni +N
+nα
+Pr(X i
+Λbi|i6=α ≤
+≥ X α ) (7)
+ni
+The probabilities can be bounded from above using
+the Hoeffding inequality (Hoeffding, 1963):
+
+
+where ϕ = min 2(
+
+UCB1
+VOI
+VOI+
+
+●
+
+nβ
+Xβ )
+
+Theorem 18. The probabilities in Equation (7) are
+bounded from above as
+
+
+nα +N
+nβ
+nα
+nβ
+Pr(X α
+≤ X β ) ≤ 2 exp −ϕ(X α − X β )2 nα
+
+
+nα +N
+nβ
+nα
+ni
+Pr(X i|i6=α ≥ X β ) ≤ 2 exp −ϕ(X α − X i )2 ni (8)
+
+●
+
+●
+
+0.010
+
+Λbα
+
+●
+
+●
+
+Regret
+
+Theorem 17.
+
+Λbi
+
+0.050
+
+When considering possible samples in the blinkered
+semi-myopic setting, two cases are possible: either the
+arm α with the highest sample mean X α is tested, and
+X α becomes lower than X β of the second-best arm β;
+or, another arm i is tested, and X i becomes higher
+than X α .
+
+200
+
+500
+
+1000
+
+Nsamples
+
+Figure 3: Average regret of various policies as a function of the fixed number of samples in a 25-action
+Bernoulli sampling problem, over 10000 trials.
+The sampling policies are compared on random
+Bernoulli selection problem instances. Figure 3 shows
+results for randomly-generated selection problems with
+25 Bernoulli arms, where the mean rewards of the arms
+are distributed uniformly in [0, 1], for a range of sample
+budgets 200..2000, with multiplicative step of 2, averaging over 10000 trials. We compare UCB1 with the
+policies based on the bounds in Equation (9) (VOI)
+and Equation (10) (VOI+). UCB1 is always considerably worse than the VOI-aware sampling policies.
+
+6
+
+Sampling in trees
+
+The previous section addressed the selection problem
+in the flat case. Selection in trees is more complicated. The goal of Monte-Carlo tree search (Chaslot
+
+et al., 2008) at the root node is usually to select an
+action that appears to be the best based on outcomes
+of search rollouts. But the goal of rollouts at non-root
+nodes is different than at the root: here it is important to better approximate the value of the node, so
+that selection at the root can be more informed. The
+exact analysis of sampling at internal nodes is outside
+the scope of this paper. At present we have no better
+proposal for internal nodes than to use UCT there.
+We thus propose the following hybrid sampling scheme
+(Tolpin and Shimony, 2012a): at the root node, sample
+based on the VOI estimate; at non-root nodes, sample
+using UCT.
+Strictly speaking, even at the root node the stationarity assumptions6 underlying our belief-state MDP
+for selection do not hold exactly. UCT is an adaptive scheme, and therefore the values generated by
+sampling at non-root nodes will typically cause values observed at children of the root node to be nonstationary. Nevertheless, sampling based on VOI estimates computed as for stationary distributions works
+well in practice. As illustrated by the empirical evaluation (Section 6), estimates based on upper bounds
+on the VOI result in good sampling policies, which exhibit performance comparable to the performance of
+some state-of-the-art heuristic algorithms.
+6.1
+
+Stopping criterion
+
+When a sample has a known cost commensurable with
+the value of information of a measurement, an upper
+bound on the intrinsic VOI can also be used to stop
+the sampling if the intrinsic VOI of any arm is less
+than the total cost of sampling C: maxi Λi ≤ C.
+The VOI estimates of Equations (7) and (9) include
+the remaining sample budget N as a factor, but given
+the cost of a single sample c, the cost of the remaining
+samples accounted for in estimating the intrinsic VOI
+is C = cN . N can be dropped on both sides of the
+inequality, giving a reasonable stopping criterion:
+nβ
+
+1 b Xβ
+nα +N
+nα
+Λ ≤
+Pr(X α
+≤ Xβ ) ≤ c
+N α
+nα
+nα
+(1 − X α )
+1
+ni +N
+nα
+max Λbi ≤ max
+Pr(X i
+≥ Xα ) ≤ c
+i
+N i
+ni
+∀i : i 6= α
+(11)
+The empirical evaluation (Section 6) confirms the viability of this stopping criterion and illustrates the influence of the sample cost c on the performance of the
+sampling policy. When the sample cost c is unknown,
+6
+This is not a restriction, however, of the general formalism in Section 2.
+
+one can perform initial calibration experiments to determine a reasonable value, as done in the following.
+6.2
+
+Sample redistribution in trees
+
+The above hybrid approach assumes that the information obtained from rollouts in the current state is discarded after an real-world action is selected. In practice, many successful Monte-Carlo tree search algorithms reuse rollouts generated at earlier search states,
+if the sample traverses the current search state during
+the rollout; thus, the value of information of a rollout
+is determined not just by the influence on the choice of
+the action at the current state, but also by its potential
+influence on the choice at future search states.
+One way to account for this reuse would be to incorporate the ‘future’ value of information into a VOI
+estimate. However, this approach requires a nontrivial extension of the theory of metareasoning for search.
+Alternately, one can behave myopically with respect to
+the search tree depth:
+1. Estimate VOI as though the information is discarded after each step,
+2. Stop early if the VOI is below a certain threshold
+(see Section 6.1), and
+3. Save the unused sample budget for search in future states, such that if the nominal budget is N ,
+and the unused budget in the last state is Nu , the
+search budget in the next state will be N + Nu .
+In this approach, the cost c of a sample in the current
+state is the VOI of increasing the budget of a future
+state by one sample. It is unclear whether this cost can
+be accurately estimated, but supposing a fixed value
+for a given problem type and algorithm implementation would work. Indeed, the empirical evaluation
+(Section 6.3) confirms that stopping and sample redistribution based on a learned fixed cost substantially
+improve the performance of the VOI-based sampling
+policy in game tree search.
+6.3
+
+Playing Go against UCT
+
+The hybrid policies were compared on the game Go, a
+search domain in which UCT-based MCTS has been
+particularly successful (Gelly and Wang, 2006). A
+modified version of Pachi (Braudiš and Loup Gailly,
+2011), a state of the art Go program, was used for the
+experiments:
+• The UCT engine of Pachi was extended with VOIaware sampling policies at the first step.
+
+• The time-allocation model based on the fixed
+number of samples was modified for both the original UCT policy and the VOI-aware policies such
+that
+– Initially, the same number of samples is available to the agent at each step, independently
+of the number of pre-simulated games;
+– If samples were unused at the current step,
+they become available at the next step.
+
+50
+
+●
+
+5000
+7000
+10000
+15000
+
+●
+●
+
+40
+
+●
+
+60
+
+●
+●
+
+50
+
+55
+
+●
+
+●
+
+5000
+
+7000
+
+10000
+
+15000
+
+Nsamples
+
+Figure 5: Winning rate of the VOI-aware policy in
+Go as a function of the number of samples, fixing cost
+c = 10−6 .
+selected moves. On the other hand, when the maximum number of samples is sufficiently high, the VOI
+of increasing the maximum number of samples in a
+future state is low.
+Note that if we disallowed reuse of samples in both
+Pachi and in our VOI-based scheme, the VOI basedscheme win rate is even higher than shown in Figure 5.
+This is as expected, as this setting (which is somewhat
+unfair to Pachi) is closer to meeting the assumptions
+underlying the selection MDP.
+
+7
+
+●
+
+Conclusion
+
+●
+
+30
+
+VOI wins, %
+
+60
+
+While the UCT engine is not the most powerful engine of Pachi, it is still a strong player. On the other
+hand, additional features of more advanced engines
+would obstruct the MCTS phenomena which are the
+subject of the experiment. The engines were com-
+
+VOI wins, %
+
+• The stopping criterion for the VOI-aware policy
+was modified and based solely on the sample cost,
+specified as a constant parameter. The heuristic
+stopping criterion for the original UCT policy was
+left unchanged.
+
+0
+
+1e−07
+
+1e−06
+
+1e−05
+
+1e−04
+
+1e−03
+
+●
+
+c
+
+Figure 4: Winning rate of the VOI-aware policy in
+Go as a function of the cost c, for varying numbers of
+samples per ply.
+pared on the 9x9 board, for 5000, 7000, 1000, and
+15000 samples (game simulations) per ply, each experiment repeated 1000 times. Figure 4 depicts a calibration experiment, showing the winning rate of the
+VOI-aware policy against UCT as a function of the
+stopping threshold c (if the maximum VOI of a sample is below the threshold, the simulation is stopped,
+and a move is chosen). Each curve in the figure corresponds to a certain number of samples per ply. For
+the stopping threshold of 10−6 , the VOI-aware policy
+is almost always better than UCT, and reaches the
+winning rate of 64% for 10000 samples per ply.
+Figure 5 shows the winning rate of VOI against UCT
+c = 10−6 . In agreement with the intuition (Figure 6.2), VOI-based stopping and sample redistribution is most influential for intermediate numbers of
+samples per ply. When the maximum number of samples is too low, early stopping would result in poorly
+
+The selection problem has numerous applications.
+This paper formalized the problem as a belief-state
+MDP and proved some important properties of the
+resulting formalism. An application of the selection
+problem to control of sampling was examined, and the
+insights provided by properties of the MDP led to approximate solutions that improve the state of the art.
+This was shown in empirical evaluation both in “flat”
+selection and when extending the methods to gametree search for the game of Go.
+The methods proposed in the paper open up several
+new research directions. The first is a better approximate solution of the MDP, that should lead to even
+better flat sampling algorithms for selection. A more
+ambitious goal is extending the formalism to trees—
+in particular, achieving better sampling at non-root
+nodes, for which the purpose of sampling differs from
+that at the root.
+
+Acknowledgments
+The research is partially supported by Israel Science
+Foundation grant 305/09, National Science Foundation grant IIS-0904672, DARPA DSO FA8650-11-17153, the Lynne and William Frankel Center for Computer Sciences, and by the Paul Ivanier Center for
+Robotics Research and Production Management.
+
+References
+J. Audibert, S. Bubeck, et al. Best arm identification
+in multi-armed bandits. In COLT, 2010.
+P. Auer, N. Cesa-Bianchi, and P. Fischer. Finite-time
+analysis of the multiarmed bandit problem. Machine
+Learning, 2002.
+R. Bechhofer. A single-sample multiple decision procedure for ranking means of normal populations
+with known variances. The Annals of Mathematical Statistics, 25(1):16–39, 1954.
+D. Berry and B. Fristedt. Bandit problems: sequential allocation of experiments. Chapman and Hall
+London, 1985.
+P. Braudiš and J. Loup Gailly. Pachi: State of the art
+open source Go program. In ACG 13, 2011.
+S. Bubeck, R. Munos, and G. Stoltz. Pure exploration in finitely-armed and continuous-armed bandits. Theor. Comput. Sci., 412(19):1832–1852, 2011.
+G. Chaslot, S. Bakkes, I. Szita, and P. Spronck. MonteCarlo tree search: A new framework for game AI.
+In AIIDE, 2008.
+
+W. Hoeffding. Probability inequalities for sums of
+bounded random variables. Journal of the American Statistical Association, 58(301):pp. 13–30, 1963.
+ISSN 01621459.
+E. J. Horvitz. Reasoning about beliefs and actions under computational resource constraints. In
+UAI. American Association for Artificial Intelligence, July 1987. Also in L. Kanal, T. Levitt, and J.
+Lemmer, ed., Uncertainty in Artificial Intelligence
+3, Elsevier, 1988, pps. 301-324.
+R. A. Howard. Information value theory. IEEE Transactions on Systems Science and Cybernetics, 1966.
+L. Kocsis and C. Szepesvári. Bandit based monte-carlo
+planning. ECML, 2006.
+O. Madani, D. Lizotte, and R. Greiner. Active model
+selection. In Proceedings of the 20th conference on
+Uncertainty in artificial intelligence, pages 357–365.
+AUAI Press, 2004.
+J. E. Matheson. The economic value of analysis and
+computation. Systems Science and Cybernetics, 4:
+325–332, 1968.
+
+T. Dean and M. Boddy. An analysis of time-dependent
+planning. In AAAI-88, pages 49–54, 1988.
+
+A. Maurer and M. Pontil. Empirical Bernstein bounds
+and sample-variance penalization. In COLT, 2009.
+
+J. Doyle. Artificial intelligence and rational selfgovernment. Technical Report CMU-CS-88-124,
+Computer Science Department, Carnegie-Mellon
+University, Pittsburgh, PA, 1988.
+
+M. Puterman. Markov decision processes: Discrete
+stochastic dynamic programming. John Wiley &
+Sons, Inc., 1994.
+
+M. Fehling and J. Breese. A computational model
+for the decision-theoretic control of problem solving under uncertainty. In Proceedings of the Fourth
+Workshop on Uncertainty in Artificial Intelligence,
+Minneapolis, MN: AAAI, 1988.
+P. Frazier and W. Powell. Paradoxes in learning and
+the marginal value of information. Decision Analysis, 2010.
+S. Gelly and D. Silver. Monte-carlo tree search and
+rapid action value estimation in computer go. Artificial Intelligence, 2011.
+S. Gelly and Y. Wang. Exploration exploitation in Go:
+UCT for Monte-Carlo Go. Computer, 2006.
+J. Gittins. Bandit processes and dynamic allocation
+indices. Journal of the Royal Statistical Society. Series B (Methodological), pages 148–177, 1979.
+J. Gittins. Multi-armed bandit allocation indices. John
+Wiley & Sons, 1989.
+I. J. Good. A five-year plan for automatic chess. In
+E. Dale and D. Michie, editors, Machine Intelligence
+2, pages 89–118. Oliver and Boyd, 1968.
+D. Harada. Reinforcement learning with time. In Proc.
+Fourteenth National Conference on Artificial Intelligence, pages 577–582. AAAI Press, 1997.
+
+S. Russell and E. Wefald. Do The Right Thing. The
+MIT Press, 1991a.
+S. Russell and E. Wefald. Principles of metareasoning.
+Artificial Intelligence, 1991b.
+S. J. Russell and E. H. Wefald. Decision-theoretic control of search: General theory and an application to
+game-playing. Technical Report UCB/CSD 88/435,
+Computer Science Division, University of California,
+Berkeley, 1988.
+J. R. Swisher, S. H. Jacobson, and E. Yücesan.
+Discrete-event simulation optimization using ranking, selection, and multiple comparison procedures:
+A survey. ACM Transactions on Modeling and Computer Simulation, 2003.
+D. Tolpin and S. E. Shimony. MCTS based on simple
+regret. In AAAI. AAAI Press, 2012a. To appear.
+D. Tolpin and S. E. Shimony. Semimyopic measurement selection for optimization under uncertainty.
+IEEE Transactions on Systems, Man, and Cybernetics, Part B, 42(2):565–579, 2012b.
+A. Wald. Sequential tests of statistical hypotheses. Annals of Mathematical Statistics, 16:117–186, 1945.
+
+

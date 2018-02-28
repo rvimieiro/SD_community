@@ -1,0 +1,1058 @@
+Continuous Time Dynamic Topic Models
+
+Chong Wang
+Computer Science Dept.
+Princeton University
+Princeton, NJ 08540
+
+1
+
+David Blei
+Computer Science Dept.
+Princeton University
+Princeton, NJ 08540
+
+David Heckerman
+Microsoft Research
+One Microsoft Way
+Redmond, WA 98052
+
+Abstract
+
+email [15], computer vision [7], bioinformatics [18], and
+information retrieval [24]. For a good review, see [8].
+
+In this paper, we develop the continuous time
+dynamic topic model (cDTM). The cDTM is
+a dynamic topic model that uses Brownian
+motion to model the latent topics through
+a sequential collection of documents, where
+a “topic” is a pattern of word use that we
+expect to evolve over the course of the collection. We derive an efficient variational
+approximate inference algorithm that takes
+advantage of the sparsity of observations in
+text, a property that lets us easily handle many time points. In contrast to the
+cDTM, the original discrete-time dynamic
+topic model (dDTM) requires that time be
+discretized. Moreover, the complexity of variational inference for the dDTM grows quickly
+as time granularity increases, a drawback
+which limits fine-grained discretization. We
+demonstrate the cDTM on two news corpora,
+reporting both predictive perplexity and the
+novel task of time stamp prediction.
+
+Most topic models assume the documents are exchangeable in the collection, i.e., that their probability
+is invariant to permutation. Many document collections, such as news or scientific journals, evolve over
+time. In this paper, we develop the continuous time
+dynamic topic model (cDTM), which is an extension of
+the discrete dynamic topic model (dDTM) [2]. Given
+a sequence of documents, we infer the latent topics and
+how they change through the course of the collection.
+
+Introduction
+
+Tools for analyzing and managing large collections of
+electronic documents are becoming increasingly important. In recent years, topic models, which are hierarchical Bayesian models of discrete data, have become a widely used approach for exploratory and predictive analysis of text. Topic models, such as latent
+Dirichlet allocation (LDA) and the more general discrete component analysis [3, 4], posit that a small
+number of distributions over words, called topics, can
+be used to explain the observed collection. LDA is
+a probabilistic extension of latent semantic indexing
+(LSI) [5] and probabilistic latent semantic indexing
+(pLSI) [11]. Owing to its formal generative semantics,
+LDA has been extended and applied to authorship [19],
+
+The dDTM uses a state space model on the natural parameters of the multinomial distributions that represent the topics. This requires that time be discretized
+into several periods, and within each period LDA is
+used to model its documents. In [2], the authors analyze the journal Science from 1880-2002, assuming
+that articles are exchangeable within each year. While
+the dDTM is a powerful model, the choice of discretization affects the memory requirements and computational complexity of posterior inference. This largely
+determines the resolution at which to fit the model.
+To resolve the problem of discretization, we consider
+time to be continuous. The continuous time dynamic
+topic model (cDTM) proposed here replaces the discrete state space model of the dDTM with its continuous generalization, Brownian motion [14]. The cDTM
+generalizes the dDTM in that the only discretization
+it models is the resolution at which the time stamps
+of the documents are measured.
+The cDTM model will, generally, introduce many more
+latent variables than the dDTM. However, this seemingly more complicated model is simpler and more efficient to fit. As we will see below, from this formulation
+the variational posterior inference procedure can take
+advantage of the natural sparsity of text, the fact that
+not all vocabulary words are used at each measured
+time step. In fact, as the resolution gets finer, fewer
+and fewer words are used.
+
+This provides an inferential speed-up that makes it
+possible to fit models at varying granularities. As examples, journal articles might be exchangeable within
+an issue, an assumption which is more realistic than
+one where they are exchangeable by year. Other data,
+such as news, might experience periods of time without
+any observation. While the dDTM requires representing all topics for the discrete ticks within these periods,
+the cDTM can analyze such data without a sacrifice
+of memory or speed. With the cDTM, the granularity
+can be chosen to maximize model fitness rather than
+to limit computational complexity.
+We note that the cDTM and dDTM are not the only
+topic models to take time into consideration. Topics
+over time models (TOT) [23] and dynamic mixture
+models (DMM) [25] also include timestamps in the
+analysis of documents. The TOT model treats the
+time stamps as observations of the latent topics, while
+DMM assumes that the topic mixture proportions of
+each document is dependent on previous topic mixture proportions. In both TOT and DMM, the topics
+themselves are constant, and the time information is
+used to better discover them. In the setting here, we
+are interested in inferring evolving topics.
+The rest of the paper is organized as follows. In section 2 we describe the dDTM and develop the cDTM
+in detail. Section 3 presents an efficient posterior inference algorithm for the cDTM based on sparse variational methods. In section 4, we present experimental
+results on two news corpora.
+
+2
+
+Continuous time dynamic topic
+models
+
+In a time stamped document collection, we would like
+to model its latent topics as changing through the
+course of the collection. In news data, for example, a
+single topic will change as the stories associated with
+it develop. The discrete-time dynamic topic model
+(dDTM) builds on the exchangeable topic model to
+provide such machinery [2]. In the dDTM, documents
+are divided into sequential groups, and the topics of
+each slice evolve from the topics of the previous slice.
+Documents in a group are assumed exchangeable.
+More specifically, a topic is represented as a distribution over the fixed vocabulary of the collection. The
+dDTM assumes that a discrete-time state space model
+governs the evolution of the natural parameters of the
+multinomial distributions that represent the topics.
+(Recall that the natural parameters of the multinomial are the logs of the probabilities of each item.)
+This is a time-series extension to the logistic normal
+distribution [26].
+
+Figure 1: Graphical model representation of the
+cDTM. The evolution of the topic parameters βt is
+governed by Brownian motion. The variable st is the
+observed time stamp of document dt .
+A drawback of the dDTM is that time is discretized.
+If the resolution is chosen to be too coarse, then the
+assumption that documents within a time step are exchangeable will not be true. If the resolution is too
+fine, then the number of variational parameters will explode as more time points are added. Choosing the discretization should be a decision based on assumptions
+about the data. However, the computational concerns
+might prevent analysis at the appropriate time scale.
+Thus, we develop the continuous time dynamic topic
+model (cDTM) for modeling sequential time-series
+data with arbitrary granularity. The cDTM can be
+seen as a natural limit of the dDTM at its finest possible resolution, the resolution at which the document
+time stamps are measured.
+In the cDTM, we still represent topics in their natural
+parameterization, but we use Brownian motion [14] to
+model their evolution through time. Let i, j (j > i >
+0) be two arbitrary time indexes, si and sj be the time
+stamps, and ∆sj ,si be the elapsed time between them.
+In a K-topic cDTM model, the distribution of the k th
+(1 ≤ k ≤ K) topic’s parameter at term w is:
+β0,k,w
+
+∼
+
+βj,k,w |βi,k,w , s ∼
+
+N (m, v0 )
+
+N βi,k,w , v∆sj ,si ,
+
+(1)
+
+where the variance increases linearly with the lag.
+This construction is used as a component in the full
+generative process. (Note: if j = i + 1, we write ∆sj ,si
+as ∆sj for short.)
+1. For each topic k, 1 ≤ k ≤ K,
+(a) Draw β0,k ∼ N (m, v0 I).
+
+2. For document dt at time st (t > 0):
+(a) For each topic k, 1 ≤ k ≤ K,
+i. From the Brownian motion model, draw
+βt,k |βt−1,k , s ∼ N (βt−1,k , v∆st I).
+(b) Draw θt ∼ Dir(α).
+(c) For each word,
+i. Draw zt,n ∼ Mult(θt ).
+ii. Draw wt,n ∼ Mult(π(βt,zt,n )).
+The function π maps the multinomial natural parameters, which are unconstrained, to its mean parameters,
+which are on the simplex,
+exp(βt,k,w )
+.
+π(βt,k )w = P
+w exp(βt,k,w )
+
+(2)
+
+The cDTM is illustrated in Figure 1.
+The cDTM can be seen as a generalization of the
+dDTM. Both models assume that the log probability
+of a term exhibits variance over an interval of time
+between observations. In the dDTM, this interval is
+evenly divided into discrete ticks. A parameter controls the variance at each tick, and the variance across
+the whole interval is that parameter multiplied by the
+number of ticks. As a consequence of this representation, the topic, i.e., the full distribution over terms,
+is explicitly represented at each tick. For fine-grained
+time series, this leads to high memory requirements
+for posterior inference, even if the observations are
+sparsely distributed throughout the timeline.
+In the cDTM, however, the variance is a function of
+the lag between observations, and the probabilities at
+discrete steps between those observations need not be
+considered. Inference, as we will see below, can be
+handled sparsely. Thus, choosing the right granularity
+becomes a modeling issue rather than one governed by
+computational concerns. A dDTM is obtained with a
+cDTM by measuring the time stamps of the documents
+at the desired granularity.
+Akin to Brownian motion as the limiting process of
+a discrete-time Gaussian random walk [6], the cDTM
+is the limiting process of the dDTM. Denote the pertick variance in the dDTM by σ 2 , and note that it
+is a function of the tick granularity (to make models comparable). The cDTM is the limiting model in
+this setting as σ 2 approaches zero. We emphasize that
+with the cDTM, we need not represent the log probabilities at the ticks between observed documents. This
+perspective is illustrated in Figure 2.
+
+3
+
+Sparse variational inference
+
+The central problem in topic modeling is posterior inference, i.e., determining the distribution of the la-
+
+Figure 2: Documents are available only at time s and
+s0 , and no documents between them. When σ 2 → 0,
+the dDTM becomes a cDTM, and we no longer need
+to represent the steps between i and j.
+
+tent topic structure conditioned on the observed documents. In sequential topic models, this structure
+comprises the per-document topic proportions θd , perword topic assignments zd,n , and the K sequences
+of topic distributions βt,k . The true posterior is not
+tractable [2]. We must appeal to an approximation.
+Several approximate inference methods have been developed for topic models. The most widely used are
+variational inference [3, 20] and collapsed Gibbs sampling [9]. In the sequential setting collapsed Gibbs
+sampling is not an option because the distribution of
+words for each topic is not conjugate to the word probabilities. Thus, we employed variational methods.
+The main idea behind variational methods is to posit
+a simple family of distributions over the latent variables, indexed by free variational parameters, and
+to find the member of that family which is closest
+in Kullback-Leibler divergence to the true posterior.
+Good overviews of this methodology can be found
+in [12] and [22]. For continuous time processes, variational inference has been applied in Markov jump processes [1] and diffusion processes [17], where the variational distributions are also random processes.
+For the cDTM described above, we adapt variational
+Kalman filtering [2] to the continuous time setting.
+For simplicity, assume that one document occurs at
+each time point. In their algorithm, the variational
+distribution over the latent variables is:
+q(β1:T , z1:T,1:N , θ1:T | β̂, φ, γ) =
+K
+Y
+
+q(β1,k , . . . , βT,k |β̂1,k , . . . , β̂T,k ) ×
+
+k=1
+T
+Y
+t=1
+
+q(θt |γt )
+
+Nt
+Y
+
+!
+q(zt,n |φt,n ) .
+
+(3)
+
+n=1
+
+The variational parameters are a Dirichlet γt for the
+per-document topic proportions, multinomials φ for
+each word’s topic assignment, and β̂ variables, which
+are “observations” to a variational Kalman filter.
+These variables are fit such that the approximate posterior is close to the true posterior. From the variational Kalman filter, the βk,t , 1 ≤ t ≤ T retain their
+chained structure in the variational distribution. Vari-
+
+ational inference proceeds by coordinate ascent, updating each of these parameters to minimize the KL
+between the true posterior and variational posterior.
+For simplicity, now we consider a model with only one
+topic. These calculations are simpler versions of those
+we need for the more general latent variable model
+but exhibit the essential features of the algorithm.
+For the cDTM, we assume a similar variational distribution, with the same variational Dirichlet and variational multinomials for the per-document variables.
+The cDTM updates for these parameters are identical
+to those in [2], and we do not replicate them here.
+In principle, we can directly use the variational
+Kalman filtering algorithm for the cDTM by replacing the state space model with Brownian motion. Let
+V be the size of the vocabulary. While conceptually
+straightforward, this will yield VT variational parameters in the vectors β̂1:T . When T and V are large, as
+in a fine-graned model, posterior inference will require
+massive amounts of time and memory. Thus, we develop a sparse variational inference procedure, which
+significantly improves its complexity without sacrificing accuracy.
+The main idea behind the sparse variational Kalman
+filtering algorithm is that if certain βt,w do not describe any term emissions, i.e., there are no observations of w at t, then the true posterior of βt,w is only
+determined by the observations of the other words at
+that time. Therefore, we don’t need to explicitly represent β̂t,w for those w that are not observed.
+Figure 3 illustrates the idea behind sparse variational
+inference for the cDTM. In Figure 3, the variational
+posterior of the log probability of a word βt,w is determined by the variational observations of the observed
+words. From the belief propagation point of view, the
+belief propagated from βt,w to node βt+2,w is not revised by term w, and this property is retained in the
+sparse variational inference algorithm. The probability of variational observation β̂t,w given βt,w is a Gaussian:
+β̂t,w |βt,w ∼ N (βt,w , v̂t ).
+
+∼
+
+mt,w
+
+=
+
+Vt,w
+
+=
+
+N (mt,w , Vt,w )
+
+E(βt,w |β̂i,i≤t,w )
+E((βt,w − mt,w )2 |β̂i,i≤t,w ).
+
+If w is not observed at time step t then
+mt,w
+
+=
+
+(5)
+
+mt−1,w
+
+Vt,w
+
+=
+
+Pt,w ,
+
+Pt,w
+
+=
+
+Vt−1,w + v∆st ,
+
+(6)
+
+which means that the forward mean remains the same
+as the previous step. Otherwise,
+mt,w
+
+=
+
+Vt,w
+
+=
+
+β̂t,w |β̂i,i≤t−1,w
+
+∼
+
+(4)
+
+We next describe the forward-backward algorithm for
+the sparse variational Kalman filter, which is needed
+to compute the expectations for updating the variational parameters. For a certain term w, the variational forward distribution p(βt,w |β̂i,i≤t,w ) is a Gaussian [13] and can be characterized as follows.
+βt,w |β̂i,i≤t,w
+
+Figure 3: A simplified graphical model shows how
+sparse variational inference works with only single
+topic. Note this generation process needs normalization to βt according to Equation 2, but this will not
+affect the sparse solution. For term w, there are no observations at time index t + 1 (or time st+1 ), the corresponding variational observations don’t appear at time
+index t + 1. For term w0 , there are no observations at
+time index t+2 (or time st+2 ), the corresponding variational observations don’t appear at time index t + 2.
+
+β̂t,w Pt,w + v̂t mt−1,w
+Pt,w + v̂t
+Pt,w
+v̂t
+Pt,w + v̂t
+N (mt−1,w , Pt,w + v̂t ).
+
+(7)
+
+Similarly, the variational backward distribution
+p(βt,w |β̂i,i≤T,w ) is also a Gaussian:
+βt,w |β̂i,i≤T,w
+
+∼
+
+m
+e t,w
+Vet,w
+
+=
+
+m
+e t−1,w
+
+=
+
+N (m
+e t,w , Vet,w )
+
+E(βt,w |β̂i,i≤T,w )
+E((βt,w − me t,w )2 |β̂i,i≤T,w ).
+
+= mt−1,w
+
+ft v
+Vt−1,w
++m
+e t,w
+Pt,w
+Pt,w
+
+Vet−1,w
+
+=
+
+Vt−1,w +
+
+2
+Vt−1,w
+(Vet,w − Pt,w ).(8)
+2
+Pt,w
+
+With this forward-backward computation in hand, we
+turn to optimizing the variational observations β̂w,k
+in the sparse setting. Equivalent to minimizing KL is
+tightening the bound on the likelihood of the observations given by Jensen’s inequality [12].
+L(β̂) ≥
+
+T
+X
+
+Eq [(log p(wt |βt ) + log p(βt |βt−1 )] + H(q),
+
+t=1
+
+(9)
+where H(q) is the entropy. This is simplified to
+L(β̂) ≥
+
+T
+X
+
+Eq
+
+h
+
+i
+log p(wt |βt ) − log q(β̂t |βt )
+
+t=1
+
++
+
+T
+X
+
+log q(β̂t |β̂i,i≤t−1 ),
+
+We use δt,w = 1 or 0 to represent whether β̂t,w is in
+the variational observations or not. Then the terms
+above are
+X
+Eq log q(wt |βt ) ≥
+nt,w m
+e t,w
+w
+
+−nt log
+
+exp(m
+e t,w + Vet,w /2)
+
+w
+
+=
+
+X
+
+δt,w Eq log q(β̂t,w |βt,w )
+
+w
+
+log q(β̂t |β̂i,i≤t−1 )
+
+=
+
+X
+
+Sparsity
+Day Week
+0.68
+0.12
+0.95
+0.79
+
+Month
+–
+0.50
+
+Table 1: Sparsity for two data sets where available.
+Higher numbers indicate a sparser data set and more
+efficiency for the cDTM over the dDTM.
+evenly spaced over the time line. In the dDTM, these
+documents were separated by years. To analyze them
+at a finer scale, e.g., issue by issue, one needs to consider 6243 time points. With a vocabulary size of 5000,
+for a 10-topic setting, the cDTM requires 0.8G memory while the dDTM requires 2.3G memory, nearly 3
+times larger. The sparsity of Science is 0.65. This
+means that a term only appears in about a third of
+the total time points.
+
+4
+
+X
+
+Hour
+0.93
+–
+
+(10)
+
+t=1
+
+Eq log p(β̂t |βt )
+
+Data set
+AP
+Election 08
+
+δt,w log q(β̂t,w |β̂i,i≤t−1,w ).
+
+w
+
+The count of w in document dt is nt,w and nt =
+P
+w nt,w .
+Thus, to optimize the variational observations, we
+need only to compute the derivative ∂L/∂ β̂t,w for
+thoseP
+δt,w
+P = 1. The general memory requirement
+is O( t w δt,w )—the sum of the number of unique
+terms at each time point—which is usually much
+smaller than O(VT ), the memory requirement for the
+densely represented algorithm. Formally, we can define the sparsity of the data set to be
+P P
+sparsity = 1 − ( t w δt,w ) /(VT ),
+(11)
+which we will compute for several data sets in the next
+section. Finally, we note that we use the conjugate
+gradient algorithm [16] to optimize the variational observations from these partial derivatives.
+As an example of the speed-up offered by sparse variational inference, consider the Science corpus from
+1880-2002, analyzed by [2], which contains 6243 issues of the magazine. Note that these issues are not
+
+Experiments
+
+In this section, we demonstrate the cDTM model on
+two news corpora. We report predictive perplexity and
+a results on the novel task of time stamp prediction.
+4.1
+
+News Corpora
+
+We used two news corpora. First, “AP” is a subset
+from the TREC AP corpus [10] containing the news
+from 05/01/1988 to 06/30/1988. We extracted the
+documents about the presidential election in 1988 resulting in 1, 342 documents. These documents are time
+stamped by hour. Second, the “Election 08” data are
+summaries of the top articles from Digg1 classified as
+being part of the 2008 presidential election. We used
+articles from 02-27-2007 to 02-22-2008. This data set
+has 1, 040 summaries. Time is measured in days.
+Table 1 shows the sparsity information for these data
+in terms of the resolution at which we can analyze
+them. This illustrates the gain in efficiency of the
+cDTM. For example, in the day setting of the Election 08 data, the sparsity is 0.95. The dDTM model
+will need at least 20 times more parameters than the
+cDTM to analyze the data at this resolution.
+4.2
+
+Per-Word Predictive Perplexity
+
+Let Dt be the set of documents at time index t. We
+performed approximate posterior inference on these
+data with the cDTM at different levels of granularity. To make models comparable, we set the variance
+across the entire period to be the same (see Equation
+1). We evaluated the models with perplexity. Specifi1
+
+http://digg.com
+
+cally, we computed the per-word predictive perplexity
+of the documents at time t based on the data of the
+previous t − 1 time indices,
+)
+(
+1 X log p(wd |D1:t−1 )
+.
+perplexitypw (t) = exp −
+|Dt |
+Nd
+d∈Dt
+
+(12)
+Note that lower numbers are better.
+Since each document is predicted exactly once in all
+models at different granularities, we also compute the
+averaged per-word perplexity over the time line, which
+is defined as
+ P
+
+log p(wd )
+P
+perplexitypw = exp − d∈D
+.
+(13)
+d∈D Nd
+In the AP data, we made predictions from 5/15/1988
+to 05/29/1988. In the Election 08 data, we made predictions from 04/26/2007 to 02/22/2008. Figure 4
+shows the results of the per-word predictive perplexity
+over the time line on both data sets for the 10 topic
+model. Figure 5 shows the results of average per-word
+perplexity for 1, 3, 5 and 10 topics.
+From the computational perspective, we note that the
+sparse inference algorithm lets us fit models of different granularities efficiently. For the AP data, the day
+model and week are almost comparable. Models with
+5 and 10 topics perform better.
+In the Election 08 data, the 1-topic model performs
+best. We suspect that this is because the summaries
+are very short. More complex models, i.e., those with
+more topics, are not appropriate. The models perform
+differently at different levels of granularity because the
+amount of data supported at each time point depends
+on the chosen level. It is not necessarily the case that
+a finer grained model will contain enough data to provide a better predictive distribution.
+4.3
+
+Time Stamp Prediction
+
+We can further use the cDTM for time stamp prediction, dating a document based on its content. To assess
+this task, we split each data set into 80% training and
+20% testing sets. We predict the time stamp of each
+test document by finding its most likely location over
+the time line. We measure the error in terms of the
+same granularity at which the data are measured.
+We investigated two approaches. The first is the flat
+approach. Each model of different granularity predicts
+as best it can. The second is the hierarchical approach.
+We use models of increasing granularity to “zoom in”
+on the prediction. For example, to predict the day, we
+first find the best month, then the best week within
+the month, and then the best day within the week.
+
+We compute the average absolute error over the test
+data set. Figure 6 illustrates the results.
+The hierarchical approach always performs better than
+or as well as the flat approach. The hour model in the
+AP data and day model in Election 08 perform worse.
+With the small data sets, a larger granularity is better.
+The reason may also lie in the parameter v. Currently
+it is shared among all models. In the future, we’d like
+to infer it from the data.
+4.4
+
+Example Topics
+
+We provide some example topics by using the week
+model in the Election 08 data. We sample the topics
+every two months. Figure 7 shows one of the topics. At
+the beginning the election (year 2007), general issues
+were discussed more, such as “healthcare.” As the
+competition went up (year 2008), the topics were more
+about candidates themselves and changing faster.
+
+5
+
+Conclusions
+
+In this paper, we have developed the cDTM, using
+Brownian motion to model continuous-time topic evolution. The main advantage of the cDTM is that we
+can employ sparse variational inference for fast model
+comparison. We demonstrated the use of cDTM by
+measuring the predictive likelihood and time stamp
+prediction accuracy on two real-world data sets. In future work, we plan to explore the Ornstein-Uhlenbeck
+(OU) model [21], a generalization of Brownian model,
+that allows bounded variance.
+Acknowledgments. We thank anonymous reviewers
+for their valuable comments. We would also like to
+thank Jordan Boyd-Graber and Jonathan Chang for
+many insightful discussions. David M. Blei is supported by ONR 175-6343, NSF CAREER 0745520,
+and grants from Google and Microsoft.
+
+References
+[1] C. Archambeau, M. Opper, Y. Shen, D. Cornford, and J. Shawe-Taylor. Variational inference
+for diffusion processes. In NIPS, 2007.
+[2] D. M. Blei and J. D. Lafferty. Dynamic topic
+models. In ICML, 2006.
+[3] D. M. Blei, A. Ng, and M. I. Jordan. Latent
+Dirichlet allocation. JMLR, 3:993–1002, 2003.
+[4] W. Buntine and A. Jakulin. Applying discrete
+PCA in data analysis. In UAI, 2004.
+
+small AP, 10 topics
+
+election 08, 10 topics
+2500
+
+4000
+3500
+
+hour
+
+day
+
+day
+week
+
+week
+
+2000
+
+month
+
+per−word perplexity
+
+per−word perplexity
+
+3000
+2500
+2000
+1500
+
+1500
+
+1000
+
+1000
+500
+500
+0
+05/15/1988
+
+05/22/1988
+
+0
+04/26/2007
+
+05/29/1988
+
+9/22/2008
+
+(a)
+
+02/22/2008
+
+(b)
+
+Figure 4: Per-word predictive perplexity comparison. The straight lines are the corresponding averaged perword predictive perplexities. (a) AP data. The week model performs the best, but the day model is almost
+comparable. (b) Election 08 data. The month model performs the best.
+small AP
+
+election 08
+1600
+
+4000
+
+hour
+
+day
+
+1400
+
+day
+
+3500
+
+week
+averaged per−word perplexity
+
+averaged per−word perplexity
+
+week
+3000
+2500
+2000
+1500
+1000
+
+1000
+800
+600
+400
+200
+
+500
+0
+
+month
+
+1200
+
+1 topic
+
+3 topics
+
+5 topics
+
+10 topics
+
+(a)
+
+0
+
+1 topic
+
+3 topics
+
+5 topics
+
+10 topics
+
+(b)
+
+Figure 5: Averaged per-word predictive perplexity comparison. (a) AP data. The week model performs the best,
+but the day model is almost comparable. (b) Election 08 data. The month model performs the best.
+[5] S. Deerwester, S. Dumais, T. Landauer, G. Furnas, and R. Harshman. Indexing by latent semantic analysis. Journal of the American Society of
+Information Science, 41(6):391–407, 1990.
+[6] J. Durbin and S. Koopman. Time Series Analysis
+by State Space Methods. Oxford Univ. Press, 2001.
+[7] L. Fei-Fei and P. Perona. A Bayesian hierarchical
+model for learning natural scene categories. In
+CVPR, 2005.
+[8] T. Griffiths and M. Steyvers. Probabilistic topic
+models. In Latent Semantic Analysis: A Road to
+Meaning. 2006.
+[9] T. L. Griffiths and M. Steyvers. Finding scientific
+topics. Proc. Natl. Acad. Sci., 101 Suppl 1:5228–
+5235, April 2004.
+
+[10] D. Harman. Overview of the first text retrieval
+conference (TREC-1). In TREC-1, 1992.
+[11] T. Hofmann. Probabilistic latent semantic analysis. In UAI, 1999.
+[12] M. I. Jordan, Z. Ghahramani, T. Jaakkola, and
+L. K. Saul. An introduction to variational methods for graphical models. Machine Learning,
+37(2):183–233, 1999.
+[13] R. Kalman. A new approach to linear filtering and
+prediction problems. Transaction of the AMSE:
+Journal of Basic Engineering, 82:35–45, 1960.
+[14] G. F. Lawler. Introduction to Stochastic Processes. Chapman & Hall/CRC, 1995.
+
+small AP, time stamp prediction
+
+election 08, time stamp prediction
+
+900
+w
+
+800
+
+d
+
+h
+
+w+d
+
+w+d+h
+
+m
+
+w
+
+d
+
+m+w
+
+m+w+d
+
+700
+
+baseline
+
+average absolute error (day)
+
+average absolute error (hour)
+
+200
+
+600
+500
+400
+300
+200
+
+baseline
+150
+
+100
+
+50
+
+100
+0
+
+1 topic
+
+3 topics
+
+5 topics
+
+0
+
+10 topics
+
+1 topic
+
+3 topics
+
+(a)
+
+5 topics
+
+10 topics
+
+(b)
+
+Figure 6: Time stamp prediction. ‘m’ stands for flat approach of ‘month’, ‘w’ for ‘week’, ‘d’ for ‘day’ and and ‘h’
+for ‘hour.’ ‘m+w’ stands for the hierarchical approach of combining ‘month’ and ‘week’, and ‘m+w+d’, ‘w+d’,
+‘w+d+h’ are similarly defined. The baseline is the expectation of the error by randomly assigning a time. (a)
+AP data. 5-topic and 10-topic models perform better than others, and the hierarchical approach always achieves
+the best performance. (b) Election 08 data. 1-topic model performs best due to the short documents. The
+hierarchical approach achieves comparable performances.
+2/27/2007
+
+4/24/2007
+
+6/26/2007
+
+8/28/2007
+
+10/23/2007
+
+12/25/2007
+
+2/19/2008
+
+healthcare
+abc
+wisconsin
+vegas
+superdelegate
+nevada
+delegate
+civil
+recount
+florida
+
+healthcare
+abc
+wisconsin
+vegas
+superdelegate
+nevada
+delegate
+civil
+fundraising
+recount
+
+healthcare
+wisconsin
+vegas
+superdelegate
+nevada
+abc
+fundraising
+delegate
+civil
+florida
+
+healthcare
+wisconsin
+vegas
+superdelegate
+kucinich
+nevada
+fundraising
+delegate
+florida
+civil
+
+kucinich
+ron
+obama
+healthcare
+paul
+wisconsin
+vegas
+superdelegate
+iowa
+nevada
+
+obama
+clinton
+paul
+ron
+kucinich
+hillary
+iowa
+campaign
+new
+barack
+
+obama
+clinton
+hillary
+barack
+campaign
+democratic
+iowa
+kucinich
+paul
+ron
+
+Figure 7: Examples from a 3-topic cDTM using the week model in the Election 08 data. In year 2007, the topics
+were more about general issues, while around year 2008, were more about candidates and changing faster.
+[15] A. McCallum, A. Corrada-Emmanuel, and
+X. Wang. Topic and role discovery in social networks. In IJCAI, 2005.
+
+[21] G. E. Uhlenbeck and L. S. Ornstein. On the theory of Brownian motion. Phys. Rev., 36:823–41,
+1930.
+
+[16] J. Nocedal and S. J. Wright. Numerical Optimization. Springer, 2006.
+
+[22] M. J. Wainwright and M. I. Jordan. Graphical
+models, exponential families and variational inference. Technical Report 649, UC Berkeley, Dept.
+of Statistics, 2003.
+
+[17] M. Opper and G. Sanguinetti. Variational inference for markov jump processes. In NIPS, 2007.
+[18] S. Rogers, M. Girolami, C. Campbell, and R. Breitling. The latent process decomposition of cDNA
+microarray data sets. IEEE/ACM Trans. on
+Comp. Bio. and Bioinf., 2(2):143–156, 2005.
+[19] M. Rosen-Zvi, T. Griffiths, M. Steyvers, and
+P. Smyth. The author-topic model for authors
+and documents. In UAI, 2004.
+[20] Y. W. Teh, D. Newman, and M. Welling. A
+collapsed variational bayesian inference algorithm
+for latent Dirichlet allocation. In NIPS, 2006.
+
+[23] X. Wang and A. McCallum. Topics over time:
+A non-Markov continuous-time model of topical
+trends. In SIGKDD, 2006.
+[24] X. Wei and B. Croft. LDA-based document models for ad-hoc retrieval. In SIGIR, 2006.
+[25] X. Wei, J. Sun, and X. Wang. Dynamic mixture
+models for multiple time series. In IJCAI, 2007.
+[26] M. West and J. Harrison. Bayesian Forecasting
+and Dynamic Models. Springer, 1997.
+
+
